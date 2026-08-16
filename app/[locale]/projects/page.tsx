@@ -6,6 +6,8 @@ import { FilterProvider } from "@/contexts/filter-context"
 import { FilterErrorBoundary } from "@/components/filter-error-boundary"
 import { DiscoverClient } from "@/components/discover-client"
 import { fetchDiscoverProjects } from "@/lib/projects/queries"
+import { getHubs } from "@/lib/project-hubs"
+import { hubToDef } from "@/components/project/hub-page"
 import { logger } from "@/lib/logger"
 import { TrackPageView } from "@/components/track-view"
 import { getSiteUrl } from "@/lib/utils"
@@ -66,6 +68,13 @@ export default async function ProjectsPage({
 }) {
   const { locale } = await params
   let projects: Awaited<ReturnType<typeof fetchDiscoverProjects>> = []
+  // Hub definitions let the FilterProvider swap the URL to a hub path
+  // (/projects/amsterdam) when the active filter exactly matches one.
+  let hubDefs: ReturnType<typeof hubToDef>[] = []
+  try {
+    const { cities, scopes } = await getHubs()
+    hubDefs = [...cities, ...scopes].map(hubToDef)
+  } catch { /* provider works fine without hub mapping */ }
 
   try {
     projects = await fetchDiscoverProjects(locale)
@@ -83,7 +92,7 @@ export default async function ProjectsPage({
       <Header />
 
       <FilterErrorBoundary>
-        <FilterProvider>
+        <FilterProvider hubs={hubDefs}>
           <DiscoverClient initialProjects={projects} />
         </FilterProvider>
       </FilterErrorBoundary>

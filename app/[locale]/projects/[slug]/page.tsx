@@ -21,6 +21,7 @@ import { getSiteUrl } from "@/lib/utils"
 import { SPACES, SPACE_SLUGS } from "@/lib/spaces"
 import { locales, defaultLocale } from "@/i18n/config"
 import { resolveHub, getHubProjects, getHubs, HUB_COPY, cityHubCopy } from "@/lib/project-hubs"
+import { fetchDiscoverProjects } from "@/lib/projects/queries"
 import { HubPage } from "@/components/project/hub-page"
 
 const PREVIEW_PARAM = "preview"
@@ -212,17 +213,27 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     // city / scope slugs; everything else 404s as before.
     const hub = await resolveHub(finalSlug)
     if (hub) {
-      const [projects, allHubs] = await Promise.all([getHubProjects(hub), getHubs()])
-      const siblings = [...allHubs.cities, ...allHubs.scopes]
-        .filter((h) => h.slug !== hub.slug)
-        .slice(0, 6)
+      const hubLocale = resolvedParams.locale ?? "en"
+      const [hubProjects, allHubsSet, discoverProjects] = await Promise.all([
+        getHubProjects(hub),
+        getHubs(),
+        fetchDiscoverProjects(hubLocale),
+      ])
+      const allHubs = [...allHubsSet.cities, ...allHubsSet.scopes]
+      const siblings = allHubs.filter((h) => h.slug !== hub.slug).slice(0, 6)
+      // Server-side pre-filter: the crawled HTML contains exactly the
+      // hub's projects; the client FilterProvider mounts with the same
+      // preset, so grid and state agree from the first paint.
+      const hubIds = new Set(hubProjects.map((p) => p.id))
+      const initialProjects = discoverProjects.filter((p) => p.id != null && hubIds.has(p.id))
       // Called as a plain async function (valid for server components) —
       // sidesteps a TS2786 false positive on async-component JSX.
       return await HubPage({
         hub,
+        allHubs,
         siblings,
-        projects,
-        locale: resolvedParams.locale ?? "en",
+        initialProjects,
+        locale: hubLocale,
       })
     }
     notFound()

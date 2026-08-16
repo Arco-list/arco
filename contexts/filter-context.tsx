@@ -249,9 +249,21 @@ interface FilterContextType {
 
 const FilterContext = createContext<FilterContextType | undefined>(undefined)
 
+/** Minimal, serializable hub definition passed down from the server.
+ *  A hub is a URL-worthy filter preset (/projects/amsterdam,
+ *  /projects/renovatie); the provider maps filter state to hub paths
+ *  and back so hub pages ARE the discover page, pre-filtered. */
+export interface HubDef {
+  slug: string
+  kind: "city" | "scope"
+  cityName?: string
+  scope?: string
+}
+
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
-function FilterProviderInner({ children }: { children: ReactNode }) {
+function FilterProviderInner({ children, hubs = [], hubSlug }: { children: ReactNode; hubs?: HubDef[]; hubSlug?: string }) {
+  const activeHub = hubSlug ? hubs.find((h) => h.slug === hubSlug) ?? null : null
   const { categories, taxonomyOptions, cities, isLoading: taxonomyLoading, error: taxonomyError, refresh } = useProjectTaxonomy()
   const initialSearchParams = useSearchParams()
   // Seed keyword from URL so the first render already has it — otherwise the
@@ -260,7 +272,14 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(
     filterReducer,
     INITIAL_FILTER_STATE,
-    (initial) => ({ ...initial, keyword: initialSearchParams.get("search") ?? "" }),
+    (initial) => ({
+      ...initial,
+      keyword: initialSearchParams.get("search") ?? "",
+      // Hub pages mount with their filter already applied so the first
+      // client render matches the server-filtered grid (no flash).
+      ...(activeHub?.kind === "city" && activeHub.cityName ? { selectedLocations: [activeHub.cityName] } : {}),
+      ...(activeHub?.kind === "scope" && activeHub.scope ? { selectedScopes: [activeHub.scope] } : {}),
+    }),
   )
   const {
     selectedTypes,
@@ -377,16 +396,12 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
   const initializedRef = useRef(false)
   const lastParsedQueryRef = useRef<string>(searchParams.toString())
   const lastSyncedQueryRef = useRef<string>(searchParams.toString())
-  const debouncedReplaceRef = useRef<(nextQuery: string) => void>()
+  const debouncedReplaceRef = useRef<(nextUrl: string, nextQuery: string) => void>()
 
   useEffect(() => {
-    const handler = debounce((nextQuery: string) => {
+    const handler = debounce((nextUrl: string, nextQuery: string) => {
       lastSyncedQueryRef.current = nextQuery
-      if (nextQuery.length === 0) {
-        router.replace(pathname, { scroll: false })
-      } else {
-        router.replace(`${pathname}?${nextQuery}`, { scroll: false })
-      }
+      router.replace(nextUrl, { scroll: false })
     }, 300)
     debouncedReplaceRef.current = handler
     return () => {
@@ -474,7 +489,12 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     const resolvedStyles = resolveTokensToIds(styleValues, taxonomyTokenMaps.project_style)
     if (!areStringArraysEqual(selectedStyles, resolvedStyles)) setSelectedStyles(resolvedStyles)
 
-    const locationValues = parseCommaSeparatedParam(searchParams.get("location"))
+    let locationValues = parseCommaSeparatedParam(searchParams.get("location"))
+    if (activeHub?.kind === "city" && activeHub.cityName && !locationValues.includes(activeHub.cityName)) {
+      // The hub path carries this filter — treat it as an implicit URL param
+      // so the empty query string doesn't clear it while on the hub page.
+      locationValues = [activeHub.cityName, ...locationValues]
+    }
     if (!areStringArraysEqual(selectedLocations, locationValues)) setSelectedLocations(locationValues)
 
     const spaceValue = searchParams.get("space") ?? ""
@@ -485,7 +505,10 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     if (!areStringArraysEqual(selectedBuildingTypes, resolvedBuildingTypes)) setSelectedBuildingTypes(resolvedBuildingTypes)
 
     // Scope filter — slugs round-trip through the URL as-is (no token map).
-    const scopeValues = parseCommaSeparatedParam(searchParams.get("scope"))
+    let scopeValues = parseCommaSeparatedParam(searchParams.get("scope"))
+    if (activeHub?.kind === "scope" && activeHub.scope && !scopeValues.includes(activeHub.scope)) {
+      scopeValues = [activeHub.scope, ...scopeValues]
+    }
     if (!areStringArraysEqual(selectedScopes, scopeValues)) setSelectedScopes(scopeValues)
 
     const buildingFeatureValues = parseCommaSeparatedParam(searchParams.get("buildingFeatures"))
@@ -524,7 +547,7 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     searchParams, selectedTypes, selectedStyles, selectedLocations, selectedSpace,
     selectedBuildingTypes, selectedBuildingFeatures,
     selectedSizes, selectedBudgets, projectYearRange,
-    buildingYearRange, keyword, isUrlHydrated, categoryTokenMaps, taxonomyTokenMaps,
+    buildingYearRange, keyword, isUrlHydrated, categoryTokenMaps, taxonomyTokenMaps, activeHub,
   ])
 
   // Sync combined features
@@ -557,23 +580,59 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     if (projectYearRange[1] !== null) params.set("projectYearMax", String(projectYearRange[1]))
     if (buildingYearRange[1] !== null) params.set("buildingYearMax", String(buildingYearRange[1]))
 
-    const nextQuery = params.toString()
+    // ── Hub URL mapping ─────────────────────────────────────────────
+    // When the state is EXACTLY one hub's preset (one qualifying city or
+    // one scope, nothing else), the canonical address for that state is
+    // the hub path (/projects/amsterdam) with no query. Anything else
+    // lives on the base discover path with query params. Ephemeral
+    // filter states therefore never mint crawlable URLs; gated hubs do.
+    const basePath = hubSlug && pathname.endsWith(`/${hubSlug}`)
+      ? pathname.slice(0, pathname.length - hubSlug.length - 1)
+      : pathname
+    const onlyFilter = (
+      locations: number, scopes: number,
+    ) =>
+      selectedLocations.length === locations &&
+      selectedScopes.length === scopes &&
+      selectedTypes.length === 0 &&
+      selectedStyles.length === 0 &&
+      selectedSpace === "" &&
+      selectedBuildingTypes.length === 0 &&
+      selectedBuildingFeatures.length === 0 &&
+      selectedSizes.length === 0 &&
+      selectedBudgets.length === 0 &&
+      projectYearRange[1] === null &&
+      buildingYearRange[1] === null &&
+      keyword.trim().length === 0
+    const matchedHub =
+      hubs.find((h) =>
+        h.kind === "city" && h.cityName && onlyFilter(1, 0) &&
+        selectedLocations[0]?.toLowerCase() === h.cityName.toLowerCase(),
+      ) ??
+      hubs.find((h) =>
+        h.kind === "scope" && h.scope && onlyFilter(0, 1) &&
+        selectedScopes[0] === h.scope,
+      ) ?? null
+
+    const nextQuery = matchedHub ? "" : params.toString()
+    const targetPath = matchedHub ? `${basePath}/${matchedHub.slug}` : basePath
+    const nextUrl = nextQuery.length > 0 ? `${targetPath}?${nextQuery}` : targetPath
     const currentQuery = searchParams.toString()
-    if (nextQuery === currentQuery) { lastSyncedQueryRef.current = nextQuery; return }
-    if (nextQuery === lastSyncedQueryRef.current) return
+    const currentUrl = currentQuery.length > 0 ? `${pathname}?${currentQuery}` : pathname
+    if (nextUrl === currentUrl) { lastSyncedQueryRef.current = nextQuery; return }
+    if (nextQuery === lastSyncedQueryRef.current && targetPath === pathname) return
 
     if (!debouncedReplaceRef.current) {
       lastSyncedQueryRef.current = nextQuery
-      if (nextQuery.length === 0) router.replace(pathname, { scroll: false })
-      else router.replace(`${pathname}?${nextQuery}`, { scroll: false })
+      router.replace(nextUrl, { scroll: false })
       return
     }
-    debouncedReplaceRef.current(nextQuery)
+    debouncedReplaceRef.current(nextUrl, nextQuery)
   }, [
     isUrlHydrated, selectedTypes, selectedStyles, selectedLocations, selectedSpace,
     selectedBuildingTypes, selectedScopes, selectedBuildingFeatures,
     selectedSizes, selectedBudgets, projectYearRange,
-    buildingYearRange, router, pathname, searchParams, categoryTokenMaps, taxonomyTokenMaps, keyword,
+    buildingYearRange, router, pathname, searchParams, categoryTokenMaps, taxonomyTokenMaps, keyword, hubs, hubSlug,
   ])
 
   // ── Actions ──────────────────────────────────────────────────────────────────
@@ -640,10 +699,10 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
   )
 }
 
-export function FilterProvider({ children }: { children: ReactNode }) {
+export function FilterProvider({ children, hubs, hubSlug }: { children: ReactNode; hubs?: HubDef[]; hubSlug?: string }) {
   return (
     <Suspense fallback={<div>Loading filters...</div>}>
-      <FilterProviderInner>{children}</FilterProviderInner>
+      <FilterProviderInner hubs={hubs} hubSlug={hubSlug}>{children}</FilterProviderInner>
     </Suspense>
   )
 }

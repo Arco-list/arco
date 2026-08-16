@@ -3,22 +3,36 @@ import { getTranslations } from "next-intl/server"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { Link } from "@/i18n/navigation"
-import { SimilarProjectCard } from "@/components/project/similar-projects"
-import { getProjectTranslation, translateScope, canonicalizeScope } from "@/lib/project-translations"
+import { FilterProvider, type HubDef } from "@/contexts/filter-context"
+import { FilterErrorBoundary } from "@/components/filter-error-boundary"
+import { DiscoverClient } from "@/components/discover-client"
+import type { DiscoverProject } from "@/lib/projects/queries"
 import { getSiteUrl } from "@/lib/utils"
-import { HUB_COPY, cityHubCopy, type Hub, type HubProjectCard } from "@/lib/project-hubs"
+import { HUB_COPY, cityHubCopy, type Hub } from "@/lib/project-hubs"
+
+export function hubToDef(hub: Hub): HubDef {
+  return {
+    slug: hub.slug,
+    kind: hub.kind,
+    cityName: hub.kind === "city" ? hub.name : undefined,
+    scope: hub.scope,
+  }
+}
 
 /**
- * Programmatic hub page ("Architectuur in Amsterdam", "Renovatieprojecten
- * in Nederland"). Fully server-rendered: breadcrumb trail, H1, templated
- * intro, project grid and sibling-hub strip are all in the HTML for
- * crawlers. Rendered from the project detail route when the slug resolves
- * to a hub instead of a project.
+ * Hub page = the discover page, pre-filtered. Renders the full filter
+ * experience (FilterProvider seeded with the hub's preset) under the
+ * hub's own identity: search-targeted H1, intro, extended breadcrumb +
+ * BreadcrumbList JSON-LD. initialProjects arrive pre-filtered from the
+ * server so the crawled HTML contains exactly the hub's projects; the
+ * FilterProvider maps any filter change to the right URL (another hub
+ * path, or /projects?query).
  */
-export async function HubPage({ hub, siblings, projects, locale }: {
+export async function HubPage({ hub, allHubs, siblings, initialProjects, locale }: {
   hub: Hub
+  allHubs: Hub[]
   siblings: Hub[]
-  projects: HubProjectCard[]
+  initialProjects: DiscoverProject[]
   locale: string
 }) {
   const t = await getTranslations("projects")
@@ -37,21 +51,36 @@ export async function HubPage({ hub, siblings, projects, locale }: {
     ],
   }
 
-  const cards = projects.map((p) => ({
-    id: p.id,
-    slug: p.slug,
-    title:
-      getProjectTranslation({ title: p.title, translations: p.translations }, "title", locale) || p.title,
-    location: p.location,
-    projectType: translateScope(canonicalizeScope(p.projectType), locale) ?? p.projectType,
-    imageUrl: p.imageUrl,
-  }))
-
   const siblingLabel = locale === "nl" ? "Ook interessant:" : "Also explore:"
   const allProjectsLabel = locale === "nl" ? "Alle projecten bekijken" : "Browse all projects"
-  const countLabel = locale === "nl"
-    ? `${projects.length} ${projects.length === 1 ? "project" : "projecten"}`
-    : `${projects.length} ${projects.length === 1 ? "project" : "projects"}`
+
+  const hubFooter = (
+    <div className="wrap" style={{ paddingBottom: 48 }}>
+      {siblings.length > 0 && (
+        <p className="text-[13px]" style={{ marginTop: 32, color: "#6b6b68" }}>
+          {siblingLabel}{" "}
+          {siblings.map((s, i) => {
+            const label = s.kind === "city"
+              ? (locale === "nl" ? `Architectuur in ${s.name}` : `Architecture in ${s.name}`)
+              : (HUB_COPY[s.slug]?.[locale === "nl" ? "nl" : "en"]?.title ?? s.slug)
+            return (
+              <span key={s.slug}>
+                {i > 0 && <span aria-hidden="true"> · </span>}
+                <Link href={`/projects/${s.slug}`} className="text-[#016D75] hover:text-[#014f55] transition-colors">
+                  {label}
+                </Link>
+              </span>
+            )
+          })}
+        </p>
+      )}
+      <p style={{ marginTop: 12 }}>
+        <Link href="/projects" className="text-[13px] text-[#016D75] hover:text-[#014f55] transition-colors">
+          {allProjectsLabel} →
+        </Link>
+      </p>
+    </div>
+  )
 
   return (
     <div className="min-h-screen bg-white">
@@ -60,66 +89,19 @@ export async function HubPage({ hub, siblings, projects, locale }: {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
       />
       <Header />
-
-      <div className="discover-page-title" style={{ marginTop: 80 }}>
-        <div className="wrap">
-          <nav aria-label="Breadcrumb" className="discover-breadcrumb">
-            <Link href="/projects" className="discover-breadcrumb-item">
-              {t("title")}
-            </Link>
-            <span className="discover-breadcrumb-sep" aria-hidden="true">›</span>
-            <Link href="/projects" className="discover-breadcrumb-item">
-              {t("breadcrumb_netherlands")}
-            </Link>
-            <span className="discover-breadcrumb-sep" aria-hidden="true">›</span>
-            <span className="discover-breadcrumb-item discover-breadcrumb-current">
-              {hub.kind === "city" ? hub.name : copy.title}
-            </span>
-          </nav>
-
-          <h1 className="arco-section-title">{copy.title}</h1>
-          <p className="arco-body-text" style={{ color: "#6b6b68", marginTop: 8, maxWidth: 560 }}>
-            {copy.intro}
-          </p>
-        </div>
-      </div>
-
-      <div className="wrap" style={{ paddingTop: 24, paddingBottom: 80 }}>
-        <p className="text-[13px] text-[#a1a1a0]" style={{ marginBottom: 16 }}>{countLabel}</p>
-
-        <div className="discover-grid">
-          {cards.map((card) => (
-            <SimilarProjectCard key={card.id} project={card} />
-          ))}
-        </div>
-
-        {/* Sibling hubs — lateral links between hub pages, server-rendered */}
-        {siblings.length > 0 && (
-          <p className="text-[13px]" style={{ marginTop: 48, color: "#6b6b68" }}>
-            {siblingLabel}{" "}
-            {siblings.map((s, i) => {
-              const label = s.kind === "city"
-                ? (locale === "nl" ? `Architectuur in ${s.name}` : `Architecture in ${s.name}`)
-                : (HUB_COPY[s.slug]?.[locale === "nl" ? "nl" : "en"]?.title ?? s.slug)
-              return (
-                <span key={s.slug}>
-                  {i > 0 && <span aria-hidden="true"> · </span>}
-                  <Link href={`/projects/${s.slug}`} className="text-[#016D75] hover:text-[#014f55] transition-colors">
-                    {label}
-                  </Link>
-                </span>
-              )
-            })}
-          </p>
-        )}
-
-        <p style={{ marginTop: 16 }}>
-          <Link href="/projects" className="text-[13px] text-[#016D75] hover:text-[#014f55] transition-colors">
-            {allProjectsLabel} →
-          </Link>
-        </p>
-      </div>
-
+      <FilterProvider hubs={allHubs.map(hubToDef)} hubSlug={hub.slug}>
+        <FilterErrorBoundary>
+          <DiscoverClient
+            initialProjects={initialProjects}
+            hubHeader={{
+              title: copy.title,
+              intro: copy.intro,
+              crumb: hub.kind === "city" ? hub.name : copy.title,
+            }}
+            hubFooter={hubFooter}
+          />
+        </FilterErrorBoundary>
+      </FilterProvider>
       <Footer />
     </div>
   )
