@@ -8,7 +8,7 @@ import { logger } from "@/lib/logger"
  * morning ritual on /admin/sales.
  *
  * Pacing model:
- *   - DAILY_CAP intros per day (20), weekdays only (see vercel.json:
+ *   - Adaptive daily cap (20 -> 60 warm-up ramp), weekdays only (see vercel.json:
  *     schedule `0 7-15 * * 1-5` = hourly 09:00–17:00 Amsterdam in
  *     summer). Nine runs share the budget: each run sends
  *     ceil(remaining / runs-left), so ~2–3 per hour — sends spread
@@ -38,10 +38,24 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const maxDuration = 120
 
-const DAILY_CAP = 20
+// ── Adaptive daily cap (domain warm-up) ─────────────────────────────
+// Ramps +25% per week from BASE_DAILY_CAP up to MAX_DAILY_CAP, but only
+// while the trailing 7 days look healthy (bounce < RAMP_HOLD_BOUNCE_PCT
+// with a minimum sample, fewer than RAMP_HOLD_COMPLAINTS complaints).
+// Unhealthy weeks hold at the base cap — the ramp resumes on the
+// schedule once metrics are clean again, it never "catches up" with a
+// burst. The 48h hard bounce guard below still halts releases outright.
+const BASE_DAILY_CAP = 20
+const MAX_DAILY_CAP = 60
+const RAMP_FACTOR = 1.25
+// Monday Aug 17 2026 = week 0 (cap 20). Week 1 → 25, then 31, 39, 49, 60.
+const RAMP_START_UTC = Date.UTC(2026, 7, 17)
+const RAMP_HOLD_BOUNCE_PCT = 3
+const RAMP_HOLD_MIN_SENDS = 30
+const RAMP_HOLD_COMPLAINTS = 2
 // Ceiling per invocation, even when invoked manually with a full
-// day's budget remaining — protects against a 20-intro burst.
-const PER_RUN_CAP = 5
+// day's budget remaining — protects against a burst.
+const PER_RUN_CAP = 8
 const BOUNCE_GUARD_PCT = 8
 const BOUNCE_GUARD_MIN_SENDS = 20
 // Cron fires hourly at 7..15 UTC (see vercel.json).
@@ -62,6 +76,36 @@ export async function GET(request: NextRequest) {
   const supabase = createServiceRoleSupabaseClient()
   const now = new Date()
 
+  // ── Adaptive cap: warm-up schedule gated on trailing-7d health ──────
+  const weeksSinceRampStart = Math.max(0, Math.floor((now.getTime() - RAMP_START_UTC) / (7 * 24 * 3600 * 1000)))
+  const scheduledCap = Math.min(MAX_DAILY_CAP, Math.round(BASE_DAILY_CAP * Math.pow(RAMP_FACTOR, weeksSinceRampStart)))
+  let dailyCap = scheduledCap
+  let rampHeld: string | null = null
+  if (scheduledCap > BASE_DAILY_CAP) {
+    const healthSince = new Date(now.getTime() - 7 * 24 * 3600 * 1000).toISOString()
+    const [{ count: sent7d }, { count: bounced7d }, { count: complained7d }] = await Promise.all([
+      supabase.from("email_events").select("id", { count: "exact", head: true })
+        .eq("event_type", "sent").gte("occurred_at", healthSince),
+      supabase.from("email_events").select("id", { count: "exact", head: true })
+        .eq("event_type", "bounced").gte("occurred_at", healthSince),
+      supabase.from("email_events").select("id", { count: "exact", head: true })
+        .eq("event_type", "complained").gte("occurred_at", healthSince),
+    ])
+    const s7 = sent7d ?? 0
+    const b7 = bounced7d ?? 0
+    const c7 = complained7d ?? 0
+    if (s7 >= RAMP_HOLD_MIN_SENDS && b7 / s7 > RAMP_HOLD_BOUNCE_PCT / 100) {
+      dailyCap = BASE_DAILY_CAP
+      rampHeld = `bounce ${b7}/${s7} in 7d > ${RAMP_HOLD_BOUNCE_PCT}%`
+    } else if (c7 >= RAMP_HOLD_COMPLAINTS) {
+      dailyCap = BASE_DAILY_CAP
+      rampHeld = `${c7} complaints in 7d`
+    }
+    if (rampHeld) {
+      logger.warn("[release-outreach-batch] ramp held at base cap", { scheduledCap, rampHeld })
+    }
+  }
+
   // ── Budget: how much of today's cap is already spent ────────────────
   // Counts ACTUAL outreach-intro sends today (email_events), not just
   // cron-triggered ones — manual releases from /admin/sales spend the
@@ -74,7 +118,7 @@ export async function GET(request: NextRequest) {
     .eq("event_type", "sent")
     .eq("template", "outreach-intro")
     .gte("occurred_at", dayStart)
-  const remaining = DAILY_CAP - (startedToday ?? 0)
+  const remaining = dailyCap - (startedToday ?? 0)
   if (remaining <= 0) {
     return NextResponse.json({ ok: true, released: 0, reason: "daily cap reached", startedToday })
   }
@@ -149,6 +193,7 @@ export async function GET(request: NextRequest) {
 
   logger.info("[release-outreach-batch] run complete", {
     released: released.length, failures: failures.length, perRun, remaining, runsLeft,
+    dailyCap, scheduledCap, rampHeld,
   })
-  return NextResponse.json({ ok: true, released: released.length, emails: released, failures, budget: { dailyCap: DAILY_CAP, startedToday: startedToday ?? 0, perRun } })
+  return NextResponse.json({ ok: true, released: released.length, emails: released, failures, budget: { dailyCap, scheduledCap, rampHeld, startedToday: startedToday ?? 0, perRun } })
 }
