@@ -17,7 +17,10 @@ export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
   title: {
     default: "Arco - Connect with Architecture & Design Professionals",
-    template: "%s | Arco",
+    // No brand suffix: Google rendered "%s | Arco" as "… - Arco" on
+    // every SERP title, wasting pixels the page name needs. The brand
+    // is already carried by the favicon + arcolist.com site line.
+    template: "%s",
   },
   description:
     "Find and collaborate with top architecture, interior design, and construction professionals in the Netherlands. Post projects, browse portfolios, and bring your vision to life.",
