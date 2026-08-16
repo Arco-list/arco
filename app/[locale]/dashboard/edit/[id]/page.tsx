@@ -445,6 +445,11 @@ export default function ListingEditorPage() {
   // Expanded editorial body (translations.<locale>.seo_body) — rendered
   // behind "Read more" on the public page, editable below the intro here.
   const [seoBodyText, setSeoBodyText] = useState("")
+  const [bodyCharCount, setBodyCharCount] = useState(0)
+  const [bodyEditing, setBodyEditing] = useState(false)
+  useEffect(() => {
+    setBodyCharCount(seoBodyText.trim().length)
+  }, [seoBodyText])
   const [currentStatusValue, setCurrentStatusValue] = useState<ContributorStatus | "">("")
   const [selectedStatus, setSelectedStatus] = useState<ContributorStatus | "">("")
   const [projectSlug, setProjectSlug] = useState<string | null>(null)
@@ -4567,7 +4572,10 @@ export default function ListingEditorPage() {
               className="arco-body-text"
               contentEditable
               suppressContentEditableWarning
+              onFocus={() => setBodyEditing(true)}
+              onInput={(e) => setBodyCharCount((e.currentTarget.textContent ?? "").trim().length)}
               onBlur={(e) => {
+                setBodyEditing(false)
                 const val = (e.currentTarget.textContent ?? "").trim()
                 if (val === seoBodyText.trim()) return
                 setSeoBodyText(val)
@@ -4602,9 +4610,9 @@ export default function ListingEditorPage() {
                   </>
                 )}
               </button>
-              {descEditing && (
-                <span className={`text-[11px] absolute right-0 ${descCharCount > 750 ? "text-red-500" : "text-[#a1a1a0]"}`}>
-                  {t("char_count", { count: descCharCount, max: 750 })}
+              {(descEditing || bodyEditing) && (
+                <span className={`text-[11px] absolute right-0 ${descCharCount + bodyCharCount > 3000 ? "text-red-500" : "text-[#a1a1a0]"}`}>
+                  {t("char_count", { count: descCharCount + bodyCharCount, max: 3000 })}
                 </span>
               )}
             </div>
