@@ -4628,8 +4628,8 @@ export default function ListingEditorPage() {
                 )}
               </button>
               {(descEditing || bodyEditing) && (
-                <span className={`text-[11px] absolute right-0 top-1/2 -translate-y-1/2 ${descCharCount + bodyCharCount > 450 ? "text-red-500" : "text-[#a1a1a0]"}`}>
-                  {t("word_count", { count: descCharCount + bodyCharCount, max: 450 })}
+                <span className={`text-[11px] absolute right-0 top-1/2 -translate-y-1/2 ${descCharCount + bodyCharCount > 350 ? "text-red-500" : "text-[#a1a1a0]"}`}>
+                  {t("word_count", { count: descCharCount + bodyCharCount, max: 350 })}
                 </span>
               )}
             </div>
