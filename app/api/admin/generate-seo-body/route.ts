@@ -166,7 +166,9 @@ export async function GET(request: NextRequest) {
     try {
       const msg = await anthropic.messages.create({
         model: MODEL,
-        max_tokens: 1500,
+        // Two ~200-word bodies plus JSON escaping — 1500 truncated mid-
+        // string on longer outputs ("Unexpected end of JSON input").
+        max_tokens: 3000,
         messages: [{ role: "user", content: buildPrompt(facts) }],
       })
       const text = msg.content
