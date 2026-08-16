@@ -43,7 +43,7 @@ export async function generateMetadata({
     description: meta.description,
     alternates: {
       canonical,
-      languages: { ...languages, "x-default": `${baseUrl}/professionals` },
+      languages: { ...languages, "x-default": `${baseUrl}/${locales[0]}/professionals` },
     },
     openGraph: {
       title: `${meta.title} | Arco`,

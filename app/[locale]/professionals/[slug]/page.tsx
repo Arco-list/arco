@@ -50,7 +50,11 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
       : t("discover_name", { name: professional.name }))
 
   const baseUrl = getSiteUrl()
-  const canonical = `${baseUrl}/professionals/${slug}`
+  // Self-canonicalize per locale (the unprefixed URL redirects; a
+  // canonical pointing at a redirect is ignored and both locale
+  // variants index independently). x-default = default-locale URL.
+  const canonical = `${baseUrl}/${locale}/professionals/${slug}`
+  const xDefault = `${baseUrl}/${locales[0]}/professionals/${slug}`
   const languages = Object.fromEntries(
     locales.map((l) => [l, `${baseUrl}/${l}/professionals/${slug}`])
   )
@@ -60,7 +64,7 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
     description,
     alternates: {
       canonical,
-      languages: { ...languages, "x-default": canonical },
+      languages: { ...languages, "x-default": xDefault },
     },
     openGraph: {
       title: professional.name,

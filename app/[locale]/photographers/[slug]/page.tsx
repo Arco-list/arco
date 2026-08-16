@@ -24,7 +24,7 @@ type PageParams = {
 export const revalidate = 300
 
 export async function generateMetadata({ params }: { params: Promise<PageParams> }): Promise<Metadata> {
-  const { slug } = await params
+  const { slug, locale } = await params
   const t = await getTranslations("professional_detail")
   const photographer = await fetchPhotographerMetadata(slug)
 
@@ -39,7 +39,9 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
       : t("discover_photographer_name", { name: photographer.name }))
 
   const baseUrl = getSiteUrl()
-  const canonical = `${baseUrl}/photographers/${slug}`
+  // Self-canonicalize per locale; see professionals/[slug] for rationale.
+  const canonical = `${baseUrl}/${locale}/photographers/${slug}`
+  const xDefault = `${baseUrl}/${locales[0]}/photographers/${slug}`
   const languages = Object.fromEntries(
     locales.map((l) => [l, `${baseUrl}/${l}/photographers/${slug}`])
   )
@@ -49,7 +51,7 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
     description,
     alternates: {
       canonical,
-      languages: { ...languages, "x-default": canonical },
+      languages: { ...languages, "x-default": xDefault },
     },
     openGraph: {
       title: `${photographer.name} | Arco`,

@@ -107,7 +107,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       `Discover ${localizedMetaTitle}`)
 
   const baseUrl = getSiteUrl()
-  const canonical = project.slug ? `${baseUrl}/projects/${project.slug}` : undefined
+  // Self-canonicalize per locale. The unprefixed URL 307-redirects to the
+  // default locale, and a canonical that points at a redirect is ignored
+  // by Google — both locale variants then get indexed independently and
+  // the same project shows twice in results. x-default points at the
+  // default-locale URL (a real 200), matching the bare-URL redirect.
+  const canonical = project.slug ? `${baseUrl}/${metaLocale}/projects/${project.slug}` : undefined
+  const xDefault = project.slug ? `${baseUrl}/${locales[0]}/projects/${project.slug}` : undefined
   const languages = project.slug
     ? Object.fromEntries(
         locales.map((l) => [l, `${baseUrl}/${l}/projects/${project.slug}`])
@@ -120,7 +126,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     alternates: {
       canonical,
       ...(languages
-        ? { languages: { ...languages, "x-default": canonical } }
+        ? { languages: { ...languages, "x-default": xDefault } }
         : {}),
     },
     openGraph: {
