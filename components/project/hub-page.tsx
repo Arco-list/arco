@@ -21,7 +21,7 @@ export async function HubPage({ hub, siblings, projects, locale }: {
   projects: HubProjectCard[]
   locale: string
 }) {
-  const t = await getTranslations("discover")
+  const t = await getTranslations("projects")
   const copy = hub.kind === "city"
     ? cityHubCopy(hub.name, locale)
     : (HUB_COPY[hub.slug]?.[locale === "nl" ? "nl" : "en"] ?? HUB_COPY[hub.slug]?.nl)
