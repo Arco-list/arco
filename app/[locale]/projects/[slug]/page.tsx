@@ -20,6 +20,8 @@ import { isProjectRow } from "@/lib/supabase/type-guards"
 import { getSiteUrl } from "@/lib/utils"
 import { SPACES, SPACE_SLUGS } from "@/lib/spaces"
 import { locales, defaultLocale } from "@/i18n/config"
+import { resolveHub, getHubProjects, getHubs, HUB_COPY, cityHubCopy } from "@/lib/project-hubs"
+import { HubPage } from "@/components/project/hub-page"
 
 const PREVIEW_PARAM = "preview"
 
@@ -71,6 +73,30 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     .maybeSingle()
 
   if (!project) {
+    // Hub fallback: /projects/{slug} doubles as the URL level for
+    // programmatic hub pages (city / scope). Project slugs win; a slug
+    // with no project may still be a qualifying hub.
+    const hub = await resolveHub(finalSlug)
+    if (hub) {
+      const hubLocale = resolvedParams.locale ?? "en"
+      const copy = hub.kind === "city"
+        ? cityHubCopy(hub.name, hubLocale)
+        : (HUB_COPY[hub.slug]?.[hubLocale === "nl" ? "nl" : "en"] ?? HUB_COPY[hub.slug]?.nl)
+      const hubBase = getSiteUrl()
+      const hubCanonical = `${hubBase}/${hubLocale}/projects/${hub.slug}`
+      return {
+        title: copy.title,
+        description: copy.description,
+        alternates: {
+          canonical: hubCanonical,
+          languages: {
+            ...Object.fromEntries(locales.map((l) => [l, `${hubBase}/${l}/projects/${hub.slug}`])),
+            "x-default": `${hubBase}/${defaultLocale}/projects/${hub.slug}`,
+          },
+        },
+        openGraph: { title: copy.title, description: copy.description, url: hubCanonical, type: "website" },
+      }
+    }
     const t = await getTranslations("project_detail")
     return {
       title: { absolute: t("not_found_title") },
@@ -181,6 +207,24 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   }
 
   if (!project || !isProjectRow(project)) {
+    // Hub fallback — see generateMetadata. Renders the fully server-side
+    // hub page (breadcrumb, H1, grid, sibling links) for qualifying
+    // city / scope slugs; everything else 404s as before.
+    const hub = await resolveHub(finalSlug)
+    if (hub) {
+      const [projects, allHubs] = await Promise.all([getHubProjects(hub), getHubs()])
+      const siblings = [...allHubs.cities, ...allHubs.scopes]
+        .filter((h) => h.slug !== hub.slug)
+        .slice(0, 6)
+      // Called as a plain async function (valid for server components) —
+      // sidesteps a TS2786 false positive on async-component JSX.
+      return await HubPage({
+        hub,
+        siblings,
+        projects,
+        locale: resolvedParams.locale ?? "en",
+      })
+    }
     notFound()
   }
 

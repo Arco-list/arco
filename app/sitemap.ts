@@ -3,6 +3,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { getSiteUrl } from "@/lib/utils"
 import { locales, defaultLocale } from "@/i18n/config"
+import { getHubs } from "@/lib/project-hubs"
 
 // Refresh the sitemap at most every hour
 export const revalidate = 3600
@@ -61,6 +62,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
     }))
 
+  // Programmatic hub pages (city / scope) — only hubs clearing the
+  // inventory gate exist, so every listed URL is a real, stocked page.
+  let hubEntries: MetadataRoute.Sitemap = []
+  try {
+    const { cities, scopes } = await getHubs()
+    hubEntries = [...cities, ...scopes].map((hub) => ({
+      ...localizedUrls(baseUrl, `/projects/${hub.slug}`),
+      lastModified: new Date(),
+      changeFrequency: "weekly" as const,
+      priority: 0.7,
+    }))
+  } catch { /* non-fatal — sitemap ships without hubs */ }
+
   // Publicly visible companies. Matches the same status set used by
   // fetchProfessionalDetail and the homepage/listing queries: 'listed'
   // (claimed + active) and 'prospected' (unclaimed but editorially curated).
@@ -84,5 +98,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
     }))
 
-  return [...staticEntries, ...projectEntries, ...companyEntries]
+  return [...staticEntries, ...hubEntries, ...projectEntries, ...companyEntries]
 }

@@ -12,12 +12,13 @@ import { FeaturesSection } from "@/components/features-section"
 import { MembershipCTA } from "@/components/membership-cta"
 import { FeaturedCompanies, type FeaturedCompany } from "@/components/featured-companies"
 import { Footer } from "@/components/footer"
-import Link from "next/link"
+import { Link } from "@/i18n/navigation"
 import { getTranslations } from "next-intl/server"
 import { getLocalizedName } from "@/lib/locale-name"
 import { getProjectTranslation, translateCategoryName } from "@/lib/project-translations"
 import { TrackPageView } from "@/components/track-view"
 import { getSiteUrl } from "@/lib/utils"
+import { getHubs, HUB_COPY, type Hub } from "@/lib/project-hubs"
 
 export const revalidate = 300
 
@@ -494,6 +495,11 @@ async function loadLandingData(locale: string) {
 export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
   const t = await getTranslations("home")
+  // Inventory-gated hub links for the "Populaire zoekopdrachten" block.
+  let popularHubs: { cities: Hub[]; scopes: Hub[] } = { cities: [], scopes: [] }
+  try {
+    popularHubs = await getHubs()
+  } catch { /* block simply doesn't render */ }
   const {
     heroProjects,
     browseProjects,
@@ -590,6 +596,51 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
 
         {/* 7. Membership CTA */}
         <MembershipCTA />
+
+        {/* 8. Popular searches — links to the programmatic hub pages.
+            Homepage links put every hub one hop from the root (crawl
+            priority); the list is generated from the same inventory-
+            gated hub set as the routes and sitemap, so every link is a
+            real, stocked page. */}
+        {(popularHubs.cities.length > 0 || popularHubs.scopes.length > 0) && (
+          <section className="py-16 max-md:py-10 bg-white" style={{ borderTop: "1px solid var(--arco-rule)" }}>
+            <div className="wrap">
+              <h2 className="arco-section-title" style={{ marginBottom: 24 }}>
+                {locale === "nl" ? "Populaire zoekopdrachten" : "Popular searches"}
+              </h2>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 32, maxWidth: 760 }}>
+                {popularHubs.cities.length > 0 && (
+                  <div>
+                    <p className="arco-eyebrow" style={{ color: "#a1a1a0", marginBottom: 10 }}>
+                      {locale === "nl" ? "Steden" : "Cities"}
+                    </p>
+                    {popularHubs.cities.slice(0, 8).map((hub) => (
+                      <p key={hub.slug} style={{ marginBottom: 8 }}>
+                        <Link href={`/projects/${hub.slug}`} className="text-[13px] text-[#6b6b68] hover:text-[#1c1c1a] transition-colors">
+                          {locale === "nl" ? `Architectuur in ${hub.name}` : `Architecture in ${hub.name}`}
+                        </Link>
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {popularHubs.scopes.length > 0 && (
+                  <div>
+                    <p className="arco-eyebrow" style={{ color: "#a1a1a0", marginBottom: 10 }}>
+                      {locale === "nl" ? "Projecttype" : "Project type"}
+                    </p>
+                    {popularHubs.scopes.map((hub) => (
+                      <p key={hub.slug} style={{ marginBottom: 8 }}>
+                        <Link href={`/projects/${hub.slug}`} className="text-[13px] text-[#6b6b68] hover:text-[#1c1c1a] transition-colors">
+                          {HUB_COPY[hub.slug]?.[locale === "nl" ? "nl" : "en"]?.title ?? hub.slug}
+                        </Link>
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
 
       </main>
       <Footer />

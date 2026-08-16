@@ -8,7 +8,7 @@ import { useTranslations } from "next-intl"
 import { ShareModal } from "@/components/share-modal"
 import { useSavedProjects } from "@/contexts/saved-projects-context"
 
-interface SimilarProject {
+export interface SimilarProject {
   id: string
   slug: string | null
   title: string
@@ -42,7 +42,7 @@ export function SimilarProjects({ projects }: SimilarProjectsProps) {
   )
 }
 
-function SimilarProjectCard({ project }: { project: SimilarProject }) {
+export function SimilarProjectCard({ project }: { project: SimilarProject }) {
   const t = useTranslations("common")
   const { savedProjectIds, saveProject, removeProject, mutatingProjectIds } = useSavedProjects()
   const [shareOpen, setShareOpen] = useState(false)
