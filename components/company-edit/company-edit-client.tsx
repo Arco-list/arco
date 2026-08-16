@@ -1251,8 +1251,22 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         companyId={company.id}
         onStatusClick={() => setStatusDialogOpen(true)}
         onSearchPreviewClick={() => setSearchPreviewOpen(true)}
-        onTourClick={() => setTourForceRun((n) => n + 1)}
       />
+
+      {/* Tour replay — a discreet help link rather than a sub-nav pill
+          (pills are for act/state; this is meta and was crowding the
+          mobile sub-nav). Owners see it during setup, admins always.
+          Forced replays never touch the account-level seen flag. */}
+      {(adminCompanyId || isSetupMode) && (
+        <div className="wrap" style={{ display: "flex", justifyContent: "flex-end", paddingTop: 10 }}>
+          <button
+            onClick={() => setTourForceRun((n) => n + 1)}
+            className="text-[12px] text-[#a1a1a0] hover:text-[#1c1c1a] transition-colors underline underline-offset-2 bg-transparent border-none cursor-pointer p-0"
+          >
+            {t("tour_replay")}
+          </button>
+        </div>
+      )}
 
       {/* ════════════════════ SETUP POPUP (OVERLAY) ════════════════════ */}
       {/* Landing case is now handled by auto-opening the Select services
