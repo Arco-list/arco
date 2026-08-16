@@ -556,6 +556,47 @@ export default function ListingEditorPage() {
     const trimmed = sTxt.trim()
     return trimmed ? trimmed.split(/\s+/).length : 0
   }
+
+  // ── Dynamic "Lees meer" split ─────────────────────────────────────
+  // The divider is a computed cut, not a manual one: on blur the full
+  // text (intro + body) is re-split at the sentence/paragraph boundary
+  // closest to INTRO_TARGET words, constrained to [INTRO_MIN, INTRO_MAX].
+  // Overflow flows down into the body; a starved intro pulls text back
+  // up. Running only on blur keeps the cursor stable while typing, and
+  // cutting exclusively on boundaries means no sentence is ever split.
+  const INTRO_MIN = 40
+  const INTRO_MAX = 100
+  const INTRO_TARGET = 75
+  const rebalanceIntroBody = useCallback((full: string): { intro: string; body: string } => {
+    const text = full.replace(/\s*\n\s*\n\s*/g, "\n\n").trim()
+    if (!text) return { intro: "", body: "" }
+    if (countWords(text) <= INTRO_MAX) return { intro: text.replace(/\n\n/g, " "), body: "" }
+    // Candidate cut points: after sentence ends, and at paragraph breaks.
+    const candidates: number[] = []
+    const sentenceRe = /[.!?\u2026]["')\]]?(?=\s|$)/g
+    let m: RegExpExecArray | null
+    while ((m = sentenceRe.exec(text))) candidates.push(m.index + m[0].length)
+    const paraRe = /\n\n/g
+    while ((m = paraRe.exec(text))) candidates.push(m.index)
+    candidates.sort((a, b) => a - b)
+    if (candidates.length === 0) return { intro: text, body: "" }
+    let best: number | null = null
+    let bestScore = Infinity
+    for (const c of candidates) {
+      const w = countWords(text.slice(0, c))
+      if (w < INTRO_MIN) continue
+      if (w > INTRO_MAX) break
+      const score = Math.abs(w - INTRO_TARGET)
+      if (score < bestScore) { bestScore = score; best = c }
+    }
+    // No boundary inside the window: sentence integrity beats the window —
+    // cut at the first boundary (intro runs slightly long rather than
+    // splitting a sentence).
+    if (best === null) best = candidates[0]
+    const intro = text.slice(0, best).trim().replace(/\n\n/g, " ")
+    const body = text.slice(best).trim()
+    return { intro, body }
+  }, [])
   const [descCharCount, setDescCharCount] = useState(() => countWords(detailsForm.projectDescription ?? ""))
   // Keep the intro count in sync with async hydration / regenerate —
   // it otherwise stayed 0 until the first keystroke, so the combined
@@ -3541,15 +3582,28 @@ export default function ListingEditorPage() {
     setDescEditing(true)
   }
 
+  // Applies a rebalanced intro/body pair: updates state + the uncontrolled
+  // contentEditable, and persists whichever part actually changed.
+  const applyRebalanced = (intro: string, body: string) => {
+    if (intro !== descriptionPlainText) {
+      setDetailsForm(prev => ({ ...prev, projectDescription: intro }))
+      if (descEditRef.current) descEditRef.current.textContent = intro
+      void saveFieldDirect({ description: intro || null })
+      if (projectId) void saveProjectTranslatedField(projectId, "description", intro, locale)
+    }
+    if (body !== seoBodyText.trim()) {
+      setSeoBodyText(body)
+      if (projectId) void saveProjectTranslatedField(projectId, "seo_body", body, locale)
+    }
+  }
+
   const handleDescEditBlur = () => {
     descEcRef.current?.classList.remove("on")
     setDescEditing(false)
-    const val = (descEditRef.current?.textContent?.trim() ?? "").slice(0, 750)
-    if (val !== descriptionPlainText) {
-      setDetailsForm(prev => ({ ...prev, projectDescription: val }))
-      void saveFieldDirect({ description: val || null })
-      if (projectId) void saveProjectTranslatedField(projectId, "description", val, locale)
-    }
+    const val = descEditRef.current?.textContent?.trim() ?? ""
+    if (val === descriptionPlainText) return
+    const { intro, body } = rebalanceIntroBody(val + (seoBodyText.trim() ? "\n\n" + seoBodyText.trim() : ""))
+    applyRebalanced(intro, body)
   }
 
   const saveSpecBarField = (field: string, value: string) => {
@@ -4591,8 +4645,9 @@ export default function ListingEditorPage() {
                 setBodyEditing(false)
                 const val = (e.currentTarget.textContent ?? "").trim()
                 if (val === seoBodyText.trim()) return
-                setSeoBodyText(val)
-                if (projectId) void saveProjectTranslatedField(projectId, "seo_body", val, locale)
+                const currentIntro = descEditRef.current?.textContent?.trim() ?? descriptionPlainText
+                const { intro, body } = rebalanceIntroBody(currentIntro + (val ? "\n\n" + val : ""))
+                applyRebalanced(intro, body)
               }}
               style={{ cursor: "text", minHeight: "1.7em", textAlign: "center", outline: "none", whiteSpace: "pre-wrap", color: "#6b6b68" }}
               data-placeholder={t("body_placeholder")}
