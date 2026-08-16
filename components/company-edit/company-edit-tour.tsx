@@ -287,7 +287,10 @@ export function CompanyEditTour({ companyId, enabled, steps, namespace = "compan
           boxShadow: "0 0 0 9999px rgba(15, 23, 42, 0.55)",
           outline: "2px solid #016D75",
           outlineOffset: 0,
-          transition: "top 200ms ease, left 200ms ease, width 200ms ease, height 200ms ease",
+          // No positional transition: the scroll listener remeasures every
+          // frame, so the box tracks the target 1:1 and reads as pinned to
+          // the element while the page scrolls. A transition here made it
+          // lag behind and "fly" across the screen between steps.
           pointerEvents: "auto",
           cursor: "pointer",
         }}
