@@ -1258,10 +1258,16 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
           mobile sub-nav). Owners see it during setup, admins always.
           Forced replays never touch the account-level seen flag. */}
       {(adminCompanyId || isSetupMode) && (
-        <div className="wrap" style={{ display: "flex", justifyContent: "flex-end", paddingTop: 10 }}>
+        // The site header is position:fixed and the sub-nav is sticky, so
+        // this element's natural flow slot sits BEHIND the stuck sub-nav
+        // bar. A zero-height relative wrapper + absolute button floats the
+        // link into the visible gap below the bars without shifting the
+        // page flow for anyone.
+        <div className="wrap" style={{ position: "relative", height: 0 }}>
           <button
             onClick={() => setTourForceRun((n) => n + 1)}
-            className="text-[12px] text-[#a1a1a0] hover:text-[#1c1c1a] transition-colors underline underline-offset-2 bg-transparent border-none cursor-pointer p-0"
+            className="absolute right-5 md:right-[60px] text-[12px] text-[#a1a1a0] hover:text-[#1c1c1a] transition-colors underline underline-offset-2 bg-transparent border-none cursor-pointer p-0"
+            style={{ top: 76 }}
           >
             {t("tour_replay")}
           </button>
