@@ -693,7 +693,6 @@ type Props = {
   initialTotalCompanies: number
   initialFunnel: SalesFunnel
   initialEmailsSent: number
-  initialCallListCount: number
   currentApolloListId?: string | null
   apolloProspectsCount?: number
   /** Apollo connection badge (Inbox pattern) — key presence + newest
@@ -706,7 +705,6 @@ export function ProspectsClient({
   initialTotalCompanies,
   initialFunnel,
   initialEmailsSent,
-  initialCallListCount,
   currentApolloListId = null,
   apolloProspectsCount = 0,
   apolloSyncStatus = null,
@@ -718,12 +716,9 @@ export function ProspectsClient({
   const [statusFilter, setStatusFilter] = useState<ProspectStatus[]>([])
   const [sourceFilter, setSourceFilter] = useState<string[]>([])
   const [sequenceFilter, setSequenceFilter] = useState<SequenceFilterValue[]>([])
-  // Toggle for the Outbound-due button: when true, the table only renders
-  // companies with a next outbound today or in the past. Count next to the
-  // button stays global (initialCallListCount) — it doesn't shrink to
-  // zero when the filter is active.
+  // Toggle for the Call list button: when true, the table only renders
+  // today's ranked call queue (max 10, tier order).
   const [callListOnly, setCallListOnly] = useState(false)
-  const [callListCount, setCallListCount] = useState(initialCallListCount)
   // Log outbound modal target — opened from the black "Log" pill on a
   // contact row. The panel has its own instance; this one serves the
   // table without opening the panel first.
@@ -781,7 +776,6 @@ export function ProspectsClient({
       }
       setTotalCompanies(result.totalCompanies)
       setFunnel(result.funnel)
-      setCallListCount(result.callListCount)
       setOffset(off)
       setHasMore(result.totalCompanies > off + result.companies.length)
     })
@@ -822,7 +816,6 @@ export function ProspectsClient({
       setCompanies(result.companies)
       setTotalCompanies(result.totalCompanies)
       setFunnel(result.funnel)
-      setCallListCount(result.callListCount)
       setTotalEmailsSent(result.companies.reduce((sum, c) => sum + c.emailsSent, 0))
       setOffset(0)
       setHasMore(result.totalCompanies > result.companies.length)
@@ -1148,7 +1141,7 @@ export function ProspectsClient({
             }`}
             aria-pressed={callListOnly}
           >
-            Call list ({callListCount})
+            Call list
           </button>
           {/* Multi-select status filter — empty selection = all statuses. */}
           <DropdownMenu>

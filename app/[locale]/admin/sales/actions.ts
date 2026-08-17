@@ -778,7 +778,6 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
    *  unfiltered dataset so the toolbar button is a stable "global"
    *  signal, independent of status / source / sequence / search
    *  narrowing. */
-  callListCount: number
   error?: string
 }> {
   const supabase = createServiceRoleSupabaseClient()
@@ -822,7 +821,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
 
   if (error) {
     console.error("Failed to fetch prospects for sales aggregation", error)
-    return { companies: [], totalCompanies: 0, funnel: EMPTY_SALES_FUNNEL, callListCount: 0, error: error.message }
+    return { companies: [], totalCompanies: 0, funnel: EMPTY_SALES_FUNNEL, error: error.message }
   }
 
   const rawRows = (data ?? []) as unknown as Omit<Prospect, "resolvedContact">[]
@@ -1175,7 +1174,6 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
       a.t.tier - b.t.tier
       || (b.r.lastContactedAt ?? "").localeCompare(a.r.lastContactedAt ?? ""))
     .slice(0, 10)
-  const callListCount = rankedCallList.length
 
   // Filter ordering matters for the funnel:
   //   - Source, sequence and search narrow the funnel (the user wants to
@@ -1254,7 +1252,6 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
       companies: annotated,
       totalCompanies: annotated.length,
       funnel,
-      callListCount,
     }
   }
 
@@ -1280,7 +1277,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   const totalCompanies = rows.length
   const paged = rows.slice(offset, offset + limit)
 
-  return { companies: paged, totalCompanies, funnel, callListCount }
+  return { companies: paged, totalCompanies, funnel }
 }
 
 const EMPTY_SALES_FUNNEL: SalesFunnel = {
