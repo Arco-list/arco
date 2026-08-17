@@ -18,7 +18,7 @@ import { getLocalizedName } from "@/lib/locale-name"
 import { getProjectTranslation, translateCategoryName } from "@/lib/project-translations"
 import { TrackPageView } from "@/components/track-view"
 import { getSiteUrl } from "@/lib/utils"
-import { getHubs, HUB_COPY, type Hub } from "@/lib/project-hubs"
+import { getHubs, hubCopy, type Hub } from "@/lib/project-hubs"
 
 export const revalidate = 300
 
@@ -496,7 +496,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   const { locale } = await params
   const t = await getTranslations("home")
   // Inventory-gated hub links for the "Populaire zoekopdrachten" block.
-  let popularHubs: { cities: Hub[]; scopes: Hub[] } = { cities: [], scopes: [] }
+  let popularHubs: { cities: Hub[]; scopes: Hub[]; types: Hub[]; combos: Hub[] } = { cities: [], scopes: [], types: [], combos: [] }
   try {
     popularHubs = await getHubs()
   } catch { /* block simply doesn't render */ }
@@ -617,7 +617,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                     {popularHubs.cities.slice(0, 8).map((hub) => (
                       <p key={hub.slug} style={{ marginBottom: 8 }}>
                         <Link href={`/projects/${hub.slug}`} className="text-[13px] text-[#6b6b68] hover:text-[#1c1c1a] transition-colors">
-                          {locale === "nl" ? `Architectuur in ${hub.name}` : `Architecture in ${hub.name}`}
+                          {hubCopy(hub, locale).h1}
                         </Link>
                       </p>
                     ))}
@@ -631,7 +631,21 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                     {popularHubs.scopes.map((hub) => (
                       <p key={hub.slug} style={{ marginBottom: 8 }}>
                         <Link href={`/projects/${hub.slug}`} className="text-[13px] text-[#6b6b68] hover:text-[#1c1c1a] transition-colors">
-                          {HUB_COPY[hub.slug]?.[locale === "nl" ? "nl" : "en"]?.title ?? hub.slug}
+                          {hubCopy(hub, locale).h1}
+                        </Link>
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {(popularHubs.types.length > 0 || popularHubs.combos.length > 0) && (
+                  <div>
+                    <p className="arco-eyebrow" style={{ color: "#a1a1a0", marginBottom: 10 }}>
+                      {locale === "nl" ? "Woningtype" : "Home type"}
+                    </p>
+                    {[...popularHubs.types, ...popularHubs.combos].slice(0, 8).map((hub) => (
+                      <p key={hub.slug} style={{ marginBottom: 8 }}>
+                        <Link href={`/projects/${hub.slug}`} className="text-[13px] text-[#6b6b68] hover:text-[#1c1c1a] transition-colors">
+                          {hubCopy(hub, locale).h1}
                         </Link>
                       </p>
                     ))}

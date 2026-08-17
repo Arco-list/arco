@@ -255,9 +255,11 @@ const FilterContext = createContext<FilterContextType | undefined>(undefined)
  *  and back so hub pages ARE the discover page, pre-filtered. */
 export interface HubDef {
   slug: string
-  kind: "city" | "scope"
+  kind: "city" | "scope" | "type" | "type-city"
   cityName?: string
   scope?: string
+  /** building_type value == filter token ("villa", "apartment"). */
+  typeValue?: string
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
@@ -277,7 +279,7 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
       keyword: initialSearchParams.get("search") ?? "",
       // Hub pages mount with their filter already applied so the first
       // client render matches the server-filtered grid (no flash).
-      ...(activeHub?.kind === "city" && activeHub.cityName ? { selectedLocations: [activeHub.cityName] } : {}),
+      ...((activeHub?.kind === "city" || activeHub?.kind === "type-city") && activeHub.cityName ? { selectedLocations: [activeHub.cityName] } : {}),
       ...(activeHub?.kind === "scope" && activeHub.scope ? { selectedScopes: [activeHub.scope] } : {}),
     }),
   )
@@ -490,7 +492,7 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
     if (!areStringArraysEqual(selectedStyles, resolvedStyles)) setSelectedStyles(resolvedStyles)
 
     let locationValues = parseCommaSeparatedParam(searchParams.get("location"))
-    if (activeHub?.kind === "city" && activeHub.cityName && !locationValues.includes(activeHub.cityName)) {
+    if ((activeHub?.kind === "city" || activeHub?.kind === "type-city") && activeHub.cityName && !locationValues.includes(activeHub.cityName)) {
       // The hub path carries this filter — treat it as an implicit URL param
       // so the empty query string doesn't clear it while on the hub page.
       locationValues = [activeHub.cityName, ...locationValues]
@@ -500,7 +502,11 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
     const spaceValue = searchParams.get("space") ?? ""
     if (selectedSpace !== spaceValue) setSelectedSpace(spaceValue)
 
-    const buildingTypeValues = parseCommaSeparatedParam(searchParams.get("buildingType"))
+    let buildingTypeValues = parseCommaSeparatedParam(searchParams.get("buildingType"))
+    if ((activeHub?.kind === "type" || activeHub?.kind === "type-city") && activeHub.typeValue && !buildingTypeValues.includes(activeHub.typeValue)) {
+      // Hub path carries the building-type filter as an implicit param.
+      buildingTypeValues = [activeHub.typeValue, ...buildingTypeValues]
+    }
     const resolvedBuildingTypes = resolveTokensToIds(buildingTypeValues, taxonomyTokenMaps.building_type)
     if (!areStringArraysEqual(selectedBuildingTypes, resolvedBuildingTypes)) setSelectedBuildingTypes(resolvedBuildingTypes)
 
@@ -590,28 +596,38 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
       ? pathname.slice(0, pathname.length - hubSlug.length - 1)
       : pathname
     const onlyFilter = (
-      locations: number, scopes: number,
+      locations: number, scopes: number, buildingTypes: number,
     ) =>
       selectedLocations.length === locations &&
       selectedScopes.length === scopes &&
+      selectedBuildingTypes.length === buildingTypes &&
       selectedTypes.length === 0 &&
       selectedStyles.length === 0 &&
       selectedSpace === "" &&
-      selectedBuildingTypes.length === 0 &&
       selectedBuildingFeatures.length === 0 &&
       selectedSizes.length === 0 &&
       selectedBudgets.length === 0 &&
       projectYearRange[1] === null &&
       buildingYearRange[1] === null &&
       keyword.trim().length === 0
+    const buildingTypeTokens = mapIdsToTokens(selectedBuildingTypes, taxonomyTokenMaps.building_type)
     const matchedHub =
       hubs.find((h) =>
-        h.kind === "city" && h.cityName && onlyFilter(1, 0) &&
+        h.kind === "type-city" && h.cityName && h.typeValue && onlyFilter(1, 0, 1) &&
+        selectedLocations[0]?.toLowerCase() === h.cityName.toLowerCase() &&
+        buildingTypeTokens[0]?.toLowerCase() === h.typeValue.toLowerCase(),
+      ) ??
+      hubs.find((h) =>
+        h.kind === "city" && h.cityName && onlyFilter(1, 0, 0) &&
         selectedLocations[0]?.toLowerCase() === h.cityName.toLowerCase(),
       ) ??
       hubs.find((h) =>
-        h.kind === "scope" && h.scope && onlyFilter(0, 1) &&
+        h.kind === "scope" && h.scope && onlyFilter(0, 1, 0) &&
         selectedScopes[0] === h.scope,
+      ) ??
+      hubs.find((h) =>
+        h.kind === "type" && h.typeValue && onlyFilter(0, 0, 1) &&
+        buildingTypeTokens[0]?.toLowerCase() === h.typeValue.toLowerCase(),
       ) ?? null
 
     const nextQuery = matchedHub ? "" : params.toString()
@@ -622,7 +638,11 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
     if (nextUrl === currentUrl) { lastSyncedQueryRef.current = nextQuery; return }
     if (nextQuery === lastSyncedQueryRef.current && targetPath === pathname) return
 
-    if (!debouncedReplaceRef.current) {
+    // Route changes (hub <-> base) navigate immediately: a debounced
+    // replace can fire with a stale closure after the route already
+    // changed, leaving the page one navigation behind until a manual
+    // refresh. Query-only updates keep the 300ms debounce.
+    if (targetPath !== pathname || !debouncedReplaceRef.current) {
       lastSyncedQueryRef.current = nextQuery
       router.replace(nextUrl, { scroll: false })
       return

@@ -11,11 +11,13 @@ interface DiscoverClientProps {
   initialProjects: DiscoverProject[]
   initialSort?: SortOption
   /** Hub mode: overrides the page identity (H1, intro, breadcrumb tail)
-   *  when the discover page renders as a hub (/projects/amsterdam). */
+   *  when the discover page renders as a hub (/projects/amsterdam).
+   *  crumbs = trail after "Projecten"; entries with href render as
+   *  links, the last entry is the current page. */
   hubHeader?: {
     title: string
     intro: string
-    crumb: string
+    crumbs: Array<{ label: string; href?: string }>
   }
   /** Server-rendered extras below the grid on hub pages (sibling-hub
    *  links, all-projects link). */
@@ -43,13 +45,23 @@ export function DiscoverClient({ initialProjects, initialSort = DEFAULT_PROJECT_
             <span className="discover-breadcrumb-sep" aria-hidden="true">›</span>
             {hubHeader ? (
               <>
-                <Link href="/projects" className="discover-breadcrumb-item">
-                  {t("breadcrumb_netherlands")}
-                </Link>
-                <span className="discover-breadcrumb-sep" aria-hidden="true">›</span>
-                <span className="discover-breadcrumb-item discover-breadcrumb-current">
-                  {hubHeader.crumb}
-                </span>
+                {hubHeader.crumbs.map((crumb, i) => {
+                  const isLast = i === hubHeader.crumbs.length - 1
+                  return (
+                    <span key={`${crumb.label}-${i}`} style={{ display: "contents" }}>
+                      {crumb.href && !isLast ? (
+                        <Link href={crumb.href} className="discover-breadcrumb-item">
+                          {crumb.label}
+                        </Link>
+                      ) : (
+                        <span className={`discover-breadcrumb-item${isLast ? " discover-breadcrumb-current" : ""}`}>
+                          {crumb.label}
+                        </span>
+                      )}
+                      {!isLast && <span className="discover-breadcrumb-sep" aria-hidden="true">›</span>}
+                    </span>
+                  )
+                })}
               </>
             ) : (
               <span className="discover-breadcrumb-item discover-breadcrumb-current">

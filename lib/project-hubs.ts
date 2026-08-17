@@ -18,17 +18,20 @@ import { canonicalizeScope, type ProjectScope } from "@/lib/project-translations
 
 export const MIN_HUB_PROJECTS = 3
 
-export type HubKind = "city" | "scope"
+export type HubKind = "city" | "scope" | "type" | "type-city"
 
 export type Hub = {
   kind: HubKind
   slug: string
-  /** Display name: city name as stored ("Amsterdam") or scope key. */
+  /** Display name: city name as stored ("Amsterdam") or scope/type key. */
   name: string
   count: number
-  /** For city hubs: the exact address_city spellings this slug covers. */
+  /** For city / type-city hubs: the exact address_city spellings covered. */
   cityNames?: string[]
   scope?: ProjectScope
+  /** For type / type-city hubs: the projects.building_type value, which
+   *  doubles as the filter token ("villa", "apartment"). */
+  typeValue?: string
 }
 
 export type HubProjectCard = {
@@ -86,6 +89,70 @@ export const HUB_COPY: Record<string, Record<"nl" | "en", { title: string; descr
   },
 }
 
+/** Display labels for building_type values. Fallback: capitalized value. */
+const TYPE_LABELS: Record<string, { nl: string; en: string }> = {
+  villa: { nl: "Villa's", en: "Villas" },
+  apartment: { nl: "Appartementen", en: "Apartments" },
+  penthouse: { nl: "Penthouses", en: "Penthouses" },
+  house: { nl: "Woonhuizen", en: "Houses" },
+}
+
+export function typeLabel(typeValue: string, locale: string): string {
+  const entry = TYPE_LABELS[typeValue]
+  if (entry) return locale === "nl" ? entry.nl : entry.en
+  return typeValue.charAt(0).toUpperCase() + typeValue.slice(1)
+}
+
+export type HubCopy = {
+  /** Visible page title — clean UX label ("Projecten in Amsterdam"). */
+  h1: string
+  /** <title> — search-phrase oriented, may differ from the H1. */
+  metaTitle: string
+  description: string
+  intro: string
+  /** Leaf label for the breadcrumb. */
+  crumb: string
+}
+
+/** Unified copy for any hub kind. */
+export function hubCopy(hub: Hub, locale: string): HubCopy {
+  const nl = locale === "nl"
+  if (hub.kind === "city") {
+    return {
+      h1: nl ? `Projecten in ${hub.name}` : `Projects in ${hub.name}`,
+      metaTitle: nl
+        ? `Architectuur- en interieurprojecten in ${hub.name}`
+        : `Architecture & interior projects in ${hub.name}`,
+      description: nl
+        ? `Bekijk gerealiseerde architectuur- en interieurprojecten in ${hub.name} — met de studio's die ze maakten.`
+        : `Browse completed architecture and interior projects in ${hub.name} — with the studios that made them.`,
+      intro: nl
+        ? `Gerealiseerde projecten in ${hub.name}, van de architecten en ontwerpers die ze maakten.`
+        : `Completed projects in ${hub.name}, by the architects and designers who made them.`,
+      crumb: hub.name,
+    }
+  }
+  if (hub.kind === "scope") {
+    const c = HUB_COPY[hub.slug]?.[nl ? "nl" : "en"] ?? HUB_COPY[hub.slug]?.nl
+    return { h1: c.title, metaTitle: c.title, description: c.description, intro: c.intro, crumb: c.title }
+  }
+  const label = typeLabel(hub.typeValue ?? hub.slug, locale)
+  const where = hub.kind === "type-city" ? hub.name : (nl ? "Nederland" : "the Netherlands")
+  return {
+    h1: `${label} in ${where}`,
+    metaTitle: nl
+      ? `${label} in ${where} – architectuurprojecten`
+      : `${label} in ${where} – architecture projects`,
+    description: nl
+      ? `Bekijk gerealiseerde ${label.toLowerCase()} in ${where} — met de architecten en studio's die ze maakten.`
+      : `Browse completed ${label.toLowerCase()} in ${where} — with the architects and studios that made them.`,
+    intro: nl
+      ? `${label} in ${where}, van de architecten en ontwerpers die ze maakten.`
+      : `${label} in ${where}, by the architects and designers who made them.`,
+    crumb: label,
+  }
+}
+
 export function cityHubCopy(city: string, locale: string): { title: string; description: string; intro: string } {
   if (locale === "nl") {
     return {
@@ -115,33 +182,45 @@ export function citySlug(name: string): string {
  *  nonsense hubs ("Architectuur in Netherlands"). */
 const CITY_DENYLIST = new Set(["netherlands", "nederland", "the-netherlands", "holland"])
 
-type ProjectRowLite = { address_city: string | null; project_type: string | null }
+type ProjectRowLite = { address_city: string | null; project_type: string | null; building_type: string | null }
 
 /** All qualifying hubs, computed from published projects. */
-export async function getHubs(): Promise<{ cities: Hub[]; scopes: Hub[] }> {
+export async function getHubs(): Promise<{ cities: Hub[]; scopes: Hub[]; types: Hub[]; combos: Hub[] }> {
   const supabase = await createServerSupabaseClient()
   const { data } = await supabase
     .from("projects")
-    .select("address_city, project_type")
+    .select("address_city, project_type, building_type")
     .eq("status", "published")
     .not("slug", "is", null)
   const rows = (data ?? []) as ProjectRowLite[]
 
   const cityAgg = new Map<string, { name: string; count: number; names: Set<string> }>()
   const scopeCounts = new Map<ProjectScope, number>()
+  const typeCounts = new Map<string, number>()
+  const comboAgg = new Map<string, { typeValue: string; city: string; count: number; names: Set<string> }>()
   for (const row of rows) {
     const city = row.address_city?.trim()
-    if (city) {
-      const slug = citySlug(city)
-      if (slug && !CITY_DENYLIST.has(slug)) {
-        const entry = cityAgg.get(slug) ?? { name: city, count: 0, names: new Set<string>() }
-        entry.count += 1
-        entry.names.add(city)
-        cityAgg.set(slug, entry)
-      }
+    const cSlug = city ? citySlug(city) : ""
+    const cityOk = Boolean(cSlug && !CITY_DENYLIST.has(cSlug))
+    if (city && cityOk) {
+      const entry = cityAgg.get(cSlug) ?? { name: city, count: 0, names: new Set<string>() }
+      entry.count += 1
+      entry.names.add(city)
+      cityAgg.set(cSlug, entry)
     }
     const scope = canonicalizeScope(row.project_type)
     if (scope) scopeCounts.set(scope, (scopeCounts.get(scope) ?? 0) + 1)
+    const typeValue = row.building_type?.trim().toLowerCase()
+    if (typeValue) {
+      typeCounts.set(typeValue, (typeCounts.get(typeValue) ?? 0) + 1)
+      if (city && cityOk) {
+        const key = `${typeValue}-${cSlug}`
+        const entry = comboAgg.get(key) ?? { typeValue, city, count: 0, names: new Set<string>() }
+        entry.count += 1
+        entry.names.add(city)
+        comboAgg.set(key, entry)
+      }
+    }
   }
 
   const cities: Hub[] = Array.from(cityAgg.entries())
@@ -159,12 +238,37 @@ export async function getHubs(): Promise<{ cities: Hub[]; scopes: Hub[] }> {
     }))
     .filter((h) => h.count >= MIN_HUB_PROJECTS)
 
-  return { cities, scopes }
+  const types: Hub[] = Array.from(typeCounts.entries())
+    .filter(([, count]) => count >= MIN_HUB_PROJECTS)
+    .map(([typeValue, count]) => ({ kind: "type" as const, slug: typeValue, name: typeValue, count, typeValue }))
+    .sort((a, b) => b.count - a.count)
+
+  // Composite single-segment slugs (apartment-amsterdam) so combos fit
+  // the existing /projects/[slug] level.
+  const combos: Hub[] = Array.from(comboAgg.entries())
+    .filter(([, v]) => v.count >= MIN_HUB_PROJECTS)
+    .map(([slug, v]) => ({
+      kind: "type-city" as const,
+      slug,
+      name: v.city,
+      count: v.count,
+      cityNames: Array.from(v.names),
+      typeValue: v.typeValue,
+    }))
+    .sort((a, b) => b.count - a.count)
+
+  return { cities, scopes, types, combos }
 }
 
 export async function resolveHub(slug: string): Promise<Hub | null> {
-  const { cities, scopes } = await getHubs()
-  return cities.find((h) => h.slug === slug) ?? scopes.find((h) => h.slug === slug) ?? null
+  const { cities, scopes, types, combos } = await getHubs()
+  return (
+    cities.find((h) => h.slug === slug) ??
+    scopes.find((h) => h.slug === slug) ??
+    types.find((h) => h.slug === slug) ??
+    combos.find((h) => h.slug === slug) ??
+    null
+  )
 }
 
 /** Projects for a hub, with primary photos, ready for the card grid. */
@@ -176,8 +280,11 @@ export async function getHubProjects(hub: Hub): Promise<HubProjectCard[]> {
     .eq("status", "published")
     .not("slug", "is", null)
     .order("published_at", { ascending: false, nullsFirst: false })
-  if (hub.kind === "city" && hub.cityNames?.length) {
+  if ((hub.kind === "city" || hub.kind === "type-city") && hub.cityNames?.length) {
     q = q.in("address_city", hub.cityNames)
+  }
+  if ((hub.kind === "type" || hub.kind === "type-city") && hub.typeValue) {
+    q = q.ilike("building_type", hub.typeValue)
   }
   const { data } = await q
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

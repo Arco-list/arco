@@ -20,7 +20,7 @@ import { isProjectRow } from "@/lib/supabase/type-guards"
 import { getSiteUrl } from "@/lib/utils"
 import { SPACES, SPACE_SLUGS } from "@/lib/spaces"
 import { locales, defaultLocale } from "@/i18n/config"
-import { resolveHub, getHubProjects, getHubs, HUB_COPY, cityHubCopy } from "@/lib/project-hubs"
+import { resolveHub, getHubProjects, getHubs, hubCopy } from "@/lib/project-hubs"
 import { fetchDiscoverProjects } from "@/lib/projects/queries"
 import { HubPage } from "@/components/project/hub-page"
 
@@ -80,13 +80,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     const hub = await resolveHub(finalSlug)
     if (hub) {
       const hubLocale = resolvedParams.locale ?? "en"
-      const copy = hub.kind === "city"
-        ? cityHubCopy(hub.name, hubLocale)
-        : (HUB_COPY[hub.slug]?.[hubLocale === "nl" ? "nl" : "en"] ?? HUB_COPY[hub.slug]?.nl)
+      const copy = hubCopy(hub, hubLocale)
       const hubBase = getSiteUrl()
       const hubCanonical = `${hubBase}/${hubLocale}/projects/${hub.slug}`
       return {
-        title: copy.title,
+        title: copy.metaTitle,
         description: copy.description,
         alternates: {
           canonical: hubCanonical,
@@ -95,7 +93,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
             "x-default": `${hubBase}/${defaultLocale}/projects/${hub.slug}`,
           },
         },
-        openGraph: { title: copy.title, description: copy.description, url: hubCanonical, type: "website" },
+        openGraph: { title: copy.metaTitle, description: copy.description, url: hubCanonical, type: "website" },
       }
     }
     const t = await getTranslations("project_detail")
@@ -219,7 +217,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         getHubs(),
         fetchDiscoverProjects(hubLocale),
       ])
-      const allHubs = [...allHubsSet.cities, ...allHubsSet.scopes]
+      const allHubs = [...allHubsSet.cities, ...allHubsSet.scopes, ...allHubsSet.types, ...allHubsSet.combos]
       const siblings = allHubs.filter((h) => h.slug !== hub.slug).slice(0, 6)
       // Server-side pre-filter: the crawled HTML contains exactly the
       // hub's projects; the client FilterProvider mounts with the same

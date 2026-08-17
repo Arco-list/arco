@@ -8,14 +8,15 @@ import { FilterErrorBoundary } from "@/components/filter-error-boundary"
 import { DiscoverClient } from "@/components/discover-client"
 import type { DiscoverProject } from "@/lib/projects/queries"
 import { getSiteUrl } from "@/lib/utils"
-import { HUB_COPY, cityHubCopy, type Hub } from "@/lib/project-hubs"
+import { hubCopy, citySlug, type Hub } from "@/lib/project-hubs"
 
 export function hubToDef(hub: Hub): HubDef {
   return {
     slug: hub.slug,
     kind: hub.kind,
-    cityName: hub.kind === "city" ? hub.name : undefined,
+    cityName: hub.kind === "city" || hub.kind === "type-city" ? hub.name : undefined,
     scope: hub.scope,
+    typeValue: hub.typeValue,
   }
 }
 
@@ -36,9 +37,21 @@ export async function HubPage({ hub, allHubs, siblings, initialProjects, locale 
   locale: string
 }) {
   const t = await getTranslations("projects")
-  const copy = hub.kind === "city"
-    ? cityHubCopy(hub.name, locale)
-    : (HUB_COPY[hub.slug]?.[locale === "nl" ? "nl" : "en"] ?? HUB_COPY[hub.slug]?.nl)
+  const copy = hubCopy(hub, locale)
+
+  // Trail after "Projecten › Nederland": the geo level, then the hub's
+  // non-geo axis as leaf. On combos ("Appartementen in Amsterdam") the
+  // city crumb links to its own hub page when one exists.
+  const cityHubForCombo = hub.kind === "type-city"
+    ? allHubs.find((h) => h.kind === "city" && h.slug === citySlug(hub.name))
+    : undefined
+  const crumbs: Array<{ label: string; href?: string }> = [
+    { label: t("breadcrumb_netherlands"), href: "/projects" },
+    ...(hub.kind === "type-city"
+      ? [{ label: hub.name, href: cityHubForCombo ? `/projects/${cityHubForCombo.slug}` : undefined }]
+      : []),
+    { label: copy.crumb },
+  ]
 
   const baseUrl = getSiteUrl()
   const breadcrumbLd = {
@@ -46,8 +59,12 @@ export async function HubPage({ hub, allHubs, siblings, initialProjects, locale 
     "@type": "BreadcrumbList",
     itemListElement: [
       { "@type": "ListItem", position: 1, name: t("title"), item: `${baseUrl}/${locale}/projects` },
-      { "@type": "ListItem", position: 2, name: t("breadcrumb_netherlands"), item: `${baseUrl}/${locale}/projects` },
-      { "@type": "ListItem", position: 3, name: copy.title, item: `${baseUrl}/${locale}/projects/${hub.slug}` },
+      ...crumbs.map((crumb, i) => ({
+        "@type": "ListItem",
+        position: i + 2,
+        name: crumb.label,
+        item: crumb.href ? `${baseUrl}/${locale}${crumb.href}` : `${baseUrl}/${locale}/projects/${hub.slug}`,
+      })),
     ],
   }
 
@@ -60,9 +77,7 @@ export async function HubPage({ hub, allHubs, siblings, initialProjects, locale 
         <p className="text-[13px]" style={{ marginTop: 32, color: "#6b6b68" }}>
           {siblingLabel}{" "}
           {siblings.map((s, i) => {
-            const label = s.kind === "city"
-              ? (locale === "nl" ? `Architectuur in ${s.name}` : `Architecture in ${s.name}`)
-              : (HUB_COPY[s.slug]?.[locale === "nl" ? "nl" : "en"]?.title ?? s.slug)
+            const label = hubCopy(s, locale).h1
             return (
               <span key={s.slug}>
                 {i > 0 && <span aria-hidden="true"> · </span>}
@@ -94,9 +109,9 @@ export async function HubPage({ hub, allHubs, siblings, initialProjects, locale 
           <DiscoverClient
             initialProjects={initialProjects}
             hubHeader={{
-              title: copy.title,
+              title: copy.h1,
               intro: copy.intro,
-              crumb: hub.kind === "city" ? hub.name : copy.title,
+              crumbs,
             }}
             hubFooter={hubFooter}
           />

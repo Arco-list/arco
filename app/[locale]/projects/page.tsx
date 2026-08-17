@@ -72,8 +72,8 @@ export default async function ProjectsPage({
   // (/projects/amsterdam) when the active filter exactly matches one.
   let hubDefs: ReturnType<typeof hubToDef>[] = []
   try {
-    const { cities, scopes } = await getHubs()
-    hubDefs = [...cities, ...scopes].map(hubToDef)
+    const { cities, scopes, types, combos } = await getHubs()
+    hubDefs = [...cities, ...scopes, ...types, ...combos].map(hubToDef)
   } catch { /* provider works fine without hub mapping */ }
 
   try {
