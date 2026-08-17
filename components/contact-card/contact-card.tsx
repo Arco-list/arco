@@ -13,6 +13,7 @@ import { removeProspectFromFunnel } from "@/app/admin/sales/actions"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { ProspectTimelineFused, TransactionalOnlyTimeline } from "./prospect-timeline-fused"
 import { LogOutboundModal } from "@/app/admin/sales/log-outbound-modal"
+import { formatPhoneDisplay } from "@/lib/format-phone"
 
 /**
  * Shared Contact Card — right-anchored slide-over. The single detail
@@ -493,6 +494,7 @@ function DetailsSection({
         <DetailField
           label="Phone"
           value={phoneLocal}
+          displayValue={formatPhoneDisplay(phoneLocal)}
           editable={canEdit}
           onSave={savePhone}
           inputType="tel"
@@ -553,6 +555,7 @@ function DetailField({
   onSave,
   inputType = "text",
   suffix,
+  displayValue,
 }: {
   label: string
   value: string | null
@@ -562,6 +565,9 @@ function DetailField({
   /** Rendered next to the value in read mode — used for
    *  read-only annotations like "· inactive" on the Role row. */
   suffix?: React.ReactNode
+  /** Read-mode formatting of the value (e.g. phone pretty-print);
+   *  editing always works on the raw value. */
+  displayValue?: string | null
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value ?? "")
@@ -656,7 +662,7 @@ function DetailField({
             }}
           >
             <span style={{ flex: 1, minWidth: 0 }}>
-              {value ?? <span style={{ color: "#a1a1a0", fontStyle: "italic" }}>Add {label.toLowerCase()}…</span>}
+              {(displayValue ?? value) ?? <span style={{ color: "#a1a1a0", fontStyle: "italic" }}>Add {label.toLowerCase()}…</span>}
               {suffix && <> {suffix}</>}
             </span>
             <span
@@ -677,7 +683,7 @@ function DetailField({
               wordBreak: "break-all",
             }}
           >
-            {value ?? "—"}
+            {(displayValue ?? value) ?? "—"}
             {suffix && <> {suffix}</>}
           </span>
         )}
