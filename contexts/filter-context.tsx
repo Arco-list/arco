@@ -255,11 +255,14 @@ const FilterContext = createContext<FilterContextType | undefined>(undefined)
  *  and back so hub pages ARE the discover page, pre-filtered. */
 export interface HubDef {
   slug: string
-  kind: "city" | "scope" | "type" | "type-city"
+  kind: "city" | "scope" | "type" | "type-city" | "province"
   cityName?: string
   scope?: string
   /** building_type value == filter token ("villa", "apartment"). */
   typeValue?: string
+  /** province hubs: every city the province covers — the hub preset is
+   *  "all of these locations". */
+  cityNames?: string[]
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
@@ -280,6 +283,7 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
       // Hub pages mount with their filter already applied so the first
       // client render matches the server-filtered grid (no flash).
       ...((activeHub?.kind === "city" || activeHub?.kind === "type-city") && activeHub.cityName ? { selectedLocations: [activeHub.cityName] } : {}),
+      ...(activeHub?.kind === "province" && activeHub.cityNames?.length ? { selectedLocations: [...activeHub.cityNames] } : {}),
       ...(activeHub?.kind === "scope" && activeHub.scope ? { selectedScopes: [activeHub.scope] } : {}),
     }),
   )
@@ -497,6 +501,10 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
       // so the empty query string doesn't clear it while on the hub page.
       locationValues = [activeHub.cityName, ...locationValues]
     }
+    if (activeHub?.kind === "province" && activeHub.cityNames?.length) {
+      const missing = activeHub.cityNames.filter((c) => !locationValues.includes(c))
+      if (missing.length > 0) locationValues = [...missing, ...locationValues]
+    }
     if (!areStringArraysEqual(selectedLocations, locationValues)) setSelectedLocations(locationValues)
 
     const spaceValue = searchParams.get("space") ?? ""
@@ -611,6 +619,11 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
       buildingYearRange[1] === null &&
       keyword.trim().length === 0
     const buildingTypeTokens = mapIdsToTokens(selectedBuildingTypes, taxonomyTokenMaps.building_type)
+    const setEquals = (a: string[], b: string[]) => {
+      if (a.length !== b.length) return false
+      const bl = new Set(b.map((x) => x.toLowerCase()))
+      return a.every((x) => bl.has(x.toLowerCase()))
+    }
     const matchedHub =
       hubs.find((h) =>
         h.kind === "type-city" && h.cityName && h.typeValue && onlyFilter(1, 0, 1) &&
@@ -628,6 +641,11 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
       hubs.find((h) =>
         h.kind === "type" && h.typeValue && onlyFilter(0, 0, 1) &&
         buildingTypeTokens[0]?.toLowerCase() === h.typeValue.toLowerCase(),
+      ) ??
+      hubs.find((h) =>
+        h.kind === "province" && (h.cityNames?.length ?? 0) > 1 &&
+        onlyFilter(h.cityNames?.length ?? 0, 0, 0) &&
+        setEquals(selectedLocations, h.cityNames ?? []),
       ) ?? null
 
     const nextQuery = matchedHub ? "" : params.toString()

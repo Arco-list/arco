@@ -18,7 +18,7 @@ import { canonicalizeScope, type ProjectScope } from "@/lib/project-translations
 
 export const MIN_HUB_PROJECTS = 3
 
-export type HubKind = "city" | "scope" | "type" | "type-city"
+export type HubKind = "city" | "scope" | "type" | "type-city" | "province"
 
 export type Hub = {
   kind: HubKind
@@ -32,6 +32,25 @@ export type Hub = {
   /** For type / type-city hubs: the projects.building_type value, which
    *  doubles as the filter token ("villa", "apartment"). */
   typeValue?: string
+  /** For city hubs: the province (address_region EN value) it belongs
+   *  to, for the breadcrumb link up to the province hub. */
+  region?: string
+}
+
+/** address_region values (stored in English) → Dutch display + slug. */
+export const PROVINCES: Record<string, { nl: string; en: string; slug: string }> = {
+  "North Holland": { nl: "Noord-Holland", en: "North Holland", slug: "noord-holland" },
+  "South Holland": { nl: "Zuid-Holland", en: "South Holland", slug: "zuid-holland" },
+  "Utrecht": { nl: "Utrecht (provincie)", en: "Utrecht (province)", slug: "provincie-utrecht" },
+  "North Brabant": { nl: "Noord-Brabant", en: "North Brabant", slug: "noord-brabant" },
+  "Gelderland": { nl: "Gelderland", en: "Gelderland", slug: "gelderland" },
+  "Overijssel": { nl: "Overijssel", en: "Overijssel", slug: "overijssel" },
+  "Zeeland": { nl: "Zeeland", en: "Zeeland", slug: "zeeland" },
+  "Drenthe": { nl: "Drenthe", en: "Drenthe", slug: "drenthe" },
+  "Flevoland": { nl: "Flevoland", en: "Flevoland", slug: "flevoland" },
+  "Friesland": { nl: "Friesland", en: "Friesland", slug: "friesland" },
+  "Groningen": { nl: "Groningen (provincie)", en: "Groningen (province)", slug: "provincie-groningen" },
+  "Limburg": { nl: "Limburg", en: "Limburg", slug: "limburg" },
 }
 
 export type HubProjectCard = {
@@ -136,6 +155,23 @@ export function hubCopy(hub: Hub, locale: string): HubCopy {
     const c = HUB_COPY[hub.slug]?.[nl ? "nl" : "en"] ?? HUB_COPY[hub.slug]?.nl
     return { h1: c.title, metaTitle: c.title, description: c.description, intro: c.intro, crumb: c.title }
   }
+  if (hub.kind === "province") {
+    const prov = PROVINCES[hub.name]
+    const label = prov ? (nl ? prov.nl : prov.en) : hub.name
+    return {
+      h1: nl ? `Projecten in ${label}` : `Projects in ${label}`,
+      metaTitle: nl
+        ? `Architectuur- en interieurprojecten in ${label}`
+        : `Architecture & interior projects in ${label}`,
+      description: nl
+        ? `Bekijk gerealiseerde architectuur- en interieurprojecten in ${label} — met de studio's die ze maakten.`
+        : `Browse completed architecture and interior projects in ${label} — with the studios that made them.`,
+      intro: nl
+        ? `Gerealiseerde projecten in ${label}, van de architecten en ontwerpers die ze maakten.`
+        : `Completed projects in ${label}, by the architects and designers who made them.`,
+      crumb: label,
+    }
+  }
   const label = typeLabel(hub.typeValue ?? hub.slug, locale)
   const where = hub.kind === "type-city" ? hub.name : (nl ? "Nederland" : "the Netherlands")
   return {
@@ -182,19 +218,20 @@ export function citySlug(name: string): string {
  *  nonsense hubs ("Architectuur in Netherlands"). */
 const CITY_DENYLIST = new Set(["netherlands", "nederland", "the-netherlands", "holland"])
 
-type ProjectRowLite = { address_city: string | null; project_type: string | null; building_type: string | null }
+type ProjectRowLite = { address_city: string | null; address_region: string | null; project_type: string | null; building_type: string | null }
 
 /** All qualifying hubs, computed from published projects. */
-export async function getHubs(): Promise<{ cities: Hub[]; scopes: Hub[]; types: Hub[]; combos: Hub[] }> {
+export async function getHubs(): Promise<{ cities: Hub[]; scopes: Hub[]; types: Hub[]; combos: Hub[]; provinces: Hub[] }> {
   const supabase = await createServerSupabaseClient()
   const { data } = await supabase
     .from("projects")
-    .select("address_city, project_type, building_type")
+    .select("address_city, address_region, project_type, building_type")
     .eq("status", "published")
     .not("slug", "is", null)
   const rows = (data ?? []) as ProjectRowLite[]
 
-  const cityAgg = new Map<string, { name: string; count: number; names: Set<string> }>()
+  const cityAgg = new Map<string, { name: string; count: number; names: Set<string>; regions: Map<string, number> }>()
+  const provinceAgg = new Map<string, { count: number; names: Set<string> }>()
   const scopeCounts = new Map<ProjectScope, number>()
   const typeCounts = new Map<string, number>()
   const comboAgg = new Map<string, { typeValue: string; city: string; count: number; names: Set<string> }>()
@@ -203,10 +240,17 @@ export async function getHubs(): Promise<{ cities: Hub[]; scopes: Hub[]; types: 
     const cSlug = city ? citySlug(city) : ""
     const cityOk = Boolean(cSlug && !CITY_DENYLIST.has(cSlug))
     if (city && cityOk) {
-      const entry = cityAgg.get(cSlug) ?? { name: city, count: 0, names: new Set<string>() }
+      const entry = cityAgg.get(cSlug) ?? { name: city, count: 0, names: new Set<string>(), regions: new Map<string, number>() }
       entry.count += 1
       entry.names.add(city)
+      if (row.address_region) entry.regions.set(row.address_region, (entry.regions.get(row.address_region) ?? 0) + 1)
       cityAgg.set(cSlug, entry)
+    }
+    if (row.address_region && PROVINCES[row.address_region] && city && cityOk) {
+      const pEntry = provinceAgg.get(row.address_region) ?? { count: 0, names: new Set<string>() }
+      pEntry.count += 1
+      pEntry.names.add(city)
+      provinceAgg.set(row.address_region, pEntry)
     }
     const scope = canonicalizeScope(row.project_type)
     if (scope) scopeCounts.set(scope, (scopeCounts.get(scope) ?? 0) + 1)
@@ -225,7 +269,26 @@ export async function getHubs(): Promise<{ cities: Hub[]; scopes: Hub[]; types: 
 
   const cities: Hub[] = Array.from(cityAgg.entries())
     .filter(([, v]) => v.count >= MIN_HUB_PROJECTS)
-    .map(([slug, v]) => ({ kind: "city" as const, slug, name: v.name, count: v.count, cityNames: Array.from(v.names) }))
+    .map(([slug, v]) => ({
+      kind: "city" as const,
+      slug,
+      name: v.name,
+      count: v.count,
+      cityNames: Array.from(v.names),
+      region: Array.from(v.regions.entries()).sort((a, b) => b[1] - a[1])[0]?.[0],
+    }))
+    .sort((a, b) => b.count - a.count)
+
+  const provinces: Hub[] = Array.from(provinceAgg.entries())
+    .filter(([, v]) => v.count >= MIN_HUB_PROJECTS)
+    .map(([regionName, v]) => ({
+      kind: "province" as const,
+      slug: PROVINCES[regionName].slug,
+      name: regionName,
+      count: v.count,
+      cityNames: Array.from(v.names),
+      region: regionName,
+    }))
     .sort((a, b) => b.count - a.count)
 
   const scopes: Hub[] = SCOPE_HUB_DEFS
@@ -257,16 +320,17 @@ export async function getHubs(): Promise<{ cities: Hub[]; scopes: Hub[]; types: 
     }))
     .sort((a, b) => b.count - a.count)
 
-  return { cities, scopes, types, combos }
+  return { cities, scopes, types, combos, provinces }
 }
 
 export async function resolveHub(slug: string): Promise<Hub | null> {
-  const { cities, scopes, types, combos } = await getHubs()
+  const { cities, scopes, types, combos, provinces } = await getHubs()
   return (
     cities.find((h) => h.slug === slug) ??
     scopes.find((h) => h.slug === slug) ??
     types.find((h) => h.slug === slug) ??
     combos.find((h) => h.slug === slug) ??
+    provinces.find((h) => h.slug === slug) ??
     null
   )
 }
@@ -280,7 +344,7 @@ export async function getHubProjects(hub: Hub): Promise<HubProjectCard[]> {
     .eq("status", "published")
     .not("slug", "is", null)
     .order("published_at", { ascending: false, nullsFirst: false })
-  if ((hub.kind === "city" || hub.kind === "type-city") && hub.cityNames?.length) {
+  if ((hub.kind === "city" || hub.kind === "type-city" || hub.kind === "province") && hub.cityNames?.length) {
     q = q.in("address_city", hub.cityNames)
   }
   if ((hub.kind === "type" || hub.kind === "type-city") && hub.typeValue) {

@@ -496,7 +496,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   const { locale } = await params
   const t = await getTranslations("home")
   // Inventory-gated hub links for the "Populaire zoekopdrachten" block.
-  let popularHubs: { cities: Hub[]; scopes: Hub[]; types: Hub[]; combos: Hub[] } = { cities: [], scopes: [], types: [], combos: [] }
+  let popularHubs: { cities: Hub[]; scopes: Hub[]; types: Hub[]; combos: Hub[]; provinces: Hub[] } = { cities: [], scopes: [], types: [], combos: [], provinces: [] }
   try {
     popularHubs = await getHubs()
   } catch { /* block simply doesn't render */ }
@@ -609,12 +609,12 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                 {locale === "nl" ? "Populaire zoekopdrachten" : "Popular searches"}
               </h2>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 32, maxWidth: 760 }}>
-                {popularHubs.cities.length > 0 && (
+                {(popularHubs.provinces.length > 0 || popularHubs.cities.length > 0) && (
                   <div>
                     <p className="arco-eyebrow" style={{ color: "#a1a1a0", marginBottom: 10 }}>
-                      {locale === "nl" ? "Steden" : "Cities"}
+                      {locale === "nl" ? "Regio's en steden" : "Regions & cities"}
                     </p>
-                    {popularHubs.cities.slice(0, 8).map((hub) => (
+                    {[...popularHubs.provinces, ...popularHubs.cities].slice(0, 8).map((hub) => (
                       <p key={hub.slug} style={{ marginBottom: 8 }}>
                         <Link href={`/projects/${hub.slug}`} className="text-[13px] text-[#6b6b68] hover:text-[#1c1c1a] transition-colors">
                           {hubCopy(hub, locale).h1}

@@ -8,7 +8,7 @@ import { FilterErrorBoundary } from "@/components/filter-error-boundary"
 import { DiscoverClient } from "@/components/discover-client"
 import type { DiscoverProject } from "@/lib/projects/queries"
 import { getSiteUrl } from "@/lib/utils"
-import { hubCopy, citySlug, type Hub } from "@/lib/project-hubs"
+import { hubCopy, citySlug, PROVINCES, type Hub } from "@/lib/project-hubs"
 
 export function hubToDef(hub: Hub): HubDef {
   return {
@@ -17,6 +17,7 @@ export function hubToDef(hub: Hub): HubDef {
     cityName: hub.kind === "city" || hub.kind === "type-city" ? hub.name : undefined,
     scope: hub.scope,
     typeValue: hub.typeValue,
+    cityNames: hub.kind === "province" ? hub.cityNames : undefined,
   }
 }
 
@@ -39,14 +40,27 @@ export async function HubPage({ hub, allHubs, siblings, initialProjects, locale 
   const t = await getTranslations("projects")
   const copy = hubCopy(hub, locale)
 
-  // Trail after "Projecten › Nederland": the geo level, then the hub's
-  // non-geo axis as leaf. On combos ("Appartementen in Amsterdam") the
-  // city crumb links to its own hub page when one exists.
+  // Trail after "Projecten › Nederland": province, then city, then the
+  // hub's non-geo axis as leaf — each intermediate level linking to its
+  // own hub when one exists. Examples:
+  //   province:  Projecten › Nederland › Noord-Holland
+  //   city:      Projecten › Nederland › Noord-Holland › Amsterdam
+  //   type-city: Projecten › Nederland › Noord-Holland › Amsterdam › Appartementen
   const cityHubForCombo = hub.kind === "type-city"
     ? allHubs.find((h) => h.kind === "city" && h.slug === citySlug(hub.name))
     : undefined
+  const regionName = hub.kind === "province" ? hub.name : (hub.region ?? cityHubForCombo?.region)
+  const provinceHub = hub.kind !== "province" && regionName
+    ? allHubs.find((h) => h.kind === "province" && h.name === regionName)
+    : undefined
+  const provinceLabel = regionName && PROVINCES[regionName]
+    ? (locale === "nl" ? PROVINCES[regionName].nl : PROVINCES[regionName].en)
+    : regionName
   const crumbs: Array<{ label: string; href?: string }> = [
     { label: t("breadcrumb_netherlands"), href: "/projects" },
+    ...(provinceHub && provinceLabel
+      ? [{ label: provinceLabel, href: `/projects/${provinceHub.slug}` }]
+      : []),
     ...(hub.kind === "type-city"
       ? [{ label: hub.name, href: cityHubForCombo ? `/projects/${cityHubForCombo.slug}` : undefined }]
       : []),

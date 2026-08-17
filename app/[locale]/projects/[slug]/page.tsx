@@ -217,7 +217,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         getHubs(),
         fetchDiscoverProjects(hubLocale),
       ])
-      const allHubs = [...allHubsSet.cities, ...allHubsSet.scopes, ...allHubsSet.types, ...allHubsSet.combos]
+      const allHubs = [...allHubsSet.cities, ...allHubsSet.scopes, ...allHubsSet.types, ...allHubsSet.combos, ...allHubsSet.provinces]
       const siblings = allHubs.filter((h) => h.slug !== hub.slug).slice(0, 6)
       // Server-side pre-filter: the crawled HTML contains exactly the
       // hub's projects; the client FilterProvider mounts with the same
