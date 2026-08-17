@@ -1062,8 +1062,14 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     }
   }
 
+  // Highest funnel status first (signup above contacted, etc.) so the
+  // visible primary contact is the furthest-progressed person at the
+  // company; recency breaks ties within the same status.
   const sortContactsByRecency = (cs: SalesContact[]): SalesContact[] =>
     cs.slice().sort((a, b) => {
+      const aRank = PROSPECT_STATUS_RANK[a.status] ?? 0
+      const bRank = PROSPECT_STATUS_RANK[b.status] ?? 0
+      if (aRank !== bRank) return bRank - aRank
       const at = a.lastEmailSentAt ?? ""
       const bt = b.lastEmailSentAt ?? ""
       if (at !== bt) return bt.localeCompare(at)
