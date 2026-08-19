@@ -8,6 +8,7 @@ export const TYPE_LABELS: Record<string, { nl: string; en: string }> = {
   bungalow: { nl: "Bungalows", en: "Bungalows" },
   townhouse: { nl: "Stadswoningen", en: "Townhouses" },
   chalet: { nl: "Chalets", en: "Chalets" },
+  farm: { nl: "Boerderijen", en: "Farmhouses" },
   extension: { nl: "Uitbouwen", en: "Extensions" },
   "garden-house": { nl: "Tuinhuizen", en: "Garden houses" },
 }

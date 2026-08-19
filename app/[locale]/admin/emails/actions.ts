@@ -146,9 +146,14 @@ const TEMPLATE_ID_TO_NAME: Record<string, string> = {
   "welcome-homeowner": "Welcome",
   "discover-projects": "Discover Projects",
   "find-professionals": "Find Professionals",
-  "prospect-intro": "Prospect Intro",
-  "prospect-followup": "Prospect Follow-up",
-  "prospect-final": "Prospect Final",
+  // The prospect-* series goes to SHOWCASED companies ("Een podium
+  // voor…") — labeled Showcase to match the Sales-side terminology.
+  "prospect-intro": "Showcase Intro",
+  "prospect-followup": "Showcase Follow-up",
+  "prospect-final": "Showcase Final",
+  "outreach-intro": "Outreach Intro",
+  "outreach-followup": "Outreach Follow-up",
+  "outreach-final": "Outreach Final",
   "new-professional-invite": "New Professional Invite",
   "new-professional-followup": "New Professional Follow-up",
   "new-professional-final": "New Professional Final",
@@ -216,16 +221,16 @@ const SUBJECT_TO_TEMPLATE: [RegExp, string, string][] = [
   [/Find the right professional/i, "find-professionals", "Find Professionals"],
   [/Vind de juiste professional op Arco/i, "find-professionals", "Find Professionals"],
   // Prospect series (PR #3)
-  [/Een podium voor/i, "prospect-intro", "Prospect Intro"],
-  [/^A stage for /i, "prospect-intro", "Prospect Intro"],
+  [/Een podium voor/i, "prospect-intro", "Showcase Intro"],
+  [/^A stage for /i, "prospect-intro", "Showcase Intro"],
   // Both prospect followup and final end in "op Arco" / "on Arco". Final
   // has the distinguishing "Claim …" prefix and MUST be matched first,
   // otherwise the followup's end-anchored pattern would swallow it.
   // Sequence is first-match-wins via matchTemplate().
-  [/^Claim .* op Arco$/i, "prospect-final", "Prospect Final"],
-  [/^Claim .* on Arco$/i, "prospect-final", "Prospect Final"],
-  [/op Arco$/i, "prospect-followup", "Prospect Follow-up"],
-  [/ on Arco$/i, "prospect-followup", "Prospect Follow-up"],
+  [/^Claim .* op Arco$/i, "prospect-final", "Showcase Final"],
+  [/^Claim .* on Arco$/i, "prospect-final", "Showcase Final"],
+  [/op Arco$/i, "prospect-followup", "Showcase Follow-up"],
+  [/ on Arco$/i, "prospect-followup", "Showcase Follow-up"],
 ]
 
 function matchTemplate(subject: string): { id: string; name: string } | null {

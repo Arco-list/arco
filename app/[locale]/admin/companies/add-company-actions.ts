@@ -54,24 +54,53 @@ export async function adminAddCompanyAction(input: GooglePlaceInput): Promise<Ad
     }
   }
 
-  // Check domain collision
+  // Domain collision: a CLAIMED company blocks; an unowned catalogue row
+  // (outreach prospect) gets UPGRADED in place — missing fields filled
+  // from the richer Places data — instead of erroring. This is how an
+  // outreach company becomes reachable for showcasing without a
+  // duplicate record.
   if (input.domain) {
     const { data: domainMatch } = await serviceSupabase
       .from("companies")
-      .select("id, name")
+      .select("id, name, owner_id, city, phone, address, state_region, google_place_id, website, latitude, longitude")
       .ilike("domain", input.domain)
       .maybeSingle()
 
     if (domainMatch) {
-      return { success: false, error: `A company with domain "${input.domain}" already exists (${domainMatch.name}).` }
+      if (domainMatch.owner_id) {
+        return { success: false, error: `A claimed company with domain "${input.domain}" already exists (${domainMatch.name}).` }
+      }
+      const fill: Record<string, unknown> = {}
+      if (!domainMatch.city && input.city) fill.city = input.city
+      if (!domainMatch.phone && input.phone) fill.phone = input.phone
+      if (!domainMatch.address && input.formattedAddress) fill.address = input.formattedAddress
+      if (!domainMatch.state_region && input.stateRegion) fill.state_region = input.stateRegion
+      if (!domainMatch.google_place_id && input.placeId) fill.google_place_id = input.placeId
+      if (!domainMatch.website && input.website) fill.website = input.website
+      if (Object.keys(fill).length > 0) {
+        await serviceSupabase.from("companies").update(fill as never).eq("id", domainMatch.id)
+      }
+      return { success: true, companyId: domainMatch.id }
     }
   }
 
-  // Generate slug
-  const slug = input.name
+  // Generate slug — suffix-dedupe against existing companies so a
+  // same-named catalogue row can't crash the insert on companies_slug_key.
+  const baseSlug = input.name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
+  const { data: takenSlugs } = await serviceSupabase
+    .from("companies")
+    .select("slug")
+    .like("slug", `${baseSlug}%`)
+  const takenSet = new Set((takenSlugs ?? []).map((r) => r.slug))
+  let slug = baseSlug
+  if (takenSet.has(slug)) {
+    let n = 2
+    while (takenSet.has(`${baseSlug}-${n}`)) n++
+    slug = `${baseSlug}-${n}`
+  }
 
   // Geocode address for map placement
   let latitude: number | null = null

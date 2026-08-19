@@ -149,7 +149,7 @@ export async function GET(request: NextRequest) {
   // ── Candidates: oldest un-started Apollo prospects, clean addresses ─
   const { data: candidates, error: candidateError } = await supabase
     .from("prospects")
-    .select("id, email, company_name")
+    .select("id, email, company_name, companies(status)")
     .eq("source", "apollo")
     .eq("status", "prospect")
     .eq("sequence_status", "not_started")
@@ -163,14 +163,20 @@ export async function GET(request: NextRequest) {
   if (candidateError) {
     return NextResponse.json({ error: candidateError.message }, { status: 500 })
   }
-  if (!candidates || candidates.length === 0) {
+  // Showcased companies are excluded from AUTO-release: their sequence
+  // is the showcase pitch, started manually from the Sales table
+  // (promote pauses/withholds outreach until the admin decides).
+  const eligible = (candidates ?? []).filter(
+    (p) => (p as { companies?: { status?: string | null } | null }).companies?.status !== "prospected",
+  )
+  if (eligible.length === 0) {
     return NextResponse.json({ ok: true, released: 0, reason: "no eligible prospects" })
   }
 
   const { startProspectSequence } = await import("@/app/admin/sales/actions")
   const released: string[] = []
   const failures: Array<{ email: string; error: string }> = []
-  for (const p of candidates) {
+  for (const p of eligible) {
     try {
       const result = await startProspectSequence(p.id)
       if (result.success) {

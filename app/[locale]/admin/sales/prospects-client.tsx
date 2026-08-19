@@ -19,6 +19,7 @@ import {
   type SalesSortDir,
   type SequenceStatus,
   type SequenceFilterValue,
+  promoteCompanyToShowcase,
 } from "./actions"
 import {
   DropdownMenu,
@@ -1799,6 +1800,9 @@ function CompanyRowView({
                   <ArrowUpRight className="h-3.5 w-3.5" />
                 </a>
               )}
+              {row.companyId && claimed && !claimed.ownerUserId && claimed.status === "added" && (
+                <ShowcasePill companyId={row.companyId} slug={claimed.slug} />
+              )}
             </span>
             {subtitle && <span className="arco-table-secondary">{subtitle}</span>}
           </div>
@@ -1928,7 +1932,7 @@ function ContactsCell({
         onClick={() => onOpenContactCard(primary)}
         className="flex items-center gap-1.5 hover:text-[#016D75] transition-colors cursor-pointer text-left"
       >
-        <ContactInline contact={primary} afterName={<LogPill onActivate={() => onLogOutbound(primary)} />} />
+        <ContactInline contact={primary} afterName={<LogPill onActivate={() => onLogOutbound(primary)} />} companyShowcased={row.claimedCompany?.status === "prospected"} />
       </button>
 
       {/* Overflow — dropdown is only a picker for WHICH contact; each
@@ -1951,7 +1955,7 @@ function ContactsCell({
                 className="text-xs cursor-pointer"
                 onClick={() => onOpenContactCard(c)}
               >
-                <ContactInline contact={c} afterName={<LogPill onActivate={() => onLogOutbound(c)} />} />
+                <ContactInline contact={c} afterName={<LogPill onActivate={() => onLogOutbound(c)} />} companyShowcased={row.claimedCompany?.status === "prospected"} />
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -1990,11 +1994,67 @@ function LogPill({ onActivate }: { onActivate: () => void }) {
   )
 }
 
-function ContactInline({ contact, afterName }: { contact: SalesContact; afterName?: React.ReactNode }) {
+/** Quiet pill on unowned catalogue rows ("added"): one click promotes
+ *  the outreach company to a visible showcase ("prospected") — the
+ *  bridge from the Sales pipeline to the marketplace. */
+function ShowcasePill({ companyId, slug }: { companyId: string; slug: string | null }) {
+  const [state, setState] = useState<"idle" | "busy" | "done">("idle")
+  void slug
+  if (state === "done") {
+    return (
+      <a
+        href={`/dashboard/company?company_id=${companyId}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        className="text-[11px] text-[#016D75] hover:underline shrink-0"
+      >
+        Showcase ✓
+      </a>
+    )
+  }
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      onClick={async (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        if (state === "busy") return
+        setState("busy")
+        const result = await promoteCompanyToShowcase(companyId)
+        if (result.success) {
+          setState("done")
+          toast.success("Showcase actief — bedrijfspagina wordt geopend")
+          // Straight into building the profile: open the company edit
+          // page (admin override via company_id) in a new tab.
+          window.open(`/dashboard/company?company_id=${companyId}`, "_blank", "noopener")
+        } else {
+          setState("idle")
+          toast.error(result.error ?? "Promoveren mislukt")
+        }
+      }}
+      className={ACTION_PILL_CLASS}
+      style={{ opacity: state === "busy" ? 0.5 : undefined }}
+      title="Maak zichtbaar als showcase op de marketplace"
+    >
+      Showcase
+    </span>
+  )
+}
+
+function ContactInline({ contact, afterName, companyShowcased = false }: { contact: SalesContact; afterName?: React.ReactNode; companyShowcased?: boolean }) {
   const statusCfg = STATUS_CONFIG[contact.status] ?? STATUS_CONFIG.prospect
   const sequenceCfg = SEQUENCE_CONFIG[contact.sequenceStatus] ?? SEQUENCE_CONFIG.not_started
   const suppression = getSuppressionState(contact)
   const displayName = contact.resolvedContact.name?.trim() || contact.contactName?.trim() || contact.email
+  // Showcase is an UPGRADE of the track: before any outreach touch the
+  // source pill is simply replaced ("Showcase"); once outreach has
+  // started, both pills show — the history plus the current state.
+  const outreachStarted =
+    contact.emailsSent > 0 || contact.sequenceStatus !== "not_started" || !!contact.lastOutboundAt
+  const showcaseUpgrade = companyShowcased && contact.source !== "arco"
+  const replaceSourceWithShowcase = showcaseUpgrade && !outreachStarted
   return (
     <>
       <span className="arco-table-status">
@@ -2006,7 +2066,10 @@ function ContactInline({ contact, afterName }: { contact: SalesContact; afterNam
         <span className={`status-pill-dot ${statusCfg.dot}`} />
         {statusCfg.label}
       </span>
-      <span className="status-pill">{sourceLabel(contact.source)}</span>
+      <span className="status-pill">{replaceSourceWithShowcase ? "Showcase" : sourceLabel(contact.source)}</span>
+      {showcaseUpgrade && !replaceSourceWithShowcase && (
+        <span className="status-pill">Showcase</span>
+      )}
       {contact.lastOutboundAt && (
         <span className="status-pill">Outbound</span>
       )}

@@ -213,6 +213,22 @@ function ActivitySection({
       bundle.sequence.map((s) => channelForTemplate(s.template)).filter((c): c is string => Boolean(c)),
     ),
   )
+  // Track membership isn't only sequence history: a contact at a
+  // showcased company sits in the Showcase channel from the moment of
+  // promotion — before any step exists — so the panel says which
+  // sequence flavor a Start would launch.
+  if ((p as { companyStatus?: string | null } | null)?.companyStatus === "prospected" && !channels.includes("Showcase")) {
+    channels.push("Showcase")
+  }
+
+  // Which track the ACTIVE sequence belongs to — from the next queued
+  // step's template (falls back to the last sent step). Rendered next to
+  // "Active" so the admin knows which pitch the pending emails carry.
+  const activeSequenceChannel = (() => {
+    const queued = bundle.sequence.find((st) => st.status === "queued")
+    const anchor = queued ?? [...bundle.sequence].reverse().find((st) => st.status === "sent")
+    return anchor ? channelForTemplate(anchor.template) : null
+  })()
 
   // Suppression state — rendered as an inline suffix on Status so a
   // bounced/unsubscribed/complained prospect reads as red at a glance.
@@ -292,7 +308,12 @@ function ActivitySection({
                   <>
                     <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6 }}>
                       <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${seqCfg?.dot ?? "bg-[#a1a1a0]"}`} />
-                      <span>{seqCfg?.label ?? p.sequence_status}</span>
+                      <span>
+                        {seqCfg?.label ?? p.sequence_status}
+                        {activeSequenceChannel && p.sequence_status === "active" && (
+                          <span style={{ color: "#6b6b68" }}> · {activeSequenceChannel}</span>
+                        )}
+                      </span>
                     </span>
                     <SequenceActionLink
                       status={p.sequence_status}

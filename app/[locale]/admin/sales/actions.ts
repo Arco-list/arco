@@ -1579,7 +1579,20 @@ export async function fetchProspectById(prospectId: string): Promise<Prospect | 
     return null
   }
   const [withContact] = await attachResolvedContacts(supabase, [data] as unknown as Omit<Prospect, "resolvedContact">[])
-  return withContact ?? null
+  if (!withContact) return null
+  // Company lifecycle status rides along so the Contact Card can show
+  // the track the contact is in (Showcase vs plain Outreach) even
+  // before any sequence step exists.
+  let companyStatus: string | null = null
+  if ((withContact as { company_id?: string | null }).company_id) {
+    const { data: companyRow } = await supabase
+      .from("companies")
+      .select("status")
+      .eq("id", (withContact as { company_id: string }).company_id)
+      .maybeSingle()
+    companyStatus = (companyRow?.status as string | null) ?? null
+  }
+  return { ...withContact, companyStatus } as Prospect & { companyStatus: string | null }
 }
 
 export async function fetchProspectEvents(prospectId: string) {
@@ -1798,11 +1811,16 @@ export async function syncPlatformProspects() {
     .is("owner_id", null)
 
   for (const company of prospectedCompanies ?? []) {
+    // ANY existing contact (outreach, apollo, manual) already represents
+    // this company in the Sales table — promoting it to showcase must
+    // not mint a synthetic empty-email 'arco' contact next to the real
+    // one. The synthetic row exists only for companies that entered the
+    // funnel AS showcases, with no outreach history.
     const { data: existing } = await supabase
       .from("prospects")
       .select("id")
       .eq("company_id", company.id)
-      .eq("source", "arco")
+      .limit(1)
       .maybeSingle()
 
     if (!existing) {
@@ -2062,10 +2080,25 @@ export async function startProspectSequence(prospectId: string) {
     return { success: true }
   }
 
+  // ── Track override: showcased companies always get the showcase
+  // pitch. An apollo-source contact whose company was promoted to
+  // showcase before the sequence started must NOT receive the cold
+  // outreach intro — their page already exists; the showcase sequence
+  // ("your work is featured — claim it") is the correct story.
+  let effectiveSource = prospect.source
+  if (prospect.source === "apollo" && prospect.company_id) {
+    const { data: companyRow } = await supabase
+      .from("companies")
+      .select("status")
+      .eq("id", prospect.company_id)
+      .maybeSingle()
+    if (companyRow?.status === "prospected") effectiveSource = "arco"
+  }
+
   // ── Apollo-source prospects: fire the Outreach (cold) drip ──
   // Unlike arco/invites, company_id is OPTIONAL here — Apollo cold
   // contacts often aren't linked to a marketplace companies row yet.
-  if (prospect.source === "apollo") {
+  if (effectiveSource === "apollo") {
     const { dispatchOutreachIntro } = await import("@/lib/outreach/dispatch-outreach-intro")
     const firstName =
       (prospect.contact_name as string | null)?.trim().split(/\s+/)[0]
@@ -3412,4 +3445,56 @@ export async function syncResendEmailStats() {
   } catch {
     return { synced: 0 }
   }
+}
+
+/** Promote a catalogued outreach company ("added") to a visible showcase
+ *  ("prospected") — the missing bridge between the Sales pipeline and
+ *  the marketplace. Claimed companies manage their own visibility and
+ *  are never touched. */
+export async function promoteCompanyToShowcase(companyId: string): Promise<{ success: boolean; slug?: string | null; error?: string }> {
+  const supabase = createServiceRoleSupabaseClient()
+  const { data: company } = await supabase
+    .from("companies")
+    .select("id, status, owner_id, slug, source")
+    .eq("id", companyId)
+    .maybeSingle()
+  if (!company) return { success: false, error: "Company not found." }
+  if (company.owner_id) return { success: false, error: "Company is already claimed — it manages its own visibility." }
+  if (company.status === "prospected" || company.status === "listed") return { success: true, slug: company.slug }
+
+  // The companies_apollo_not_showcased check guards against BULK Apollo
+  // records surfacing unvetted. This action is a deliberate per-company
+  // human promotion — reclassify to 'manual' (provenance stays via
+  // apollo_account_id) so the guard keeps protecting against mass flips.
+  const updates: Record<string, unknown> = { status: "prospected" }
+  if (company.source === "apollo") updates.source = "manual"
+
+  const { error } = await supabase
+    .from("companies")
+    .update(updates as never)
+    .eq("id", companyId)
+    .is("owner_id", null)
+  if (error) return { success: false, error: error.message }
+
+  // Pause any unfinished outreach sequence: the pitch changes once the
+  // company is showcased ("your work is featured — claim it"), so queued
+  // generic drip emails must not keep sending. Cancel pending queue rows
+  // and mark the contacts' sequences paused; the admin restarts outreach
+  // manually with the showcase angle.
+  await supabase
+    .from("email_drip_queue")
+    .update({ cancelled_at: new Date().toISOString(), cancelled_reason: "promoted_to_showcase" } as never)
+    .eq("company_id", companyId)
+    .is("sent_at", null)
+    .is("cancelled_at", null)
+  await supabase
+    .from("prospects")
+    .update({ sequence_status: "paused" } as never)
+    .eq("company_id", companyId)
+    .eq("sequence_status", "active")
+
+  // Surface it on the discover/hubs right away.
+  try { await supabase.rpc("refresh_all_materialized_views") } catch { /* next cron refresh picks it up */ }
+  logger.info("admin-sales", "Company promoted to showcase", { companyId })
+  return { success: true, slug: company.slug }
 }

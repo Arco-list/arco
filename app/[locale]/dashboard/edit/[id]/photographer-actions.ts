@@ -124,11 +124,12 @@ export async function addPhotographerToProject(
 
   // Create company if no match.
   if (!companyId) {
-    const slug = input.name
+    const baseSlug = input.name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "")
       || `photographer-${Date.now()}`
+    const slug = await uniqueCompanySlug(serviceSupabase, baseSlug)
 
     let latitude: number | null = null
     let longitude: number | null = null
@@ -292,4 +293,18 @@ export async function removePhotographerFromProject(
 
   revalidatePath(`/dashboard/edit/${projectId}`)
   return { success: true }
+}
+
+async function uniqueCompanySlug(serviceSupabase: any, base: string): Promise<string> {
+  // Slug collisions (same-named company already catalogued) get a
+  // numeric suffix instead of crashing the insert on companies_slug_key.
+  const { data: taken } = await serviceSupabase
+    .from("companies")
+    .select("slug")
+    .like("slug", `${base}%`)
+  const set = new Set((taken ?? []).map((r: { slug: string | null }) => r.slug))
+  if (!set.has(base)) return base
+  let n = 2
+  while (set.has(`${base}-${n}`)) n++
+  return `${base}-${n}`
 }
