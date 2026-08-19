@@ -418,11 +418,15 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
       .single()
 
     if (company && !company.owner_id) {
+      // ANY existing contact already represents this company in the
+      // Sales table — mirror the syncPlatformProspects rule so a status
+      // change never mints a synthetic empty-email contact next to a
+      // real outreach contact.
       const { data: existing } = await serviceClient
         .from("prospects")
         .select("id")
         .eq("company_id", company.id)
-        .eq("source", "arco")
+        .limit(1)
         .maybeSingle()
 
       if (!existing) {

@@ -363,6 +363,7 @@ function channelForTemplate(template: string): string | null {
 type StreamRow =
   | { kind: "stage"; ts: string; label: string; dot: string; key: string }
   | { kind: "sequence"; ts: string; step: ProspectSequenceStep; key: string }
+  | { kind: "scheduled"; ts: string; step: ProspectSequenceStep; key: string }
   | { kind: "event"; ts: string; event: ProspectEvent; key: string }
   | { kind: "transactional"; ts: string; row: TransactionalEmailRow; key: string }
 
@@ -410,6 +411,18 @@ function TimelineStream({
       kind: "sequence" as const,
       ts: s.timestamp as string,
       key: `seq-${s.template}`,
+      step: s,
+    }))
+
+  // Queued sends surface as future rows ABOVE today (desc sort puts a
+  // future send_at on top) so the panel answers "what's hitting this
+  // inbox next" without opening the queue.
+  const scheduledRows: StreamRow[] = bundle.sequence
+    .filter((s) => s.status === "queued" && s.timestamp)
+    .map((s) => ({
+      kind: "scheduled" as const,
+      ts: s.timestamp as string,
+      key: `sched-${s.template}`,
       step: s,
     }))
 
@@ -512,7 +525,7 @@ function TimelineStream({
     row: t,
   }))
 
-  const rows: StreamRow[] = [...stageRows, ...sequenceRows, ...inboundRows, ...eventRows, ...transactionalRows]
+  const rows: StreamRow[] = [...stageRows, ...sequenceRows, ...scheduledRows, ...inboundRows, ...eventRows, ...transactionalRows]
     .sort((a, b) => b.ts.localeCompare(a.ts))
 
   if (rows.length === 0) {
@@ -531,6 +544,8 @@ function TimelineStream({
             lang={guessedLang}
             onPreview={onPreviewTemplate}
           />
+        ) : row.kind === "scheduled" ? (
+          <ScheduledRow key={row.key} step={row.step} onPreview={onPreviewTemplate} />
         ) : row.kind === "transactional" ? (
           <TransactionalRow key={row.key} row={row.row} />
         ) : (
@@ -602,6 +617,35 @@ function SequenceRow({
         <span className="status-pill shrink-0">
           <span className={`status-pill-dot ${engagement.dot}`} />
           {capitalizeFirst(engagement.label)}
+        </span>
+      </span>
+    </div>
+  )
+}
+
+// ── Scheduled row (queued future send) ─────────────────────────────────
+
+function ScheduledRow({ step, onPreview }: { step: ProspectSequenceStep; onPreview: (template: string) => void }) {
+  const name = templateDisplayName(step.template)
+  return (
+    <div
+      className="grid items-center gap-2 text-xs"
+      style={{ gridTemplateColumns: "90px 1fr", opacity: 0.75 }}
+    >
+      <span className="text-[#a1a1a0] whitespace-nowrap" style={{ fontSize: 11 }}>
+        {step.timestamp ? formatDateShort(step.timestamp) : "—"}
+      </span>
+      <span className="inline-flex items-center gap-2 min-w-0 flex-wrap">
+        <button
+          type="button"
+          onClick={() => onPreview(step.template)}
+          className="text-[#016D75] hover:underline truncate cursor-pointer text-left"
+        >
+          {name}
+        </button>
+        <span className="status-pill shrink-0">
+          <span className="status-pill-dot bg-[#a1a1a0]" />
+          Scheduled
         </span>
       </span>
     </div>

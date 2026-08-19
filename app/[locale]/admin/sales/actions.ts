@@ -2804,10 +2804,12 @@ export async function getProspectSequence(prospectId: string): Promise<{
       .from("email_drip_queue")
       .select("template, send_at, sent_at, cancelled_at, cancelled_reason, attempt_count, last_error, opened_at, clicked_at, last_event_cached")
       .ilike("email", prospect.email)
-      .in("template", ["outreach-intro", "outreach-followup", "outreach-final"])
+      // prospect-* included: a showcase promotion mid-track swaps the
+      // remaining steps to the showcase drip — those rows must show.
+      .in("template", ["outreach-intro", "outreach-followup", "outreach-final", "prospect-intro", "prospect-followup", "prospect-final"])
       .order("created_at", { ascending: false })
 
-    const hasOutreachRows = (outreachQueueRows ?? []).length > 0
+    const hasOutreachRows = (outreachQueueRows ?? []).some((r: { template: string }) => r.template.startsWith("outreach-"))
     if (!hasOutreachRows) {
       return getApolloSequence(prospect as any)
     }
@@ -2845,6 +2847,19 @@ export async function getProspectSequence(prospectId: string): Promise<{
         outreachEventsByTemplate.get("outreach-final"),
       ),
     ]
+
+    // Showcase steps appended for tracks swapped mid-sequence (company
+    // promoted to showcase): only templates that actually have queue
+    // rows render — pure-outreach contacts see no phantom showcase steps.
+    const showcaseLabels: Array<[string, string]> = [
+      ["prospect-intro", "Showcase Intro"],
+      ["prospect-followup", "Showcase Follow-up"],
+      ["prospect-final", "Showcase Final"],
+    ]
+    for (const [tpl, label] of showcaseLabels) {
+      const row = outreachByTemplate.get(tpl)
+      if (row) outreachSteps.push(queueRowToProspectStep(tpl, label, row))
+    }
 
     return { success: true, steps: outreachSteps, locale: outreachLocale }
   }
