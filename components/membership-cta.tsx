@@ -8,13 +8,13 @@ export function MembershipCTA() {
   const tn = useTranslations("nav")
 
   return (
-    <section className="py-20 px-4 md:px-8 bg-white">
+    <section className="py-20 px-4 md:px-8" style={{ background: "var(--arco-surface)" }}>
       <div className="max-w-[1100px] mx-auto">
 
         <h2 className="arco-page-title mb-4 text-center">
           {t("built_for_industry")}
         </h2>
-        <p className="arco-body-text mb-12 max-w-[520px] mx-auto text-center">
+        <p className="arco-body-text mb-12 max-w-[760px] mx-auto text-center">
           {t("built_for_industry_subtitle")}
         </p>
 

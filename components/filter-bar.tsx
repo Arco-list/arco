@@ -14,6 +14,7 @@ import { useLocale, useTranslations } from "next-intl"
 import { PROJECT_SCOPES, translateBuildingType, translateProjectStyle, translateScope } from "@/lib/project-translations"
 
 import { useFilters } from "@/contexts/filter-context"
+import { PROVINCES, cityLabel } from "@/lib/provinces"
 import type { ProjectSpaceKey } from "@/types/project-filters"
 
 // ─── Space options ─────────────────────────────────────────────────────────────
@@ -219,9 +220,11 @@ interface DropdownOptionProps {
   checked: boolean
   icon?: React.ReactNode
   onToggle: () => void
+  /** Right-aligned type tag (Provincie / Stad). */
+  suffix?: string
 }
 
-function DropdownOption({ label, checked, icon, onToggle }: DropdownOptionProps) {
+function DropdownOption({ label, checked, icon, onToggle, suffix }: DropdownOptionProps) {
   return (
     <div
       role="option"
@@ -239,6 +242,11 @@ function DropdownOption({ label, checked, icon, onToggle }: DropdownOptionProps)
         {icon && <span className="filter-dropdown-icon">{icon}</span>}
         <span className="filter-dropdown-label">{label}</span>
       </div>
+      {suffix && (
+        <span style={{ fontSize: 11, color: "var(--text-secondary, #a1a1a0)", marginLeft: "auto", paddingLeft: 12, flexShrink: 0 }}>
+          {suffix}
+        </span>
+      )}
     </div>
   )
 }
@@ -447,6 +455,9 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
     selectedTypes,
     selectedStyles,
     selectedLocations,
+    selectedRegions,
+    setSelectedRegions,
+    regionCityMap,
     selectedSpace,
     selectedBuildingTypes,
     selectedScopes,
@@ -503,13 +514,26 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
     [categories],
   )
 
+  // Provinces available as region filters (from the hub definitions),
+  // searchable together with the cities below them.
+  const filteredRegions = useMemo(() => {
+    const regions = Object.keys(regionCityMap)
+    const q = locationSearch.trim().toLowerCase()
+    if (!q) return regions
+    return regions.filter((r) => {
+      const label = PROVINCES[r] ? (locale === "nl" ? PROVINCES[r].nl : PROVINCES[r].en) : r
+      return label.toLowerCase().includes(q) || r.toLowerCase().includes(q)
+    })
+  }, [regionCityMap, locationSearch, locale])
+
   // ── Filtered cities ──────────────────────────────────────────────────────────
   const filteredCities = useMemo(
     () =>
-      cities.filter((c) =>
-        c.toLowerCase().includes(locationSearch.toLowerCase()),
-      ),
-    [cities, locationSearch],
+      cities.filter((c) => {
+        const q = locationSearch.toLowerCase()
+        return c.toLowerCase().includes(q) || cityLabel(c, locale).toLowerCase().includes(q)
+      }),
+    [cities, locationSearch, locale],
   )
 
   // ── Active chips ─────────────────────────────────────────────────────────────
@@ -528,8 +552,12 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
       const cat = topLevelCategories.find((c) => c.id === id)
       tags.push({ type: "type", value: id, label: cat?.name ?? id })
     })
+    selectedRegions.forEach((region) => {
+      const label = PROVINCES[region] ? (locale === "nl" ? PROVINCES[region].nl : PROVINCES[region].en) : region
+      tags.push({ type: "region", value: region, label })
+    })
     selectedLocations.forEach((loc) => {
-      tags.push({ type: "location", value: loc, label: loc })
+      tags.push({ type: "location", value: loc, label: cityLabel(loc, locale) })
     })
     selectedStyles.forEach((id) => {
       const opt = styleOptions.find((s) => (s.id ?? s.slug ?? s.name) === id)
@@ -548,7 +576,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
       tags.push({ type: "projectYear", value: `${min}-${max}`, label: `${min} – ${max}` })
     }
     return tags
-  }, [keyword, selectedSpace, selectedTypes, selectedLocations, selectedStyles, selectedBuildingTypes, selectedScopes, projectYearRange, topLevelCategories, styleOptions, buildingTypeOptions, YEAR_MIN, YEAR_MAX, tSpaces, locale])
+  }, [keyword, selectedSpace, selectedTypes, selectedLocations, selectedRegions, selectedStyles, selectedBuildingTypes, selectedScopes, projectYearRange, topLevelCategories, styleOptions, buildingTypeOptions, YEAR_MIN, YEAR_MAX, tSpaces, locale])
 
   const totalCount = chips.length
 
@@ -677,18 +705,18 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
             <div className="filter-pill-group" style={{ position: "relative" }}>
               <button
                 className="filter-pill"
-                data-active={selectedLocations.length > 0}
+                data-active={selectedLocations.length + selectedRegions.length > 0}
                 data-open={activeDropdown === "location"}
                 onClick={() => toggleDropdown("location")}
                 aria-expanded={activeDropdown === "location"}
               >
                 {t("location")}
-                {selectedLocations.length > 0 && (
-                  <span className="filter-pill-badge">{selectedLocations.length}</span>
+                {selectedLocations.length + selectedRegions.length > 0 && (
+                  <span className="filter-pill-badge">{selectedLocations.length + selectedRegions.length}</span>
                 )}
                 <ChevronDownIcon className="filter-pill-chevron" />
               </button>
-              <FilterDropdown open={activeDropdown === "location"}>
+              <FilterDropdown open={activeDropdown === "location"} minWidth={280}>
                 <div className="filter-dropdown-search">
                   <input
                     type="text"
@@ -699,11 +727,28 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
                   />
                 </div>
                 <div style={{ maxHeight: 240, overflowY: "auto" }}>
+                  {filteredRegions.map((region) => (
+                    <DropdownOption
+                      key={`region-${region}`}
+                      label={PROVINCES[region] ? (locale === "nl" ? PROVINCES[region].nl : PROVINCES[region].en) : region}
+                      suffix={locale === "nl" ? "Provincie" : "Region"}
+                      checked={selectedRegions.includes(region)}
+                      onToggle={() => {
+                        setSelectedRegions(
+                          selectedRegions.includes(region)
+                            ? selectedRegions.filter((r) => r !== region)
+                            : [...selectedRegions, region]
+                        )
+                        setLocationSearch("")
+                      }}
+                    />
+                  ))}
                   {filteredCities.length > 0 ? (
                     filteredCities.map((city) => (
                       <DropdownOption
                         key={city}
-                        label={city}
+                        label={cityLabel(city, locale)}
+                        suffix={locale === "nl" ? "Stad" : "City"}
                         checked={selectedLocations.includes(city)}
                         onToggle={() => {
                           setSelectedLocations(
@@ -874,7 +919,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
                       <div className="drawer-option-checkbox">
                         {isChecked && <CheckIcon />}
                       </div>
-                      <span className="drawer-option-label">{city}</span>
+                      <span className="drawer-option-label">{cityLabel(city, locale)}</span>
                     </div>
                   </div>
                 )

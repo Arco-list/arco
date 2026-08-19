@@ -92,6 +92,8 @@ export function useProjectsQuery({
     selectedTypes,
     selectedStyles,
     selectedLocations,
+    selectedRegions,
+    regionCityMap,
     selectedSpace,
     selectedFeatures,
     selectedBuildingTypes,
@@ -194,7 +196,18 @@ export function useProjectsQuery({
     () => ({
       types: typeFilterValues,
       styles: selectedStyles,
-      locations: selectedLocations,
+      // Regions expand to their member cities for querying — the region
+      // itself is one chip in the UI, many city terms in the query. A
+      // selected city INSIDE a selected region refines it (drill-down):
+      // the region then contributes nothing beyond the chosen city.
+      // Cities outside any selected region still add as a union.
+      locations: Array.from(new Set([
+        ...selectedLocations,
+        ...selectedRegions.flatMap((r) => {
+          const members = regionCityMap[r] ?? []
+          return members.some((m) => selectedLocations.includes(m)) ? [] : members
+        }),
+      ])),
       features: selectedFeatures,
       buildingTypes: selectedBuildingTypes,
       scopes: selectedScopes,
@@ -211,6 +224,8 @@ export function useProjectsQuery({
       typeFilterValues,
       selectedStyles,
       selectedLocations,
+      selectedRegions,
+      regionCityMap,
       selectedFeatures,
       selectedBuildingTypes,
       selectedScopes,

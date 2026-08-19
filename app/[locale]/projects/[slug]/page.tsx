@@ -20,7 +20,8 @@ import { isProjectRow } from "@/lib/supabase/type-guards"
 import { getSiteUrl } from "@/lib/utils"
 import { SPACES, SPACE_SLUGS } from "@/lib/spaces"
 import { locales, defaultLocale } from "@/i18n/config"
-import { resolveHub, getHubProjects, getHubs, HUB_COPY, cityHubCopy } from "@/lib/project-hubs"
+import { resolveHub, getHubProjects, getHubs, hubCopy } from "@/lib/project-hubs"
+import { fetchDiscoverProjects } from "@/lib/projects/queries"
 import { HubPage } from "@/components/project/hub-page"
 
 const PREVIEW_PARAM = "preview"
@@ -66,26 +67,31 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const finalSlug = await resolveRedirect(resolvedParams.slug, supabase)
 
-  const { data: project } = await supabase
-    .from("projects")
-    .select("id, title, description, translations, seo_title, seo_description, slug")
-    .eq("slug", finalSlug)
-    .maybeSingle()
+  // A hub claiming a redirected-away slug outranks the redirect: when a
+  // project vacates a slug that doubles as a hub (e.g. "townhouse"), the
+  // hub takes the URL and the redirect row only covers non-hub slugs.
+  const hubOverride = finalSlug !== resolvedParams.slug ? await resolveHub(resolvedParams.slug) : null
+
+  const { data: project } = hubOverride
+    ? { data: null }
+    : await supabase
+        .from("projects")
+        .select("id, title, description, translations, seo_title, seo_description, slug")
+        .eq("slug", finalSlug)
+        .maybeSingle()
 
   if (!project) {
     // Hub fallback: /projects/{slug} doubles as the URL level for
     // programmatic hub pages (city / scope). Project slugs win; a slug
     // with no project may still be a qualifying hub.
-    const hub = await resolveHub(finalSlug)
+    const hub = hubOverride ?? await resolveHub(finalSlug)
     if (hub) {
       const hubLocale = resolvedParams.locale ?? "en"
-      const copy = hub.kind === "city"
-        ? cityHubCopy(hub.name, hubLocale)
-        : (HUB_COPY[hub.slug]?.[hubLocale === "nl" ? "nl" : "en"] ?? HUB_COPY[hub.slug]?.nl)
+      const copy = hubCopy(hub, hubLocale)
       const hubBase = getSiteUrl()
       const hubCanonical = `${hubBase}/${hubLocale}/projects/${hub.slug}`
       return {
-        title: copy.title,
+        title: copy.metaTitle,
         description: copy.description,
         alternates: {
           canonical: hubCanonical,
@@ -94,7 +100,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
             "x-default": `${hubBase}/${defaultLocale}/projects/${hub.slug}`,
           },
         },
-        openGraph: { title: copy.title, description: copy.description, url: hubCanonical, type: "website" },
+        openGraph: { title: copy.metaTitle, description: copy.description, url: hubCanonical, type: "website" },
       }
     }
     const t = await getTranslations("project_detail")
@@ -178,9 +184,12 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const resolvedSearchParams = await searchParams
   const supabase = await createServerSupabaseClient()
 
-  // Resolve redirects
+  // Resolve redirects — unless a hub owns the original slug (see
+  // generateMetadata): then the hub renders at this URL and the redirect
+  // row only serves as history for non-hub slugs.
   const finalSlug = await resolveRedirect(resolvedParams.slug, supabase)
-  if (finalSlug !== resolvedParams.slug) {
+  const hubOverride = finalSlug !== resolvedParams.slug ? await resolveHub(resolvedParams.slug) : null
+  if (finalSlug !== resolvedParams.slug && !hubOverride) {
     redirect(`/projects/${finalSlug}`)
   }
 
@@ -206,23 +215,31 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     project = projectById
   }
 
-  if (!project || !isProjectRow(project)) {
+  if (hubOverride || !project || !isProjectRow(project)) {
     // Hub fallback — see generateMetadata. Renders the fully server-side
     // hub page (breadcrumb, H1, grid, sibling links) for qualifying
     // city / scope slugs; everything else 404s as before.
-    const hub = await resolveHub(finalSlug)
+    const hub = hubOverride ?? await resolveHub(finalSlug)
     if (hub) {
-      const [projects, allHubs] = await Promise.all([getHubProjects(hub), getHubs()])
-      const siblings = [...allHubs.cities, ...allHubs.scopes]
-        .filter((h) => h.slug !== hub.slug)
-        .slice(0, 6)
+      const hubLocale = resolvedParams.locale ?? "en"
+      const [hubProjects, allHubsSet, discoverProjects] = await Promise.all([
+        getHubProjects(hub),
+        getHubs(),
+        fetchDiscoverProjects(hubLocale),
+      ])
+      const allHubs = [...allHubsSet.cities, ...allHubsSet.scopes, ...allHubsSet.types, ...allHubsSet.combos, ...allHubsSet.provinces]
+      // Server-side pre-filter: the crawled HTML contains exactly the
+      // hub's projects; the client FilterProvider mounts with the same
+      // preset, so grid and state agree from the first paint.
+      const hubIds = new Set(hubProjects.map((p) => p.id))
+      const initialProjects = discoverProjects.filter((p) => p.id != null && hubIds.has(p.id))
       // Called as a plain async function (valid for server components) —
       // sidesteps a TS2786 false positive on async-component JSX.
       return await HubPage({
         hub,
-        siblings,
-        projects,
-        locale: resolvedParams.locale ?? "en",
+        allHubs,
+        initialProjects,
+        locale: hubLocale,
       })
     }
     notFound()

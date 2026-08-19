@@ -3,7 +3,8 @@
 import { useState } from "react"
 import { Link } from "@/i18n/navigation"
 import Image from "next/image"
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
+import { cityLabel } from "@/lib/provinces"
 
 import { ShareModal } from "@/components/share-modal"
 import { useSavedProjects } from "@/contexts/saved-projects-context"
@@ -44,13 +45,14 @@ export function SimilarProjects({ projects }: SimilarProjectsProps) {
 
 export function SimilarProjectCard({ project }: { project: SimilarProject }) {
   const t = useTranslations("common")
+  const locale = useLocale()
   const { savedProjectIds, saveProject, removeProject, mutatingProjectIds } = useSavedProjects()
   const [shareOpen, setShareOpen] = useState(false)
 
   const href = project.slug ? `/projects/${project.slug}` : "#"
   const isSaved = savedProjectIds.has(project.id)
   const isMutating = mutatingProjectIds.has(project.id)
-  const subtitle = [project.projectType, project.location].filter(Boolean).join(" · ")
+  const subtitle = [project.projectType, project.location && cityLabel(project.location, locale)].filter(Boolean).join(" · ")
 
   return (
     <>

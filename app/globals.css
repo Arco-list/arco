@@ -5467,6 +5467,8 @@ body.no-scroll {
   padding: 40px 36px;
   border: 1px solid #e8e8e6;
   border-radius: 8px;
+  /* Cards read as white panels on the grey section surface. */
+  background: #fff;
 }
 
 @media (max-width: 768px) {
@@ -5487,12 +5489,12 @@ body.no-scroll {
 /* â”€â”€â”€ Page title section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .discover-page-title {
-  padding: 36px 0 28px;
+  padding: 36px 0 10px;
 }
 
 @media (max-width: 768px) {
   .discover-page-title {
-    padding: 28px 0 24px;
+    padding: 28px 0 8px;
   }
 }
 
@@ -5825,6 +5827,9 @@ body.no-scroll {
   font-family: var(--font-sans);
   font-size: 14px;
   color: var(--text-secondary);
+  /* Option labels stay on one line (the location dropdown adds a
+     right-aligned Provincie/Stad tag; wrapping read as two rows). */
+  white-space: nowrap;
 }
 
 .filter-dropdown-option[data-checked="true"] .filter-dropdown-label {
@@ -6727,7 +6732,7 @@ body.no-scroll {
 .discover-results-meta {
   display: flex;
   align-items: center;
-  margin-top: 36px;
+  margin-top: 10px;
   margin-bottom: 24px;
 }
 

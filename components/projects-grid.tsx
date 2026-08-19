@@ -10,11 +10,11 @@ import { translateBuildingType, translateCategoryName } from "@/lib/project-tran
 import { ShareModal } from "@/components/share-modal"
 
 import { useFilters } from "@/contexts/filter-context"
+import { cityLabel } from "@/lib/provinces"
 import { useSavedProjects } from "@/contexts/saved-projects-context"
 import { useProjectsQuery } from "@/hooks/use-projects-query"
 import type { DiscoverProject } from "@/lib/projects/queries"
 import { SORT_OPTIONS, type SortOption } from "@/components/filter-bar"
-import { pluralizeLabel } from "@/lib/pluralize-label"
 import { SortLinks } from "@/components/sort-links"
 
 interface ProjectsGridProps {
@@ -26,7 +26,7 @@ interface ProjectsGridProps {
 export function ProjectsGrid({ initialProjects = [], sortBy, onSortChange }: ProjectsGridProps) {
   const t = useTranslations("projects")
   const gridLocale = useLocale()
-  const { selectedSpace, selectedTypes, selectedLocations, taxonomyLabelMap, clearAllFilters } = useFilters()
+  const { selectedSpace, taxonomyLabelMap, clearAllFilters } = useFilters()
   const { savedProjectIds, saveProject, removeProject, mutatingProjectIds } = useSavedProjects()
   const { projects, total, isLoading, error, hasMore, loadMore, spacePhotoOverrides } = useProjectsQuery({
     pageSize: 15,
@@ -44,32 +44,11 @@ export function ProjectsGrid({ initialProjects = [], sortBy, onSortChange }: Pro
 
   const displayCount = total > sortedProjects.length ? total : sortedProjects.length
 
-  const headingText = useMemo(() => {
-    // Pluralize the type labels when the result count calls for it —
-    // "4 Bungalows in the Netherlands", not "4 Bungalow in ...".
-    const typeLabels = selectedTypes
-      .map((id) => pluralizeLabel(taxonomyLabelMap.get(id) ?? id, displayCount, gridLocale))
-      .filter(Boolean)
-
-    const typePart =
-      typeLabels.length === 0
-        ? t("title")
-        : typeLabels.length === 1
-          ? typeLabels[0]
-          : typeLabels.length === 2
-            ? `${typeLabels[0]} & ${typeLabels[1]}`
-            : `${typeLabels.slice(0, -1).join(", ")} & ${typeLabels.at(-1)}`
-
-    const locationPart =
-      selectedLocations.length === 0
-        ? t("heading_default_location")
-        : selectedLocations.length === 1
-          ? selectedLocations[0]
-          : selectedLocations.length === 2
-            ? `${selectedLocations[0]} & ${selectedLocations[1]}`
-            : `${selectedLocations.slice(0, -1).join(", ")} & ${selectedLocations.at(-1)}`
-    return `${typePart} in ${locationPart}`
-  }, [selectedTypes, selectedLocations, taxonomyLabelMap, t, displayCount, gridLocale])
+  // The H1 above already describes the filter state, so the count line
+  // stays minimal: "3 projecten".
+  const headingText = gridLocale === "nl"
+    ? (displayCount === 1 ? "project" : "projecten")
+    : (displayCount === 1 ? "project" : "projects")
 
   // ── photo navigation ─────────────────────────────────────────────────────────
 
@@ -251,7 +230,7 @@ function ProjectCard({
         ? (translateBuildingType(project.building_type as any, locale) ?? project.building_type)
         : null)
 
-  const subtitleParts = [projectTypeLabel, project.location].filter(Boolean)
+  const subtitleParts = [projectTypeLabel, project.location && cityLabel(project.location, locale)].filter(Boolean)
   const cardSubtitle = subtitleParts.join(" · ")
 
   return (

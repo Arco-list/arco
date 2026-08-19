@@ -15,6 +15,7 @@ import { debounce } from "lodash-es"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 
 import { useProjectTaxonomy } from "@/hooks/use-project-taxonomy"
+import { PROVINCES } from "@/lib/provinces"
 
 const DEFAULT_RANGE: [number | null, number | null] = [null, null]
 
@@ -120,6 +121,8 @@ interface FilterState {
   selectedTypes: string[]
   selectedStyles: string[]
   selectedLocations: string[]
+  /** Province filter — address_region EN canonical values. */
+  selectedRegions: string[]
   selectedSpace: string
   selectedFeatures: string[]
   selectedBuildingTypes: string[]
@@ -139,6 +142,7 @@ const INITIAL_FILTER_STATE: FilterState = {
   selectedTypes: [],
   selectedStyles: [],
   selectedLocations: [],
+  selectedRegions: [],
   selectedSpace: "",
   selectedFeatures: [],
   selectedBuildingTypes: [],
@@ -157,6 +161,7 @@ type FilterAction =
   | { type: "SET_TYPES"; payload: string[] }
   | { type: "SET_STYLES"; payload: string[] }
   | { type: "SET_LOCATIONS"; payload: string[] }
+  | { type: "SET_REGIONS"; payload: string[] }
   | { type: "SET_SPACE"; payload: string }
   | { type: "SET_FEATURES"; payload: string[] }
   | { type: "SET_BUILDING_TYPES"; payload: string[] }
@@ -177,6 +182,8 @@ const filterReducer = (state: FilterState, action: FilterAction): FilterState =>
       return { ...state, selectedStyles: action.payload }
     case "SET_LOCATIONS":
       return { ...state, selectedLocations: action.payload }
+    case "SET_REGIONS":
+      return { ...state, selectedRegions: action.payload }
     case "SET_SPACE":
       return { ...state, selectedSpace: action.payload }
     case "SET_FEATURES":
@@ -210,6 +217,7 @@ interface FilterContextType {
   selectedTypes: string[]
   selectedStyles: string[]
   selectedLocations: string[]
+  selectedRegions: string[]
   selectedSpace: string
   selectedFeatures: string[]
   selectedBuildingTypes: string[]
@@ -223,6 +231,7 @@ interface FilterContextType {
   setSelectedTypes: (types: string[]) => void
   setSelectedStyles: (styles: string[]) => void
   setSelectedLocations: (locations: string[]) => void
+  setSelectedRegions: (regions: string[]) => void
   setSelectedSpace: (space: string) => void
   setSelectedFeatures: (features: string[]) => void
   setSelectedBuildingTypes: (types: string[]) => void
@@ -245,13 +254,39 @@ interface FilterContextType {
     refresh: () => Promise<void>
   }
   taxonomyLabelMap: Map<string, string>
+  /** Province → the city names it covers (from the hub definitions);
+   *  used to expand a region filter into city terms for querying. */
+  regionCityMap: Record<string, string[]>
 }
 
 const FilterContext = createContext<FilterContextType | undefined>(undefined)
 
+// Region slugs round-trip through the URL; EN canonical names live in state.
+const REGION_BY_SLUG = new Map(Object.entries(PROVINCES).map(([en, v]) => [v.slug, en]))
+const regionToSlug = (en: string) => PROVINCES[en]?.slug ?? en
+
+/** Minimal, serializable hub definition passed down from the server.
+ *  A hub is a URL-worthy filter preset (/projects/amsterdam,
+ *  /projects/renovatie); the provider maps filter state to hub paths
+ *  and back so hub pages ARE the discover page, pre-filtered. */
+export interface HubDef {
+  slug: string
+  kind: "city" | "scope" | "type" | "type-city" | "type-province" | "scope-city" | "scope-province" | "province"
+  cityName?: string
+  scope?: string
+  /** project-type category slug == filter URL token ("villa", "apartment"). */
+  typeValue?: string
+  /** province hubs: every city the province covers — used to expand the
+   *  region filter into city terms for querying. */
+  cityNames?: string[]
+  /** province hubs: the address_region EN canonical name. */
+  region?: string
+}
+
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
-function FilterProviderInner({ children }: { children: ReactNode }) {
+function FilterProviderInner({ children, hubs = [], hubSlug }: { children: ReactNode; hubs?: HubDef[]; hubSlug?: string }) {
+  const activeHub = hubSlug ? hubs.find((h) => h.slug === hubSlug) ?? null : null
   const { categories, taxonomyOptions, cities, isLoading: taxonomyLoading, error: taxonomyError, refresh } = useProjectTaxonomy()
   const initialSearchParams = useSearchParams()
   // Seed keyword from URL so the first render already has it — otherwise the
@@ -260,12 +295,21 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(
     filterReducer,
     INITIAL_FILTER_STATE,
-    (initial) => ({ ...initial, keyword: initialSearchParams.get("search") ?? "" }),
+    (initial) => ({
+      ...initial,
+      keyword: initialSearchParams.get("search") ?? "",
+      // Hub pages mount with their filter already applied so the first
+      // client render matches the server-filtered grid (no flash).
+      ...((activeHub?.kind === "city" || activeHub?.kind === "type-city" || activeHub?.kind === "scope-city") && activeHub.cityName ? { selectedLocations: [activeHub.cityName] } : {}),
+      ...((activeHub?.kind === "province" || activeHub?.kind === "type-province" || activeHub?.kind === "scope-province") && activeHub.region ? { selectedRegions: [activeHub.region] } : {}),
+      ...((activeHub?.kind === "scope" || activeHub?.kind === "scope-city" || activeHub?.kind === "scope-province") && activeHub.scope ? { selectedScopes: [activeHub.scope] } : {}),
+    }),
   )
   const {
     selectedTypes,
     selectedStyles,
     selectedLocations,
+    selectedRegions,
     selectedSpace,
     selectedFeatures,
     selectedBuildingTypes,
@@ -296,6 +340,13 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
       dispatch({ type: "SET_STYLES", payload: Array.isArray(styles) ? [...styles] : [] }),
     [],
   )
+  const setSelectedRegions = useCallback((regions: string[]) => {
+    const sanitized = Array.isArray(regions)
+      ? regions.filter((r): r is string => Boolean(r)).filter((v, i, a) => a.indexOf(v) === i)
+      : []
+    dispatch({ type: "SET_REGIONS", payload: sanitized })
+  }, [])
+
   const setSelectedLocations = useCallback((locations: string[]) => {
     if (!Array.isArray(locations)) {
       dispatch({ type: "SET_LOCATIONS", payload: [] })
@@ -377,16 +428,12 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
   const initializedRef = useRef(false)
   const lastParsedQueryRef = useRef<string>(searchParams.toString())
   const lastSyncedQueryRef = useRef<string>(searchParams.toString())
-  const debouncedReplaceRef = useRef<(nextQuery: string) => void>()
+  const debouncedReplaceRef = useRef<(nextUrl: string, nextQuery: string) => void>()
 
   useEffect(() => {
-    const handler = debounce((nextQuery: string) => {
+    const handler = debounce((nextUrl: string, nextQuery: string) => {
       lastSyncedQueryRef.current = nextQuery
-      if (nextQuery.length === 0) {
-        router.replace(pathname, { scroll: false })
-      } else {
-        router.replace(`${pathname}?${nextQuery}`, { scroll: false })
-      }
+      router.replace(nextUrl, { scroll: false })
     }, 300)
     debouncedReplaceRef.current = handler
     return () => {
@@ -466,7 +513,11 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
 
     if (initializedRef.current && lastSyncedQueryRef.current === queryString && !pendingResolution) return
 
-    const typeValues = parseCommaSeparatedParam(searchParams.get("type"))
+    let typeValues = parseCommaSeparatedParam(searchParams.get("type"))
+    if ((activeHub?.kind === "type" || activeHub?.kind === "type-city" || activeHub?.kind === "type-province") && activeHub.typeValue && !typeValues.includes(activeHub.typeValue)) {
+      // Hub path carries the project-type category filter as an implicit param.
+      typeValues = [activeHub.typeValue, ...typeValues]
+    }
     const resolvedTypes = resolveTokensToIds(typeValues, categoryTokenMaps)
     if (!areStringArraysEqual(selectedTypes, resolvedTypes)) setSelectedTypes(resolvedTypes)
 
@@ -474,8 +525,21 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     const resolvedStyles = resolveTokensToIds(styleValues, taxonomyTokenMaps.project_style)
     if (!areStringArraysEqual(selectedStyles, resolvedStyles)) setSelectedStyles(resolvedStyles)
 
-    const locationValues = parseCommaSeparatedParam(searchParams.get("location"))
+    let locationValues = parseCommaSeparatedParam(searchParams.get("location"))
+    if ((activeHub?.kind === "city" || activeHub?.kind === "type-city" || activeHub?.kind === "scope-city") && activeHub.cityName && !locationValues.includes(activeHub.cityName)) {
+      // The hub path carries this filter — treat it as an implicit URL param
+      // so the empty query string doesn't clear it while on the hub page.
+      locationValues = [activeHub.cityName, ...locationValues]
+    }
+
     if (!areStringArraysEqual(selectedLocations, locationValues)) setSelectedLocations(locationValues)
+
+    let regionValues = parseCommaSeparatedParam(searchParams.get("region"))
+      .map((slug) => REGION_BY_SLUG.get(slug) ?? slug)
+    if ((activeHub?.kind === "province" || activeHub?.kind === "type-province" || activeHub?.kind === "scope-province") && activeHub.region && !regionValues.includes(activeHub.region)) {
+      regionValues = [activeHub.region, ...regionValues]
+    }
+    if (!areStringArraysEqual(selectedRegions, regionValues)) setSelectedRegions(regionValues)
 
     const spaceValue = searchParams.get("space") ?? ""
     if (selectedSpace !== spaceValue) setSelectedSpace(spaceValue)
@@ -485,7 +549,10 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     if (!areStringArraysEqual(selectedBuildingTypes, resolvedBuildingTypes)) setSelectedBuildingTypes(resolvedBuildingTypes)
 
     // Scope filter — slugs round-trip through the URL as-is (no token map).
-    const scopeValues = parseCommaSeparatedParam(searchParams.get("scope"))
+    let scopeValues = parseCommaSeparatedParam(searchParams.get("scope"))
+    if ((activeHub?.kind === "scope" || activeHub?.kind === "scope-city" || activeHub?.kind === "scope-province") && activeHub.scope && !scopeValues.includes(activeHub.scope)) {
+      scopeValues = [activeHub.scope, ...scopeValues]
+    }
     if (!areStringArraysEqual(selectedScopes, scopeValues)) setSelectedScopes(scopeValues)
 
     const buildingFeatureValues = parseCommaSeparatedParam(searchParams.get("buildingFeatures"))
@@ -521,10 +588,10 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     lastSyncedQueryRef.current = searchParams.toString()
     if (!isUrlHydrated) setIsUrlHydrated(true)
   }, [
-    searchParams, selectedTypes, selectedStyles, selectedLocations, selectedSpace,
+    searchParams, selectedTypes, selectedStyles, selectedLocations, selectedRegions, selectedSpace,
     selectedBuildingTypes, selectedBuildingFeatures,
     selectedSizes, selectedBudgets, projectYearRange,
-    buildingYearRange, keyword, isUrlHydrated, categoryTokenMaps, taxonomyTokenMaps,
+    buildingYearRange, keyword, isUrlHydrated, categoryTokenMaps, taxonomyTokenMaps, activeHub,
   ])
 
   // Sync combined features
@@ -545,6 +612,7 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     setArrayParam("type", mapIdsToTokens(selectedTypes, categoryTokenMaps))
     setArrayParam("style", mapIdsToTokens(selectedStyles, taxonomyTokenMaps.project_style))
     setArrayParam("location", selectedLocations)
+    setArrayParam("region", selectedRegions.map(regionToSlug))
     if (selectedSpace) params.set("space", selectedSpace)
     setArrayParam("buildingType", mapIdsToTokens(selectedBuildingTypes, taxonomyTokenMaps.building_type))
     // Scope filter — uses canonical slugs from lib/project-translations.ts
@@ -557,23 +625,93 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     if (projectYearRange[1] !== null) params.set("projectYearMax", String(projectYearRange[1]))
     if (buildingYearRange[1] !== null) params.set("buildingYearMax", String(buildingYearRange[1]))
 
-    const nextQuery = params.toString()
-    const currentQuery = searchParams.toString()
-    if (nextQuery === currentQuery) { lastSyncedQueryRef.current = nextQuery; return }
-    if (nextQuery === lastSyncedQueryRef.current) return
+    // ── Hub URL mapping ─────────────────────────────────────────────
+    // When the state is EXACTLY one hub's preset (one qualifying city or
+    // one scope, nothing else), the canonical address for that state is
+    // the hub path (/projects/amsterdam) with no query. Anything else
+    // lives on the base discover path with query params. Ephemeral
+    // filter states therefore never mint crawlable URLs; gated hubs do.
+    const basePath = hubSlug && pathname.endsWith(`/${hubSlug}`)
+      ? pathname.slice(0, pathname.length - hubSlug.length - 1)
+      : pathname
+    const onlyFilter = (
+      locations: number, scopes: number, types: number, regions = 0,
+    ) =>
+      selectedLocations.length === locations &&
+      selectedScopes.length === scopes &&
+      selectedTypes.length === types &&
+      selectedRegions.length === regions &&
+      selectedBuildingTypes.length === 0 &&
+      selectedStyles.length === 0 &&
+      selectedSpace === "" &&
+      selectedBuildingFeatures.length === 0 &&
+      selectedSizes.length === 0 &&
+      selectedBudgets.length === 0 &&
+      projectYearRange[1] === null &&
+      buildingYearRange[1] === null &&
+      keyword.trim().length === 0
+    const categoryTokens = mapIdsToTokens(selectedTypes, categoryTokenMaps)
+    const matchedHub =
+      hubs.find((h) =>
+        h.kind === "type-city" && h.cityName && h.typeValue && onlyFilter(1, 0, 1) &&
+        selectedLocations[0]?.toLowerCase() === h.cityName.toLowerCase() &&
+        categoryTokens[0]?.toLowerCase() === h.typeValue.toLowerCase(),
+      ) ??
+      hubs.find((h) =>
+        h.kind === "scope-city" && h.cityName && h.scope && onlyFilter(1, 1, 0) &&
+        selectedLocations[0]?.toLowerCase() === h.cityName.toLowerCase() &&
+        selectedScopes[0] === h.scope,
+      ) ??
+      hubs.find((h) =>
+        h.kind === "scope-province" && h.region && h.scope && onlyFilter(0, 1, 0, 1) &&
+        selectedRegions[0] === h.region &&
+        selectedScopes[0] === h.scope,
+      ) ??
+      hubs.find((h) =>
+        h.kind === "type-province" && h.region && h.typeValue && onlyFilter(0, 0, 1, 1) &&
+        selectedRegions[0] === h.region &&
+        categoryTokens[0]?.toLowerCase() === h.typeValue.toLowerCase(),
+      ) ??
+      hubs.find((h) =>
+        h.kind === "city" && h.cityName && onlyFilter(1, 0, 0) &&
+        selectedLocations[0]?.toLowerCase() === h.cityName.toLowerCase(),
+      ) ??
+      hubs.find((h) =>
+        h.kind === "scope" && h.scope && onlyFilter(0, 1, 0) &&
+        selectedScopes[0] === h.scope,
+      ) ??
+      hubs.find((h) =>
+        h.kind === "type" && h.typeValue && onlyFilter(0, 0, 1) &&
+        categoryTokens[0]?.toLowerCase() === h.typeValue.toLowerCase(),
+      ) ??
+      hubs.find((h) =>
+        h.kind === "province" && h.region && onlyFilter(0, 0, 0, 1) &&
+        selectedRegions[0] === h.region,
+      ) ?? null
 
-    if (!debouncedReplaceRef.current) {
+    const nextQuery = matchedHub ? "" : params.toString()
+    const targetPath = matchedHub ? `${basePath}/${matchedHub.slug}` : basePath
+    const nextUrl = nextQuery.length > 0 ? `${targetPath}?${nextQuery}` : targetPath
+    const currentQuery = searchParams.toString()
+    const currentUrl = currentQuery.length > 0 ? `${pathname}?${currentQuery}` : pathname
+    if (nextUrl === currentUrl) { lastSyncedQueryRef.current = nextQuery; return }
+    if (nextQuery === lastSyncedQueryRef.current && targetPath === pathname) return
+
+    // Route changes (hub <-> base) navigate immediately: a debounced
+    // replace can fire with a stale closure after the route already
+    // changed, leaving the page one navigation behind until a manual
+    // refresh. Query-only updates keep the 300ms debounce.
+    if (targetPath !== pathname || !debouncedReplaceRef.current) {
       lastSyncedQueryRef.current = nextQuery
-      if (nextQuery.length === 0) router.replace(pathname, { scroll: false })
-      else router.replace(`${pathname}?${nextQuery}`, { scroll: false })
+      router.replace(nextUrl, { scroll: false })
       return
     }
-    debouncedReplaceRef.current(nextQuery)
+    debouncedReplaceRef.current(nextUrl, nextQuery)
   }, [
-    isUrlHydrated, selectedTypes, selectedStyles, selectedLocations, selectedSpace,
+    isUrlHydrated, selectedTypes, selectedStyles, selectedLocations, selectedRegions, selectedSpace,
     selectedBuildingTypes, selectedScopes, selectedBuildingFeatures,
     selectedSizes, selectedBudgets, projectYearRange,
-    buildingYearRange, router, pathname, searchParams, categoryTokenMaps, taxonomyTokenMaps, keyword,
+    buildingYearRange, router, pathname, searchParams, categoryTokenMaps, taxonomyTokenMaps, keyword, hubs, hubSlug,
   ])
 
   // ── Actions ──────────────────────────────────────────────────────────────────
@@ -585,6 +723,7 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
       case "type": setSelectedTypes(selectedTypes.filter((t) => t !== value)); break
       case "style": setSelectedStyles(selectedStyles.filter((s) => s !== value)); break
       case "location": setSelectedLocations(selectedLocations.filter((l) => l !== value)); break
+      case "region": setSelectedRegions(selectedRegions.filter((r) => r !== value)); break
       case "space": setSelectedSpace(""); break
       case "feature":
         setSelectedFeatures(selectedFeatures.filter((f) => f !== value))
@@ -601,10 +740,19 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
     }
   }
 
+  const regionCityMap = useMemo(() => {
+    const map: Record<string, string[]> = {}
+    for (const h of hubs) {
+      if (h.kind === "province" && h.region && h.cityNames?.length) map[h.region] = h.cityNames
+    }
+    return map
+  }, [hubs])
+
   const hasActiveFilters = () =>
     selectedTypes.length > 0 ||
     selectedStyles.length > 0 ||
     selectedLocations.length > 0 ||
+    selectedRegions.length > 0 ||
     selectedSpace !== "" ||
     selectedFeatures.length > 0 ||
     selectedBuildingTypes.length > 0 ||
@@ -619,11 +767,11 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
   return (
     <FilterContext.Provider
       value={{
-        selectedTypes, selectedStyles, selectedLocations, selectedSpace,
+        selectedTypes, selectedStyles, selectedLocations, selectedRegions, selectedSpace,
         selectedFeatures, selectedBuildingTypes, selectedScopes,
         selectedBuildingFeatures, selectedSizes,
         selectedBudgets, projectYearRange, buildingYearRange, keyword,
-        setSelectedTypes, setSelectedStyles, setSelectedLocations, setSelectedSpace,
+        setSelectedTypes, setSelectedStyles, setSelectedLocations, setSelectedRegions, setSelectedSpace,
         setSelectedFeatures, setSelectedBuildingTypes, setSelectedScopes,
         setSelectedBuildingFeatures, setSelectedSizes,
         setSelectedBudgets, setProjectYearRange, setBuildingYearRange, setKeyword,
@@ -633,6 +781,7 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
           isLoading: taxonomyLoading, error: taxonomyError, refresh,
         },
         taxonomyLabelMap,
+        regionCityMap,
       }}
     >
       {children}
@@ -640,10 +789,10 @@ function FilterProviderInner({ children }: { children: ReactNode }) {
   )
 }
 
-export function FilterProvider({ children }: { children: ReactNode }) {
+export function FilterProvider({ children, hubs, hubSlug }: { children: ReactNode; hubs?: HubDef[]; hubSlug?: string }) {
   return (
     <Suspense fallback={<div>Loading filters...</div>}>
-      <FilterProviderInner>{children}</FilterProviderInner>
+      <FilterProviderInner hubs={hubs} hubSlug={hubSlug}>{children}</FilterProviderInner>
     </Suspense>
   )
 }
