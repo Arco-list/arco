@@ -11,8 +11,9 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { debounce } from "lodash-es"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
+
+import { PROVINCES, provinceKey } from "@/lib/provinces"
 
 import { useProfessionalTaxonomy, type LocationOptions } from "@/hooks/use-professional-taxonomy"
 
@@ -92,6 +93,9 @@ const createTokenMaps = <T,>(items: T[] | undefined, config: TokenMapConfig<T>):
   return { tokenToId, idToToken, idToLabel }
 }
 
+const REGION_BY_SLUG = new Map(Object.entries(PROVINCES).map(([en, v]) => [v.slug, en]))
+const regionToSlug = (en: string) => PROVINCES[en]?.slug ?? en
+
 const parseCommaSeparatedParam = (value: string | null) =>
   value
     ? value
@@ -139,6 +143,8 @@ interface ProfessionalFilterState {
   selectedCategories: string[]
   selectedServices: string[]
   selectedCities: string[]
+  /** Province filters — canonical EN keys of PROVINCES. */
+  selectedRegions: string[]
   keyword: string
   sortBy: ProfessionalSortOption
 }
@@ -147,6 +153,7 @@ const INITIAL_STATE: ProfessionalFilterState = {
   selectedCategories: [],
   selectedServices: [],
   selectedCities: [],
+  selectedRegions: [],
   keyword: "",
   sortBy: DEFAULT_PROFESSIONAL_SORT,
 }
@@ -155,6 +162,7 @@ type ProfessionalFilterAction =
   | { type: "SET_CATEGORIES"; payload: string[] }
   | { type: "SET_SERVICES"; payload: string[] }
   | { type: "SET_CITIES"; payload: string[] }
+  | { type: "SET_REGIONS"; payload: string[] }
   | { type: "SET_KEYWORD"; payload: string }
   | { type: "SET_SORT"; payload: ProfessionalSortOption }
   | { type: "RESET" }
@@ -167,6 +175,8 @@ const filterReducer = (state: ProfessionalFilterState, action: ProfessionalFilte
       return { ...state, selectedServices: action.payload }
     case "SET_CITIES":
       return { ...state, selectedCities: action.payload }
+    case "SET_REGIONS":
+      return { ...state, selectedRegions: action.payload }
     case "SET_KEYWORD":
       return { ...state, keyword: action.payload }
     case "SET_SORT":
@@ -182,6 +192,7 @@ interface ProfessionalFilterContextValue extends ProfessionalFilterState {
   setSelectedCategories: (values: string[]) => void
   setSelectedServices: (values: string[]) => void
   setSelectedCities: (values: string[]) => void
+  setSelectedRegions: (values: string[]) => void
   setKeyword: (value: string) => void
   setSortBy: (value: ProfessionalSortOption) => void
   clearAllFilters: () => void
@@ -190,12 +201,34 @@ interface ProfessionalFilterContextValue extends ProfessionalFilterState {
   taxonomy: ReturnType<typeof useProfessionalTaxonomy>
   taxonomyLabelMap: Map<string, string>
   cities: string[]
+  /** Canonical EN province key -> member cities (from location facets). */
+  regionCityMap: Record<string, string[]>
 }
 
 const ProfessionalFilterContext = createContext<ProfessionalFilterContextValue | undefined>(undefined)
 
-function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) {
+/** Minimal, serializable hub definition passed down from the server —
+ *  a URL-worthy filter preset (/professionals/amsterdam). Mirrors the
+ *  projects HubDef contract. */
+export interface ProHubDef {
+  slug: string
+  kind: "city" | "province" | "service" | "service-city" | "service-province" | "category" | "category-city" | "category-province"
+  cityName?: string
+  region?: string
+  /** specialty slug == service filter URL token. */
+  serviceSlug?: string
+  /** service GROUP slug == categories filter URL token. */
+  categorySlug?: string
+}
+
+function ProfessionalFilterProviderInner({ children, hubs = [], hubSlug }: { children: ReactNode; hubs?: ProHubDef[]; hubSlug?: string }) {
   const taxonomy = useProfessionalTaxonomy()
+  // The hub preset applies only while the URL is still on the hub's
+  // path — URL sync is shallow, so this tree survives leaving it.
+  const livePathname = usePathname()
+  const activeHub = hubSlug && livePathname.endsWith(`/${hubSlug}`)
+    ? hubs.find((h) => h.slug === hubSlug) ?? null
+    : null
   const initialSearchParams = useSearchParams()
   // Seed keyword from URL so the first render already has it — otherwise the
   // discover page mounts with empty filters, fetches all results, then
@@ -206,9 +239,14 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
     (initial) => ({
       ...initial,
       keyword: initialSearchParams.get("search") ?? initialSearchParams.get("keyword") ?? "",
+      // Hub pages mount pre-filtered so the first client render matches
+      // the server-filtered grid. Service seeding happens at hydration
+      // (tokens need the taxonomy's token maps).
+      ...((activeHub?.kind === "city" || activeHub?.kind === "service-city" || activeHub?.kind === "category-city") && activeHub.cityName ? { selectedCities: [activeHub.cityName] } : {}),
+      ...((activeHub?.kind === "province" || activeHub?.kind === "service-province" || activeHub?.kind === "category-province") && activeHub.region ? { selectedRegions: [activeHub.region] } : {}),
     }),
   )
-  const { selectedCategories, selectedServices, selectedCities, keyword, sortBy } = state
+  const { selectedCategories, selectedServices, selectedCities, selectedRegions, keyword, sortBy } = state
 
   // Extract unique cities from location facets
   const cities = useMemo(() => {
@@ -219,6 +257,18 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
       }
     })
     return Array.from(citySet).sort((a, b) => a.localeCompare(b))
+  }, [taxonomy.locationFacets])
+
+  // Province -> member cities, from the same facets that feed the city
+  // list. Mirrors the projects regionCityMap contract.
+  const regionCityMap = useMemo(() => {
+    const map: Record<string, Set<string>> = {}
+    taxonomy.locationFacets.forEach((facet) => {
+      const key = provinceKey(facet.stateRegion)
+      if (!key || !facet.city) return
+      ;(map[key] ??= new Set()).add(facet.city)
+    })
+    return Object.fromEntries(Object.entries(map).map(([k, v]) => [k, Array.from(v).sort((a, b) => a.localeCompare(b))]))
   }, [taxonomy.locationFacets])
 
   const taxonomyLabelMap = useMemo(() => {
@@ -287,6 +337,15 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
     },
     [dispatch],
   )
+  const setSelectedRegions = useCallback(
+    (values: string[]) => {
+      const sanitized = values
+        .filter((value): value is string => Boolean(value))
+        .filter((value, index, array) => array.indexOf(value) === index)
+      dispatch({ type: "SET_REGIONS", payload: sanitized })
+    },
+    [dispatch],
+  )
   const setKeyword = useCallback((value: string) => dispatch({ type: "SET_KEYWORD", payload: value }), [])
   const setSortBy = useCallback((value: ProfessionalSortOption) => dispatch({ type: "SET_SORT", payload: value }), [])
   const clearAllFilters = useCallback(() => dispatch({ type: "RESET" }), [])
@@ -296,8 +355,9 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
       selectedCategories.length > 0 ||
       selectedServices.length > 0 ||
       selectedCities.length > 0 ||
+      selectedRegions.length > 0 ||
       keyword.trim().length > 0,
-    [keyword, selectedCategories.length, selectedCities.length, selectedServices.length],
+    [keyword, selectedCategories.length, selectedCities.length, selectedRegions.length, selectedServices.length],
   )
 
   const removeFilter = useCallback(
@@ -312,6 +372,9 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
         case "city":
           setSelectedCities(selectedCities.filter((item) => item !== value))
           break
+        case "region":
+          setSelectedRegions(selectedRegions.filter((item) => item !== value))
+          break
         case "keyword":
           setKeyword("")
           break
@@ -319,33 +382,18 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
           break
       }
     },
-    [selectedCategories, selectedCities, selectedServices, setKeyword, setSelectedCategories, setSelectedCities, setSelectedServices],
+    [selectedCategories, selectedCities, selectedRegions, selectedServices, setKeyword, setSelectedCategories, setSelectedCities, setSelectedRegions, setSelectedServices],
   )
 
-  const router = useRouter()
-  const pathname = usePathname()
+  const pathname = livePathname
   const searchParams = initialSearchParams
   const initializedRef = useRef(false)
   const lastParsedQueryRef = useRef<string>("")
   const lastSyncedQueryRef = useRef<string>("")
-  const debouncedReplaceRef = useRef<(nextQuery: string) => void>()
 
-  useEffect(() => {
-    const handler = debounce((nextQuery: string) => {
-      lastSyncedQueryRef.current = nextQuery
-      if (nextQuery.length === 0) {
-        router.replace(pathname, { scroll: false })
-      } else {
-        router.replace(`${pathname}?${nextQuery}`, { scroll: false })
-      }
-    }, 300)
-
-    debouncedReplaceRef.current = handler
-    return () => {
-      handler.cancel()
-      debouncedReplaceRef.current = undefined
-    }
-  }, [pathname, router])
+  // URL sync is SHALLOW (same as the projects filter): the address bar
+  // mirrors filter state — including hub paths — without a server
+  // navigation, so filtering never reloads the page.
 
   useEffect(() => {
     if (!initializedRef.current) return
@@ -365,33 +413,120 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
       params.set("city", selectedCities.join(","))
     }
 
+    if (selectedRegions.length > 0) {
+      params.set("region", selectedRegions.map(regionToSlug).join(","))
+    }
+
     if (keyword.trim().length > 0) {
       params.set("search", keyword.trim())
     }
 
-    const nextQuery = params.toString()
-    if (nextQuery === lastSyncedQueryRef.current) {
+    // ── Hub URL mapping — exactly one preset -> /professionals/{slug}.
+    const pathHub = hubs
+      .filter((h) => pathname.endsWith(`/${h.slug}`))
+      .sort((a, b) => b.slug.length - a.slug.length)[0]
+    const basePath = pathHub
+      ? pathname.slice(0, pathname.length - pathHub.slug.length - 1)
+      : pathname
+    const only = (cities: number, regions: number, services: number, cats = 0) =>
+      selectedCities.length === cities &&
+      selectedRegions.length === regions &&
+      selectedServices.length === services &&
+      selectedCategories.length === cats &&
+      keyword.trim().length === 0
+    const svcTokens = mapIdsToTokens(selectedServices, serviceTokenMaps)
+    const catTokens = mapIdsToTokens(selectedCategories, categoryTokenMaps)
+    const matchedHub =
+      hubs.find((h) =>
+        h.kind === "service-city" && h.cityName && h.serviceSlug && only(1, 0, 1) &&
+        selectedCities[0]?.toLowerCase() === h.cityName.toLowerCase() &&
+        svcTokens[0]?.toLowerCase() === h.serviceSlug.toLowerCase(),
+      ) ??
+      hubs.find((h) =>
+        h.kind === "service-province" && h.region && h.serviceSlug && only(0, 1, 1) &&
+        selectedRegions[0] === h.region &&
+        svcTokens[0]?.toLowerCase() === h.serviceSlug.toLowerCase(),
+      ) ??
+      hubs.find((h) =>
+        h.kind === "category-city" && h.cityName && h.categorySlug && only(1, 0, 0, 1) &&
+        selectedCities[0]?.toLowerCase() === h.cityName.toLowerCase() &&
+        catTokens[0]?.toLowerCase() === h.categorySlug.toLowerCase(),
+      ) ??
+      hubs.find((h) =>
+        h.kind === "category-province" && h.region && h.categorySlug && only(0, 1, 0, 1) &&
+        selectedRegions[0] === h.region &&
+        catTokens[0]?.toLowerCase() === h.categorySlug.toLowerCase(),
+      ) ??
+      hubs.find((h) =>
+        h.kind === "city" && h.cityName && only(1, 0, 0) &&
+        selectedCities[0]?.toLowerCase() === h.cityName.toLowerCase(),
+      ) ??
+      hubs.find((h) =>
+        h.kind === "province" && h.region && only(0, 1, 0) &&
+        selectedRegions[0] === h.region,
+      ) ??
+      hubs.find((h) =>
+        h.kind === "service" && h.serviceSlug && only(0, 0, 1) &&
+        svcTokens[0]?.toLowerCase() === h.serviceSlug.toLowerCase(),
+      ) ??
+      hubs.find((h) =>
+        h.kind === "category" && h.categorySlug && only(0, 0, 0, 1) &&
+        catTokens[0]?.toLowerCase() === h.categorySlug.toLowerCase(),
+      ) ?? null
+
+    const nextQuery = matchedHub ? "" : params.toString()
+    const targetPath = matchedHub ? `${basePath}/${matchedHub.slug}` : basePath
+    const currentQuery = searchParams.toString()
+    if (nextQuery === lastSyncedQueryRef.current && targetPath === pathname) {
       return
     }
-
-    if (debouncedReplaceRef.current) {
-      debouncedReplaceRef.current(nextQuery)
+    if (targetPath === pathname && nextQuery === currentQuery) {
+      lastSyncedQueryRef.current = nextQuery
+      return
     }
+    lastSyncedQueryRef.current = nextQuery
+    window.history.replaceState(window.history.state, "", nextQuery.length === 0 ? targetPath : `${targetPath}?${nextQuery}`)
   }, [
     categoryTokenMaps,
     keyword,
     selectedCategories,
     selectedCities,
+    selectedRegions,
     selectedServices,
     serviceTokenMaps,
+    pathname,
+    hubs,
+    searchParams,
   ])
 
   useEffect(() => {
     const currentQuery = searchParams.toString()
-    if (!initializedRef.current || currentQuery !== lastParsedQueryRef.current) {
-      const categoriesParam = parseCommaSeparatedParam(searchParams.get("categories"))
-      const servicesParam = parseCommaSeparatedParam(searchParams.get("services"))
-      const cityParams = parseCommaSeparatedParam(searchParams.get("city"))
+    // Tokens parsed before the taxonomy loaded sit in state as raw slugs
+    // ("design-planning") — the chips render (label map covers slugs) but
+    // id-keyed checkboxes don't. Re-resolve once the token maps can.
+    const needsResolution = (values: string[], maps: TokenMaps) =>
+      values.some((v) => !maps.idToToken.has(v) && maps.tokenToId.has(normalizeToken(v)))
+    const pendingResolution =
+      needsResolution(selectedCategories, categoryTokenMaps) ||
+      needsResolution(selectedServices, serviceTokenMaps)
+    if (!initializedRef.current || currentQuery !== lastParsedQueryRef.current || pendingResolution) {
+      let categoriesParam = parseCommaSeparatedParam(searchParams.get("categories"))
+      if ((activeHub?.kind === "category" || activeHub?.kind === "category-city" || activeHub?.kind === "category-province") && activeHub.categorySlug && !categoriesParam.includes(activeHub.categorySlug)) {
+        categoriesParam = [activeHub.categorySlug, ...categoriesParam]
+      }
+      let servicesParam = parseCommaSeparatedParam(searchParams.get("services"))
+      if ((activeHub?.kind === "service" || activeHub?.kind === "service-city" || activeHub?.kind === "service-province") && activeHub.serviceSlug && !servicesParam.includes(activeHub.serviceSlug)) {
+        servicesParam = [activeHub.serviceSlug, ...servicesParam]
+      }
+      let cityParams = parseCommaSeparatedParam(searchParams.get("city"))
+      if ((activeHub?.kind === "city" || activeHub?.kind === "service-city" || activeHub?.kind === "category-city") && activeHub.cityName && !cityParams.includes(activeHub.cityName)) {
+        cityParams = [activeHub.cityName, ...cityParams]
+      }
+      let regionParams = parseCommaSeparatedParam(searchParams.get("region"))
+        .map((slug) => REGION_BY_SLUG.get(slug) ?? provinceKey(slug) ?? slug)
+      if ((activeHub?.kind === "province" || activeHub?.kind === "service-province" || activeHub?.kind === "category-province") && activeHub.region && !regionParams.includes(activeHub.region)) {
+        regionParams = [activeHub.region, ...regionParams]
+      }
       const keywordParam = searchParams.get("search") ?? searchParams.get("keyword") ?? ""
 
       const resolvedCategories = resolveTokensToIds(categoriesParam, categoryTokenMaps)
@@ -405,6 +540,9 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
       }
       if (!areStringArraysEqual(cityParams, selectedCities)) {
         dispatch({ type: "SET_CITIES", payload: cityParams })
+      }
+      if (!areStringArraysEqual(regionParams, selectedRegions)) {
+        dispatch({ type: "SET_REGIONS", payload: regionParams })
       }
       if (keywordParam !== keyword) {
         dispatch({ type: "SET_KEYWORD", payload: keywordParam })
@@ -421,6 +559,7 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
     searchParams,
     selectedCategories,
     selectedCities,
+    selectedRegions,
     selectedServices,
     serviceTokenMaps,
   ])
@@ -430,11 +569,13 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
       selectedCategories,
       selectedServices,
       selectedCities,
+      selectedRegions,
       keyword,
       sortBy,
       setSelectedCategories,
       setSelectedServices,
       setSelectedCities,
+      setSelectedRegions,
       setKeyword,
       setSortBy,
       clearAllFilters,
@@ -443,6 +584,7 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
       taxonomy,
       taxonomyLabelMap,
       cities,
+      regionCityMap,
     }),
     [
       clearAllFilters,
@@ -453,22 +595,25 @@ function ProfessionalFilterProviderInner({ children }: { children: ReactNode }) 
       removeFilter,
       selectedCategories,
       selectedCities,
+      selectedRegions,
       selectedServices,
       setKeyword,
       setSortBy,
       setSelectedCategories,
       setSelectedCities,
+      setSelectedRegions,
       setSelectedServices,
       taxonomy,
       taxonomyLabelMap,
+      regionCityMap,
     ],
   )
 
   return <ProfessionalFilterContext.Provider value={contextValue}>{children}</ProfessionalFilterContext.Provider>
 }
 
-export function ProfessionalFilterProvider({ children }: { children: ReactNode }) {
-  return <ProfessionalFilterProviderInner>{children}</ProfessionalFilterProviderInner>
+export function ProfessionalFilterProvider({ children, hubs, hubSlug }: { children: ReactNode; hubs?: ProHubDef[]; hubSlug?: string }) {
+  return <ProfessionalFilterProviderInner hubs={hubs} hubSlug={hubSlug}>{children}</ProfessionalFilterProviderInner>
 }
 
 export function useProfessionalFilters() {

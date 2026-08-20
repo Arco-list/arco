@@ -79,17 +79,15 @@ export function PopularSearches({ hubs, locale, full = false }: { hubs: PopularH
               ))}
             </div>
           )}
-          {/* Professional searches — filtered discover links for now;
-              proper professional hub routes come with the
-              professional-discover rework. Only stocked services
-              are listed (architects 22, interior designers 12). */}
+          {/* Professional hub links — service hubs are inventory-gated
+              like every other hub, so both links land on stocked pages. */}
           <div>
             <p className="arco-eyebrow" style={{ color: "#a1a1a0", marginBottom: 10 }}>
               Professionals
             </p>
             {[
-              { href: "/professionals?services=architect", nl: "Architecten", en: "Architects" },
-              { href: "/professionals?services=interior-designer", nl: "Interieurontwerpers", en: "Interior designers" },
+              { href: "/professionals/architect", nl: "Architecten", en: "Architects" },
+              { href: "/professionals/interior-designer", nl: "Interieurontwerpers", en: "Interior designers" },
               { href: "/professionals", nl: "Alle professionals", en: "All professionals" },
             ].map((item) => (
               <p key={item.href} style={{ marginBottom: 8 }}>

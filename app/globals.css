@@ -5502,6 +5502,10 @@ body.no-scroll {
   display: flex;
   align-items: center;
   gap: 7px;
+  /* Long trails (geo spine + leaf) wrap to extra rows on narrow
+     screens instead of overflowing off-canvas. */
+  flex-wrap: wrap;
+  row-gap: 4px;
   margin-bottom: 14px;
 }
 

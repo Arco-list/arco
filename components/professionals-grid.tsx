@@ -9,6 +9,8 @@ import { ProfessionalCard as ProfessionalCardComponent } from "@/components/prof
 import { MapPreviewCard, ProfessionalsMap } from "@/components/professionals-map"
 import { Footer } from "@/components/footer"
 import { useProfessionalFilters, PROFESSIONAL_SORT_OPTIONS } from "@/contexts/professional-filter-context"
+import { BreadcrumbSelect, type BreadcrumbSelectItem } from "@/components/project/breadcrumb-select"
+import { PROVINCES, cityLabel } from "@/lib/provinces"
 import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
 import type { ProfessionalCard } from "@/lib/professionals/types"
 import { useProfessionalsForMap, useProfessionalsQuery } from "@/hooks/use-professionals-query"
@@ -20,9 +22,12 @@ import { pluralizeLabel } from "@/lib/pluralize-label"
 export function ProfessionalsGrid({
   professionals = [],
   initialTotal,
+  hubMode = false,
 }: {
   professionals?: ProfessionalCard[]
   initialTotal?: number
+  /** Hub pages: render the page title as the crawlable h1. */
+  hubMode?: boolean
 }) {
   const [showMap, setShowMap] = useState(false)
   const t = useTranslations("professionals")
@@ -32,6 +37,11 @@ export function ProfessionalsGrid({
     selectedCategories,
     selectedServices,
     selectedCities,
+    setSelectedCities,
+    selectedRegions,
+    setSelectedRegions,
+    regionCityMap,
+    cities,
     keyword,
     taxonomyLabelMap,
     sortBy,
@@ -59,33 +69,102 @@ export function ProfessionalsGrid({
 
   const displayCount = total > sortedProfessionals.length ? total : sortedProfessionals.length
 
-  const headingText = useMemo(() => {
-    const locationLabel =
-      selectedCities.length === 1
-        ? selectedCities[0]
-        : selectedCities.length === 2
-          ? `${selectedCities[0]} & ${selectedCities[1]}`
-          : selectedCities.length > 2
-            ? `${selectedCities.slice(0, -1).join(", ")} & ${selectedCities.at(-1)}`
-            : t("heading_default_location")
+  // ── Filter-driven header (same system as the projects discover) ─────
+  const nl = gridLocale === "nl"
+  const regionLabel = (r: string) => (PROVINCES[r] ? (nl ? PROVINCES[r].nl : PROVINCES[r].en) : r)
+  const derivedRegions = Array.from(
+    new Set(
+      selectedCities
+        .map((c) => Object.keys(regionCityMap).find((r) => (regionCityMap[r] ?? []).includes(c)))
+        .filter((r): r is string => Boolean(r)),
+    ),
+  )
+  const cityChoices = (
+    selectedRegions.length > 0
+      ? Array.from(new Set([...selectedRegions.flatMap((r) => regionCityMap[r] ?? []), ...selectedCities]))
+      : cities
+  ).slice().sort((a, b) => a.localeCompare(b))
+  const crumbItems = (role: "provinces" | "cities"): BreadcrumbSelectItem[] =>
+    role === "provinces"
+      ? Object.keys(regionCityMap).map((r) => ({
+          label: regionLabel(r),
+          checked: selectedRegions.includes(r) || derivedRegions.includes(r),
+          onToggle: () => {
+            if (selectedRegions.includes(r)) {
+              setSelectedRegions(selectedRegions.filter((x) => x !== r))
+            } else if (derivedRegions.includes(r)) {
+              setSelectedCities(selectedCities.filter((c) => !(regionCityMap[r] ?? []).includes(c)))
+            } else {
+              setSelectedRegions([...selectedRegions, r])
+            }
+          },
+        }))
+      : cityChoices.map((c) => ({
+          label: cityLabel(c, gridLocale),
+          checked: selectedCities.includes(c),
+          onToggle: () => {
+            if (selectedCities.includes(c)) {
+              setSelectedCities(selectedCities.filter((x) => x !== c))
+              return
+            }
+            // Breadcrumb = drill-down: a city REPLACES the province(s)
+            // containing it (the Locatie pill accumulates instead).
+            setSelectedCities([...selectedCities, c])
+            const remaining = selectedRegions.filter((r) => !(regionCityMap[r] ?? []).includes(c))
+            if (remaining.length !== selectedRegions.length) setSelectedRegions(remaining)
+          },
+        }))
+  const showCityLevel = selectedRegions.length > 0 || selectedCities.length > 0
+  const provinceLabelSource = Array.from(new Set([...selectedRegions, ...derivedRegions]))
+  const provinceCrumbLabel =
+    provinceLabelSource.length === 0
+      ? (nl ? "Kies provincie" : "Choose province")
+      : provinceLabelSource.length === 1
+        ? regionLabel(provinceLabelSource[0])
+        : `${provinceLabelSource.length} ${nl ? "provincies" : "provinces"}`
+  const cityCrumbLabel =
+    selectedCities.length === 0
+      ? (nl ? "Kies plaats" : "Choose city")
+      : selectedCities.length === 1
+        ? cityLabel(selectedCities[0], gridLocale)
+        : `${selectedCities.length} ${nl ? "plaatsen" : "cities"}`
 
-    if (selectedCategories.length > 0) {
-      // Pluralize when the count calls for it — "12 Architecten in
-      // Nederland", not "12 Architect in ...".
-      const labels = selectedCategories
-        .map((id) => pluralizeLabel(taxonomyLabelMap.get(id) ?? id, displayCount, gridLocale))
-        .filter(Boolean)
-      const part =
-        labels.length === 1
-          ? labels[0]
-          : labels.length === 2
-            ? `${labels[0]} & ${labels[1]}`
-            : `${labels.slice(0, -1).join(", ")} & ${labels.at(-1)}`
-      return `${part} in ${locationLabel}`
-    }
-    if (selectedCities.length > 0) return t("heading_in", { location: locationLabel })
-    return t("heading_in", { location: t("heading_default_location") })
-  }, [selectedCategories, selectedCities, taxonomyLabelMap, t, displayCount, gridLocale])
+  // Title: "{Types} in {Locations}", capped at two named items per axis.
+  // Service GROUPS (categories) read as "{Group} professionals" in the
+  // TITLE ("Design & Planning professionals in North Brabant") but stay
+  // plain in the breadcrumb leaf.
+  const typeIds = [...selectedCategories, ...selectedServices]
+  const typesResolved = typeIds.every((id) => taxonomyLabelMap.has(id))
+  const plainTypeLabels = typesResolved
+    ? [
+        ...selectedCategories.map((id) => taxonomyLabelMap.get(id) ?? id),
+        ...selectedServices.map((id) => pluralizeLabel(taxonomyLabelMap.get(id) ?? id, 2, gridLocale)),
+      ].filter(Boolean)
+    : []
+  const typeLabels = typesResolved
+    ? [
+        ...selectedCategories.map((id) => `${taxonomyLabelMap.get(id) ?? id} professionals`),
+        ...selectedServices.map((id) => pluralizeLabel(taxonomyLabelMap.get(id) ?? id, 2, gridLocale)),
+      ].filter(Boolean)
+    : []
+  const leafCrumb = plainTypeLabels.length > 0 && plainTypeLabels.length <= 2 ? plainTypeLabels.join(" & ") : null
+  const joinAmp = (items: string[]) =>
+    items.length === 1 ? items[0] : items.length === 2 ? `${items[0]} & ${items[1]}` : `${items.slice(0, -1).join(", ")} & ${items.at(-1)}`
+  const titleRegions = selectedRegions.filter(
+    (r) => !(regionCityMap[r] ?? []).some((m) => selectedCities.includes(m)),
+  )
+  const titleLocations = [...titleRegions.map(regionLabel), ...selectedCities.map((c) => cityLabel(c, gridLocale))]
+  const typePart = typeLabels.length === 0 || typeLabels.length > 2 ? t("title") : joinAmp(typeLabels)
+  const locationPart =
+    titleLocations.length === 0
+      ? t("heading_default_location")
+      : titleLocations.length > 2
+        ? `${titleLocations.length} ${nl ? "locaties" : "locations"}`
+        : joinAmp(titleLocations)
+  const pageTitle = typesResolved ? `${typePart} in ${locationPart}` : t("browse")
+
+  // The H1 above describes the filter state; the count line stays minimal.
+  const headingText = displayCount === 1 ? "professional" : "professionals"
 
   // Full result set for the map — the list is paginated, so previously the
   // map only saw whatever was already loaded (14 pros on first paint).
@@ -118,12 +197,28 @@ export function ProfessionalsGrid({
             <Link href="/professionals" className="discover-breadcrumb-item">
               {t("title")}
             </Link>
-            <span className="discover-breadcrumb-sep" aria-hidden="true">›</span>
-            <span className="discover-breadcrumb-item discover-breadcrumb-current">
+            <span className="discover-breadcrumb-sep" aria-hidden="true">/</span>
+            <span className="discover-breadcrumb-item">
               {t("breadcrumb_netherlands")}
             </span>
+            <span className="discover-breadcrumb-sep" aria-hidden="true">/</span>
+            <BreadcrumbSelect label={provinceCrumbLabel} items={crumbItems("provinces")} muted={provinceLabelSource.length === 0} />
+            {showCityLevel && (
+              <>
+                <span className="discover-breadcrumb-sep" aria-hidden="true">/</span>
+                <BreadcrumbSelect label={cityCrumbLabel} items={crumbItems("cities")} muted={selectedCities.length === 0} />
+              </>
+            )}
+            {leafCrumb && (
+              <>
+                <span className="discover-breadcrumb-sep" aria-hidden="true">/</span>
+                <span className="discover-breadcrumb-item discover-breadcrumb-current">{leafCrumb}</span>
+              </>
+            )}
           </nav>
-          <h2 className="arco-section-title">{t("browse")}</h2>
+          {hubMode
+            ? <h1 className="arco-section-title">{pageTitle}</h1>
+            : <h2 className="arco-section-title">{pageTitle}</h2>}
         </div>
       </div>
 

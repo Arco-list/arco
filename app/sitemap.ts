@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { getSiteUrl } from "@/lib/utils"
 import { locales, defaultLocale } from "@/i18n/config"
 import { getHubs } from "@/lib/project-hubs"
+import { getProfessionalHubs } from "@/lib/professional-hubs"
 
 // Refresh the sitemap at most every hour
 export const revalidate = 3600
@@ -75,6 +76,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }))
   } catch { /* non-fatal — sitemap ships without hubs */ }
 
+  let proHubEntries: MetadataRoute.Sitemap = []
+  try {
+    proHubEntries = (await getProfessionalHubs()).map((hub) => ({
+      ...localizedUrls(baseUrl, `/professionals/${hub.slug}`),
+    }))
+  } catch { /* non-fatal */ }
+
   // Publicly visible companies. Matches the same status set used by
   // fetchProfessionalDetail and the homepage/listing queries: 'listed'
   // (claimed + active) and 'prospected' (unclaimed but editorially curated).
@@ -98,5 +106,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
     }))
 
-  return [...staticEntries, ...hubEntries, ...projectEntries, ...companyEntries]
+  return [...staticEntries, ...hubEntries, ...proHubEntries, ...projectEntries, ...companyEntries]
 }

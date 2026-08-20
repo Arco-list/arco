@@ -9,6 +9,8 @@ import { logger } from "@/lib/logger"
 import { TrackPageView } from "@/components/track-view"
 import { getSiteUrl } from "@/lib/utils"
 import { locales, defaultLocale } from "@/i18n/config"
+import { getProfessionalHubs } from "@/lib/professional-hubs"
+import { proHubToDef } from "@/components/professional/professional-hub-page"
 
 // SEO copy is intentionally inline (not via messages/*.json). See the matching
 // note in app/[locale]/projects/page.tsx for the rationale.
@@ -61,6 +63,12 @@ export default async function ProfessionalsPage({ params }: { params: Promise<{ 
   let professionals: Awaited<ReturnType<typeof fetchDiscoverProfessionals>>["professionals"] = []
   let total = 0
 
+  // Hub definitions let the provider swap the URL to a hub path
+  // (/professionals/amsterdam) when the filter exactly matches one.
+  let hubDefs: ReturnType<typeof proHubToDef>[] = []
+  try {
+    hubDefs = (await getProfessionalHubs()).map(proHubToDef)
+  } catch { /* provider works fine without hub mapping */ }
   try {
     const result = await fetchDiscoverProfessionals(locale)
     professionals = result.professionals
@@ -74,7 +82,7 @@ export default async function ProfessionalsPage({ params }: { params: Promise<{ 
       <TrackPageView path="/professionals" />
       <Header />
       <FilterErrorBoundary>
-        <ProfessionalFilterProvider>
+        <ProfessionalFilterProvider hubs={hubDefs}>
           <ProfessionalsFilterBar />
 
           <main>

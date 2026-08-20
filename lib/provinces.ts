@@ -16,6 +16,24 @@ export const PROVINCES: Record<string, { nl: string; en: string; slug: string }>
   "Limburg": { nl: "Limburg", en: "Limburg", slug: "limburg" },
 }
 
+/** Resolve any spelling of a province — EN name (canonical key), Dutch
+ * name, or URL slug — to the canonical EN key. Returns null when the
+ * value names no known province. */
+export function provinceKey(value: string | null | undefined): string | null {
+  if (!value) return null
+  const v = value.trim()
+  if (PROVINCES[v]) return v
+  for (const [en, meta] of Object.entries(PROVINCES)) {
+    if (meta.nl === v || meta.slug === v || meta.en === v) return en
+  }
+  // Bare "Utrecht"/"Groningen" (no "(provincie)" suffix) as stored in
+  // companies.state_region.
+  for (const [en, meta] of Object.entries(PROVINCES)) {
+    if (meta.nl.replace(/ \(provincie\)$/, "") === v || meta.en.replace(/ \(province\)$/, "") === v) return en
+  }
+  return null
+}
+
 /** City exonyms. address_city is stored as the Dutch endonym; this maps the
  * few cities whose English name differs. Unknown cities pass through as-is. */
 export const CITY_EXONYMS: Record<string, { nl: string; en: string }> = {

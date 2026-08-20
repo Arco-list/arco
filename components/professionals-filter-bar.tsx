@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { createPortal } from "react-dom"
 import { X } from "lucide-react"
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
 
 import {
   useProfessionalFilters,
   PROFESSIONAL_SORT_OPTIONS,
 } from "@/contexts/professional-filter-context"
+import { PROVINCES, cityLabel } from "@/lib/provinces"
 
 // ─── Icons ──────────────────────────────────────────────────────────────────
 
@@ -130,7 +131,12 @@ export function ProfessionalsFilterBar() {
     taxonomyLabelMap,
     taxonomy,
     cities,
+    selectedRegions,
+    setSelectedRegions,
+    regionCityMap,
   } = useProfessionalFilters()
+  const locale = useLocale()
+  const regionLabel = (r: string) => (PROVINCES[r] ? (locale === "nl" ? PROVINCES[r].nl : PROVINCES[r].en) : r)
 
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -181,12 +187,21 @@ export function ProfessionalsFilterBar() {
       .filter((s) => s.services.length > 0)
   }, [taxonomy.categories, taxonomy.services])
 
+  // ── Filtered regions (provinces) ──
+  const filteredRegions = useMemo(() => {
+    const term = locationSearch.trim().toLowerCase()
+    const regions = Object.keys(regionCityMap)
+    if (term.length === 0) return regions
+    return regions.filter((r) => regionLabel(r).toLowerCase().includes(term) || r.toLowerCase().includes(term))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regionCityMap, locationSearch, locale])
+
   // ── Filtered cities ──
   const filteredCities = useMemo(() => {
     const term = locationSearch.trim().toLowerCase()
     if (term.length === 0) return cities
-    return cities.filter((c) => c.toLowerCase().includes(term))
-  }, [cities, locationSearch])
+    return cities.filter((c) => c.toLowerCase().includes(term) || cityLabel(c, locale).toLowerCase().includes(term))
+  }, [cities, locationSearch, locale])
 
   // ── Active chip tags ──
   const activeFilterTags = useMemo(() => {
@@ -200,11 +215,14 @@ export function ProfessionalsFilterBar() {
     selectedServices.forEach((id) =>
       tags.push({ type: "service", value: id, label: taxonomyLabelMap.get(id) ?? id }),
     )
+    selectedRegions.forEach((region) =>
+      tags.push({ type: "region", value: region, label: regionLabel(region) }),
+    )
     selectedCities.forEach((city) =>
-      tags.push({ type: "city", value: city, label: city }),
+      tags.push({ type: "city", value: city, label: cityLabel(city, locale) }),
     )
     return tags
-  }, [keyword, selectedCategories, selectedServices, selectedCities, taxonomyLabelMap])
+  }, [keyword, selectedCategories, selectedServices, selectedCities, selectedRegions, taxonomyLabelMap, locale])
 
   const totalCount = activeFilterTags.length
   const serviceFilterCount = selectedCategories.length + selectedServices.length
@@ -367,14 +385,14 @@ export function ProfessionalsFilterBar() {
             <div className="filter-pill-group" style={{ position: "relative" }}>
               <button
                 className="filter-pill"
-                data-active={selectedCities.length > 0}
+                data-active={selectedCities.length + selectedRegions.length > 0}
                 data-open={activeDropdown === "location"}
                 onClick={() => toggleDropdown("location")}
                 aria-expanded={activeDropdown === "location"}
               >
                 {t("location")}
-                {selectedCities.length > 0 && (
-                  <span className="filter-pill-badge">{selectedCities.length}</span>
+                {selectedCities.length + selectedRegions.length > 0 && (
+                  <span className="filter-pill-badge">{selectedCities.length + selectedRegions.length}</span>
                 )}
                 <ChevronDownIcon className="filter-pill-chevron" />
               </button>
@@ -389,6 +407,35 @@ export function ProfessionalsFilterBar() {
                   />
                 </div>
                 <div style={{ maxHeight: 240, overflowY: "auto" }}>
+                  {filteredRegions.map((region) => {
+                    const regionChecked = selectedRegions.includes(region)
+                    const toggleRegion = () =>
+                      setSelectedRegions(
+                        regionChecked ? selectedRegions.filter((r) => r !== region) : [...selectedRegions, region],
+                      )
+                    return (
+                      <div
+                        key={region}
+                        className="filter-dropdown-option"
+                        data-checked={regionChecked}
+                        role="option"
+                        aria-selected={regionChecked}
+                        tabIndex={0}
+                        onClick={toggleRegion}
+                        onKeyDown={(e) => {
+                          if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleRegion() }
+                        }}
+                      >
+                        <div className="filter-dropdown-option-left">
+                          <div className="filter-checkbox">{regionChecked && <CheckIcon />}</div>
+                          <span className="filter-dropdown-label">{regionLabel(region)}</span>
+                        </div>
+                        <span style={{ marginLeft: "auto", paddingLeft: 12, fontSize: 11, color: "#a1a1a0", flexShrink: 0 }}>
+                          {locale === "nl" ? "Provincie" : "Province"}
+                        </span>
+                      </div>
+                    )
+                  })}
                   {filteredCities.length > 0 ? (
                     filteredCities.map((city) => {
                       const cityChecked = selectedCities.includes(city)
@@ -420,8 +467,11 @@ export function ProfessionalsFilterBar() {
                         >
                           <div className="filter-dropdown-option-left">
                             <div className="filter-checkbox">{cityChecked && <CheckIcon />}</div>
-                            <span className="filter-dropdown-label">{city}</span>
+                            <span className="filter-dropdown-label">{cityLabel(city, locale)}</span>
                           </div>
+                          <span style={{ marginLeft: "auto", paddingLeft: 12, fontSize: 11, color: "#a1a1a0", flexShrink: 0 }}>
+                            {locale === "nl" ? "Stad" : "City"}
+                          </span>
                         </div>
                       )
                     })

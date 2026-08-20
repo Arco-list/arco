@@ -6,6 +6,24 @@ import { useLocale } from "next-intl"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { ProfessionalCard } from "@/lib/professionals/types"
 import { useProfessionalFilters } from "@/contexts/professional-filter-context"
+
+/** Regions expand to their member cities for querying — a selected city
+ * INSIDE a selected region refines it (the region then contributes
+ * nothing beyond the chosen city); disjoint selections union. Mirrors
+ * the projects location semantics. */
+const effectiveCityFilters = (
+  selectedCities: string[],
+  selectedRegions: string[],
+  regionCityMap: Record<string, string[]>,
+): string[] =>
+  Array.from(new Set([
+    ...selectedCities,
+    ...selectedRegions.flatMap((r) => {
+      const members = regionCityMap[r] ?? []
+      return members.some((m) => selectedCities.includes(m)) ? [] : members
+    }),
+  ]))
+
 import { translateProfessionalService } from "@/lib/project-translations"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
@@ -118,6 +136,8 @@ export function useProfessionalsQuery(
     selectedCategories,
     selectedServices,
     selectedCities,
+    selectedRegions,
+    regionCityMap,
     keyword,
     taxonomy,
     sortBy,
@@ -179,7 +199,7 @@ export function useProfessionalsQuery(
           search_query: keyword.trim().length > 0 ? keyword.trim() : null,
           country_filter: null,
           state_filter: null,
-          city_filters: selectedCities.length > 0 ? selectedCities : null,
+          city_filters: (() => { const c = effectiveCityFilters(selectedCities, selectedRegions, regionCityMap); return c.length > 0 ? c : null })(),
           category_filters: validCategories.length > 0 ? validCategories : null,
           service_filters: validServices.length > 0 ? validServices : null,
           max_hourly_rate: null,
@@ -247,7 +267,7 @@ export function useProfessionalsQuery(
         }
       }
     },
-    [keyword, selectedCategories, selectedCities, selectedServices, sortBy],
+    [keyword, selectedCategories, selectedCities, selectedRegions, regionCityMap, selectedServices, sortBy],
   )
 
   useEffect(() => {
@@ -261,6 +281,7 @@ export function useProfessionalsQuery(
       selectedCategories.length > 0 ||
       selectedServices.length > 0 ||
       selectedCities.length > 0 ||
+      selectedRegions.length > 0 ||
       keyword.trim().length > 0
 
     // If we have initial SSR data, no filters, and the sort hasn't changed
@@ -277,7 +298,7 @@ export function useProfessionalsQuery(
     setHasMore(true)
     setCurrentOffset(0)
     void fetchPage(0, true)
-  }, [fetchPage, taxonomy.isLoading, selectedCategories.length, selectedServices.length, selectedCities, keyword, sortBy])
+  }, [fetchPage, taxonomy.isLoading, selectedCategories.length, selectedServices.length, selectedCities, selectedRegions, keyword, sortBy])
 
   const loadMore = useCallback(async () => {
     if (isLoading || isLoadingMore || !hasMore) {
@@ -323,6 +344,8 @@ export function useProfessionalsForMap(enabled: boolean): {
     selectedCategories,
     selectedServices,
     selectedCities,
+    selectedRegions,
+    regionCityMap,
     keyword,
     sortBy,
   } = useProfessionalFilters()
@@ -345,7 +368,7 @@ export function useProfessionalsForMap(enabled: boolean): {
       search_query: keyword.trim().length > 0 ? keyword.trim() : null,
       country_filter: null,
       state_filter: null,
-      city_filters: selectedCities.length > 0 ? selectedCities : null,
+      city_filters: (() => { const c = effectiveCityFilters(selectedCities, selectedRegions, regionCityMap); return c.length > 0 ? c : null })(),
       category_filters: validCategories.length > 0 ? validCategories : null,
       service_filters: validServices.length > 0 ? validServices : null,
       max_hourly_rate: null,
