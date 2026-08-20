@@ -31,6 +31,10 @@ interface ExtractedProject {
   title_nl: string
   description_en: string | null
   description_nl: string | null
+  /** Long "Read more" body (seo_body) — generated at import so new
+   *  projects are born with their expanded text. */
+  body_en: string | null
+  body_nl: string | null
   building_year: number | null
   scope: string | null
   location: string | null
@@ -463,45 +467,111 @@ function extractImagesFromDom(doc: Document, baseUrl: string): string[] {
 
 // ─── Claude extraction ───────────────────────────────────────────────────────
 
+// The model occasionally emits literal newlines inside JSON string
+// values (invalid JSON) — repair by escaping control characters that
+// occur inside string literals. Shared by extraction + regenerate.
+const escapeCtrlInJsonStrings = (src: string): string => {
+  let out = ""
+  let inStr = false
+  let esc = false
+  for (const ch of src) {
+    if (inStr) {
+      if (esc) { out += ch; esc = false; continue }
+      if (ch === "\\") { out += ch; esc = true; continue }
+      if (ch === '"') { inStr = false; out += ch; continue }
+      if (ch === "\n") { out += "\\n"; continue }
+      if (ch === "\r") { continue }
+      if (ch === "\t") { out += "\\t"; continue }
+      out += ch
+    } else {
+      if (ch === '"') inStr = true
+      out += ch
+    }
+  }
+  return out
+}
+
 /** Use Claude to intelligently extract structured project data */
-async function extractWithClaude(pageText: string, pageUrl: string): Promise<ExtractedProject> {
+async function extractWithClaude(pageText: string, pageUrl: string, imageUrls: string[] = []): Promise<ExtractedProject> {
   const client = new Anthropic()
 
-  const message = await client.messages.create({
-    model: "claude-haiku-4-5",
-    // Bumped from 512 — bilingual title + description + the metadata
-    // fields fit comfortably in ~1500 tokens of JSON.
-    max_tokens: 1024,
+  // Visual grounding: portfolio pages are often image-heavy and text-thin,
+  // which made the text-only extraction correctly return null descriptions.
+  // A few photos give the model the same footing the regenerate flow has.
+  // avif/svg are unsupported by the API's URL image source; skip those.
+  const photoBlocks = imageUrls
+    .filter((u) => !/\.(avif|svg)(\?|$)/i.test(u))
+    .slice(0, 4)
+    .map((u) => ({ type: "image" as const, source: { type: "url" as const, url: u } }))
+
+  const createExtraction = (withPhotos: boolean) => client.messages.create({
+    // Sonnet, not Haiku: the extraction now also writes the long-form
+    // "Read more" body in both languages — the same quality bar as the
+    // seo_body regenerate/batch pipeline.
+    model: "claude-sonnet-5",
+    max_tokens: 3000,
     system: `You are an expert at extracting structured data from architecture and interior design project pages.
-Given the text content of a web page, extract the following fields as JSON.
+Given the text content of a web page (and, when attached, photos from that page), extract the following fields as JSON. The photos are part of the evidence — use them for the description, body, building_type and style even when the text is thin.
 Only return a valid JSON object — no prose, no markdown, no code fences.
 
 Fields:
 - is_relevant_project (boolean): true if this page is a single, specific project showcase — residential (villa, house, apartment, townhouse, bungalow, chalet, garden), commercial (restaurant, café, hotel, bar, retail, office, gallery, gym, spa, salon), or institutional (school, museum, healthcare). Any architecture, interior design, construction, real estate, or fit-out project on a single page counts. Return false ONLY for clearly non-project pages: company about / contact / team / careers pages, blog index, general service descriptions, product catalogues, portfolio index pages that list many projects without focusing on one, or pages without any photos or design content. When unsure, default to true.
-- translations (object): bilingual title + description, in both English (en) and Dutch (nl). Required shape: { "en": { "title": string, "description": string }, "nl": { "title": string, "description": string } }. Rules:
+- translations (object): bilingual title + description + body, in both English (en) and Dutch (nl). Required shape: { "en": { "title": string, "description": string, "body": string }, "nl": { "title": string, "description": string, "body": string } }. Escape newlines inside JSON strings as \\n. Rules:
   - title (max 120 chars each language): The project name ONLY — strip location, city, company/studio name, and separators (e.g. " - ", " | "). For example, "Moderne villa met horizontale belijning - Diepenveen - Atelier 3" should become "Modern villa with horizontal lines" (en) / "Moderne villa met horizontale belijning" (nl). If no clear project name exists, derive one from the content.
-  - description (3-4 sentences, 60-100 words, max 700 chars each language): Third-person professional prose. Capture the project's essence and one or two key design decisions. Write each language NATIVELY — don't translate word-for-word; produce idiomatic prose that reads naturally in that language. If there is not enough content to write a meaningful description, set description to null in BOTH languages.
-- building_year (number | null): The year the project was completed or built (4-digit integer). Return null if not found.
+  - description (3-4 sentences, 60-100 words, max 700 chars each language): Third-person professional prose. Capture the project's essence and one or two key design decisions. Write each language NATIVELY — don't translate word-for-word; produce idiomatic prose that reads naturally in that language. Base the description on the page text AND the attached photos — an image-heavy page with thin text still deserves a real description of what the photos show. Only set description to null in BOTH languages when neither text nor photos carry any usable project content.
+  - body (140-200 words, 2-3 short paragraphs separated by blank lines, each language): A continuation shown behind a "Read more" link after the description. Quiet, magazine-like tone; no superlatives, no marketing filler. Only facts present in the page text or visible in the attached photos — never invent materials, dimensions or client details. Do not repeat the description's sentences. Write each language natively. If the page text is too thin for a factual continuation, set body to null in BOTH languages.
+- project_year (number | null): The year the PROJECT was completed / delivered (4-digit integer) — not the original construction year of the building. Return null if not found.
 - scope (string | null): The project scope. MUST be one of: "New Build", "Renovation", "Interior Design". Return null if unclear.
 - location (string | null): City and/or country, e.g. "Amsterdam, Netherlands". Return null if not found.
-- building_type (string | null): The project type. MUST be one of: "villa", "apartment", "townhouse", "bungalow", "chalet", "extension", "garden-house", "garden-design". Return null if none of these fit.
+- building_type (string | null): The project type. MUST be one of: "villa", "apartment", "townhouse", "bungalow", "chalet", "farm", "extension", "garden-house", "garden-design". Use "farm" for farmhouses and farm conversions. Return null if none of these fit.
 - style (string | null): The design style. MUST be one of: "modern", "minimalist", "contemporary", "scandinavian", "industrial", "mid-century-modern", "traditional", "transitional", "eclectic", "farmhouse", "coastal", "mediterranean", "bohemian", "rustic", "urban-modern". Return null if unclear.`,
     messages: [
       {
         role: "user",
-        content: `Page URL: ${pageUrl}\n\nPage text:\n${pageText}`,
+        content: [
+          ...(withPhotos ? photoBlocks : []),
+          { type: "text" as const, text: `Page URL: ${pageUrl}\n\nPage text:\n${pageText}` },
+        ],
       },
     ],
   })
+  // One retry on transient API failures — mirrors regenerateDescription.
+  // A 4xx with photos attached (unfetchable/oversized/unsupported image)
+  // retries once WITHOUT photos rather than failing the import.
+  let message
+  try {
+    message = await createExtraction(photoBlocks.length > 0)
+  } catch (apiErr: any) {
+    const status = apiErr?.status ?? 0
+    if (status === 429 || status >= 500 || apiErr?.error?.type === "overloaded_error") {
+      await new Promise((r) => setTimeout(r, 2000))
+      message = await createExtraction(photoBlocks.length > 0)
+    } else if (status >= 400 && photoBlocks.length > 0) {
+      message = await createExtraction(false)
+    } else {
+      throw apiErr
+    }
+  }
 
   const rawText = message.content.find((b) => b.type === "text")?.text ?? "{}"
   const text = rawText.replace(/```json?\n?/g, "").replace(/```/g, "").trim()
-  const parsed = JSON.parse(text)
+  // Multi-paragraph body strings occasionally arrive with literal
+  // newlines — extract the {...} span and repair before giving up
+  // (a throw here falls back to jsdom metadata extraction).
+  const jsonStart = text.indexOf("{")
+  const jsonEnd = text.lastIndexOf("}")
+  const candidate = jsonStart !== -1 && jsonEnd > jsonStart ? text.slice(jsonStart, jsonEnd + 1) : text
+  let parsed: any
+  try {
+    parsed = JSON.parse(candidate)
+  } catch {
+    parsed = JSON.parse(escapeCtrlInJsonStrings(candidate))
+  }
 
   const currentYear = new Date().getFullYear()
-  const year = parseInt(parsed.building_year, 10)
+  const year = parseInt(parsed.project_year ?? parsed.building_year, 10)
 
-  const validBuildingTypes = ["villa", "apartment", "townhouse", "bungalow", "chalet", "extension", "garden-house", "garden-design"]
+  const validBuildingTypes = ["villa", "apartment", "townhouse", "bungalow", "chalet", "farm", "extension", "garden-house", "garden-design"]
   const validStyles = ["modern", "minimalist", "contemporary", "scandinavian", "industrial", "mid-century-modern", "traditional", "transitional", "eclectic", "farmhouse", "coastal", "mediterranean", "bohemian", "rustic", "urban-modern"]
 
   // Canonicalise scope to a known slug, then write back the English display
@@ -533,6 +603,12 @@ Fields:
   const title_nl = trText(trBlock?.nl?.title, 120) || title_en
   const description_en = trDesc(trBlock?.en?.description) ?? flatDesc
   const description_nl = trDesc(trBlock?.nl?.description) ?? description_en
+  const trBody = (v: any): string | null => {
+    const t = trText(v, 2500)
+    return t || null
+  }
+  const body_en = trBody(trBlock?.en?.body)
+  const body_nl = trBody(trBlock?.nl?.body) ?? body_en
 
   return {
     title: title_en,
@@ -541,6 +617,8 @@ Fields:
     title_nl,
     description_en,
     description_nl,
+    body_en,
+    body_nl,
     building_year: !isNaN(year) && year >= 1800 && year <= currentYear + 1 ? year : null,
     scope: rawScope, // already canonicalised above; null if Claude returned something unknown
     location: typeof parsed.location === "string" && parsed.location.trim()
@@ -594,6 +672,8 @@ function extractWithJsdom(doc: Document): ExtractedProject {
     title_nl: title,
     description_en: description,
     description_nl: description,
+    body_en: null,
+    body_nl: null,
     building_year,
     scope: null,
     location: null,
@@ -780,7 +860,7 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
       console.log("[scrape] ANTHROPIC_API_KEY set:", !!process.env.ANTHROPIC_API_KEY, "pageText length:", pageText.length)
       if (process.env.ANTHROPIC_API_KEY && pageText.length > 50) {
         try {
-          extracted = await extractWithClaude(pageText, url.toString())
+          extracted = await extractWithClaude(pageText, url.toString(), imageUrls)
         } catch (err) {
           logger.error("Claude extraction failed", { url: url.toString() }, err as Error)
           // Basic fallback from Firecrawl metadata. The user explicitly
@@ -795,6 +875,8 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
             title_nl: fbTitle,
             description_en: fbDesc,
             description_nl: fbDesc,
+            body_en: null,
+            body_nl: null,
             building_year: null,
             scope: null,
             location: null,
@@ -815,6 +897,8 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
           title_nl: fbTitle,
           description_en: fbDesc,
           description_nl: fbDesc,
+          body_en: null,
+          body_nl: null,
           building_year: null,
           scope: null,
           location: null,
@@ -876,7 +960,7 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
     if (process.env.ANTHROPIC_API_KEY) {
       try {
         pageText = extractReadableText(doc)
-        extracted = await extractWithClaude(pageText, url.toString())
+        extracted = await extractWithClaude(pageText, url.toString(), imageUrls)
       } catch (err) {
         logger.error("Claude extraction failed, falling back to jsdom", { url: url.toString() }, err as Error)
         extracted = extractWithJsdom(doc)
@@ -900,7 +984,7 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
     console.log("[scrape] is_relevant_project=false but images present — proceeding anyway.", { url: url.toString(), imageCount: imageUrls.length })
   }
 
-  const { building_year, scope, location, building_type, style, title_en, title_nl, description_en, description_nl } = extracted
+  const { building_year, scope, location, building_type, style, title_en, title_nl, description_en, description_nl, body_en, body_nl } = extracted
   // Pick the locale to populate the primary title / description columns
   // with — falls back to English when the cookie's missing. The other
   // language always lives under translations.<locale>, so getProjectTranslation
@@ -988,21 +1072,26 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
   // can persist both up-front and getProjectTranslation will hand the
   // right one to the render layer based on the request locale.
   const initialTranslations: Record<string, any> = {}
-  if (title_en || description_en) {
+  if (title_en || description_en || body_en) {
     initialTranslations.en = {}
     if (title_en) initialTranslations.en.title = title_en
     if (description_en) initialTranslations.en.description = description_en
+    if (body_en) initialTranslations.en.seo_body = body_en
   }
-  if (title_nl || description_nl) {
+  if (title_nl || description_nl || body_nl) {
     initialTranslations.nl = {}
     if (title_nl) initialTranslations.nl.title = title_nl
     if (description_nl) initialTranslations.nl.description = description_nl
+    if (body_nl) initialTranslations.nl.seo_body = body_nl
   }
 
   const projectData = {
     title,
     description,
-    building_year,
+    // Extracted year = completion year -> projects.project_year (what the
+    // "Jaar" spec in the details bar reads). building_year stays for the
+    // building's original construction year, which pages rarely state.
+    project_year: building_year,
     location: addressCity,
     address_city: addressCity,
     address_region: addressRegion,
@@ -1731,39 +1820,30 @@ The JSON must be strictly valid: escape newlines inside strings as \\n (paragrap
 ${context}`,
     })
 
-    const message = await client.messages.create({
+    // One retry on transient API failures (overload, rate limit, 5xx) —
+    // a single hiccup shouldn't surface as "Generation failed".
+    const createMessage = () => client.messages.create({
       model: "claude-sonnet-5",
       // Bilingual intro + 140-200-word body + titles, JSON-escaped.
       max_tokens: 3000,
       messages: [{ role: "user", content }],
     })
+    let message
+    try {
+      message = await createMessage()
+    } catch (apiErr: any) {
+      const status = apiErr?.status ?? 0
+      if (status === 429 || status >= 500 || apiErr?.error?.type === "overloaded_error") {
+        await new Promise((r) => setTimeout(r, 2000))
+        message = await createMessage()
+      } else {
+        throw apiErr
+      }
+    }
 
     const rawText = message.content.find((b) => b.type === "text")?.text?.trim() ?? ""
     if (!rawText) return { error: "Could not generate description. Try again." }
 
-    // Parse bilingual response. The model occasionally emits literal
-    // newlines inside JSON string values (invalid JSON) — repair by
-    // escaping control characters that occur inside string literals.
-    const escapeCtrlInJsonStrings = (src: string): string => {
-      let out = ""
-      let inStr = false
-      let esc = false
-      for (const ch of src) {
-        if (inStr) {
-          if (esc) { out += ch; esc = false; continue }
-          if (ch === "\\") { out += ch; esc = true; continue }
-          if (ch === '"') { inStr = false; out += ch; continue }
-          if (ch === "\n") { out += "\\n"; continue }
-          if (ch === "\r") { continue }
-          if (ch === "\t") { out += "\\t"; continue }
-          out += ch
-        } else {
-          if (ch === '"') inStr = true
-          out += ch
-        }
-      }
-      return out
-    }
     let enDesc = ""
     let nlDesc = ""
     let enTitle = ""

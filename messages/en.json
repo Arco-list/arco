@@ -402,7 +402,7 @@
     "title_done": "Your project is ready",
     "title_error": "Import failed",
     "desc_input": "Paste a link to a project page on your company website. We'll extract the title, photos, and details automatically.",
-    "desc_processing": "This usually takes about 10 seconds.",
+    "desc_processing": "This usually takes 30 to 60 seconds.",
     "desc_done": "Redirecting to your project…",
     "desc_error": "Something went wrong while importing your project.",
     "placeholder": "https://yourstudio.com/projects/villa-laren",

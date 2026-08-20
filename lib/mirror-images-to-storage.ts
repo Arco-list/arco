@@ -44,7 +44,14 @@ async function mirrorOne(
     const res = await fetch(sourceUrl, {
       signal: controller.signal,
       // Some CDNs 403 on the default node user-agent; a browser UA is safer.
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; ArcoBot/1.0; +https://arcolist.com)" },
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; ArcoBot/1.0; +https://arcolist.com)",
+        // Prefer jpeg/png over content-negotiated webp/avif: the stored
+        // bytes must stay decodable by the autoTag pipeline (jimp has no
+        // webp decoder) and by older browsers. CDNs that only HAVE webp
+        // still serve it — the fallback keeps working.
+        Accept: "image/jpeg,image/png,image/*;q=0.8,*/*;q=0.5",
+      },
       redirect: "follow",
     })
     if (!res.ok) {

@@ -402,7 +402,7 @@
     "title_done": "Je project is klaar",
     "title_error": "Import mislukt",
     "desc_input": "Plak een link naar een projectpagina op je bedrijfswebsite. We extraheren de titel, foto's en details automatisch.",
-    "desc_processing": "Dit duurt meestal ongeveer 10 seconden.",
+    "desc_processing": "Dit duurt meestal 30 tot 60 seconden.",
     "desc_done": "Doorsturen naar je project…",
     "desc_error": "Er ging iets mis bij het importeren van je project.",
     "placeholder": "https://jouwstudio.nl/projecten/villa-laren",

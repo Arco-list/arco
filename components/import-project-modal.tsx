@@ -15,7 +15,9 @@ type ModalPhase = "input" | "processing" | "done" | "error"
 // Step keys resolved via translations at render time
 const STEP_KEYS = ["step_fetching", "step_extracting", "step_creating"] as const
 
-const STEP_DELAYS_MS = [0, 1200, 2800]
+// Fetch is quick; AI extraction dominates the wait (~30-60s in total
+// with body text + translations), creation wraps up at the end.
+const STEP_DELAYS_MS = [0, 2500, 32000]
 
 interface ImportProjectModalProps {
   open: boolean
@@ -48,6 +50,8 @@ export function ImportProjectModal({
   const [error, setError] = useState<string | null>(null)
   const [scrapeUrl, setScrapeUrl] = useState<string | null>(null)
   const [isCreatingBlank, setIsCreatingBlank] = useState(false)
+  // Drives the slow-creep progress transition (see the bar below).
+  const [barStarted, setBarStarted] = useState(false)
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
   // Pin volatile deps in refs so useEffect isn't retriggered by parent
   // re-renders while a scrape is in-flight. The parent passes
@@ -74,6 +78,7 @@ export function ImportProjectModal({
         setStatuses(["pending", "pending", "pending"])
         setError(null)
         setScrapeUrl(null)
+        setBarStarted(false)
       }, 200)
       return () => clearTimeout(t)
     }
@@ -91,6 +96,8 @@ export function ImportProjectModal({
     timersRef.current = []
 
     setStatuses(["active", "pending", "pending"])
+    // Kick the bar's slow-creep transition one frame after it mounts.
+    timersRef.current.push(setTimeout(() => setBarStarted(true), 50))
 
     timersRef.current.push(
       setTimeout(() => setStatuses(["done", "active", "pending"]), STEP_DELAYS_MS[1])
@@ -344,15 +351,14 @@ export function ImportProjectModal({
               {/* Progress bar */}
               {isProcessing && (
                 <div className="scrape-progress-track" style={{ marginTop: 20 }}>
+                  {/* Asymptotic creep: races to ~40% early, then slows
+                      toward 94% over the realistic worst case, so the
+                      bar never sits frozen during the AI extraction. */}
                   <div
                     className="scrape-progress-bar"
                     style={{
-                      width:
-                        statuses[2] === "active"
-                          ? "85%"
-                          : statuses[1] === "active"
-                            ? "55%"
-                            : "25%",
+                      width: barStarted ? "94%" : "3%",
+                      transition: "width 75s cubic-bezier(0.08, 0.65, 0.25, 1)",
                     }}
                   />
                 </div>
