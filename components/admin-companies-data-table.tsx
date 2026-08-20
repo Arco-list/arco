@@ -961,12 +961,12 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               <button
                 type="button"
                 className="shrink-0 transition-colors"
-                title={company.isFeatured ? "Remove from homepage" : "Feature on homepage"}
+                title={company.isFeatured ? "Remove star (featured tier)" : "Star as featured"}
                 onClick={async (e) => {
                   e.stopPropagation()
                   const result = await updateCompanyFeaturedAction({ companyId: company.id, isFeatured: !company.isFeatured })
                   if (result.success) {
-                    toast.success(company.isFeatured ? "Removed from homepage" : "Featured on homepage")
+                    toast.success(company.isFeatured ? "Star removed" : "Starred as featured")
                     router.refresh()
                   } else {
                     toast.error(result.error ?? "Failed to update")

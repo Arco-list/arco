@@ -306,12 +306,12 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
             <button
               type="button"
               className="shrink-0 mt-0.5 transition-colors"
-              title={isFeatured ? "Remove from homepage" : "Feature on homepage"}
+              title={isFeatured ? "Remove star (featured tier)" : "Star as featured"}
               onClick={async (e) => {
                 e.stopPropagation()
                 const result = await toggleProjectFeaturedAction({ projectId: project.id, isFeatured: !isFeatured })
                 if (result.success) {
-                  toast.success(isFeatured ? "Removed from homepage" : "Featured on homepage")
+                  toast.success(isFeatured ? "Star removed" : "Starred as featured")
                   router.refresh()
                 } else {
                   toast.error(result.error ?? "Failed to update")

@@ -238,6 +238,7 @@ export type Database = {
           email: string | null
           first_touch_source: string | null
           founded_year: number | null
+          founding_claimed_at: string | null
           google_place_id: string | null
           hero_photo_project_id: string | null
           hero_photo_url: string | null
@@ -293,6 +294,7 @@ export type Database = {
           email?: string | null
           first_touch_source?: string | null
           founded_year?: number | null
+          founding_claimed_at?: string | null
           google_place_id?: string | null
           hero_photo_project_id?: string | null
           hero_photo_url?: string | null
@@ -348,6 +350,7 @@ export type Database = {
           email?: string | null
           first_touch_source?: string | null
           founded_year?: number | null
+          founding_claimed_at?: string | null
           google_place_id?: string | null
           hero_photo_project_id?: string | null
           hero_photo_url?: string | null
@@ -3489,6 +3492,57 @@ export type Database = {
           },
         ]
       }
+      seo_daily_metrics: {
+        Row: {
+          clicks: number
+          impressions: number
+          metric_date: string
+          scope: string
+        }
+        Insert: {
+          clicks?: number
+          impressions?: number
+          metric_date: string
+          scope: string
+        }
+        Update: {
+          clicks?: number
+          impressions?: number
+          metric_date?: string
+          scope?: string
+        }
+        Relationships: []
+      }
+      seo_metric_snapshots: {
+        Row: {
+          clicks_28d: number
+          created_at: string
+          impressions_28d: number
+          indexed_count: number
+          scope: string
+          snapshot_date: string
+          total_count: number
+        }
+        Insert: {
+          clicks_28d?: number
+          created_at?: string
+          impressions_28d?: number
+          indexed_count?: number
+          scope: string
+          snapshot_date: string
+          total_count?: number
+        }
+        Update: {
+          clicks_28d?: number
+          created_at?: string
+          impressions_28d?: number
+          indexed_count?: number
+          scope?: string
+          snapshot_date?: string
+          total_count?: number
+        }
+        Relationships: []
+      }
       spaces: {
         Row: {
           created_at: string
@@ -3522,6 +3576,24 @@ export type Database = {
           name?: string
           slug?: string
           sort_order?: number
+        }
+        Relationships: []
+      }
+      ui_tour_seen: {
+        Row: {
+          seen_at: string
+          tour_key: string
+          user_id: string
+        }
+        Insert: {
+          seen_at?: string
+          tour_key: string
+          user_id: string
+        }
+        Update: {
+          seen_at?: string
+          tour_key?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -3643,6 +3715,7 @@ export type Database = {
           project_size: string | null
           project_type: string | null
           project_year: number | null
+          scope_rotation: number | null
           search_vector: unknown
           slug: string | null
           status: Database["public"]["Enums"]["project_status"] | null
@@ -3723,6 +3796,20 @@ export type Database = {
           state_region: string
         }[]
       }
+      get_profile_by_email: {
+        Args: { p_email: string }
+        Returns: {
+          admin_role: string
+          email: string
+          first_name: string
+          id: string
+          is_active: boolean
+          last_name: string
+          phone: string
+          user_types: string[]
+        }[]
+      }
+      get_profile_email_by_id: { Args: { p_user_id: string }; Returns: string }
       get_project_cities: {
         Args: never
         Returns: {
@@ -3858,6 +3945,10 @@ export type Database = {
       }
       pinterest_enqueue: {
         Args: { p_action: string; p_target_id: string; p_target_type: string }
+        Returns: undefined
+      }
+      promote_first_project_photo: {
+        Args: { p_project_id: string }
         Returns: undefined
       }
       refresh_all_materialized_views: { Args: never; Returns: undefined }
@@ -4185,7 +4276,7 @@ export const Constants = {
       ],
       company_source: ["apollo", "direct", "manual", "invited"],
       company_status: [
-        "draft",
+        "created",
         "unlisted",
         "listed",
         "deactivated",

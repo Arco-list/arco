@@ -118,6 +118,7 @@ const mapRowToCard = (row: SearchProfessionalsRow, locale: string = "en"): Profe
     logoUrl: row.company_logo ?? null,
     specialties,
     isVerified: Boolean(row.is_verified),
+    isFeatured: Boolean(row.is_featured),
     domain: row.company_domain ?? null,
     latitude: row.company_latitude ?? null,
     longitude: row.company_longitude ?? null,

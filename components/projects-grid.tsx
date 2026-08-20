@@ -8,6 +8,7 @@ import { useLocale, useTranslations } from "next-intl"
 import { translateBuildingType, translateCategoryName } from "@/lib/project-translations"
 
 import { ShareModal } from "@/components/share-modal"
+import { AdminFeatureStar } from "@/components/admin-feature-star"
 
 import { useFilters } from "@/contexts/filter-context"
 import { cityLabel } from "@/lib/provinces"
@@ -303,8 +304,15 @@ function ProjectCard({
             </div>
           )}
 
-          {/* Save + Share */}
+          {/* Save + Share (+ admin-only featured star) */}
           <div className="discover-card-actions" data-saved={isSaved}>
+            {project.id && (
+              <AdminFeatureStar
+                entity="project"
+                entityId={project.id}
+                initialFeatured={Boolean(project.is_featured)}
+              />
+            )}
             <button
               className="discover-card-action-btn"
               data-saved={isSaved}

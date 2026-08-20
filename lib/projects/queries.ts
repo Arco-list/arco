@@ -5,6 +5,7 @@ import { logger } from "@/lib/logger"
 import { getProjectTranslation } from "@/lib/project-translations"
 import type { Tables } from "@/lib/supabase/types"
 import { applyProjectSort, DEFAULT_PROJECT_SORT, type ProjectSort } from "./sort"
+import { orderFeaturedFeed } from "./featured-shuffle"
 
 const INITIAL_PAGE_SIZE = 15
 
@@ -91,19 +92,56 @@ export const fetchDiscoverProjects = async (
   const supabase = await createServerSupabaseClient()
 
   // ── 1. Base project rows ──────────────────────────────────────────────────
-  let baseQuery = supabase
-    .from("project_search_documents")
-    .select("*")
-    .eq("status", "published")
-  baseQuery = applyProjectSort(baseQuery, sort)
-  const { data: baseRows, error: baseError } = await baseQuery.limit(INITIAL_PAGE_SIZE)
-
-  if (baseError) {
-    logger.error("Failed to load projects for discover", {
-      function: "fetchDiscoverProjects",
-      error: baseError,
-    })
-    return []
+  let baseRows: Tables<"project_search_documents">[] | null = null
+  if (sort === "featured") {
+    // Seeded scope-rotation feed: fresh seed per request, so the featured
+    // listing reorders on every reload (lib/projects/featured-shuffle.ts).
+    // The client hook excludes these SSR-shown ids from its own shuffled
+    // sequence, so "Load more" never repeats them.
+    const { data: idRows, error: idError } = await supabase
+      .from("project_search_documents")
+      .select("id, is_featured, project_type")
+      .eq("status", "published")
+      .limit(1000)
+    if (idError) {
+      logger.error("Failed to load feed ids for discover", {
+        function: "fetchDiscoverProjects",
+        error: idError,
+      })
+      return []
+    }
+    const orderedIds = orderFeaturedFeed(idRows ?? [], Math.random()).slice(0, INITIAL_PAGE_SIZE)
+    if (orderedIds.length === 0) return []
+    const { data: rows, error: rowsError } = await supabase
+      .from("project_search_documents")
+      .select("*")
+      .in("id", orderedIds)
+    if (rowsError) {
+      logger.error("Failed to load projects for discover", {
+        function: "fetchDiscoverProjects",
+        error: rowsError,
+      })
+      return []
+    }
+    const orderIndex = new Map(orderedIds.map((id, i) => [id, i]))
+    baseRows = (rows ?? [])
+      .slice()
+      .sort((a, b) => (orderIndex.get(a.id ?? "") ?? 0) - (orderIndex.get(b.id ?? "") ?? 0))
+  } else {
+    let baseQuery = supabase
+      .from("project_search_documents")
+      .select("*")
+      .eq("status", "published")
+    baseQuery = applyProjectSort(baseQuery, sort)
+    const { data, error: baseError } = await baseQuery.limit(INITIAL_PAGE_SIZE)
+    if (baseError) {
+      logger.error("Failed to load projects for discover", {
+        function: "fetchDiscoverProjects",
+        error: baseError,
+      })
+      return []
+    }
+    baseRows = data
   }
 
   if (!baseRows || baseRows.length === 0) return []

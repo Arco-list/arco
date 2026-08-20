@@ -7,6 +7,7 @@ import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { Enums, Tables } from "@/lib/supabase/types"
 import { PROJECT_TYPE_FILTERS, isAllowedProjectSubType, isAllowedProjectType } from "@/lib/project-type-filter-map"
 import { applyProjectSort, DEFAULT_PROJECT_SORT, type ProjectSort } from "@/lib/projects/sort"
+import { orderFeaturedFeed } from "@/lib/projects/featured-shuffle"
 
 import { useFilters } from "@/contexts/filter-context"
 
@@ -122,6 +123,16 @@ export function useProjectsQuery({
   // Capture the sort the SSR data was fetched with so we know to refetch
   // if the user changes the sort before triggering any other filter.
   const initialSortRef = useRef<ProjectSort>(sort)
+  // Seed for the featured feed's scope-rotation shuffle: fresh per mount
+  // (so every reload reorders), stable across "Load more" (so pagination
+  // never duplicates or drops projects within a visit).
+  const [shuffleSeed] = useState(() => Math.random())
+  // When the SSR page is kept as page 0 of the featured feed, its ids are
+  // excluded from this client's own shuffled sequence (the server shuffled
+  // with a different seed) so later pages never repeat them.
+  const ssrShownIdsRef = useRef<string[] | null>(null)
+  // One-shot: the background count query that fixes `total` after SSR.
+  const ssrTotalCorrectedRef = useRef(false)
 
   const categories = taxonomy.categories as CategoryRow[]
 
@@ -307,12 +318,12 @@ export function useProjectsQuery({
       const from = pageIndex * effectivePageSize
       const to = from + effectivePageSize - 1
 
-      let query: any = supabase
-        .from("project_search_documents")
-        .select("*", { count: "exact" })
-      query = applyProjectSort(query, sort)
-      query = query.range(from, to)
-
+      // Applies every active discover filter to `query`. Returns null when
+      // a filter proves the result set empty (space with no photos).
+      // NB: the builder is wrapped in an object because Supabase query
+      // builders are thenables — returning one bare from an async function
+      // would make `await` EXECUTE the query instead of returning it.
+      const applyFilters = async (query: any): Promise<{ query: any } | null> => {
       // Space filter: find project IDs that have photos tagged with the selected space
       if (selectedSpace) {
         const { data: spaceRows } = await supabase
@@ -337,8 +348,8 @@ export function useProjectsQuery({
           if (projectIds.length > 0) {
             query = query.in("id", projectIds)
           } else {
-            // No projects have photos in this space — return empty
-            return { data: [], total: 0 }
+            // No projects have photos in this space — empty result set
+            return null
           }
         }
       }
@@ -416,9 +427,69 @@ export function useProjectsQuery({
         query = query.lte("building_year", filters.buildingYearRange[1] as number)
       }
 
-      const { data, error: supabaseError, count } = await query
-      if (supabaseError) {
-        throw supabaseError
+      return { query }
+      }
+
+      let data: ProjectSummaryRow[]
+      let count: number
+
+      if (sort === "featured") {
+        // Seeded scope-rotation feed (lib/projects/featured-shuffle.ts):
+        // fetch the matching ids once, order them locally with this
+        // mount's seed, then page by id list. The seed is stable for the
+        // visit, so "Load more" continues one consistent sequence — and a
+        // reload reshuffles.
+        const idFiltered = await applyFilters(
+          supabase.from("project_search_documents").select("id, is_featured, project_type"),
+        )
+        if (!idFiltered) return { data: [], total: 0 }
+        const { data: idRows, error: idError } = await idFiltered.query.limit(1000)
+        if (idError) throw idError
+
+        let orderedIds = orderFeaturedFeed(idRows ?? [], shuffleSeed)
+        let sliceFrom = from
+        const ssrShownIds = ssrShownIdsRef.current
+        if (ssrShownIds && ssrShownIds.length > 0) {
+          // The grid already shows the SSR page (ordered by the server's
+          // own seed). Exclude those and treat this fetch as continuing
+          // after them: page 1 starts at the top of the remainder.
+          const skip = new Set(ssrShownIds)
+          orderedIds = orderedIds.filter((id) => !skip.has(id))
+          sliceFrom = Math.max(0, (pageIndex - 1) * effectivePageSize)
+          count = ssrShownIds.length + orderedIds.length
+        } else {
+          count = orderedIds.length
+        }
+
+        const pageIds = orderedIds.slice(sliceFrom, sliceFrom + effectivePageSize)
+        if (pageIds.length === 0) {
+          data = []
+        } else {
+          const { data: pageRows, error: pageError } = await supabase
+            .from("project_search_documents")
+            .select("*")
+            .in("id", pageIds)
+          if (pageError) throw pageError
+          const orderIndex = new Map(pageIds.map((id, i) => [id, i]))
+          data = ((pageRows ?? []) as ProjectSummaryRow[])
+            .slice()
+            .sort((a, b) => (orderIndex.get(a.id ?? "") ?? 0) - (orderIndex.get(b.id ?? "") ?? 0))
+        }
+      } else {
+        let query: any = supabase
+          .from("project_search_documents")
+          .select("*", { count: "exact" })
+        query = applyProjectSort(query, sort)
+        query = query.range(from, to)
+        const filtered = await applyFilters(query)
+        if (!filtered) return { data: [], total: 0 }
+
+        const { data: queryData, error: supabaseError, count: queryCount } = await filtered.query
+        if (supabaseError) {
+          throw supabaseError
+        }
+        data = (queryData ?? []) as ProjectSummaryRow[]
+        count = queryCount ?? 0
       }
 
       // Fetch preview photos for card carousel (max 5 per project)
@@ -475,7 +546,7 @@ export function useProjectsQuery({
         total: count ?? 0,
       }
     },
-    [effectivePageSize, filters, selectedSpace, locale, sort],
+    [effectivePageSize, filters, selectedSpace, locale, sort, shuffleSeed],
   )
 
   const fetchTypePhotoOverrides = useCallback(
@@ -685,14 +756,41 @@ export function useProjectsQuery({
 
       // If we have initial SSR data, no filters, and the sort hasn't
       // changed from the one used for SSR, the initial data is still
-      // valid — skip the fetch.
+      // valid — skip the fetch. The flag is deliberately NOT consumed
+      // here: this effect re-runs on dependency identity churn (taxonomy
+      // loading in, filter-context memo rebuilds) without anything
+      // user-visible changing, and consuming the flag on the first run
+      // made the second run refetch — visibly reshuffling the seeded
+      // featured feed right after SSR paint.
       if (hasInitialDataRef.current && !hasFilters && sort === initialSortRef.current) {
-        hasInitialDataRef.current = false
+        if (sort === "featured") {
+          ssrShownIdsRef.current = initialProjects
+            .map((p) => p.id)
+            .filter((id): id is string => Boolean(id))
+        }
+        // SSR only knows its own page, so `total` starts at 15 — fetch
+        // the real count in the background without touching the grid.
+        if (!ssrTotalCorrectedRef.current && initialProjects.length === DEFAULT_PAGE_SIZE) {
+          ssrTotalCorrectedRef.current = true
+          void (async () => {
+            const supabase = getBrowserSupabaseClient()
+            const { count } = await supabase
+              .from("project_search_documents")
+              .select("id", { count: "exact", head: true })
+            if (!cancelled && typeof count === "number" && count > 0) {
+              setTotal(count)
+              setHasMore(count > initialProjects.length)
+            }
+          })()
+        }
         return
       }
 
-      // Clear the flag for subsequent filter changes
+      // A real filter/sort change: the SSR page is stale from here on.
+      // Any fetch from page 0 renders the full client-shuffled sequence,
+      // so nothing is excluded.
       hasInitialDataRef.current = false
+      ssrShownIdsRef.current = null
 
       setIsLoading(true)
       setError(null)
@@ -809,6 +907,8 @@ export function useProjectsQuery({
   const refetch = useCallback(async () => {
     setIsLoading(true)
     setError(null)
+    // Refetch renders from page 0 of the client sequence — nothing excluded.
+    ssrShownIdsRef.current = null
 
     try {
       const result = await fetchProjects(0)

@@ -1870,7 +1870,10 @@ export default function ListingEditorPage() {
 
       const { error } = await supabase
         .from("projects")
-        .update({ status: newStatus, ...(autoApprove ? { is_featured: true } : {}) })
+        // Auto-approve publishes but never stars: is_featured is a curated
+        // quality tier (AI featured decision at import, admin-overridable),
+        // not an approval side effect.
+        .update({ status: newStatus })
         .eq("id", projectId)
 
       if (error) {

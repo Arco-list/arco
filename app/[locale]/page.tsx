@@ -20,6 +20,7 @@ import { getProjectTranslation, translateCategoryName } from "@/lib/project-tran
 import { TrackPageView } from "@/components/track-view"
 import { getSiteUrl } from "@/lib/utils"
 import { getHubs } from "@/lib/project-hubs"
+import { orderFeaturedFeed } from "@/lib/projects/featured-shuffle"
 
 export const revalidate = 300
 
@@ -82,7 +83,15 @@ async function loadLandingData(locale: string) {
       .select("slot, project_id, photo_url, projects(id, title, slug, location, project_type, translations)")
       .eq("scope", "home")
       .order("slot", { ascending: true }),
-    supabase.rpc("search_projects", { limit_count: 12, featured_only: true }),
+    // Featured projects for the home section — minimal rows only; the
+    // seeded scope-rotation pick happens below (same logic as the
+    // discover "Uitgelicht" feed, fresh selection every reload).
+    supabase
+      .from("project_search_documents")
+      .select("id, is_featured, project_type")
+      .eq("status", "published")
+      .eq("is_featured", true)
+      .limit(1000),
     supabase
       .from("categories")
       .select("id,name,name_nl,slug,parent_id,sort_order,project_category_attributes(is_listable)")
@@ -155,7 +164,27 @@ async function loadLandingData(locale: string) {
       project_type: cover.projects.project_type,
       primary_photo_url: cover.photo_url,
     }))
-  const popularProjects = (popularProjectsResult.data ?? []).filter((project) => Boolean(project?.slug))
+  // Order the featured set with the same seeded scope-rotation as the
+  // discover feed (new build / interior design / renovation interleaved,
+  // reshuffled per request), then fetch card data for the picks.
+  const featuredOrderedIds = orderFeaturedFeed(
+    (popularProjectsResult.data ?? []) as { id: string | null; is_featured: boolean | null; project_type: string | null }[],
+    Math.random(),
+  ).slice(0, 6)
+  let popularProjects: any[] = []
+  if (featuredOrderedIds.length > 0) {
+    const { data: featuredRows, error: featuredRowsError } = await supabase
+      .from("project_search_documents")
+      .select("id, title, slug, location, primary_photo_url, primary_category, primary_category_slug, translations")
+      .in("id", featuredOrderedIds)
+    if (featuredRowsError) {
+      logger.error("Failed to load featured project cards", { scope: "landing" }, featuredRowsError)
+    }
+    const orderIndex = new Map(featuredOrderedIds.map((id, i) => [id, i]))
+    popularProjects = (featuredRows ?? [])
+      .filter((project) => Boolean(project?.slug))
+      .sort((a, b) => (orderIndex.get(a.id ?? "") ?? 0) - (orderIndex.get(b.id ?? "") ?? 0))
+  }
   const parentCategories = (parentCategoriesResult.data as CategoryRow[] | null) ?? []
   const homeProjectTypes = (homeProjectTypesResult.data as Tables<"categories">[] | null) ?? []
   const homeProfessionalServices = (homeProfessionalServicesResult.data as Tables<"categories">[] | null) ?? []

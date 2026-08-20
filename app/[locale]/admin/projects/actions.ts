@@ -202,7 +202,9 @@ export async function setProjectStatusAction(input: {
     status_updated_at: new Date().toISOString(),
     status_updated_by: user.id,
     rejection_reason: statusResult.data === "rejected" ? trimmedReason : null,
-    ...(statusResult.data === "published" ? { is_featured: true } : {}),
+    // Publishing no longer implies is_featured — the star is a curated
+    // quality tier (AI featured decision at import, admin-overridable),
+    // not an approval side effect.
   }
 
   const { error: updateError } = await supabase
@@ -241,6 +243,22 @@ export async function setProjectStatusAction(input: {
         .from("companies")
         .update({ auto_approve_projects: true, setup_completed: true } as never)
         .eq("id", ownerPP.company_id)
+
+      // A company inherits the quality star when one of its featured
+      // projects goes live: featured companies sort above the fold on
+      // the professionals discover/hubs. One-way only — publishing an
+      // average project never removes an earned star.
+      const { data: publishedProject } = await supabase
+        .from("projects")
+        .select("is_featured")
+        .eq("id", idResult.data)
+        .maybeSingle()
+      if (publishedProject?.is_featured) {
+        await supabase
+          .from("companies")
+          .update({ is_featured: true })
+          .eq("id", ownerPP.company_id)
+      }
 
       // Sync company listed status based on active projects
       await syncCompanyListedStatus(ownerPP.company_id)

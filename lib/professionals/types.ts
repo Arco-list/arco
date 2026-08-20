@@ -19,6 +19,8 @@ export type ProfessionalCard = {
   logoUrl: string | null
   specialties: string[]
   isVerified: boolean
+  /** Featured tier flag (admin-curated star) — drives the admin-only star on cards */
+  isFeatured?: boolean
   domain?: string | null
   latitude?: number | null
   longitude?: number | null

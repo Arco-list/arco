@@ -5,14 +5,17 @@
 
 export type ProfessionalSort = "most_relevant" | "featured" | "popular" | "most_recent"
 
+// Featured leads and is the DEFAULT — mirrors lib/projects/sort.ts: the
+// curated tier sits above the fold, "most relevant" is the pure credits
+// signal for visitors who opt out of curation.
 export const PROFESSIONAL_SORT_OPTIONS = [
-  "most_relevant",
   "featured",
+  "most_relevant",
   "popular",
   "most_recent",
 ] as const satisfies readonly ProfessionalSort[]
 
-export const DEFAULT_PROFESSIONAL_SORT: ProfessionalSort = "most_relevant"
+export const DEFAULT_PROFESSIONAL_SORT: ProfessionalSort = "featured"
 
 /** Translation keys in the `professionals` namespace. */
 export const PROFESSIONAL_SORT_I18N_KEYS: Record<ProfessionalSort, string> = {

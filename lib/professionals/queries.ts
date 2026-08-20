@@ -243,19 +243,14 @@ const toProfessionalCard = (row: ProfessionalRow): ProfessionalCard | null => {
     image,
     specialties,
     isVerified: Boolean(row.is_verified),
+    isFeatured: Boolean((company as { is_featured?: boolean | null }).is_featured),
     domain: company.domain ?? null,
   }
 }
 
-const sortProfessionals = (professionals: ProfessionalCard[]) => {
-  return professionals.sort((a, b) => {
-    if (a.isVerified !== b.isVerified) {
-      return a.isVerified ? -1 : 1
-    }
-
-    return a.name.localeCompare(b.name)
-  })
-}
+// NB: no client-side re-sort of RPC results — search_professionals applies
+// the requested sort (featured tier first on the default) in its ORDER BY,
+// and a local verified/alphabetical re-sort here used to clobber it.
 
 type SearchProfessionalsRpcRow = {
   id: string
@@ -319,6 +314,7 @@ const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow, locale: str
     logoUrl: row.company_logo ?? null,
     specialties,
     isVerified: Boolean(row.is_verified),
+    isFeatured: Boolean(row.is_featured),
     domain: row.company_domain ?? null,
     latitude: row.company_latitude ?? null,
     longitude: row.company_longitude ?? null,
@@ -377,7 +373,7 @@ export const fetchDiscoverProfessionals = async (
     .map((row) => mapRpcRowToProfessionalCard(row, locale))
     .filter((card): card is ProfessionalCard => card !== null)
 
-  const professionals = sortProfessionals(cards)
+  const professionals = cards
   const total = countResult.data != null ? Number(countResult.data) : professionals.length
 
   return { professionals, total }

@@ -5,6 +5,7 @@ import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
 
 import { ShareModal } from "@/components/share-modal"
+import { AdminFeatureStar } from "@/components/admin-feature-star"
 import type { ProfessionalCard as ProfessionalCardData } from "@/lib/professionals/types"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=400&width=600"
@@ -95,8 +96,13 @@ export const ProfessionalCard = memo(function ProfessionalCard({
             />
           </div>
 
-          {/* Save + Share */}
+          {/* Save + Share (+ admin-only featured star) */}
           <div className="discover-card-actions" data-saved={isSaved}>
+            <AdminFeatureStar
+              entity="company"
+              entityId={professional.companyId}
+              initialFeatured={Boolean(professional.isFeatured)}
+            />
             <button
               className="discover-card-action-btn"
               data-saved={isSaved}

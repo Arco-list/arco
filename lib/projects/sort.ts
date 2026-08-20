@@ -5,14 +5,18 @@
 
 export type ProjectSort = "most_relevant" | "featured" | "popular" | "most_recent"
 
+// Featured leads and is the DEFAULT: the curated tier (AI featured
+// decision at import, admin-overridable star) sits above the fold on
+// discover, hubs and home. "Most relevant" is the pure network signal
+// (credits) for visitors who opt out of curation.
 export const PROJECT_SORT_OPTIONS = [
-  "most_relevant",
   "featured",
+  "most_relevant",
   "popular",
   "most_recent",
 ] as const satisfies readonly ProjectSort[]
 
-export const DEFAULT_PROJECT_SORT: ProjectSort = "most_relevant"
+export const DEFAULT_PROJECT_SORT: ProjectSort = "featured"
 
 /** Translation keys in the `projects` namespace. */
 export const PROJECT_SORT_I18N_KEYS: Record<ProjectSort, string> = {
@@ -35,10 +39,15 @@ function clausesFor(sort: ProjectSort): SortClause[] {
         { column: "created_at", ascending: false },
       ]
     case "featured":
+      // The real featured feed is a seeded per-reload shuffle (starred
+      // band first, then constant scope rotation) computed in
+      // lib/projects/featured-shuffle.ts by both the SSR query and the
+      // client hook. These DB clauses are only the deterministic fallback
+      // for any other consumer of applyProjectSort.
       return [
         { column: "is_featured", ascending: false },
-        { column: "credited_count", ascending: false },
-        { column: "created_at", ascending: false },
+        { column: "scope_rotation", ascending: true },
+        { column: "views_count", ascending: false },
       ]
     case "popular":
       return [

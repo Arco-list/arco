@@ -1461,8 +1461,10 @@ Also determine: style (modern/contemporary/traditional/minimalist/industrial/sca
 
 For building_type, classify by ARCHITECTURE not current use — a restaurant inside a converted villa is "villa"; a café in a row of townhouses is "townhouse"; a hotel in a former mansion is "villa". Only fall back to "other" if no residential archetype fits (e.g. a purpose-built modern office block).
 
+Also decide "feature": would a design magazine editor pick THIS project for the cover, over other professional work? true only for clearly exceptional projects — striking architecture or interiors AND magazine-grade photography AND rich, distinctive materialization. Competent professional work with good photos is the NORM on this platform, not featured. Default to false; at most 1 in 4 projects merits true.
+
 Return ONLY this JSON:
-{"photos":[{"index":0,"space":"exterior","alt":"Rietgedekte villa met houten gevelbekleding en brede oprit"}],"style":"modern","scope":"new-build","building_type":"villa"}`,
+{"photos":[{"index":0,"space":"exterior","alt":"Rietgedekte villa met houten gevelbekleding en brede oprit"}],"style":"modern","scope":"new-build","building_type":"villa","feature":false}`,
           },
         ],
       },
@@ -1477,6 +1479,7 @@ Return ONLY this JSON:
   let detectedStyle: string | null = null
   let detectedScope: string | null = null
   let detectedBuildingType: string | null = null
+  let detectedFeature: boolean | null = null
   try {
     const cleaned = responseText.replace(/```json?\n?/g, "").replace(/```/g, "").trim()
     const parsed = JSON.parse(cleaned)
@@ -1488,8 +1491,9 @@ Return ONLY this JSON:
       detectedStyle = typeof parsed.style === "string" ? parsed.style.trim().toLowerCase() : null
       detectedScope = typeof parsed.scope === "string" ? parsed.scope.trim().toLowerCase() : null
       detectedBuildingType = typeof parsed.building_type === "string" ? parsed.building_type.trim().toLowerCase() : null
+      detectedFeature = typeof parsed.feature === "boolean" ? parsed.feature : null
     }
-    console.log(`[autoTag] Detected style: ${detectedStyle}, scope: ${detectedScope}, building_type: ${detectedBuildingType}`)
+    console.log(`[autoTag] Detected style: ${detectedStyle}, scope: ${detectedScope}, building_type: ${detectedBuildingType}, feature: ${detectedFeature}`)
   } catch {
     logger.error("Auto-tag: could not parse Claude response", { projectId, responseText })
     return
@@ -1497,6 +1501,21 @@ Return ONLY this JSON:
 
   // Use service role client to bypass RLS for spaces and project_features
   const serviceSupabase = createServiceRoleSupabaseClient()
+
+  // Featured decision from the same vision pass. Starred projects sort
+  // above the fold on discover, home and hubs, so the tier must stay
+  // selective — the prompt is calibrated to star roughly the top quarter.
+  // Written only at import (fresh project), so a later admin override of
+  // the star is never clobbered.
+  if (detectedFeature !== null) {
+    const { error: featureErr } = await serviceSupabase
+      .from("projects")
+      .update({ is_featured: detectedFeature })
+      .eq("id", projectId)
+    if (featureErr) {
+      console.error(`[autoTag] Failed to write is_featured:`, featureErr)
+    }
+  }
 
   // Look up space IDs from the spaces table
   const { data: spaces, error: spacesError } = await serviceSupabase
