@@ -1439,7 +1439,9 @@ async function autoTagPhotosWithSpaces(
   console.log(`[autoTag] Calling Claude vision...`)
   const message = await client.messages.create({
     model: "claude-haiku-4-5",
-    max_tokens: 2048,
+    // Bumped from 2048: per-photo alt text (~15 words each, 40 photos)
+    // rides in the same response as the space classifications.
+    max_tokens: 4096,
     messages: [
       {
         role: "user",
@@ -1447,18 +1449,20 @@ async function autoTagPhotosWithSpaces(
           ...imageBlocks,
           {
             type: "text",
-            text: `Classify each photo into a space and determine overall project attributes.
+            text: `Classify each photo into a space, write alt text for it, and determine overall project attributes.
 
 Spaces: exterior (outside view of building — facade, roof, entrance, driveway, aerial, twilight. DEFAULT for any outdoor photo showing a building), pool (swimming pool visible), garden (only plants/lawn, NO building visible), terrace (on a terrace/balcony/patio), living (living room, lounge, sitting area), kitchen (kitchen, pantry, dining connected to kitchen), bedroom (bedroom, walk-in closet), bathroom (bathroom, shower, toilet, sauna), home-office (study, workspace, library), hallway (entrance hall, corridor, staircase), other (last resort — indoor only)
 
 Rules: outdoor photo with building visible = always "exterior". Tag every photo. Never skip.
+
+For each photo also write "alt": a concise Dutch image description (8-15 words) naming the room/space and the most distinctive visible materials or features, e.g. "Badkamer met travertijnen wastafel en eikenhouten kastenwand". Factual, no marketing language, never start with "Foto van" or "Afbeelding van".
 
 Also determine: style (modern/contemporary/traditional/minimalist/industrial/scandinavian/mediterranean/rustic/mid-century-modern/bohemian/coastal/farmhouse/transitional/urban-modern/eclectic), scope (new-build/renovated/interior-designed), building_type (villa/house/apartment/townhouse/penthouse/bungalow/chalet/farm/garden-house/other). Always pick one for each.
 
 For building_type, classify by ARCHITECTURE not current use — a restaurant inside a converted villa is "villa"; a café in a row of townhouses is "townhouse"; a hotel in a former mansion is "villa". Only fall back to "other" if no residential archetype fits (e.g. a purpose-built modern office block).
 
 Return ONLY this JSON:
-{"photos":[{"index":0,"space":"exterior"}],"style":"modern","scope":"new-build","building_type":"villa"}`,
+{"photos":[{"index":0,"space":"exterior","alt":"Rietgedekte villa met houten gevelbekleding en brede oprit"}],"style":"modern","scope":"new-build","building_type":"villa"}`,
           },
         ],
       },
@@ -1469,7 +1473,7 @@ Return ONLY this JSON:
   console.log(`[autoTag] Claude response:`, responseText.substring(0, 800))
 
   // Parse the JSON response — handle markdown code blocks
-  let classifications: { index: number; space: string }[]
+  let classifications: { index: number; space: string; alt?: string }[]
   let detectedStyle: string | null = null
   let detectedScope: string | null = null
   let detectedBuildingType: string | null = null
@@ -1537,6 +1541,26 @@ Return ONLY this JSON:
     if (!photosBySpace.has(finalSlug)) photosBySpace.set(finalSlug, [])
     photosBySpace.get(finalSlug)!.push(photo.id)
   }
+
+  // Per-photo alt text from the same vision pass — invisible to sighted
+  // users (HTML alt attribute) but the main attribution signal for
+  // Google Images and the description screen readers announce.
+  const serviceForAlt = createServiceRoleSupabaseClient()
+  let altWritten = 0
+  for (const c of classifications) {
+    const alt = typeof (c as any).alt === "string" ? (c as any).alt.trim().slice(0, 300) : ""
+    if (!alt) continue
+    const rawIndex = (c as any).index
+    const idx = typeof rawIndex === "number" ? rawIndex : Number(rawIndex)
+    const photo = Number.isFinite(idx) ? photos.find((p) => p.order_index === idx) : undefined
+    if (!photo) continue
+    const { error: altErr } = await serviceForAlt
+      .from("project_photos")
+      .update({ alt_text: alt })
+      .eq("id", photo.id)
+    if (!altErr) altWritten++
+  }
+  console.log(`[autoTag] alt text written for ${altWritten}/${classifications.length} photos`)
   console.log(`[autoTag] photosBySpace built: ${photosBySpace.size} slug(s), ${Array.from(photosBySpace.values()).reduce((n, v) => n + v.length, 0)} photo(s) linked. Drops: noPhotoMatch=${droppedNoPhotoMatch}, noSlugMatch=${droppedNoSlugMatch}. Classifications received: ${classifications.length}`)
 
   // Fetch existing project_features so we can reuse them instead of creating duplicates

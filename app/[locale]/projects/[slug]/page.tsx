@@ -276,7 +276,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const [photosResult, professionalsResult, featuresResult, photographerResult] = await Promise.all([
     supabase
       .from("project_photos")
-      .select("id, url, caption, feature_id, is_primary, order_index, width, height")
+      .select("id, url, caption, alt_text, feature_id, is_primary, order_index, width, height")
       .eq("project_id", project.id)
       .order("is_primary", { ascending: false })
       .order("order_index", { ascending: true }),

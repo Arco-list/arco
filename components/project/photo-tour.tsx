@@ -9,6 +9,7 @@ interface Photo {
   id: string
   url: string
   caption: string | null
+  alt_text?: string | null
   feature_id: string | null
   /** Space slug derived from the feature's linked space */
   space?: string | null
@@ -600,7 +601,7 @@ export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
               >
                 <Image
                   src={photo.url}
-                  alt={photo.caption ?? 'Project photo'}
+                  alt={photo.alt_text ?? photo.caption ?? 'Project photo'}
                   fill
                   className="photo-cell-img"
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
@@ -687,7 +688,7 @@ export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
             <div className="lightbox-image-container">
               <Image
                 src={lightboxPhotos[lightboxIndex].url}
-                alt={lightboxPhotos[lightboxIndex].caption ?? 'Project photo'}
+                alt={lightboxPhotos[lightboxIndex].alt_text ?? lightboxPhotos[lightboxIndex].caption ?? 'Project photo'}
                 width={lightboxPhotos[lightboxIndex].width ?? 1920}
                 height={lightboxPhotos[lightboxIndex].height ?? 1080}
                 className="lightbox-image"

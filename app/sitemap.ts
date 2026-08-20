@@ -45,22 +45,45 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority,
   }))
 
-  // Published projects
+  // Published projects — each entry declares its OWN photos as sitemap
+  // image entries. Google Images uses this as the canonical page-owns-
+  // image signal, so photos appearing in Similar/More-from rails on
+  // other pages don't get attributed to those pages.
   const { data: projects } = await supabase
     .from("projects")
-    .select("slug, updated_at")
+    .select("id, slug, updated_at")
     .eq("status", "published")
     .not("slug", "is", null)
     .order("updated_at", { ascending: false })
     .limit(10000)
 
+  const publishedIds = (projects ?? []).map((p) => p.id).filter(Boolean)
+  const photosByProject = new Map<string, string[]>()
+  if (publishedIds.length > 0) {
+    const { data: photoRows } = await supabase
+      .from("project_photos")
+      .select("project_id, url, is_primary, order_index")
+      .in("project_id", publishedIds)
+      .order("is_primary", { ascending: false })
+      .order("order_index", { ascending: true })
+    for (const row of photoRows ?? []) {
+      if (!row.project_id || !row.url) continue
+      const list = photosByProject.get(row.project_id) ?? []
+      // Cap per project — primary + first tour photos carry the signal;
+      // exhaustive lists just bloat the sitemap.
+      if (list.length < 12) list.push(row.url)
+      photosByProject.set(row.project_id, list)
+    }
+  }
+
   const projectEntries: MetadataRoute.Sitemap = (projects ?? [])
-    .filter((p): p is { slug: string; updated_at: string | null } => !!p.slug)
+    .filter((p): p is { id: string; slug: string; updated_at: string | null } => !!p.slug)
     .map((p) => ({
       ...localizedUrls(baseUrl, `/projects/${p.slug}`),
       lastModified: p.updated_at ? new Date(p.updated_at) : new Date(),
       changeFrequency: "weekly" as const,
       priority: 0.8,
+      images: photosByProject.get(p.id),
     }))
 
   // Programmatic hub pages (city / scope) — only hubs clearing the
