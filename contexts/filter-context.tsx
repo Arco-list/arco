@@ -11,8 +11,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react"
-import { debounce } from "lodash-es"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
 
 import { useProjectTaxonomy } from "@/hooks/use-project-taxonomy"
 import { PROVINCES } from "@/lib/provinces"
@@ -286,7 +285,14 @@ export interface HubDef {
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 function FilterProviderInner({ children, hubs = [], hubSlug }: { children: ReactNode; hubs?: HubDef[]; hubSlug?: string }) {
-  const activeHub = hubSlug ? hubs.find((h) => h.slug === hubSlug) ?? null : null
+  // The hub preset applies only while the URL is still on the hub's path.
+  // Filter changes sync via shallow history.replaceState (no server
+  // navigation), so this tree survives leaving the hub URL — the preset
+  // must stop re-injecting the moment the path no longer matches.
+  const livePathname = usePathname()
+  const activeHub = hubSlug && livePathname.endsWith(`/${hubSlug}`)
+    ? hubs.find((h) => h.slug === hubSlug) ?? null
+    : null
   const { categories, taxonomyOptions, cities, isLoading: taxonomyLoading, error: taxonomyError, refresh } = useProjectTaxonomy()
   const initialSearchParams = useSearchParams()
   // Seed keyword from URL so the first render already has it — otherwise the
@@ -423,24 +429,18 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
 
   const [isUrlHydrated, setIsUrlHydrated] = useState(false)
   const searchParams = initialSearchParams
-  const router = useRouter()
-  const pathname = usePathname()
+  const pathname = livePathname
   const initializedRef = useRef(false)
   const lastParsedQueryRef = useRef<string>(searchParams.toString())
   const lastSyncedQueryRef = useRef<string>(searchParams.toString())
-  const debouncedReplaceRef = useRef<(nextUrl: string, nextQuery: string) => void>()
-
-  useEffect(() => {
-    const handler = debounce((nextUrl: string, nextQuery: string) => {
-      lastSyncedQueryRef.current = nextQuery
-      router.replace(nextUrl, { scroll: false })
-    }, 300)
-    debouncedReplaceRef.current = handler
-    return () => {
-      handler.cancel()
-      debouncedReplaceRef.current = undefined
-    }
-  }, [pathname, router])
+  // URL sync is SHALLOW: history.replaceState updates the address (and
+  // Next's usePathname/useSearchParams) without a server navigation, so
+  // filtering never reloads the page. Hub paths still server-render on
+  // direct loads — the URL is just a mirror during a client session.
+  const shallowReplace = (nextUrl: string, nextQuery: string) => {
+    lastSyncedQueryRef.current = nextQuery
+    window.history.replaceState(window.history.state, "", nextUrl)
+  }
 
   const categoryTokenMaps = useMemo(
     () =>
@@ -631,8 +631,13 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
     // the hub path (/projects/amsterdam) with no query. Anything else
     // lives on the base discover path with query params. Ephemeral
     // filter states therefore never mint crawlable URLs; gated hubs do.
-    const basePath = hubSlug && pathname.endsWith(`/${hubSlug}`)
-      ? pathname.slice(0, pathname.length - hubSlug.length - 1)
+    // Longest matching slug wins — /projects/amsterdam/villa must strip
+    // the nested combo slug, not the shorter national "villa" type hub.
+    const pathHub = hubs
+      .filter((h) => pathname.endsWith(`/${h.slug}`))
+      .sort((a, b) => b.slug.length - a.slug.length)[0]
+    const basePath = pathHub
+      ? pathname.slice(0, pathname.length - pathHub.slug.length - 1)
       : pathname
     const onlyFilter = (
       locations: number, scopes: number, types: number, regions = 0,
@@ -697,21 +702,12 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
     if (nextUrl === currentUrl) { lastSyncedQueryRef.current = nextQuery; return }
     if (nextQuery === lastSyncedQueryRef.current && targetPath === pathname) return
 
-    // Route changes (hub <-> base) navigate immediately: a debounced
-    // replace can fire with a stale closure after the route already
-    // changed, leaving the page one navigation behind until a manual
-    // refresh. Query-only updates keep the 300ms debounce.
-    if (targetPath !== pathname || !debouncedReplaceRef.current) {
-      lastSyncedQueryRef.current = nextQuery
-      router.replace(nextUrl, { scroll: false })
-      return
-    }
-    debouncedReplaceRef.current(nextUrl, nextQuery)
+    shallowReplace(nextUrl, nextQuery)
   }, [
     isUrlHydrated, selectedTypes, selectedStyles, selectedLocations, selectedRegions, selectedSpace,
     selectedBuildingTypes, selectedScopes, selectedBuildingFeatures,
     selectedSizes, selectedBudgets, projectYearRange,
-    buildingYearRange, router, pathname, searchParams, categoryTokenMaps, taxonomyTokenMaps, keyword, hubs, hubSlug,
+    buildingYearRange, pathname, searchParams, categoryTokenMaps, taxonomyTokenMaps, keyword, hubs, hubSlug,
   ])
 
   // ── Actions ──────────────────────────────────────────────────────────────────

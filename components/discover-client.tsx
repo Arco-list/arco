@@ -16,15 +16,12 @@ import { scopeLabel } from "@/lib/type-labels"
 interface DiscoverClientProps {
   initialProjects: DiscoverProject[]
   initialSort?: SortOption
-  /** Hub mode: overrides the page identity (H1, breadcrumb tail) when
-   *  the discover page renders as a hub (/projects/amsterdam).
-   *  crumbs = trail after "Projecten"; entries with href render as
-   *  links, role-tagged entries get a live multi-select dropdown
-   *  (provinces / cities / both) filled in client-side, the last plain
-   *  entry is the current page. */
+  /** Hub mode: server-provided H1 fallback for states the dynamic title
+   *  doesn't cover (scope hubs) and h1-vs-h2 selection. The breadcrumb
+   *  is always client-computed from filter state, so it stays correct
+   *  across shallow URL transitions. */
   hubHeader?: {
     title: string
-    crumbs: Array<{ label: string; href?: string; role?: "provinces" | "cities" }>
   }
   /** Server-rendered extras below the grid on hub pages (sibling-hub
    *  links, all-projects link). */
@@ -104,7 +101,6 @@ export function DiscoverClient({ initialProjects, initialSort = DEFAULT_PROJECT_
   // JamesEdition-style progressive disclosure: the city level only
   // appears once a province is chosen (or a city is already selected).
   const showCityLevel = selectedRegions.length > 0 || selectedLocations.length > 0
-  const hubCrumbs = (hubHeader?.crumbs ?? []).filter((c) => c.role !== "cities" || showCityLevel)
 
   // Base-page geo crumb labels: placeholder when empty, the selection's
   // own name for one, a count beyond that. With only cities selected the
@@ -182,47 +178,21 @@ export function DiscoverClient({ initialProjects, initialSort = DEFAULT_PROJECT_
               {t("title")}
             </Link>
             <span className="discover-breadcrumb-sep" aria-hidden="true">/</span>
-            {hubHeader ? (
+            <span className="discover-breadcrumb-item">
+              {t("breadcrumb_netherlands")}
+            </span>
+            <span className="discover-breadcrumb-sep" aria-hidden="true">/</span>
+            <BreadcrumbSelect label={provinceCrumbLabel} items={roleItems("provinces")} muted={selectedRegions.length === 0} />
+            {showCityLevel && (
               <>
-                {hubCrumbs.map((crumb, i) => {
-                  const isLast = i === hubCrumbs.length - 1
-                  return (
-                    <span key={`${crumb.label}-${i}`} style={{ display: "contents" }}>
-                      {crumb.role ? (
-                        <BreadcrumbSelect label={crumb.label} items={roleItems(crumb.role)} muted={roleMuted(crumb.role)} />
-                      ) : crumb.href && !isLast ? (
-                        <Link href={crumb.href} className="discover-breadcrumb-item">
-                          {crumb.label}
-                        </Link>
-                      ) : (
-                        <span className={`discover-breadcrumb-item${isLast ? " discover-breadcrumb-current" : ""}`}>
-                          {crumb.label}
-                        </span>
-                      )}
-                      {!isLast && <span className="discover-breadcrumb-sep" aria-hidden="true">/</span>}
-                    </span>
-                  )
-                })}
-              </>
-            ) : (
-              <>
-                <span className="discover-breadcrumb-item">
-                  {t("breadcrumb_netherlands")}
-                </span>
                 <span className="discover-breadcrumb-sep" aria-hidden="true">/</span>
-                <BreadcrumbSelect label={provinceCrumbLabel} items={roleItems("provinces")} muted={provinceLabelSource.length === 0} />
-                {showCityLevel && (
-                  <>
-                    <span className="discover-breadcrumb-sep" aria-hidden="true">/</span>
-                    <BreadcrumbSelect label={cityCrumbLabel} items={roleItems("cities")} muted={selectedLocations.length === 0} />
-                  </>
-                )}
-                {leafCrumb && (
-                  <>
-                    <span className="discover-breadcrumb-sep" aria-hidden="true">/</span>
-                    <span className="discover-breadcrumb-item discover-breadcrumb-current">{leafCrumb}</span>
-                  </>
-                )}
+                <BreadcrumbSelect label={cityCrumbLabel} items={roleItems("cities")} muted={selectedLocations.length === 0} />
+              </>
+            )}
+            {leafCrumb && (
+              <>
+                <span className="discover-breadcrumb-sep" aria-hidden="true">/</span>
+                <span className="discover-breadcrumb-item discover-breadcrumb-current">{leafCrumb}</span>
               </>
             )}
           </nav>

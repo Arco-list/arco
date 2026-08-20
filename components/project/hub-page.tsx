@@ -60,45 +60,9 @@ export async function HubPage({ hub, allHubs, initialProjects, locale }: {
     ? (locale === "nl" ? PROVINCES[regionName].nl : PROVINCES[regionName].en)
     : regionName
 
-  // Interactive crumbs: geo levels above the current one link to their
-  // hubs; the current level and next-level-down placeholders render as
-  // multi-select dropdowns (all provinces / cities, with checkmarks)
-  // driven client-side by the filter state — the DiscoverClient fills
-  // role-tagged entries in.
-  type Crumb = { label: string; href?: string; role?: "provinces" | "cities" }
-  const nl = locale === "nl"
-  const crumbs: Crumb[] = [
-    { label: t("breadcrumb_netherlands"), href: "/projects" },
-    // Province level: selectable on a province hub, a plain link up when
-    // the hub sits below a known province.
-    ...(hub.kind === "province"
-      ? [{ label: copy.crumb, role: "provinces" as const }]
-      : (hub.kind === "type-province" || hub.kind === "scope-province") && provinceLabel
-        ? [{ label: provinceLabel, role: "provinces" as const }]
-        : provinceHub && provinceLabel
-          ? [{ label: provinceLabel, href: `/projects/${provinceHub.slug}` }]
-          : []),
-    // City level: current segment on city/type-city hubs, next-level
-    // placeholder on a province hub.
-    ...(hub.kind === "city"
-      ? [{ label: copy.crumb, role: "cities" as const }]
-      : hub.kind === "type-city" || hub.kind === "scope-city"
-        ? [{ label: cityLabel(hub.name, locale), role: "cities" as const }]
-        : hub.kind === "province" || hub.kind === "type-province" || hub.kind === "scope-province"
-          ? [{ label: nl ? "Kies plaats" : "Choose city", role: "cities" as const }]
-          : []),
-    // Type/scope hubs: geo placeholders before the non-geo leaf so the
-    // spine matches the base page (Projecten / Nederland / Kies provincie /
-    // Kies plaats / Villa's).
-    ...(hub.kind === "type" || hub.kind === "scope"
-      ? [
-          { label: nl ? "Kies provincie" : "Choose province", role: "provinces" as const },
-          { label: nl ? "Kies plaats" : "Choose city", role: "cities" as const },
-        ]
-      : []),
-    // Non-geo leaf (scope / type / type-city label).
-    ...(hub.kind === "city" || hub.kind === "province" ? [] : [{ label: copy.crumb }]),
-  ]
+  // The visible breadcrumb is client-computed by DiscoverClient from the
+  // seeded filter state (it must stay live across shallow URL
+  // transitions); only the JSON-LD trail below is server-authored.
 
   const baseUrl = getSiteUrl()
   // Structured data describes the plain hierarchy (no interactive
@@ -149,10 +113,7 @@ export async function HubPage({ hub, allHubs, initialProjects, locale }: {
         <FilterErrorBoundary>
           <DiscoverClient
             initialProjects={initialProjects}
-            hubHeader={{
-              title: copy.h1,
-              crumbs,
-            }}
+            hubHeader={{ title: copy.h1 }}
             hubFooter={hubFooter}
           />
         </FilterErrorBoundary>
