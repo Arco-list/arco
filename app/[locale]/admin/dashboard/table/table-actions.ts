@@ -1626,8 +1626,8 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   // as an explicit "Other" sub so the mismatch is legible instead of
   // looking like broken math.
   const proVisitorSubSeries = [
-    salesVisitorsSeriesDb, inviteVisitorsSeriesDb,
-    proVisitorsEmailBucketed.series, proVisitorsDirectAdjustedSeries,
+    proVisitorsSalesBucketed.series, proVisitorsInvitesBucketed.series,
+    proVisitorsEmailBucketed.series, proVisitorsDirectBucketed.series,
     proVisitorsGoogleBucketed.series, proVisitorsSocialBucketed.series,
     proVisitorsReferralBucketed.series, proVisitorsShareBucketed.series,
   ]
@@ -1840,26 +1840,22 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
         // displayed sub value one row down. Both source from
         // companies.first_touch_source (Supabase, populated via the
         // FirstTouchStamper hook + onboarded trigger).
-        { key: "sales", label: "Sales", definition: "Pros who clicked through to a Sales landing (Outreach or Showcase). Sourced from prospect_events server-side, not PostHog first-touch — measures click-through, not initial acquisition channel.",
-          source: "supabase" as MetricSource,
-          total: salesVisitorsTotalDb, datapoints: salesVisitorsSeriesDb,
+        // Sales / Invites series now read the session-scoped PostHog
+        // cache keys (same system as the parent and the other 6 subs),
+        // so all 8 channels partition the parent by construction. The
+        // cohorted CRs still key off server-side click logs — cohort
+        // membership is prospect identity, not pageview attribution.
+        { key: "sales", label: "Sales", definition: "Pro sessions whose entry pageview was a Sales landing (Outreach ref= or Showcase inviteEmail= URL on /businesses/architects).",
+          total: proVisitorsSalesBucketed.total, datapoints: proVisitorsSalesBucketed.series,
           customCR: { label: "to New Pros (ever) from Sales", numerator: salesClickerCohort.num, denominator: salesClickerCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex } },
-        { key: "invites", label: "Invites", definition: "Pros who clicked through to an invite landing. Sourced from project_professionals.landing_visited_at server-side.",
-          source: "supabase" as MetricSource,
-          total: inviteVisitorsTotalDb, datapoints: inviteVisitorsSeriesDb,
+        { key: "invites", label: "Invites", definition: "Pro sessions whose entry pageview was an invite landing (/businesses/professionals with inviteEmail=).",
+          total: proVisitorsInvitesBucketed.total, datapoints: proVisitorsInvitesBucketed.series,
           customCR: { label: "to New Pros (ever) from Invites", numerator: inviteClickerCohort.num, denominator: inviteClickerCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex } },
         { key: "email", label: "Email", definition: "Pro visitors from Arco transactional emails (project-live, team-invite, domain-verification, etc.)",
           total: proVisitorsEmailBucketed.total, datapoints: proVisitorsEmailBucketed.series,
           crNumerator: { total: newProsBySourceTotals.email, datapoints: newProsBySource.email } },
-        // Direct first-touch reduced by Sales+Invites click-throughs.
-        // Most Sales/Invites clickers first-touched as Direct (typed
-        // URL / bookmark before getting our email), so they show up
-        // in BOTH the server-side Sales/Invites count and PostHog's
-        // first-touch Direct count. Subtraction removes the overlap
-        // so the 8 subs sum to parent. Floored at 0 in case the
-        // subtraction over-shoots (rare).
-        { key: "direct", label: "Direct", definition: "Pros whose first touch was Direct (typed URL, bookmark, or no referrer), excluding those who later clicked an Outreach or Invite email (counted under Sales / Invites instead).",
-          total: proVisitorsDirectAdjustedTotal, datapoints: proVisitorsDirectAdjustedSeries,
+        { key: "direct", label: "Direct", definition: "Pro sessions entering with no referrer (typed URL, bookmark, app-to-app). Session-entry channels are mutually exclusive, so no overlap adjustment is needed.",
+          total: proVisitorsDirectBucketed.total, datapoints: proVisitorsDirectBucketed.series,
           crNumerator: { total: newProsDirectAdjustedTotal, datapoints: newProsDirectAdjustedSeries } },
         { key: "google", label: "SEO", definition: "Pro visitors from search engines (Google, Bing, DuckDuckGo, Yahoo, Ecosia, Brave, Qwant, Startpage)",
           total: proVisitorsGoogleBucketed.total, datapoints: proVisitorsGoogleBucketed.series,
@@ -1873,7 +1869,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
         { key: "shares", label: "Shares", definition: "Pro visitors from a tagged share URL (utm_source=share)",
           total: proVisitorsShareBucketed.total, datapoints: proVisitorsShareBucketed.series,
           crNumerator: { total: newProsBySourceTotals.shares, datapoints: newProsBySource.shares } },
-        { key: "other", label: "Other / unattributed", definition: "Parent total minus the attributed channels. Mostly link-scanner and bot traffic that PostHog counts as a unique /businesses visitor but no clean channel claims — plus measurement drift between server-side Sales/Invites click logs and PostHog uniques. A large value here means noise, not a hidden channel.",
+        { key: "other", label: "Other / unattributed", definition: "Parent total minus the 8 attributed channels — since all 9 rows share the session-scoped PostHog definition, this is near-zero by construction except for sessions whose entry channel defies classification (mostly link-scanners and bots executing JS). A large value here means noise, not a hidden channel.",
           total: proVisitorsOtherTotal, datapoints: proVisitorsOtherSeries },
         // Outbound moved to Pros contacted — it's an outreach signal
         // (we reached out), not a visit signal (they landed). See the
