@@ -525,6 +525,30 @@ export function useProjectsQuery({
         }
       }
 
+      // Owning studio per project — mirrors the SSR discover query so
+      // client-fetched pages (Load more, filtered views) show the same
+      // professional line as the SSR cards instead of dropping it.
+      if (projectIds.length > 0) {
+        const { data: ownerRows } = await supabase
+          .from("project_professionals")
+          .select("project_id, company:companies!company_id(name, slug, status)")
+          .in("project_id", projectIds)
+          .eq("is_project_owner", true)
+          .in("status", ["live_on_page", "listed"])
+        const ownerByProject = new Map<string, { name: string; slug: string | null }>()
+        for (const row of (ownerRows ?? []) as any[]) {
+          if (!row.project_id || !row.company || row.company.status === "unclaimed") continue
+          if (!ownerByProject.has(row.project_id)) {
+            ownerByProject.set(row.project_id, { name: row.company.name, slug: row.company.slug ?? null })
+          }
+        }
+        for (const project of (data ?? []) as any[]) {
+          const owner = ownerByProject.get(project.id) ?? null
+          project.professional_name = owner?.name ?? null
+          project.professional_slug = owner?.slug ?? null
+        }
+      }
+
       // Resolve locale-aware title/description from projects.translations.
       // Falls back to the base column when no translation exists.
       const localized = (data ?? []).map((row: ProjectSummaryRow) => ({

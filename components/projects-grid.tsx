@@ -341,11 +341,17 @@ function ProjectCard({
           </div>
         </div>
 
-        {/* Text */}
+        {/* Text — two rows max below the image: title, then type ·
+            location · studio on one line (studio keeps its teal accent). */}
         <h3 className="discover-card-title">{project.title}</h3>
-        {cardSubtitle && <p className="discover-card-sub">{cardSubtitle}</p>}
-        {project.professional_name && (
-          <p className="discover-card-professional">{project.professional_name}</p>
+        {(cardSubtitle || project.professional_name) && (
+          <p className="discover-card-sub truncate">
+            {cardSubtitle}
+            {cardSubtitle && project.professional_name && " · "}
+            {project.professional_name && (
+              <span style={{ color: "var(--primary)" }}>{project.professional_name}</span>
+            )}
+          </p>
         )}
       </Link>
 

@@ -6956,14 +6956,6 @@ body.no-scroll {
   line-height: 1.4;
 }
 
-.discover-card-professional {
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--primary);
-  line-height: 1.4;
-  margin-top: 2px;
-}
-
 /* Professional card – info row with logo */
 .pro-card-info {
   display: flex;
