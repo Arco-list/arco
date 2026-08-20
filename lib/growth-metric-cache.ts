@@ -417,8 +417,9 @@ function buildHogQLQuery(metric: CachedMetricKey, bucketExpr: string, sinceIso: 
       // Unfiltered — matches PostHog Web Analytics' "Unique visitors".
       return uniqueVisitorsQuery(bucketExpr, sinceIso, "1 = 1")
     case "pro_visitors":
-      // Visits to the architect-recruitment landing pages.
-      return uniqueVisitorsQuery(bucketExpr, sinceIso, `properties.$current_url ILIKE '%/businesses%'`)
+      // Persons with a session that touched the /businesses recruitment
+      // pages — session-scoped so internally-navigated visits count.
+      return proSessionChannelQuery(bucketExpr, sinceIso)
     case "apollo_visitors":
       // Pro pages reached via Apollo Outreach link (?ref= present).
       // Path is /businesses/architects since the Outreach CTA points
@@ -450,28 +451,27 @@ function buildHogQLQuery(metric: CachedMetricKey, bucketExpr: string, sinceIso: 
       )
     case "client_visitors_share":
       return firstTouchChannelQuery(bucketExpr, sinceIso, `= 'share'`)
-    // All 8 pro_visitors channel subs use first-touch attribution via
-    // session.$channel_type (re-evaluated at query time against the
-    // current PostHog Custom Channel Type rules). Each person gets
-    // exactly one first-touch channel, so the 8 subs partition the
-    // parent pro_visitors set and sum to it by construction.
-    // /businesses URL filter keeps the scope identical to parent.
+    // All 8 pro_visitors channel subs use SESSION-ENTRY attribution:
+    // sessions touching /businesses are classified by the channel of
+    // the session's first pageview (wherever it landed — a Google
+    // landing on a project page counts as 'google'). Each session has
+    // exactly one entry channel, so the subs partition the parent.
     case "pro_visitors_sales":
-      return firstTouchChannelQuery(bucketExpr, sinceIso, `= 'sales'`, `properties.$current_url ILIKE '%/businesses%'`)
+      return proSessionChannelQuery(bucketExpr, sinceIso, `= 'sales'`)
     case "pro_visitors_invites":
-      return firstTouchChannelQuery(bucketExpr, sinceIso, `= 'invites'`, `properties.$current_url ILIKE '%/businesses%'`)
+      return proSessionChannelQuery(bucketExpr, sinceIso, `= 'invites'`)
     case "pro_visitors_email":
-      return firstTouchChannelQuery(bucketExpr, sinceIso, `= 'email'`, `properties.$current_url ILIKE '%/businesses%'`)
+      return proSessionChannelQuery(bucketExpr, sinceIso, `= 'email'`)
     case "pro_visitors_direct":
-      return firstTouchChannelQuery(bucketExpr, sinceIso, `= 'direct'`, `properties.$current_url ILIKE '%/businesses%'`)
+      return proSessionChannelQuery(bucketExpr, sinceIso, `= 'direct'`)
     case "pro_visitors_google":
-      return firstTouchChannelQuery(bucketExpr, sinceIso, `= 'google'`, `properties.$current_url ILIKE '%/businesses%'`)
+      return proSessionChannelQuery(bucketExpr, sinceIso, `= 'google'`)
     case "pro_visitors_social":
-      return firstTouchChannelQuery(bucketExpr, sinceIso, `= 'social'`, `properties.$current_url ILIKE '%/businesses%'`)
+      return proSessionChannelQuery(bucketExpr, sinceIso, `= 'social'`)
     case "pro_visitors_share":
-      return firstTouchChannelQuery(bucketExpr, sinceIso, `= 'share'`, `properties.$current_url ILIKE '%/businesses%'`)
+      return proSessionChannelQuery(bucketExpr, sinceIso, `= 'share'`)
     case "pro_visitors_referral":
-      return firstTouchChannelQuery(bucketExpr, sinceIso, `= 'referral'`, `properties.$current_url ILIKE '%/businesses%'`)
+      return proSessionChannelQuery(bucketExpr, sinceIso, `= 'referral'`)
 
     // New-pro signups by first-touch channel — mirrors the pro_visitors
     // subs. Numerator for the Pro visitors per-source CR rows
@@ -681,6 +681,53 @@ const ENTRY_CHANNEL_EXPR = `
     'referral'
   )
 `
+
+/** Session-scoped pro-visitor attribution. A session counts when it
+ *  TOUCHES /businesses/* at any point; its channel is classified from
+ *  the session's ENTRY pageview (first pageview of the session,
+ *  wherever it landed). This credits the SEO loop's canonical path —
+ *  Google -> ranked project page -> internal click to /businesses —
+ *  to 'google', which per-pageview referrer attribution structurally
+ *  could not (the /businesses view carries an internal referrer and
+ *  was discarded as self-referral). Self/internal entry referrers are
+ *  normalized to NULL so mid-site session starts read as 'direct'.
+ *  Without a channelPredicate this doubles as the parent total, so the
+ *  channel subs partition the parent by construction. */
+function proSessionChannelQuery(
+  bucketExpr: string,
+  sinceIso: string,
+  channelPredicate?: string,
+): string {
+  // Bucket by the session's entry time, not per-event time.
+  const entryBucketExpr = bucketExpr.replace(/\btimestamp\b/g, "min(timestamp)")
+  const channelFilter = channelPredicate ? `AND (${ENTRY_CHANNEL_EXPR}) ${channelPredicate}` : ""
+  return `
+    SELECT period, count(DISTINCT person_id) AS value
+    FROM (
+      SELECT person_id,
+             properties.$session_id AS session_id,
+             toString(${entryBucketExpr}) AS period,
+             nullIf(multiIf(
+               argMin(properties.$referring_domain, timestamp) ILIKE '%arcolist.com%'
+                 OR argMin(properties.$referring_domain, timestamp) ILIKE '%localhost%'
+                 OR argMin(properties.$referring_domain, timestamp) ILIKE '%vercel.app%'
+                 OR argMin(properties.$referring_domain, timestamp) ILIKE '%vercel.com%', '',
+               argMin(properties.$referring_domain, timestamp)
+             ), '') AS entry_ref,
+             argMin(properties.$current_url, timestamp) AS entry_url,
+             argMin(properties.utm_source, timestamp) AS entry_utm,
+             max(CASE WHEN properties.$current_url ILIKE '%/businesses%' THEN 1 ELSE 0 END) AS hit_pro
+      FROM events
+      WHERE event = '$pageview'
+        AND timestamp >= toDateTime('${sinceIso}')
+        AND ${NOT_INTERNAL_TEAM}
+      GROUP BY person_id, session_id
+    )
+    WHERE hit_pro = 1 ${channelFilter}
+    GROUP BY period
+    ORDER BY period
+  `
+}
 
 function firstTouchChannelQuery(
   bucketExpr: string,
