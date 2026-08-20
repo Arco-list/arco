@@ -177,7 +177,33 @@ export async function GET(request: NextRequest) {
         .trim()
       const jsonStart = text.indexOf("{")
       const jsonEnd = text.lastIndexOf("}")
-      const parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1)) as { nl?: string; en?: string }
+      const candidate = text.slice(jsonStart, jsonEnd + 1)
+      // Two-paragraph bodies occasionally arrive with literal newlines
+      // inside JSON strings — repair control characters before giving up
+      // (same pass as the import extraction).
+      let parsed: { nl?: string; en?: string }
+      try {
+        parsed = JSON.parse(candidate)
+      } catch {
+        let out = ""
+        let inStr = false
+        let esc = false
+        for (const ch of candidate) {
+          if (inStr) {
+            if (esc) { out += ch; esc = false; continue }
+            if (ch === "\\") { out += ch; esc = true; continue }
+            if (ch === '"') { inStr = false; out += ch; continue }
+            if (ch === "\n") { out += "\\n"; continue }
+            if (ch === "\r") { continue }
+            if (ch === "\t") { out += "\\t"; continue }
+            out += ch
+          } else {
+            if (ch === '"') inStr = true
+            out += ch
+          }
+        }
+        parsed = JSON.parse(out)
+      }
       if (!parsed.nl?.trim() || !parsed.en?.trim()) {
         throw new Error("model returned empty body")
       }

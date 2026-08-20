@@ -200,25 +200,28 @@ export function CompanyEditTour({ companyId, enabled, steps, namespace = "compan
     // so the tooltip doesn't land at a viewport edge on tall pages.
     target.scrollIntoView({ behavior: "smooth", block: "center" })
 
-    // First measure now; then a follow-up after the smooth-scroll has
-    // roughly settled.
+    // Track the target continuously with a rAF loop. Scroll events alone
+    // miss silent layout shifts (images/fonts loading push content down
+    // without scrolling), which left the spotlight pinned to stale
+    // coordinates. One getBoundingClientRect per frame is cheap; state
+    // only updates when the rect actually moved.
     setLayout(measure(target, currentStep.placement))
-    const settle = window.setTimeout(() => {
-      const t2 = findTarget(currentStep.anchor)
-      if (t2) setLayout(measure(t2, currentStep.placement))
-    }, 350)
-
-    const onResize = () => {
+    let lastKey = ""
+    let raf = 0
+    const track = () => {
       const el = findTarget(currentStep.anchor)
-      if (el) setLayout(measure(el, currentStep.placement))
+      if (el) {
+        const next = measure(el, currentStep.placement)
+        const key = `${next.spot.top}|${next.spot.left}|${next.spot.width}|${next.spot.height}|${next.card.left}|${next.card.placement}`
+        if (key !== lastKey) {
+          lastKey = key
+          setLayout(next)
+        }
+      }
+      raf = window.requestAnimationFrame(track)
     }
-    window.addEventListener("resize", onResize)
-    window.addEventListener("scroll", onResize, true)
-    return () => {
-      window.clearTimeout(settle)
-      window.removeEventListener("resize", onResize)
-      window.removeEventListener("scroll", onResize, true)
-    }
+    raf = window.requestAnimationFrame(track)
+    return () => window.cancelAnimationFrame(raf)
   }, [currentStep, findTarget])
 
   const onMarkSeenRef = useRef(onMarkSeen)
