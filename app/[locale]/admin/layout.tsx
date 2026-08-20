@@ -4,7 +4,6 @@ import { redirect } from "next/navigation"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
 import { Header, type NavItem } from "@/components/header"
-import { countOutboundDueCompanies } from "./sales/actions"
 import { countUnreadInboundEmails } from "./inbox/actions"
 import { countProjectsToReview } from "./projects/actions"
 
@@ -57,11 +56,9 @@ const ICONS = {
 }
 
 function buildAdminNavLinks({
-  outboundDueCount,
   inboxUnreadCount,
   projectsToReviewCount,
 }: {
-  outboundDueCount: number
   inboxUnreadCount: number
   projectsToReviewCount: number
 }): NavItem[] {
@@ -85,7 +82,10 @@ function buildAdminNavLinks({
       label: "Growth",
       children: [
         { href: "/admin/dashboard", label: "Dashboard", icon: ICONS.growth },
-        { href: "/admin/sales", label: "Sales", icon: ICONS.sales, badge: outboundDueCount },
+        // No badge: the outbound-due count implied action pressure the
+        // call-list workflow no longer uses (mirrors the earlier removal
+        // of the in-page Call list count).
+        { href: "/admin/sales", label: "Sales", icon: ICONS.sales },
         { href: "/admin/inbox", label: "Inbox", icon: ICONS.inbox, badge: inboxUnreadCount },
         { href: "/admin/emails", label: "Emails", icon: ICONS.emails },
         { href: "/admin/model", label: "Model", icon: ICONS.growthModel },
@@ -132,8 +132,7 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
     return redirect(`/dashboard?unauthorized=admin`)
   }
 
-  const [outboundDueCount, inboxUnreadCount, projectsToReviewCount] = await Promise.all([
-    countOutboundDueCompanies(),
+  const [inboxUnreadCount, projectsToReviewCount] = await Promise.all([
     countUnreadInboundEmails(),
     countProjectsToReview(),
   ])
@@ -152,7 +151,7 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
     // (tables, funnels) want the whole viewport.
     <div className="min-h-screen overflow-x-clip admin-full-bleed">
       <Header
-        navLinks={buildAdminNavLinks({ outboundDueCount, inboxUnreadCount, projectsToReviewCount })}
+        navLinks={buildAdminNavLinks({ inboxUnreadCount, projectsToReviewCount })}
       />
       <main className="pt-[60px] overflow-x-clip">
         {children}

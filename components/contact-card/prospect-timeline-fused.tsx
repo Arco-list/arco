@@ -245,7 +245,7 @@ function ActivitySection({
           <button
             type="button"
             onClick={onLogOutbound}
-            className="shrink-0 rounded-full border border-[#016D75] text-[#016D75] text-[10px] font-medium px-2 py-0.5 leading-4 cursor-pointer hover:bg-[#f0f7f6] transition-colors"
+            className="shrink-0 rounded-[12px] border border-[#016D75] text-[#016D75] text-[10px] font-medium px-2 py-[2px] leading-normal cursor-pointer hover:bg-[#f0f7f6] transition-colors"
             title="Log outbound"
           >
             Log
@@ -883,7 +883,7 @@ function SequenceActionLink({
       type="button"
       onClick={handleClick}
       disabled={pending}
-      className="shrink-0 rounded-full border border-[#016D75] text-[#016D75] text-[10px] font-medium px-2 py-0.5 leading-4 cursor-pointer hover:bg-[#f0f7f6] transition-colors disabled:opacity-50 disabled:cursor-wait"
+      className="shrink-0 rounded-[12px] border border-[#016D75] text-[#016D75] text-[10px] font-medium px-2 py-[2px] leading-normal cursor-pointer hover:bg-[#f0f7f6] transition-colors disabled:opacity-50 disabled:cursor-wait"
     >
       {pending ? "…" : action.label}
     </button>

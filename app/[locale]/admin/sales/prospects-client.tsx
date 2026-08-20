@@ -39,7 +39,7 @@ import { useContactParam } from "@/hooks/use-contact-param"
 // call-list "Skip" button and the panel's Activity "Log" (kept in sync
 // manually there). Deliberately quiet: outline + primary text.
 const ACTION_PILL_CLASS =
-  "shrink-0 rounded-full border border-[#016D75] text-[#016D75] text-[10px] font-medium px-2 py-0.5 leading-4 cursor-pointer hover:bg-[#f0f7f6] transition-colors"
+  "shrink-0 rounded-[12px] border border-[#016D75] text-[#016D75] text-[10px] font-medium px-2 py-[2px] leading-normal cursor-pointer hover:bg-[#f0f7f6] transition-colors"
 
 // -- Status config -----------------------------------------------------------
 
@@ -1865,6 +1865,12 @@ function CompanyRowView({
           {row.sources.map((s) => (
             <span key={s} className="status-pill shrink-0">{sourceLabel(s)}</span>
           ))}
+          {/* Showcase membership comes from the company's lifecycle, not
+              a contact source — append unless an 'arco' source already
+              rendered the same label. */}
+          {row.claimedCompany?.status === "prospected" && !row.sources.includes("arco") && (
+            <span className="status-pill shrink-0">Showcase</span>
+          )}
           {row.lastOutboundAt && (
             <span className="status-pill shrink-0">Outbound</span>
           )}
@@ -2022,14 +2028,21 @@ function ShowcasePill({ companyId, slug }: { companyId: string; slug: string | n
         e.stopPropagation()
         if (state === "busy") return
         setState("busy")
+        // Open the tab synchronously, inside the click gesture — calling
+        // window.open after the await gets popup-blocked (the gesture
+        // context is gone by then), so the edit page never appeared. No
+        // "noopener" either: it makes window.open return null, and we
+        // need the handle to point the tab at the edit page on success.
+        const tab = window.open("", "_blank")
         const result = await promoteCompanyToShowcase(companyId)
+        const editUrl = `/dashboard/company?company_id=${companyId}`
         if (result.success) {
           setState("done")
           toast.success("Showcase actief — bedrijfspagina wordt geopend")
-          // Straight into building the profile: open the company edit
-          // page (admin override via company_id) in a new tab.
-          window.open(`/dashboard/company?company_id=${companyId}`, "_blank", "noopener")
+          if (tab) tab.location.href = editUrl
+          else window.location.assign(editUrl)
         } else {
+          tab?.close()
           setState("idle")
           toast.error(result.error ?? "Promoveren mislukt")
         }

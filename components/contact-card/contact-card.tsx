@@ -506,7 +506,7 @@ function DetailsSection({
               <a
                 href={`tel:${phoneLocal.replace(/[^+\d]/g, "")}`}
                 onClick={(e) => e.stopPropagation()}
-                className="shrink-0 rounded-full border border-[#016D75] text-[#016D75] text-[10px] font-medium px-2 py-0.5 leading-4 cursor-pointer hover:bg-[#f0f7f6] transition-colors no-underline"
+                className="shrink-0 rounded-[12px] border border-[#016D75] text-[#016D75] text-[10px] font-medium px-2 py-[2px] leading-normal cursor-pointer hover:bg-[#f0f7f6] transition-colors no-underline"
               >
                 Call
               </a>
@@ -845,7 +845,7 @@ function NoProspectTimeline({ data }: { data: ContactByEmailData }) {
             <button
               type="button"
               onClick={() => setLogOpen(true)}
-              className="shrink-0 rounded-full border border-[#016D75] text-[#016D75] text-[10px] font-medium px-2 py-0.5 leading-4 cursor-pointer hover:bg-[#f0f7f6] transition-colors"
+              className="shrink-0 rounded-[12px] border border-[#016D75] text-[#016D75] text-[10px] font-medium px-2 py-[2px] leading-normal cursor-pointer hover:bg-[#f0f7f6] transition-colors"
               title="Log outbound"
             >
               Log
