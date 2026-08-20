@@ -213,6 +213,66 @@ async function fetchPagePerformance28d(token: string): Promise<Map<string, {
   return map
 }
 
+/** True DAILY impressions/clicks per scope, path-filtered. GSC serves up
+ * to ~16 months of daily rows in one call, so every run re-upserts the
+ * full available history — self-healing (GSC finalizes data ~3 days
+ * late) and the initial run doubles as the backfill. Feeds the
+ * dashboard's weekly/monthly buckets with real per-period sums; the
+ * 28d rolling snapshots remain for point-in-time reads. */
+async function syncDailyMetrics(
+  token: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+): Promise<{ scopes: number; days: number }> {
+  const today = new Date()
+  const startDate = new Date(today)
+  startDate.setDate(today.getDate() - 480)
+  const fmt = (d: Date) => d.toISOString().slice(0, 10)
+
+  const scopes: Array<{ scope: string; pathContains: string }> = [
+    { scope: "projects", pathContains: "/projects/" },
+    { scope: "companies", pathContains: "/professionals/" },
+  ]
+  let totalDays = 0
+  for (const { scope, pathContains } of scopes) {
+    const res = await fetch(
+      `https://searchconsole.googleapis.com/webmasters/v3/sites/${encodeURIComponent(GSC_PROPERTY)}/searchAnalytics/query`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startDate: fmt(startDate),
+          endDate: fmt(today),
+          dimensions: ["date"],
+          dimensionFilterGroups: [{ filters: [{ dimension: "page", operator: "contains", expression: pathContains }] }],
+          rowLimit: 1000,
+        }),
+      },
+    )
+    if (!res.ok) {
+      logger.warn("[gsc-sync] daily metrics query failed", { scope, status: res.status })
+      continue
+    }
+    const json = (await res.json()) as { rows?: Array<{ keys?: string[]; impressions: number; clicks: number }> }
+    const rows = (json.rows ?? [])
+      .filter((r) => r.keys?.[0])
+      .map((r) => ({
+        metric_date: r.keys![0],
+        scope,
+        impressions: Math.round(r.impressions ?? 0),
+        clicks: Math.round(r.clicks ?? 0),
+      }))
+    if (rows.length > 0) {
+      const { error } = await supabase
+        .from("seo_daily_metrics")
+        .upsert(rows, { onConflict: "metric_date,scope" })
+      if (error) logger.warn("[gsc-sync] daily metrics upsert failed", { scope, message: error.message })
+      else totalDays += rows.length
+    }
+  }
+  return { scopes: scopes.length, days: totalDays }
+}
+
 // ─── Sync ─────────────────────────────────────────────────────────────────────
 
 type RowToSync = {
@@ -314,6 +374,14 @@ export async function syncGscIndexation(): Promise<GscSyncResult> {
         logger.error("[gsc-sync] row failed", { url: target.url, error: lastError })
       }
     }
+  }
+
+  // Daily impressions/clicks series — full-history upsert, best-effort.
+  try {
+    const daily = await syncDailyMetrics(token, supabase)
+    logger.info("[gsc-sync] daily metrics synced", daily)
+  } catch (err) {
+    logger.warn("[gsc-sync] daily metrics sync failed", { message: err instanceof Error ? err.message : String(err) })
   }
 
   logger.info("[gsc-sync] done", { projectsSynced, companiesSynced, errorCount })

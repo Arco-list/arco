@@ -672,44 +672,43 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const aggregateCtrPct = totalSeoImpressions > 0
     ? Math.round((totalSeoClicks / totalSeoImpressions) * 100)
     : 0
+  // True per-bucket sums from seo_daily_metrics (daily GSC rows,
+  // path-filtered per scope). Replaces the earlier rolling-28d snapshot
+  // sampling, which rendered a 4x-wide overlapping window as if it were
+  // the bucket's own traffic. The last (partial) bucket sums whatever
+  // days GSC has finalized so far.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: seoSnapshotRows } = await (supabase as any)
-    .from("seo_metric_snapshots")
-    .select("snapshot_date, scope, impressions_28d, clicks_28d")
-    .order("snapshot_date")
+  const { data: seoDailyRows } = await (supabase as any)
+    .from("seo_daily_metrics")
+    .select("metric_date, scope, impressions, clicks")
+    .order("metric_date")
   const seoSnapshotSeries = (
     scope: "projects" | "companies",
-    liveImpressions: number,
-    liveClicks: number,
-    liveCtr: number,
+    _liveImpressions: number,
+    _liveClicks: number,
+    _liveCtr: number,
   ): { impressions: number[]; clicks: number[]; ctr: number[] } => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rows = ((seoSnapshotRows ?? []) as any[])
+    const rows = ((seoDailyRows ?? []) as any[])
       .filter((r) => r.scope === scope)
       .map((r) => ({
-        // End-of-day so a snapshot taken on the bucket's last day counts.
-        date: new Date(`${r.snapshot_date}T23:59:59Z`),
-        imp: Number(r.impressions_28d) || 0,
-        clicks: Number(r.clicks_28d) || 0,
+        date: new Date(`${r.metric_date}T12:00:00Z`),
+        imp: Number(r.impressions) || 0,
+        clicks: Number(r.clicks) || 0,
       }))
-    const lastIdx = buckets.ends.length - 1
     const impressions: number[] = []
     const clicks: number[] = []
     const ctr: number[] = []
-    buckets.ends.forEach((end, i) => {
-      if (i === lastIdx) {
-        impressions.push(liveImpressions)
-        clicks.push(liveClicks)
-        ctr.push(liveCtr)
-        return
-      }
-      let latest: { imp: number; clicks: number } | null = null
+    buckets.starts.forEach((start, i) => {
+      const end = buckets.ends[i]
+      let imp = 0
+      let clk = 0
       for (const r of rows) {
-        if (r.date <= end) latest = r
-        else break
+        if (r.date >= start && r.date < end) {
+          imp += r.imp
+          clk += r.clicks
+        }
       }
-      const imp = latest?.imp ?? 0
-      const clk = latest?.clicks ?? 0
       impressions.push(imp)
       clicks.push(clk)
       ctr.push(imp > 0 ? Math.round((clk / imp) * 100) : 0)
