@@ -100,7 +100,7 @@ export async function HubPage({ hub, allHubs, initialProjects, locale }: {
   // Full hub directory — same exhaustive crawl surface as the base
   // discover page, so every hub links laterally to every other. The way
   // back up is the breadcrumb root; no separate all-projects link.
-  const hubFooter = <PopularSearches hubs={popularHubs} locale={locale} full />
+  const hubFooter = <PopularSearches hubs={popularHubs} locale={locale} />
 
   return (
     <div className="min-h-screen bg-white">

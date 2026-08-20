@@ -97,7 +97,7 @@ export default async function ProjectsPage({
         <FilterProvider hubs={hubDefs}>
           <DiscoverClient
             initialProjects={projects}
-            hubFooter={<PopularSearches hubs={popularHubs} locale={locale} full />}
+            hubFooter={<PopularSearches hubs={popularHubs} locale={locale} />}
           />
         </FilterProvider>
       </FilterErrorBoundary>
