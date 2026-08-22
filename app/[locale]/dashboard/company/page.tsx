@@ -27,11 +27,11 @@ export default async function CompanySettingsPage({
     error: userError,
   } = await supabase.auth.getUser()
 
-  if (userError) {
-    throw new Error(userError.message)
-  }
-
-  if (!user) {
+  // Missing/expired session surfaces as a getUser error ("Auth session
+  // missing") — treat it as logged-out and redirect, instead of throwing
+  // a 500 that renders as a blank page (bitten via the Sales "Showcase"
+  // promote flow, which opens this page in a fresh tab).
+  if (userError || !user) {
     redirect("/login?redirectTo=/dashboard/company")
   }
 

@@ -952,7 +952,7 @@ export async function syncCompanyListedStatus(companyId: string) {
 
   const { data: company } = await supabase
     .from("companies")
-    .select("status, manually_unlisted")
+    .select("status, manually_unlisted, owner_id")
     .eq("id", companyId)
     .maybeSingle()
 
@@ -969,22 +969,31 @@ export async function syncCompanyListedStatus(companyId: string) {
   // Auto-list from any pre-live state — draft, unlisted, prospected,
   // invited, unclaimed, added. Excluded: listed (already there),
   // deactivated (admin intent, do not override).
+  //
+  // "Listed" means CLAIMED: a company without owner_id can only ever
+  // reach "prospected" (Showcase) here — admin-added catalogue companies
+  // whose projects go live are showcases, not listed members. The DB
+  // mirror (sync_company_listed_status, migration 208 revision) bails on
+  // ownerless companies entirely; this helper promotes them to showcase.
+  const hasOwner = Boolean((company as { owner_id?: string | null }).owner_id)
+  const targetStatus = hasOwner ? "listed" : "prospected"
   const AUTO_LIST_ELIGIBLE = new Set(["created", "unlisted", "prospected", "invited", "unclaimed", "added"])
   if (
     hasActiveProjects
     && AUTO_LIST_ELIGIBLE.has(company.status as string)
+    && company.status !== targetStatus
     && !company.manually_unlisted
   ) {
     // Flip setup_completed when auto-listing from draft — this is the
     // moment the pro effectively "completed" onboarding without going
     // through the manual chain, and leaving it false keeps the popup
     // + tour firing on subsequent loads.
-    const update: Record<string, unknown> = { status: "listed" }
-    if (company.status === "created") update.setup_completed = true
+    const update: Record<string, unknown> = { status: targetStatus }
+    if (company.status === "created" && hasOwner) update.setup_completed = true
     await supabase.from("companies").update(update).eq("id", companyId)
-    logger.info("admin-projects", "Company auto-listed (has active projects)", { companyId, from: company.status })
+    logger.info("admin-projects", "Company status synced (has active projects)", { companyId, from: company.status, to: targetStatus })
     statusChanged = true
-  } else if (!hasActiveProjects && company.status === "listed") {
+  } else if (!hasActiveProjects && company.status === "listed" && hasOwner) {
     // Auto-unlist: leave manually_unlisted alone. It's still false
     // (the previous listed was auto or explicitly user-chosen), so a
     // future active credit will auto-relist.
