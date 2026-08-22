@@ -23,11 +23,15 @@ export function ProfessionalsGrid({
   professionals = [],
   initialTotal,
   hubMode = false,
+  preFooter,
 }: {
   professionals?: ProfessionalCard[]
   initialTotal?: number
   /** Hub pages: render the page title as the crawlable h1. */
   hubMode?: boolean
+  /** Rendered between the grid and the Footer (this component owns the
+   *  Footer) — service hubs pass their editorial prose + FAQ here. */
+  preFooter?: React.ReactNode
 }) {
   const [showMap, setShowMap] = useState(false)
   const t = useTranslations("professionals")
@@ -376,6 +380,8 @@ export function ProfessionalsGrid({
           {t("show_on_map")}
         </button>
       )}
+
+      {preFooter}
 
       <Footer />
     </>

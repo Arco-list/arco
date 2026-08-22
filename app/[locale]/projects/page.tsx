@@ -9,6 +9,8 @@ import { fetchDiscoverProjects } from "@/lib/projects/queries"
 import { getHubs } from "@/lib/project-hubs"
 import { PopularSearches, type PopularHubs } from "@/components/popular-searches"
 import { hubToDef } from "@/components/project/hub-page"
+import { ProjectsDiscoverOutro } from "@/components/projects-discover-outro"
+import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
 import { TrackPageView } from "@/components/track-view"
 import { getSiteUrl } from "@/lib/utils"
@@ -87,6 +89,16 @@ export default async function ProjectsPage({
       error as Error,
     )
   }
+  // Live count for the outro platform block.
+  let publishedProjectCount = 0
+  try {
+    const supabase = await createServerSupabaseClient()
+    const { count } = await supabase
+      .from("projects")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "published")
+    publishedProjectCount = count ?? 0
+  } catch { /* outro copy degrades to a wordy fallback */ }
 
   return (
     <div className="min-h-screen bg-white">
@@ -97,7 +109,12 @@ export default async function ProjectsPage({
         <FilterProvider hubs={hubDefs}>
           <DiscoverClient
             initialProjects={projects}
-            hubFooter={<PopularSearches hubs={popularHubs} locale={locale} />}
+            hubFooter={
+              <>
+                <PopularSearches hubs={popularHubs} locale={locale} />
+                <ProjectsDiscoverOutro locale={locale} projectCount={publishedProjectCount} />
+              </>
+            }
           />
         </FilterProvider>
       </FilterErrorBoundary>

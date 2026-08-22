@@ -73,36 +73,36 @@ export const HUB_COPY: Record<string, Record<"nl" | "en", { title: string; descr
   renovatie: {
     nl: {
       title: "Renovatieprojecten in Nederland",
-      description: "Bekijk gerealiseerde renovatieprojecten van Nederlandse architecten en interieurontwerpers — met de studio's die ze maakten.",
+      description: "Bekijk gerealiseerde renovatieprojecten van Nederlandse architecten en interieurontwerpers op Arco — van monumentale villa's tot complete transformaties — met de studio's erachter en hun contactgegevens.",
       intro: "Gerealiseerde renovaties van Nederlandse studio's — van monumentale villa's tot complete transformaties.",
     },
     en: {
       title: "Renovation projects in the Netherlands",
-      description: "Browse completed renovation projects by Dutch architects and interior designers — with the studios that made them.",
+      description: "Browse completed renovation projects by Dutch architects and interior designers on Arco — from listed villas to full transformations — with the studios behind them and how to reach them.",
       intro: "Completed renovations by Dutch studios — from listed villas to full transformations.",
     },
   },
   nieuwbouw: {
     nl: {
       title: "Nieuwbouwprojecten in Nederland",
-      description: "Bekijk gerealiseerde nieuwbouwprojecten van Nederlandse architecten — met de studio's die ze ontwierpen.",
+      description: "Bekijk gerealiseerde nieuwbouwprojecten van Nederlandse architecten op Arco — villa's, woningen en bijzondere opdrachten — met de studio's die ze ontwierpen en hun contactgegevens.",
       intro: "Nieuwbouw van Nederlandse architecten — villa's, woningen en bijzondere opdrachten.",
     },
     en: {
       title: "New-build projects in the Netherlands",
-      description: "Browse completed new-build projects by Dutch architects — with the studios that designed them.",
+      description: "Browse completed new-build projects by Dutch architects on Arco — villas, homes and one-off commissions — with the studios that designed them and how to reach them.",
       intro: "New builds by Dutch architects — villas, homes and one-off commissions.",
     },
   },
   interieur: {
     nl: {
       title: "Interieurprojecten in Nederland",
-      description: "Bekijk gerealiseerde interieurprojecten van Nederlandse ontwerpers — met de studio's die ze maakten.",
+      description: "Bekijk gerealiseerde interieurprojecten van Nederlandse ontwerpers op Arco — woningen, werkplekken en alles daartussen — met de studio's erachter en hun contactgegevens.",
       intro: "Interieurontwerp van Nederlandse studio's — woningen, werkplekken en alles daartussen.",
     },
     en: {
       title: "Interior design projects in the Netherlands",
-      description: "Browse completed interior design projects by Dutch designers — with the studios that made them.",
+      description: "Browse completed interior design projects by Dutch designers on Arco — homes, workplaces and everything in between — with the studios behind them and how to reach them.",
       intro: "Interior design by Dutch studios — homes, workplaces and everything in between.",
     },
   },
@@ -132,8 +132,8 @@ export function hubCopy(hub: Hub, locale: string): HubCopy {
         ? `Architectuur- en interieurprojecten in ${name}`
         : `Architecture & interior projects in ${name}`,
       description: nl
-        ? `Bekijk gerealiseerde architectuur- en interieurprojecten in ${name} — met de studio's die ze maakten.`
-        : `Browse completed architecture and interior projects in ${name} — with the studios that made them.`,
+        ? `Bekijk gerealiseerde architectuur- en interieurprojecten in ${name} op Arco — van villa's tot interieurs — met de studio's die ze maakten en hun contactgegevens.`
+        : `Browse completed architecture and interior projects in ${name} on Arco — from villas to interiors — with the studios that made them and how to reach them.`,
       intro: nl
         ? `Gerealiseerde projecten in ${name}, van de architecten en ontwerpers die ze maakten.`
         : `Completed projects in ${name}, by the architects and designers who made them.`,
@@ -154,8 +154,8 @@ export function hubCopy(hub: Hub, locale: string): HubCopy {
         ? `Architectuur- en interieurprojecten in ${label}`
         : `Architecture & interior projects in ${label}`,
       description: nl
-        ? `Bekijk gerealiseerde architectuur- en interieurprojecten in ${label} — met de studio's die ze maakten.`
-        : `Browse completed architecture and interior projects in ${label} — with the studios that made them.`,
+        ? `Bekijk gerealiseerde architectuur- en interieurprojecten in ${label} op Arco — van villa's tot interieurs — met de studio's die ze maakten en hun contactgegevens.`
+        : `Browse completed architecture and interior projects in ${label} on Arco — from villas to interiors — with the studios that made them and how to reach them.`,
       intro: nl
         ? `Gerealiseerde projecten in ${label}, van de architecten en ontwerpers die ze maakten.`
         : `Completed projects in ${label}, by the architects and designers who made them.`,
@@ -172,8 +172,8 @@ export function hubCopy(hub: Hub, locale: string): HubCopy {
       h1: title,
       metaTitle: title,
       description: nl
-        ? `Bekijk gerealiseerde ${noun.toLowerCase()} in ${where} — met de studio's die ze maakten.`
-        : `Browse completed ${noun.toLowerCase()} in ${where} — with the studios that made them.`,
+        ? `Bekijk gerealiseerde ${noun.toLowerCase()} in ${where} op Arco — met foto's per ruimte, de studio's die ze maakten en hun contactgegevens.`
+        : `Browse completed ${noun.toLowerCase()} in ${where} on Arco — with photos per room, the studios that made them and how to get in touch.`,
       intro: nl
         ? `${noun} in ${where}, van de studio's die ze maakten.`
         : `${noun} in ${where}, by the studios that made them.`,
@@ -193,8 +193,8 @@ export function hubCopy(hub: Hub, locale: string): HubCopy {
       ? `${label} in ${where} – architectuurprojecten`
       : `${label} in ${where} – architecture projects`,
     description: nl
-      ? `Bekijk gerealiseerde ${label.toLowerCase()} in ${where} — met de architecten en studio's die ze maakten.`
-      : `Browse completed ${label.toLowerCase()} in ${where} — with the architects and studios that made them.`,
+      ? `Bekijk gerealiseerde ${label.toLowerCase()} in ${where} op Arco — met foto's per ruimte, de architecten en studio's die ze ontwierpen en hun contactgegevens.`
+      : `Browse completed ${label.toLowerCase()} in ${where} on Arco — with photos per room, the architects and studios that designed them and how to reach them.`,
     intro: nl
       ? `${label} in ${where}, van de architecten en ontwerpers die ze maakten.`
       : `${label} in ${where}, by the architects and designers who made them.`,
@@ -206,13 +206,13 @@ export function cityHubCopy(city: string, locale: string): { title: string; desc
   if (locale === "nl") {
     return {
       title: `Architectuur in ${city}`,
-      description: `Bekijk gerealiseerde architectuur- en interieurprojecten in ${city} — met de studio's die ze maakten.`,
+      description: `Bekijk gerealiseerde architectuur- en interieurprojecten in ${city} op Arco — van villa's tot interieurs — met de studio's die ze maakten en hun contactgegevens.`,
       intro: `Gerealiseerde projecten in ${city}, van de architecten en ontwerpers die ze maakten.`,
     }
   }
   return {
     title: `Architecture in ${city}`,
-    description: `Browse completed architecture and interior projects in ${city} — with the studios that made them.`,
+    description: `Browse completed architecture and interior projects in ${city} on Arco — from villas to interiors — with the studios that made them and how to reach them.`,
     intro: `Completed projects in ${city}, by the architects and designers who made them.`,
   }
 }

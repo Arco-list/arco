@@ -3,6 +3,10 @@ import { FilterErrorBoundary } from "@/components/filter-error-boundary"
 import { ProfessionalFilterProvider, type ProHubDef } from "@/contexts/professional-filter-context"
 import { ProfessionalsFilterBar } from "@/components/professionals-filter-bar"
 import { ProfessionalsGrid } from "@/components/professionals-grid"
+import { ServiceHubProse } from "@/components/professional/service-hub-prose"
+import { ProfessionalPopularSearches } from "@/components/professional-popular-searches"
+import { DiscoverBottomSwitcher } from "@/components/professional/discover-bottom-switcher"
+import { SERVICE_HUB_PROSE } from "@/lib/professional-hubs"
 import { TrackPageView } from "@/components/track-view"
 import { getSiteUrl } from "@/lib/utils"
 import { getTranslations } from "next-intl/server"
@@ -90,7 +94,39 @@ export async function ProfessionalHubPage({ hub, allHubs, locale }: {
         <ProfessionalFilterProvider hubs={allHubs.map(proHubToDef)} hubSlug={hub.slug}>
           <ProfessionalsFilterBar />
           <main>
-            <ProfessionalsGrid professionals={professionals} initialTotal={professionals.length} hubMode />
+            {/* Editorial prose + FAQ for the national service hubs rides
+                the grid's preFooter slot — the grid owns the Footer, so
+                rendering after it would land below the footer. */}
+            <ProfessionalsGrid
+              professionals={professionals}
+              initialTotal={professionals.length}
+              hubMode
+              preFooter={
+                <>
+                  <ProfessionalPopularSearches hubs={allHubs} locale={locale} />
+                  {/* Same switcher as the root: the prose follows the live
+                      filter state instead of freezing on the hub's own. */}
+                  <DiscoverBottomSwitcher
+                    initialMatch={hub.slug}
+                    proseBySlug={Object.fromEntries(
+                      Object.keys(SERVICE_HUB_PROSE).map((slug) => [
+                        slug,
+                        <ServiceHubProse
+                          key={slug}
+                          hubSlug={slug}
+                          locale={locale}
+                          companyCount={
+                            slug === hub.slug
+                              ? professionals.length
+                              : allHubs.find((h) => h.kind === "service" && h.serviceSlug === slug)?.count ?? 0
+                          }
+                        />,
+                      ]),
+                    )}
+                  />
+                </>
+              }
+            />
           </main>
         </ProfessionalFilterProvider>
       </FilterErrorBoundary>
