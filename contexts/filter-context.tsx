@@ -513,10 +513,13 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
 
     if (initializedRef.current && lastSyncedQueryRef.current === queryString && !pendingResolution) return
 
+    // Re-inject the hub's preset only while the LIVE URL is still on the
+    // hub path — usePathname is stale after shallow replaceState.
+    const hubLive = activeHub && window.location.pathname.endsWith(`/${activeHub.slug}`) ? activeHub : null
     let typeValues = parseCommaSeparatedParam(searchParams.get("type"))
-    if ((activeHub?.kind === "type" || activeHub?.kind === "type-city" || activeHub?.kind === "type-province") && activeHub.typeValue && !typeValues.includes(activeHub.typeValue)) {
+    if ((hubLive?.kind === "type" || hubLive?.kind === "type-city" || hubLive?.kind === "type-province") && hubLive.typeValue && !typeValues.includes(hubLive.typeValue)) {
       // Hub path carries the project-type category filter as an implicit param.
-      typeValues = [activeHub.typeValue, ...typeValues]
+      typeValues = [hubLive.typeValue, ...typeValues]
     }
     const resolvedTypes = resolveTokensToIds(typeValues, categoryTokenMaps)
     if (!areStringArraysEqual(selectedTypes, resolvedTypes)) setSelectedTypes(resolvedTypes)
@@ -526,18 +529,18 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
     if (!areStringArraysEqual(selectedStyles, resolvedStyles)) setSelectedStyles(resolvedStyles)
 
     let locationValues = parseCommaSeparatedParam(searchParams.get("location"))
-    if ((activeHub?.kind === "city" || activeHub?.kind === "type-city" || activeHub?.kind === "scope-city") && activeHub.cityName && !locationValues.includes(activeHub.cityName)) {
+    if ((hubLive?.kind === "city" || hubLive?.kind === "type-city" || hubLive?.kind === "scope-city") && hubLive.cityName && !locationValues.includes(hubLive.cityName)) {
       // The hub path carries this filter — treat it as an implicit URL param
       // so the empty query string doesn't clear it while on the hub page.
-      locationValues = [activeHub.cityName, ...locationValues]
+      locationValues = [hubLive.cityName, ...locationValues]
     }
 
     if (!areStringArraysEqual(selectedLocations, locationValues)) setSelectedLocations(locationValues)
 
     let regionValues = parseCommaSeparatedParam(searchParams.get("region"))
       .map((slug) => REGION_BY_SLUG.get(slug) ?? slug)
-    if ((activeHub?.kind === "province" || activeHub?.kind === "type-province" || activeHub?.kind === "scope-province") && activeHub.region && !regionValues.includes(activeHub.region)) {
-      regionValues = [activeHub.region, ...regionValues]
+    if ((hubLive?.kind === "province" || hubLive?.kind === "type-province" || hubLive?.kind === "scope-province") && hubLive.region && !regionValues.includes(hubLive.region)) {
+      regionValues = [hubLive.region, ...regionValues]
     }
     if (!areStringArraysEqual(selectedRegions, regionValues)) setSelectedRegions(regionValues)
 
@@ -550,8 +553,8 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
 
     // Scope filter — slugs round-trip through the URL as-is (no token map).
     let scopeValues = parseCommaSeparatedParam(searchParams.get("scope"))
-    if ((activeHub?.kind === "scope" || activeHub?.kind === "scope-city" || activeHub?.kind === "scope-province") && activeHub.scope && !scopeValues.includes(activeHub.scope)) {
-      scopeValues = [activeHub.scope, ...scopeValues]
+    if ((hubLive?.kind === "scope" || hubLive?.kind === "scope-city" || hubLive?.kind === "scope-province") && hubLive.scope && !scopeValues.includes(hubLive.scope)) {
+      scopeValues = [hubLive.scope, ...scopeValues]
     }
     if (!areStringArraysEqual(selectedScopes, scopeValues)) setSelectedScopes(scopeValues)
 
@@ -633,12 +636,16 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
     // filter states therefore never mint crawlable URLs; gated hubs do.
     // Longest matching slug wins — /projects/amsterdam/villa must strip
     // the nested combo slug, not the shorter national "villa" type hub.
+    // usePathname/useSearchParams do NOT observe our own shallow
+    // history.replaceState calls — read the LIVE location, or the guards
+    // below leave the URL stuck on a hub path after deselecting.
+    const livePath = window.location.pathname
     const pathHub = hubs
-      .filter((h) => pathname.endsWith(`/${h.slug}`))
+      .filter((h) => livePath.endsWith(`/${h.slug}`))
       .sort((a, b) => b.slug.length - a.slug.length)[0]
     const basePath = pathHub
-      ? pathname.slice(0, pathname.length - pathHub.slug.length - 1)
-      : pathname
+      ? livePath.slice(0, livePath.length - pathHub.slug.length - 1)
+      : livePath
     const onlyFilter = (
       locations: number, scopes: number, types: number, regions = 0,
     ) =>
@@ -697,10 +704,9 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
     const nextQuery = matchedHub ? "" : params.toString()
     const targetPath = matchedHub ? `${basePath}/${matchedHub.slug}` : basePath
     const nextUrl = nextQuery.length > 0 ? `${targetPath}?${nextQuery}` : targetPath
-    const currentQuery = searchParams.toString()
-    const currentUrl = currentQuery.length > 0 ? `${pathname}?${currentQuery}` : pathname
+    const currentQuery = window.location.search.replace(/^\?/, "")
+    const currentUrl = currentQuery.length > 0 ? `${livePath}?${currentQuery}` : livePath
     if (nextUrl === currentUrl) { lastSyncedQueryRef.current = nextQuery; return }
-    if (nextQuery === lastSyncedQueryRef.current && targetPath === pathname) return
 
     shallowReplace(nextUrl, nextQuery)
   }, [

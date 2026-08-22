@@ -422,12 +422,18 @@ function ProfessionalFilterProviderInner({ children, hubs = [], hubSlug }: { chi
     }
 
     // ── Hub URL mapping — exactly one preset -> /professionals/{slug}.
+    // NB: usePathname/useSearchParams do NOT observe our own shallow
+    // history.replaceState calls — after a hub swap they keep returning
+    // the server-navigated path, which made the guards below conclude
+    // "already there" and left the URL stuck on the hub after a filter
+    // was deselected. Read the LIVE location instead.
+    const livePath = window.location.pathname
     const pathHub = hubs
-      .filter((h) => pathname.endsWith(`/${h.slug}`))
+      .filter((h) => livePath.endsWith(`/${h.slug}`))
       .sort((a, b) => b.slug.length - a.slug.length)[0]
     const basePath = pathHub
-      ? pathname.slice(0, pathname.length - pathHub.slug.length - 1)
-      : pathname
+      ? livePath.slice(0, livePath.length - pathHub.slug.length - 1)
+      : livePath
     const only = (cities: number, regions: number, services: number, cats = 0) =>
       selectedCities.length === cities &&
       selectedRegions.length === regions &&
@@ -476,11 +482,8 @@ function ProfessionalFilterProviderInner({ children, hubs = [], hubSlug }: { chi
 
     const nextQuery = matchedHub ? "" : params.toString()
     const targetPath = matchedHub ? `${basePath}/${matchedHub.slug}` : basePath
-    const currentQuery = searchParams.toString()
-    if (nextQuery === lastSyncedQueryRef.current && targetPath === pathname) {
-      return
-    }
-    if (targetPath === pathname && nextQuery === currentQuery) {
+    const currentQuery = window.location.search.replace(/^\?/, "")
+    if (targetPath === livePath && nextQuery === currentQuery) {
       lastSyncedQueryRef.current = nextQuery
       return
     }
@@ -510,22 +513,25 @@ function ProfessionalFilterProviderInner({ children, hubs = [], hubSlug }: { chi
       needsResolution(selectedCategories, categoryTokenMaps) ||
       needsResolution(selectedServices, serviceTokenMaps)
     if (!initializedRef.current || currentQuery !== lastParsedQueryRef.current || pendingResolution) {
+      // Re-inject the hub's preset only while the LIVE URL is still on
+      // the hub path — usePathname is stale after shallow replaceState.
+      const hubLive = activeHub && window.location.pathname.endsWith(`/${activeHub.slug}`) ? activeHub : null
       let categoriesParam = parseCommaSeparatedParam(searchParams.get("categories"))
-      if ((activeHub?.kind === "category" || activeHub?.kind === "category-city" || activeHub?.kind === "category-province") && activeHub.categorySlug && !categoriesParam.includes(activeHub.categorySlug)) {
-        categoriesParam = [activeHub.categorySlug, ...categoriesParam]
+      if ((hubLive?.kind === "category" || hubLive?.kind === "category-city" || hubLive?.kind === "category-province") && hubLive.categorySlug && !categoriesParam.includes(hubLive.categorySlug)) {
+        categoriesParam = [hubLive.categorySlug, ...categoriesParam]
       }
       let servicesParam = parseCommaSeparatedParam(searchParams.get("services"))
-      if ((activeHub?.kind === "service" || activeHub?.kind === "service-city" || activeHub?.kind === "service-province") && activeHub.serviceSlug && !servicesParam.includes(activeHub.serviceSlug)) {
-        servicesParam = [activeHub.serviceSlug, ...servicesParam]
+      if ((hubLive?.kind === "service" || hubLive?.kind === "service-city" || hubLive?.kind === "service-province") && hubLive.serviceSlug && !servicesParam.includes(hubLive.serviceSlug)) {
+        servicesParam = [hubLive.serviceSlug, ...servicesParam]
       }
       let cityParams = parseCommaSeparatedParam(searchParams.get("city"))
-      if ((activeHub?.kind === "city" || activeHub?.kind === "service-city" || activeHub?.kind === "category-city") && activeHub.cityName && !cityParams.includes(activeHub.cityName)) {
-        cityParams = [activeHub.cityName, ...cityParams]
+      if ((hubLive?.kind === "city" || hubLive?.kind === "service-city" || hubLive?.kind === "category-city") && hubLive.cityName && !cityParams.includes(hubLive.cityName)) {
+        cityParams = [hubLive.cityName, ...cityParams]
       }
       let regionParams = parseCommaSeparatedParam(searchParams.get("region"))
         .map((slug) => REGION_BY_SLUG.get(slug) ?? provinceKey(slug) ?? slug)
-      if ((activeHub?.kind === "province" || activeHub?.kind === "service-province" || activeHub?.kind === "category-province") && activeHub.region && !regionParams.includes(activeHub.region)) {
-        regionParams = [activeHub.region, ...regionParams]
+      if ((hubLive?.kind === "province" || hubLive?.kind === "service-province" || hubLive?.kind === "category-province") && hubLive.region && !regionParams.includes(hubLive.region)) {
+        regionParams = [hubLive.region, ...regionParams]
       }
       const keywordParam = searchParams.get("search") ?? searchParams.get("keyword") ?? ""
 
