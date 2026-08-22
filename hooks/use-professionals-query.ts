@@ -5,6 +5,7 @@ import { useLocale } from "next-intl"
 
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { ProfessionalCard } from "@/lib/professionals/types"
+import { orderCardsForFeaturedFeed } from "@/lib/professionals/sort"
 import { useProfessionalFilters } from "@/contexts/professional-filter-context"
 
 /** Regions expand to their member cities for querying — a selected city
@@ -161,6 +162,13 @@ export function useProfessionalsQuery(
   // Capture the sort the SSR data was fetched with so we know to refetch if
   // the user changes the sort before triggering any other filter.
   const initialSortRef = useRef(sortBy)
+  // Featured-feed rotation seed: fresh per mount (every reload reorders),
+  // stable across "Load more" (pagination never repeats or drops a company).
+  const [shuffleSeed] = useState(() => Math.random())
+  // When the SSR page is kept as page 0 of the featured feed, its company
+  // ids are excluded from this client's own shuffled sequence (the server
+  // shuffled with a different seed) so later pages never repeat them.
+  const ssrShownIdsRef = useRef<string[] | null>(null)
 
   const fetchPage = useCallback(
     async (offset: number, replace: boolean) => {
@@ -208,9 +216,18 @@ export function useProfessionalsQuery(
         }
 
         const size = offset === 0 ? FIRST_PAGE_SIZE : PAGE_SIZE
+        // Featured (default) sort is a seeded rotation computed client-side:
+        // fetch the whole matching set once, order with this mount's seed,
+        // slice the page locally. Other sorts page inside the RPC.
+        const featuredFeed = sortBy === "featured"
         const dataPromise = supabase.rpc(
           "search_professionals",
-          { ...filterParams, limit_count: size, offset_count: offset, sort_by: sortBy },
+          {
+            ...filterParams,
+            limit_count: featuredFeed ? 1000 : size,
+            offset_count: featuredFeed ? 0 : offset,
+            sort_by: sortBy,
+          },
           { signal: controller.signal },
         )
 
@@ -233,17 +250,30 @@ export function useProfessionalsQuery(
         }
 
         const rows = Array.isArray(data) ? (data as SearchProfessionalsRow[]) : []
-        const mapped = rows
+        let mapped = rows
           .map((row) => mapRowToCard(row, locale))
           .filter((card): card is ProfessionalCard => card !== null)
 
-        setProfessionals((prev) => (replace ? mapped : [...prev, ...mapped]))
-        // Accumulate all unique professionals for client-side map filtering
+        // Accumulate all unique professionals for client-side map filtering.
+        // In featured mode `mapped` is the FULL set at this point, which
+        // conveniently completes the map in one go.
         setAllProfessionals((prev) => {
           const existing = new Map(prev.map((p) => [p.companyId, p]))
           mapped.forEach((p) => existing.set(p.companyId, p))
           return Array.from(existing.values())
         })
+
+        if (featuredFeed) {
+          const ordered = orderCardsForFeaturedFeed(mapped, shuffleSeed)
+          const excluded = new Set(ssrShownIdsRef.current ?? [])
+          const pool = excluded.size > 0 ? ordered.filter((c) => !excluded.has(c.companyId)) : ordered
+          // `offset` counts everything shown so far including the SSR page,
+          // which is not part of this client's pool.
+          const start = Math.max(0, offset - excluded.size)
+          mapped = pool.slice(start, start + size)
+        }
+
+        setProfessionals((prev) => (replace ? mapped : [...prev, ...mapped]))
         setHasMore(mapped.length === size)
         setCurrentOffset(offset + mapped.length)
       } catch (err) {
@@ -268,7 +298,7 @@ export function useProfessionalsQuery(
         }
       }
     },
-    [keyword, selectedCategories, selectedCities, selectedRegions, regionCityMap, selectedServices, sortBy],
+    [keyword, selectedCategories, selectedCities, selectedRegions, regionCityMap, selectedServices, sortBy, shuffleSeed, locale],
   )
 
   useEffect(() => {
@@ -287,13 +317,23 @@ export function useProfessionalsQuery(
 
     // If we have initial SSR data, no filters, and the sort hasn't changed
     // from the one the SSR fetch used, the initial data is still valid.
+    // The flag is deliberately NOT consumed here — this effect re-runs on
+    // dependency identity churn without anything user-visible changing, and
+    // consuming it made the second run refetch, visibly reshuffling the
+    // seeded featured feed right after SSR paint.
     if (hasInitialDataRef.current && !hasFilters && sortBy === initialSortRef.current) {
-      hasInitialDataRef.current = false
+      if (sortBy === "featured") {
+        ssrShownIdsRef.current = initialProfessionals
+          .map((p) => p.companyId)
+          .filter((id): id is string => Boolean(id))
+      }
       return
     }
 
-    // Clear the flag for subsequent filter changes
+    // A real filter/sort change: the SSR page is stale from here on and any
+    // fetch renders the full client sequence, so nothing is excluded.
     hasInitialDataRef.current = false
+    ssrShownIdsRef.current = null
 
     // Don't clear professionals — keep old data visible until new results arrive
     setHasMore(true)
