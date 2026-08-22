@@ -188,6 +188,12 @@ export async function syncAllCachedMetrics(
   // client_visitors_* channel splits (positions 28-32) never landed.
   // 5 workers keeps us well under PostHog's HogQL rate limits while
   // shrinking wall time to ~15 s.
+  // NB: granularities run SEQUENTIALLY inside each worker. The previous
+  // Promise.all here meant 5 workers × 5 granularities = up to 25
+  // PostHog queries in flight, which tripped rate limiting — random
+  // (metric, granularity) tasks failed each night, leaving holes in the
+  // daily series (a missing day renders as "0" on the dashboard while
+  // the channel subs that DID sync show real values).
   const CONCURRENCY = 5
   const all: SyncResult[] = []
   let cursor = 0
@@ -196,21 +202,37 @@ export async function syncAllCachedMetrics(
       const idx = cursor++
       if (idx >= CACHED_METRIC_KEYS.length) return
       const metric = CACHED_METRIC_KEYS[idx]
-      const perGranularity = await Promise.all(
-        GRANULARITIES.map(async (granularity) => {
-          try {
-            return await syncMetric(supabase, metric, granularity)
-          } catch (err) {
-            logger.error("growth-metric-cache: sync threw", { metric, granularity, error: String(err) })
-            return { metric, granularity, windowPeriods: 0, upserted: 0, error: String(err) } as SyncResult
-          }
-        }),
-      )
-      all.push(...perGranularity)
+      for (const granularity of GRANULARITIES) {
+        all.push(await syncMetricWithRetry(supabase, metric, granularity))
+      }
     }
   }
   await Promise.all(Array.from({ length: CONCURRENCY }, worker))
   return all
+}
+
+/** One (metric, granularity) sync with up to 2 retries on failure —
+ *  transient PostHog errors (rate limits, timeouts) shouldn't leave a
+ *  hole in the cached series until the next nightly run. */
+async function syncMetricWithRetry(
+  supabase: SupabaseClient,
+  metric: CachedMetricKey,
+  granularity: Granularity,
+): Promise<SyncResult> {
+  let lastError = ""
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 2000 * attempt))
+    try {
+      const result = await syncMetric(supabase, metric, granularity)
+      if (!result.error) return result
+      lastError = result.error
+    } catch (err) {
+      lastError = String(err)
+    }
+    logger.warn("growth-metric-cache: sync attempt failed", { metric, granularity, attempt, error: lastError })
+  }
+  logger.error("growth-metric-cache: sync failed after retries", { metric, granularity, error: lastError })
+  return { metric, granularity, windowPeriods: 0, upserted: 0, error: lastError }
 }
 
 async function syncMetric(

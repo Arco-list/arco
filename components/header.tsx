@@ -278,8 +278,6 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
       .then((data) => {
         if (cancelled || !data) return
         const map: Record<string, number> = {}
-        if (typeof data.outboundDueCount === "number" && data.outboundDueCount > 0)
-          map["/admin/sales"] = data.outboundDueCount
         if (typeof data.inboxUnreadCount === "number" && data.inboxUnreadCount > 0)
           map["/admin/inbox"] = data.inboxUnreadCount
         if (typeof data.projectsToReviewCount === "number" && data.projectsToReviewCount > 0)

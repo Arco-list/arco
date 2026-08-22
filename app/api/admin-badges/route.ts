@@ -2,7 +2,6 @@ import { NextResponse } from "next/server"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
-import { countOutboundDueCompanies } from "../../[locale]/admin/sales/actions"
 import { countUnreadInboundEmails } from "../../[locale]/admin/inbox/actions"
 import { countProjectsToReview } from "../../[locale]/admin/projects/actions"
 
@@ -34,11 +33,12 @@ export async function GET() {
   if (profile?.is_active === false) return NextResponse.json({})
   if (!isAdminUser(profile?.user_types, profile?.admin_role)) return NextResponse.json({})
 
-  const [outboundDueCount, inboxUnreadCount, projectsToReviewCount] = await Promise.all([
-    countOutboundDueCompanies(),
+  // No Sales badge: the outbound-due count was dropped from the admin nav
+  // (it implied action pressure the call-list workflow no longer uses).
+  const [inboxUnreadCount, projectsToReviewCount] = await Promise.all([
     countUnreadInboundEmails(),
     countProjectsToReview(),
   ])
 
-  return NextResponse.json({ outboundDueCount, inboxUnreadCount, projectsToReviewCount })
+  return NextResponse.json({ inboxUnreadCount, projectsToReviewCount })
 }

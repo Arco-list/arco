@@ -2035,7 +2035,10 @@ function ShowcasePill({ companyId, slug }: { companyId: string; slug: string | n
         // need the handle to point the tab at the edit page on success.
         const tab = window.open("", "_blank")
         const result = await promoteCompanyToShowcase(companyId)
-        const editUrl = `/dashboard/company?company_id=${companyId}`
+        // Absolute URL: the pre-opened tab is about:blank, and a relative
+        // href assigned to another window resolves against about:blank
+        // (not our origin) in some browsers — the tab then stays blank.
+        const editUrl = `${window.location.origin}/dashboard/company?company_id=${companyId}`
         if (result.success) {
           setState("done")
           toast.success("Showcase actief — bedrijfspagina wordt geopend")
