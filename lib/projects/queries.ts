@@ -88,21 +88,31 @@ interface ProjectProfessional {
 export const fetchDiscoverProjects = async (
   locale: string = "en",
   sort: ProjectSort = DEFAULT_PROJECT_SORT,
+  options?: {
+    /** Restrict the feed to this id set (hub pages pass their own
+     *  inventory). Without it, hub pages used to intersect the hub set
+     *  with the first feed page — under the seeded shuffle that made a
+     *  hub's SSR grid a random-sized subset that changed every reload. */
+    projectIds?: string[]
+  },
 ): Promise<DiscoverProject[]> => {
   const supabase = await createServerSupabaseClient()
+  const restrictIds = options?.projectIds
 
   // ── 1. Base project rows ──────────────────────────────────────────────────
   let baseRows: Tables<"project_search_documents">[] | null = null
+  if (restrictIds && restrictIds.length === 0) return []
   if (sort === "featured") {
     // Seeded scope-rotation feed: fresh seed per request, so the featured
     // listing reorders on every reload (lib/projects/featured-shuffle.ts).
     // The client hook excludes these SSR-shown ids from its own shuffled
     // sequence, so "Load more" never repeats them.
-    const { data: idRows, error: idError } = await supabase
+    let idQuery = supabase
       .from("project_search_documents")
       .select("id, is_featured, project_type")
       .eq("status", "published")
-      .limit(1000)
+    if (restrictIds) idQuery = idQuery.in("id", restrictIds)
+    const { data: idRows, error: idError } = await idQuery.limit(1000)
     if (idError) {
       logger.error("Failed to load feed ids for discover", {
         function: "fetchDiscoverProjects",
@@ -132,6 +142,7 @@ export const fetchDiscoverProjects = async (
       .from("project_search_documents")
       .select("*")
       .eq("status", "published")
+    if (restrictIds) baseQuery = baseQuery.in("id", restrictIds)
     baseQuery = applyProjectSort(baseQuery, sort)
     const { data, error: baseError } = await baseQuery.limit(INITIAL_PAGE_SIZE)
     if (baseError) {

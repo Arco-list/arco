@@ -222,17 +222,20 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     const hub = hubOverride ?? await resolveHub(finalSlug)
     if (hub) {
       const hubLocale = resolvedParams.locale ?? "en"
-      const [hubProjects, allHubsSet, discoverProjects] = await Promise.all([
+      const [hubProjects, allHubsSet] = await Promise.all([
         getHubProjects(hub),
         getHubs(),
-        fetchDiscoverProjects(hubLocale),
       ])
       const allHubs = [...allHubsSet.cities, ...allHubsSet.scopes, ...allHubsSet.types, ...allHubsSet.combos, ...allHubsSet.provinces]
-      // Server-side pre-filter: the crawled HTML contains exactly the
-      // hub's projects; the client FilterProvider mounts with the same
-      // preset, so grid and state agree from the first paint.
-      const hubIds = new Set(hubProjects.map((p) => p.id))
-      const initialProjects = discoverProjects.filter((p) => p.id != null && hubIds.has(p.id))
+      // Server-side pre-filter: the feed is built FROM the hub's own id
+      // set, so the crawled HTML contains exactly the hub's projects
+      // (first page of them, seeded-shuffled like discover). Previously
+      // this intersected the hub set with the first page of the GLOBAL
+      // feed — under the seeded shuffle that made hub grids a random
+      // subset that changed size on every reload.
+      const initialProjects = await fetchDiscoverProjects(hubLocale, undefined, {
+        projectIds: hubProjects.map((p) => p.id).filter((id): id is string => Boolean(id)),
+      })
       // Called as a plain async function (valid for server components) —
       // sidesteps a TS2786 false positive on async-component JSX.
       return await HubPage({

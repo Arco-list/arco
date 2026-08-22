@@ -19,7 +19,7 @@ import type {
   ProfessionalProjectSummary,
   ProfessionalSocialLink,
 } from "./types"
-import { DEFAULT_PROFESSIONAL_SORT, type ProfessionalSort } from "./sort"
+import { DEFAULT_PROFESSIONAL_SORT, orderCardsForFeaturedFeed, type ProfessionalSort } from "./sort"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
 // First-page fetch for the discover grid leaves a slot for the inline map
@@ -333,6 +333,13 @@ export interface DiscoverProfessionalsResult {
 export const fetchDiscoverProfessionals = async (
   locale: string = "en",
   sort: ProfessionalSort = DEFAULT_PROFESSIONAL_SORT,
+  options?: {
+    /** Return the FULL ordered set instead of the first page. Hub pages
+     *  need this: they post-filter the result to their own inventory, and
+     *  filtering a first-page slice of the seeded shuffle produced a
+     *  random-sized subset that changed on every reload. */
+    full?: boolean
+  },
 ): Promise<DiscoverProfessionalsResult> => {
   const supabase = await createServerSupabaseClient()
 
@@ -349,15 +356,21 @@ export const fetchDiscoverProfessionals = async (
     verified_only: false,
   }
 
+  // Featured (default) sort is a seeded per-reload shuffle: fetch the whole
+  // set, rotate client-side, keep the first page. Other sorts page in the
+  // DB — unless the caller asked for the full set (hub pre-filtering).
+  const featuredFeed = sort === "featured"
+  const fetchAll = featuredFeed || options?.full === true
   const [searchResult, countResult] = await Promise.all([
     supabase.rpc("search_professionals", {
       ...filterParams,
-      limit_count: INITIAL_PAGE_SIZE,
+      limit_count: fetchAll ? 1000 : INITIAL_PAGE_SIZE,
       offset_count: 0,
       sort_by: sort,
     }),
     supabase.rpc("count_professionals", filterParams),
   ])
+
 
   if (searchResult.error) {
     logger.error("Failed to load professionals for discover", { function: "search_professionals", error: searchResult.error })
@@ -373,7 +386,14 @@ export const fetchDiscoverProfessionals = async (
     .map((row) => mapRpcRowToProfessionalCard(row, locale))
     .filter((card): card is ProfessionalCard => card !== null)
 
-  const professionals = cards
+  // Seeded rotation for the featured feed: starred band first, then the
+  // profession types interleaved (architects / interior designers / ...),
+  // reshuffled per request — same mechanism as the projects feed. The
+  // client hook excludes these SSR-shown companies from its own sequence.
+  // With options.full the caller gets the complete ordered set (hub pages
+  // post-filter, then slice their own first page).
+  const ordered = featuredFeed ? orderCardsForFeaturedFeed(cards, Math.random()) : cards
+  const professionals = options?.full ? ordered : ordered.slice(0, INITIAL_PAGE_SIZE)
   const total = countResult.data != null ? Number(countResult.data) : professionals.length
 
   return { professionals, total }

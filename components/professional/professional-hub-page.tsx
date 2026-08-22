@@ -49,7 +49,9 @@ export async function ProfessionalHubPage({ hub, allHubs, locale }: {
     } catch { /* pre-filter falls back to city-only */ }
   }
   try {
-    const result = await fetchDiscoverProfessionals(locale)
+    // Full ordered set — filtering a first-page slice of the seeded
+    // shuffle gave hubs a random subset that changed size every reload.
+    const result = await fetchDiscoverProfessionals(locale, undefined, { full: true })
     // Server-side pre-filter so the crawled HTML contains exactly the
     // hub's companies. City matching is case-insensitive against the
     // covered spellings; service matching goes via specialty names.
