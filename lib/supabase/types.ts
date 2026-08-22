@@ -3686,6 +3686,8 @@ export type Database = {
       }
       project_search_documents: {
         Row: {
+          address_city: string | null
+          address_region: string | null
           budget_display: string | null
           budget_level:
             | Database["public"]["Enums"]["project_budget_level"]

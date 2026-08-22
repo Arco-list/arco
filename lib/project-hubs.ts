@@ -283,10 +283,12 @@ export async function getHubs(): Promise<{ cities: Hub[]; scopes: Hub[]; types: 
       if (row.address_region) entry.regions.set(row.address_region, (entry.regions.get(row.address_region) ?? 0) + 1)
       cityAgg.set(cSlug, entry)
     }
-    if (row.address_region && PROVINCES[row.address_region] && city && cityOk) {
+    // Province counts include city-less rows (privacy-vague locations) —
+    // the hub query matches on address_region, so they're real inventory.
+    if (row.address_region && PROVINCES[row.address_region]) {
       const pEntry = provinceAgg.get(row.address_region) ?? { count: 0, names: new Set<string>() }
       pEntry.count += 1
-      pEntry.names.add(city)
+      if (city && cityOk) pEntry.names.add(city)
       provinceAgg.set(row.address_region, pEntry)
     }
     const scope = canonicalizeScope(row.project_type)
@@ -442,7 +444,12 @@ export async function getHubProjects(hub: Hub): Promise<HubProjectCard[]> {
     .eq("status", "published")
     .not("slug", "is", null)
     .order("published_at", { ascending: false, nullsFirst: false })
-  if (hub.kind !== "scope" && hub.kind !== "type" && hub.cityNames?.length) {
+  if ((hub.kind === "province" || hub.kind === "type-province" || hub.kind === "scope-province") && hub.region) {
+    // Province hubs match on the region column, NOT the member-city list:
+    // projects with a region but no city (privacy-vague locations like
+    // "'t Gooi") belong to the province hub too.
+    q = q.eq("address_region", hub.region)
+  } else if (hub.kind !== "scope" && hub.kind !== "type" && hub.cityNames?.length) {
     q = q.in("address_city", hub.cityNames)
   }
   if ((hub.kind === "type" || hub.kind === "type-city" || hub.kind === "type-province") && hub.categoryId) {

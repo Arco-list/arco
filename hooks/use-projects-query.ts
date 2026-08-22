@@ -219,6 +219,14 @@ export function useProjectsQuery({
           return members.some((m) => selectedLocations.includes(m)) ? [] : members
         }),
       ])),
+      // Regions ALSO match address_region directly — some projects carry a
+      // region but no city (privacy-vague locations), so the member-city
+      // expansion alone misses them. Drill-down rule mirrors `locations`:
+      // a selected city inside the region supersedes the region term.
+      regions: selectedRegions.filter((r) => {
+        const members = regionCityMap[r] ?? []
+        return !members.some((m) => selectedLocations.includes(m))
+      }),
       features: selectedFeatures,
       buildingTypes: selectedBuildingTypes,
       scopes: selectedScopes,
@@ -362,11 +370,22 @@ export function useProjectsQuery({
         query = query.contains("style_preferences", filters.styles)
       }
 
-      if (filters.locations.length > 0) {
-        const locationOr = filters.locations
-          .map((loc) => `location.ilike.%${escapeIlikePattern(loc)}%`)
-          .join(",")
-        query = query.or(locationOr)
+      if (filters.locations.length > 0 || filters.regions.length > 0) {
+        // Union of: free-text location match (legacy labels like
+        // "Walcheren"), exact address_city match, and — for region
+        // selections — exact address_region match, which is the only way
+        // to reach projects that have a region but no city.
+        const quote = (v: string) => `"${v.replace(/"/g, '')}"`
+        const terms = [
+          ...filters.locations.map((loc) => `location.ilike.%${escapeIlikePattern(loc)}%`),
+          ...(filters.locations.length > 0
+            ? [`address_city.in.(${filters.locations.map(quote).join(",")})`]
+            : []),
+          ...(filters.regions.length > 0
+            ? [`address_region.in.(${filters.regions.map(quote).join(",")})`]
+            : []),
+        ]
+        query = query.or(terms.join(","))
       }
 
       if (filters.features.length > 0) {
