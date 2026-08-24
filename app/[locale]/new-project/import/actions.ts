@@ -1391,7 +1391,11 @@ async function autoTagPhotosWithSpaces(
       // silently skip the vision pass, e.g. "Woning in Doorn" 2026-08-24).
       const storageMatch = photo.url.match(/^(https:\/\/[^/]+\/storage\/v1)\/object\/public\/(.+)$/)
       if (storageMatch) {
-        const transformUrl = `${storageMatch[1]}/render/image/public/${storageMatch[2]}?width=768&quality=75`
+        // height + resize=contain bound BOTH dimensions: width=768 alone
+        // preserves aspect ratio, and one tall portrait/panorama over
+        // 2000px high gets the whole many-image API request rejected
+        // ("Surrounded by the Forest" 2026-08-24, 25 photos, 0 tagged).
+        const transformUrl = `${storageMatch[1]}/render/image/public/${storageMatch[2]}?width=768&height=1200&resize=contain&quality=75`
         const res = await fetch(transformUrl, { signal: controller.signal })
         clearTimeout(timeout)
         if (res.ok && (res.headers.get("content-type") ?? "").includes("image/")) {
