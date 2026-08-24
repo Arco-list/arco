@@ -893,21 +893,34 @@ export default function ListingEditorPage() {
 
       let hasAccess = isAdminUser(userProfile?.user_types) || project.client_id === userId
       if (!hasAccess) {
-        // Check if user's company owns this project
-        const { data: proData } = await supabase
-          .from("professionals")
-          .select("company_id")
-          .eq("user_id", userId)
-          .maybeSingle()
-        if (proData?.company_id) {
+        // Check if the user's company owns this project. Company links come
+        // from three sources: the legacy professionals row, companies they
+        // OWN, and active company_contacts memberships (the current team
+        // model — members invited via /dashboard/team only exist here).
+        const [{ data: proData }, { data: ownedData }, { data: contactData }] = await Promise.all([
+          supabase.from("professionals").select("company_id").eq("user_id", userId),
+          supabase.from("companies").select("id").eq("owner_id", userId),
+          supabase
+            .from("company_contacts")
+            .select("company_id, person:persons!inner(auth_user_id)")
+            .eq("person.auth_user_id", userId)
+            .in("role", ["owner", "admin", "member"])
+            .eq("status", "active"),
+        ])
+        const companyIds = Array.from(new Set([
+          ...(proData ?? []).map((r: any) => r.company_id),
+          ...(ownedData ?? []).map((r: any) => r.id),
+          ...(contactData ?? []).map((r: any) => r.company_id),
+        ].filter(Boolean)))
+        if (companyIds.length > 0) {
           const { data: ppData } = await supabase
             .from("project_professionals")
             .select("id")
             .eq("project_id", projectId)
-            .eq("company_id", proData.company_id)
+            .in("company_id", companyIds)
             .eq("is_project_owner", true)
-            .maybeSingle()
-          if (ppData) hasAccess = true
+            .limit(1)
+          if (ppData && ppData.length > 0) hasAccess = true
         }
       }
       if (!hasAccess) {
@@ -5035,7 +5048,7 @@ export default function ListingEditorPage() {
                             {groups.map((g, gi) => (
                               <div key={g.label}>
                                 {gi > 0 && <div className="company-search-divider" />}
-                                <div className="service-group-label">{g.label}</div>
+                                <div className="service-group-label">{translateProfessionalService(g.label, locale) ?? g.label}</div>
                                 {g.items.map(s => {
                                   const isSelected = inv.serviceIds.includes(s.id)
                                   const atMax = !isSelected && inv.serviceIds.length >= 3
@@ -5064,7 +5077,7 @@ export default function ListingEditorPage() {
                                       setEditingInviteField(null)
                                     }}
                                   >
-                                    <span>{s.name}</span>
+                                    <span>{translateProfessionalService((s as any).slug ?? s.name, locale) ?? s.name}</span>
                                     {isSelected && (
                                       <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#016D75" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 8l4 4 8-8" /></svg>
                                     )}
@@ -5431,7 +5444,7 @@ export default function ListingEditorPage() {
                           {groups.map((g, gi) => (
                             <div key={g.label}>
                               {gi > 0 && <div className="company-search-divider" />}
-                              <div className="service-group-label">{g.label}</div>
+                              <div className="service-group-label">{translateProfessionalService(g.label, locale) ?? g.label}</div>
                               {g.items.map(s => {
                                 const isSelected = draftCard.serviceIds.includes(s.id)
                                 const atMax = !isSelected && draftCard.serviceIds.length >= 3
