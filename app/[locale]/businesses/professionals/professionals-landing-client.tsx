@@ -41,7 +41,17 @@ export default function ProfessionalsLandingClient({
   const tBusiness = useTranslations("business")
   const autoOpenedRef = useRef(false)
 
-  useEffect(() => { trackPageView("/businesses/professionals") }, [])
+  useEffect(() => {
+    trackPageView("/businesses/professionals")
+    // Advance the invite prospect to "visitor" — mirrors the ?ref
+    // tracking on /businesses/architects. The invite claim URL carries
+    // inviteEmail instead of ref, and the tracker resolves prospects by
+    // email, so without this a clicked Invite email never moved the
+    // contact past "Contacted".
+    if (inviteEmail) {
+      fetch(`/api/prospect-track?ref=${encodeURIComponent(inviteEmail)}`).catch(() => {})
+    }
+  }, [inviteEmail])
 
   // Auto-open the claim modal when user is logged in and we have preloaded company data
   // (happens after auth redirect back to this page)
