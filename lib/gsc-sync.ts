@@ -313,10 +313,12 @@ export async function syncGscIndexation(): Promise<GscSyncResult> {
     ...((projectRows ?? []).map((r) => ({
       table: "projects" as const,
       id: (r as any).id,
+      // nl + en only: the bare URL 307-redirects and always inspects as
+      // NEUTRAL — paying 8s for it per non-indexed page blew the cron's
+      // 300s budget (two 504s at the tail on 2026-08-24).
       urls: [
         `${SITE_URL}/nl/projects/${(r as any).slug}`,
         `${SITE_URL}/en/projects/${(r as any).slug}`,
-        `${SITE_URL}/projects/${(r as any).slug}`,
       ],
     }))),
     ...((companyRows ?? []).map((r) => ({
@@ -325,7 +327,6 @@ export async function syncGscIndexation(): Promise<GscSyncResult> {
       urls: [
         `${SITE_URL}/nl/professionals/${(r as any).slug}`,
         `${SITE_URL}/en/professionals/${(r as any).slug}`,
-        `${SITE_URL}/professionals/${(r as any).slug}`,
       ],
     }))),
   ]
@@ -345,7 +346,7 @@ export async function syncGscIndexation(): Promise<GscSyncResult> {
   // the slow part (1–8s per URL); serial would blow the 300s Vercel timeout
   // on ~80 URLs. Search Analytics is already a single bulk call. Each batch's
   // failures are isolated so one bad URL can't poison the whole run.
-  const CONCURRENCY = 10
+  const CONCURRENCY = 14
   for (let i = 0; i < targets.length; i += CONCURRENCY) {
     const batch = targets.slice(i, i + CONCURRENCY)
     logger.info("[gsc-sync] batch", { from: i, to: i + batch.length, total: targets.length })
