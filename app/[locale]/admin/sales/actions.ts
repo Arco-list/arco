@@ -1989,11 +1989,36 @@ export async function syncPlatformProspects() {
         .not("domain", "is", null)
 
       // Status advances to 'active' when the company is Listed and 'company'
-      // when it's Draft. The resolvedContact join only renders the owner
-      // profile for those two stages — without this, a linked Apollo row
-      // would still display the Apollo outreach email as the contact.
+      // when it's Draft — but ONLY for the prospect whose email is the
+      // owner's. Domain-mates (colleagues at the same firm) keep their own
+      // funnel stage; they get the company link, not the conversion.
       const STATUS_ORDER: Record<string, number> = {
         prospect: 0, contacted: 1, visitor: 2, signup: 3, company: 4, active: 5,
+      }
+
+      const ownerIdsNeeded = new Set(
+        (claimedCompanies ?? [])
+          .map((c) => c.owner_id)
+          .filter((v): v is string => typeof v === "string" && v.length > 0),
+      )
+      const ownerEmailByUserId = new Map<string, string>()
+      if (ownerIdsNeeded.size > 0) {
+        const perPage = 200
+        let page = 1
+        while (ownerIdsNeeded.size > 0) {
+          const { data, error } = await supabase.auth.admin.listUsers({ page, perPage })
+          if (error) break
+          const users = data?.users ?? []
+          if (users.length === 0) break
+          for (const u of users) {
+            if (ownerIdsNeeded.has(u.id) && u.email) {
+              ownerEmailByUserId.set(u.id, u.email.toLowerCase())
+              ownerIdsNeeded.delete(u.id)
+            }
+          }
+          if (users.length < perPage) break
+          page++
+        }
       }
 
       for (const company of claimedCompanies ?? []) {
@@ -2005,21 +2030,25 @@ export async function syncPlatformProspects() {
         const targetStatus = company.status === "listed" ? "active" : "company"
         const targetRank = STATUS_ORDER[targetStatus]
         const createdAt = company.created_at as string
+        const ownerEmail = company.owner_id ? ownerEmailByUserId.get(company.owner_id) ?? null : null
 
         const { data: currentRows } = await supabase
           .from("prospects")
-          .select("id, status, company_created_at, converted_at")
+          .select("id, email, status, company_created_at, converted_at")
           .in("id", prospectIds)
 
         for (const row of currentRows ?? []) {
           const currentRank = STATUS_ORDER[row.status ?? ""] ?? -1
+          const isOwnerProspect = Boolean(
+            ownerEmail && row.email && ownerEmail === row.email.toLowerCase(),
+          )
           const updates: Record<string, unknown> = {
             company_id: company.id,
             company_name: company.name,
           }
-          if (targetRank > currentRank) updates.status = targetStatus
+          if (isOwnerProspect && targetRank > currentRank) updates.status = targetStatus
           if (!row.company_created_at) updates.company_created_at = createdAt
-          if (targetStatus === "active" && !row.converted_at) {
+          if (isOwnerProspect && targetStatus === "active" && !row.converted_at) {
             updates.converted_at = createdAt
           }
           await supabase.from("prospects").update(updates).eq("id", row.id)
