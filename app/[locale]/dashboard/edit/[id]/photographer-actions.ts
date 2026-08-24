@@ -171,7 +171,10 @@ export async function addPhotographerToProject(
         latitude,
         longitude,
         is_verified: false,
-        status: "unclaimed" as any,
+        // "added" is the current catalogue-entry status ("unclaimed" is the
+        // legacy pre-lifecycle name) — keeps photographer companies in the
+        // same Added → Showcased → Listed flow as every other company.
+        status: "added" as any,
         slug,
         primary_service_id: photographerCategoryId,
         services_offered: [photographerCategoryId],

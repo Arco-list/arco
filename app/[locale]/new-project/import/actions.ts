@@ -1383,6 +1383,27 @@ async function autoTagPhotosWithSpaces(
     try {
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 10000)
+
+      // Photos already mirrored into our Supabase Storage: fetch through
+      // the image-transformation endpoint, which resizes server-side AND
+      // transcodes to JPEG — this is what lets webp sources through (jimp
+      // cannot decode webp; sites that ONLY serve webp made every photo
+      // silently skip the vision pass, e.g. "Woning in Doorn" 2026-08-24).
+      const storageMatch = photo.url.match(/^(https:\/\/[^/]+\/storage\/v1)\/object\/public\/(.+)$/)
+      if (storageMatch) {
+        const transformUrl = `${storageMatch[1]}/render/image/public/${storageMatch[2]}?width=768&quality=75`
+        const res = await fetch(transformUrl, { signal: controller.signal })
+        clearTimeout(timeout)
+        if (res.ok && (res.headers.get("content-type") ?? "").includes("image/")) {
+          const jpeg = Buffer.from(await res.arrayBuffer())
+          imageBlocks.push(
+            { type: "image", source: { type: "base64", media_type: (res.headers.get("content-type") ?? "image/jpeg") as any, data: jpeg.toString("base64") } },
+            { type: "text", text: `#${photo.order_index}` }
+          )
+          continue
+        }
+        console.log(`[autoTag] transform fetch failed for #${photo.order_index} (HTTP ${res.status}) — falling back to raw download`)
+      }
       // Some WordPress / CDN setups (jouwnest.nl etc.) return 403 to
       // requests without a Referer matching the photo's own origin —
       // hot-link protection. Setting Referer to the origin avoids this.
@@ -1457,9 +1478,9 @@ Rules: outdoor photo with building visible = always "exterior". Tag every photo.
 
 For each photo also write "alt": a concise Dutch image description (8-15 words) naming the room/space and the most distinctive visible materials or features, e.g. "Badkamer met travertijnen wastafel en eikenhouten kastenwand". Factual, no marketing language, never start with "Foto van" or "Afbeelding van".
 
-Also determine: style (modern/contemporary/traditional/minimalist/industrial/scandinavian/mediterranean/rustic/mid-century-modern/bohemian/coastal/farmhouse/transitional/urban-modern/eclectic), scope (new-build/renovated/interior-designed), building_type (villa/house/apartment/townhouse/penthouse/bungalow/chalet/farm/garden-house/other). Always pick one for each.
+Also determine: style (modern/contemporary/traditional/minimalist/industrial/scandinavian/mediterranean/rustic/mid-century-modern/bohemian/coastal/farmhouse/transitional/urban-modern/eclectic), scope (new-build/renovated/interior-designed), building_type (villa/apartment/townhouse/bungalow/chalet/farm/extension/garden-house). Always pick one for each.
 
-For building_type, classify by ARCHITECTURE not current use — a restaurant inside a converted villa is "villa"; a café in a row of townhouses is "townhouse"; a hotel in a former mansion is "villa". Only fall back to "other" if no residential archetype fits (e.g. a purpose-built modern office block).
+For building_type, classify by ARCHITECTURE not current use — a restaurant inside a converted villa is "villa"; a café in a row of townhouses is "townhouse"; a hotel in a former mansion is "villa". Always pick the CLOSEST match from the list — a detached family house is "villa", a penthouse or loft is "apartment"; there is no "other".
 
 Also decide "feature": would a design magazine editor pick THIS project for the cover, over other professional work? true only for clearly exceptional projects — striking architecture or interiors AND magazine-grade photography AND rich, distinctive materialization. Competent professional work with good photos is the NORM on this platform, not featured. Default to false; at most 1 in 4 projects merits true.
 
@@ -1745,7 +1766,12 @@ Return ONLY this JSON:
 
   // Save building type to projects.building_type and category if empty
   if (detectedBuildingType) {
-    const validTypes = ["villa", "house", "apartment", "townhouse", "penthouse", "bungalow", "chalet", "farm", "garden-house", "other"]
+    // Mirrors the ACTIVE project-type taxonomy (categories where
+    // category_type='Project', parent IS NULL, is_active) — same list the
+    // scrape extraction enforces. "house"/"penthouse"/"other" were legacy
+    // values outside the taxonomy that rendered as untranslatable "Anders"
+    // in the Type field.
+    const validTypes = ["villa", "apartment", "townhouse", "bungalow", "chalet", "farm", "extension", "garden-house", "garden-design"]
     if (validTypes.includes(detectedBuildingType)) {
       // Update projects.building_type if empty
       await serviceSupabase
