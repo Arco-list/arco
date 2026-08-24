@@ -15,6 +15,13 @@ const cormorant = Cormorant_Garamond({
 
 export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
+  // og:site_name on every page — together with the homepage's WebSite
+  // JSON-LD (name "Arco") this is the signal pair Google documents for
+  // showing a site NAME ("Arco") instead of the bare domain
+  // ("arcolist.com") above results.
+  openGraph: {
+    siteName: "Arco",
+  },
   title: {
     default: "Arco - Connect with Architecture & Design Professionals",
     // No brand suffix: Google rendered "%s | Arco" as "… - Arco" on
