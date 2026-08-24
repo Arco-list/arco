@@ -666,7 +666,7 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
     .filter((row) => typeof row?.project_id === "string" && allowedStatuses.has(String(row.status)))
 
   const projectIds = filteredLinks.map((row) => row.project_id as string)
-  const uniqueProjectIds = Array.from(new Set(projectIds)).slice(0, 12)
+  const uniqueProjectIds = Array.from(new Set(projectIds))
 
   // Build map of project_id → cover_photo_id for contributor-specific covers
   const coverPhotoIdMap = new Map<string, string>()
@@ -841,6 +841,15 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
           projectType: resolvedType ?? null,
         }
       })
+
+      // The full grid renders every live project, so give it a stable,
+      // deliberate order — the pp link rows themselves carry none.
+      projects.sort(
+        (a, b) =>
+          (b.projectYear ?? 0) - (a.projectYear ?? 0) ||
+          (b.likesCount ?? 0) - (a.likesCount ?? 0) ||
+          a.title.localeCompare(b.title),
+      )
     }
   }
 

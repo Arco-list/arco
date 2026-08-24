@@ -26,11 +26,12 @@ export async function ProfessionalProjects({ projects, heading }: ProfessionalPr
   const t = await getTranslations("professional_detail")
   const sectionHeading = heading ?? t("featured_projects")
 
-  // Show up to 6 projects with images, or first 10 if no images
+  // Full grid — every live project. More projects on the page also means
+  // more internal links to project pages.
   const projectsWithImages = projects.filter(p => p.image)
   const displayProjects = projectsWithImages.length > 0
-    ? projectsWithImages.slice(0, 6)
-    : projects.slice(0, 10)
+    ? projectsWithImages
+    : projects
 
   const hasImages = projectsWithImages.length > 0
 
