@@ -278,7 +278,11 @@ async function syncDailyMetrics(
 type RowToSync = {
   table: "projects" | "companies"
   id: string
-  url: string
+  /** URL variants to inspect, most-likely-indexed first. Locale routing
+   *  means the real indexed page is /nl/... or /en/... — the bare URL
+   *  307-redirects, and URL Inspection reports a redirect as "not on
+   *  Google" (NEUTRAL), which mis-flagged indexed pages as Not indexed. */
+  urls: string[]
 }
 
 /**
@@ -309,12 +313,20 @@ export async function syncGscIndexation(): Promise<GscSyncResult> {
     ...((projectRows ?? []).map((r) => ({
       table: "projects" as const,
       id: (r as any).id,
-      url: `${SITE_URL}/projects/${(r as any).slug}`,
+      urls: [
+        `${SITE_URL}/nl/projects/${(r as any).slug}`,
+        `${SITE_URL}/en/projects/${(r as any).slug}`,
+        `${SITE_URL}/projects/${(r as any).slug}`,
+      ],
     }))),
     ...((companyRows ?? []).map((r) => ({
       table: "companies" as const,
       id: (r as any).id,
-      url: `${SITE_URL}/professionals/${(r as any).slug}`,
+      urls: [
+        `${SITE_URL}/nl/professionals/${(r as any).slug}`,
+        `${SITE_URL}/en/professionals/${(r as any).slug}`,
+        `${SITE_URL}/professionals/${(r as any).slug}`,
+      ],
     }))),
   ]
 
@@ -339,11 +351,32 @@ export async function syncGscIndexation(): Promise<GscSyncResult> {
     logger.info("[gsc-sync] batch", { from: i, to: i + batch.length, total: targets.length })
     const results = await Promise.allSettled(
       batch.map(async (target) => {
-        const inspection = await inspectUrl(token, target.url)
-        const perf =
-          performance.get(target.url) ??
-          (inspection.canonicalChosen ? performance.get(inspection.canonicalChosen) : undefined) ??
-          null
+        // Inspect variants until one is indexed; a page counts as indexed
+        // when ANY of its locale variants is on Google. The first (nl)
+        // result is the fallback verdict when none are.
+        let inspection = await inspectUrl(token, target.urls[0])
+        for (let v = 1; v < target.urls.length && !inspection.indexed; v++) {
+          const next = await inspectUrl(token, target.urls[v])
+          if (next.indexed) inspection = next
+        }
+        // Search Analytics splits impressions across the variants —
+        // aggregate them (plus Google's chosen canonical if different).
+        const perfUrls = new Set<string>(target.urls)
+        if (inspection.canonicalChosen) perfUrls.add(inspection.canonicalChosen)
+        let perf: { impressions: number; clicks: number; ctr: number; position: number | null } | null = null
+        for (const u of perfUrls) {
+          const p = performance.get(u)
+          if (!p) continue
+          if (!perf) perf = { impressions: 0, clicks: 0, ctr: 0, position: null }
+          const prevImp = perf.impressions
+          perf.impressions += p.impressions
+          perf.clicks += p.clicks
+          // Position: impression-weighted average across variants.
+          perf.position = perf.position === null
+            ? p.position
+            : (perf.position * prevImp + (p.position ?? 0) * p.impressions) / Math.max(1, perf.impressions)
+        }
+        if (perf) perf.ctr = perf.impressions > 0 ? perf.clicks / perf.impressions : 0
         const update = {
           seo_indexed: inspection.indexed,
           seo_indexation_state: inspection.state,
@@ -371,7 +404,7 @@ export async function syncGscIndexation(): Promise<GscSyncResult> {
       } else {
         errorCount += 1
         lastError = result.reason instanceof Error ? result.reason.message : String(result.reason)
-        logger.error("[gsc-sync] row failed", { url: target.url, error: lastError })
+        logger.error("[gsc-sync] row failed", { url: target.urls[0], error: lastError })
       }
     }
   }
