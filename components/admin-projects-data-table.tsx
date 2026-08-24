@@ -606,8 +606,16 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
     {
       accessorKey: "seoImpressions28d",
       header: "Impressions",
-      sortingFn: (rowA, rowB) =>
-        (rowA.original.seoImpressions28d ?? -1) - (rowB.original.seoImpressions28d ?? -1),
+      // Sort order mirrors the cell's three states: real impression counts
+      // first (indexed pages with 0 impressions included, at value 0),
+      // then "—" pending rows (-1, cron never ran), then "Not indexed"
+      // (-2) at the bottom — an indexed page with zero traffic is further
+      // along than one Google rejected.
+      sortingFn: (rowA, rowB) => {
+        const rank = (r: AdminProjectRow) =>
+          r.seoIndexed === false ? -2 : r.seoImpressions28d ?? -1
+        return rank(rowA.original) - rank(rowB.original)
+      },
       cell: ({ row }) => {
         const r = row.original
         // Pages where Google did NOT pass indexation read as "Not indexed"

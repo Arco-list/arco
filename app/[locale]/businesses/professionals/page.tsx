@@ -82,16 +82,27 @@ export default async function ProfessionalsPage({ searchParams }: PageProps) {
     }
   }
 
-  // Fetch recently added professionals
+  // Fetch recently added professionals — STARRED ones only: this page is
+  // the sales pitch, so the strip shows the featured tier. is_featured
+  // lives on companies (not the MV), so resolve the starred ids first.
   const supabase = await createServerSupabaseClient()
   const locale = await getLocale()
-  const { data: recentCompanies } = await supabase
-    .from("mv_professional_summary")
-    .select("company_id, company_name, company_slug, company_city, cover_photo_url, company_logo, primary_service_name, primary_service_name_nl, primary_specialty_slug")
-    .in("company_status", ["listed", "prospected"])
-    .not("cover_photo_url", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(6)
+  const { data: featuredCompanyRows } = await supabase
+    .from("companies")
+    .select("id")
+    .eq("is_featured", true)
+    .in("status", ["listed", "prospected"])
+  const featuredIds = (featuredCompanyRows ?? []).map((r) => r.id)
+  const { data: recentCompanies } = featuredIds.length > 0
+    ? await supabase
+        .from("mv_professional_summary")
+        .select("company_id, company_name, company_slug, company_city, cover_photo_url, company_logo, primary_service_name, primary_service_name_nl, primary_specialty_slug")
+        .in("company_status", ["listed", "prospected"])
+        .in("company_id", featuredIds)
+        .not("cover_photo_url", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(6)
+    : { data: [] as any[] }
 
   const recentProfessionals: RecentProfessional[] = (recentCompanies ?? []).map((c: any) => {
     const rawName = c.primary_service_name ?? ""

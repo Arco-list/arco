@@ -97,9 +97,12 @@ export default async function ArchitectsPage({ params: paramsPromise, searchPara
 
   const rawProjects = await fetchDiscoverProjects(locale)
 
-  // Deduplicate by firm (max 1 project per owner), then take 6
+  // Starred work only — this page is the sales pitch, so the carousel
+  // shows the featured tier, not whatever the feed rotation surfaced.
+  // Deduplicate by firm (max 1 project per owner), then take 6.
   const seen = new Set<string>()
   const carouselProjects: ProjectCard[] = rawProjects
+    .filter((project) => project.is_featured === true)
     .map((project) => ({
       id: project.id ?? "",
       title: project.title ?? "",

@@ -1338,8 +1338,13 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
       {
         accessorKey: "seoImpressions28d",
         header: "Impressions",
-        sortingFn: (rowA, rowB) =>
-          (rowA.original.seoImpressions28d ?? -1) - (rowB.original.seoImpressions28d ?? -1),
+        // Indexed-with-0-impressions sorts ABOVE "Not indexed" (-2) and
+        // pending "—" rows (-1) — mirrors the projects table.
+        sortingFn: (rowA, rowB) => {
+          const rank = (r: AdminCompanyRow) =>
+            r.seoIndexed === false ? -2 : r.seoImpressions28d ?? -1
+          return rank(rowA.original) - rank(rowB.original)
+        },
         cell: ({ row }) => {
           const r = row.original
           if (r.seoIndexed === false) {
@@ -1722,18 +1727,22 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 const label = stage.status === "invited" ? "Invited" : companyStatusLabel(stage.status)
 
                 // Inline connector rate before this card. Sequential hops:
-                // Added→Prospected, Invited→Draft, Draft→Listed.
-                // Prospected→Invited is a parallel-entry hop (rendered as
-                // a plain line, no rate); the bypass arc covers
-                // Prospected→Draft. Listed→Unlisted and Unlisted→
-                // Deactivated are leaks, not conversions.
+                // Added→Prospected, Draft→Listed. Prospected→Invited is a
+                // parallel-entry hop (plain line, no rate); the bypass arc
+                // covers Prospected→Draft. Invited→Created carries NO rate:
+                // the cohort math counted listed/unlisted on both sides
+                // (as if every listed company had passed through Invited),
+                // which rendered a fake 100% when zero invites converted.
+                // The honest invite-acceptance rate ("% Accepted") lives on
+                // the growth dashboard, computed from invite provenance.
+                // Listed→Unlisted and Unlisted→Deactivated are leaks, not
+                // conversions.
                 let rate = ""
                 let suppressConnector = false
                 if (i > 0) {
                   const prev = COMPANY_FUNNEL[i - 1].status
                   const show =
                     (prev === "added" && stage.status === "prospected") ||
-                    (prev === "invited" && stage.status === "created") ||
                     (prev === "created" && stage.status === "listed")
                   if (show) {
                     rate = companyConversionRate(companyCohortFor(prev), companyCohortFor(stage.status))

@@ -132,9 +132,13 @@ async function loadLandingData(locale: string) {
         logo_url,
         hero_photo_url,
         primary_service_id,
-        primary_service:categories!companies_primary_service_id_fkey(name, name_nl)
+        primary_service:categories!companies_primary_service_id_fkey!inner(name, name_nl, slug)
       `)
       .eq("is_featured", true)
+      // Section is titled "Uitgelichte architecten" — starred ARCHITECTS
+      // only (interior designers etc. get their stars on discover), shown
+      // in rotation: the pool is shuffled per request and sliced to 3.
+      .eq("primary_service.slug", "architect")
       .in("status", ["listed", "prospected"]),
   ])
 

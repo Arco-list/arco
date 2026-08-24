@@ -813,16 +813,26 @@ export function useProjectsQuery({
         }
         // SSR only knows its own page, so `total` starts at 15 — fetch
         // the real count in the background without touching the grid.
+        // NB: deliberately NOT gated on this effect run's `cancelled`
+        // flag — the effect re-runs on taxonomy load moments after
+        // mount, and when the count resolved after that cleanup the
+        // update was dropped while the one-shot flag blocked retries,
+        // leaving the counter stuck at 15 on some loads. The one-shot
+        // flag is set on SUCCESS, and the result applies as long as the
+        // grid still shows the SSR page (a real filter fetch sets its
+        // own total and wins).
         if (!ssrTotalCorrectedRef.current && initialProjects.length === DEFAULT_PAGE_SIZE) {
-          ssrTotalCorrectedRef.current = true
           void (async () => {
             const supabase = getBrowserSupabaseClient()
             const { count } = await supabase
               .from("project_search_documents")
               .select("id", { count: "exact", head: true })
-            if (!cancelled && typeof count === "number" && count > 0) {
-              setTotal(count)
-              setHasMore(count > initialProjects.length)
+            if (typeof count === "number" && count > 0 && !ssrTotalCorrectedRef.current) {
+              ssrTotalCorrectedRef.current = true
+              if (hasInitialDataRef.current) {
+                setTotal(count)
+                setHasMore(count > initialProjects.length)
+              }
             }
           })()
         }
