@@ -171,8 +171,12 @@ export default async function UsersPage() {
         .eq("status", "active"),
     ])
 
+    // NB: extractors match each source's shape — these were SWAPPED
+    // (professionals read .person.auth_user_id, contacts read .user_id),
+    // so both loops always skipped and only OWNED companies ever showed
+    // in the Company column; memberships silently dropped.
     for (const row of (teamMemberRows ?? []) as any[]) {
-      const userId = row?.person?.auth_user_id as string | undefined
+      const userId = row?.user_id as string | undefined
       if (!userId || !row.companies) continue
       addCompany(userId, row.companies as unknown as { id: string; name: string; slug: string; status: string })
     }
@@ -182,9 +186,10 @@ export default async function UsersPage() {
       addCompany(row.owner_id, row)
     }
 
-    for (const row of memberRows ?? []) {
-      if (!row.user_id || !row.companies) continue
-      addCompany(row.user_id, row.companies as unknown as { id: string; name: string; slug: string; status: string })
+    for (const row of (memberRows ?? []) as any[]) {
+      const userId = row?.person?.auth_user_id as string | undefined
+      if (!userId || !row.companies) continue
+      addCompany(userId, row.companies as unknown as { id: string; name: string; slug: string; status: string })
     }
   }
 

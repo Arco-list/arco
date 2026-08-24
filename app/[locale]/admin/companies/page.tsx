@@ -68,11 +68,16 @@ async function loadAdminCompaniesData() {
         .select("company_id")
         .in("role", ["owner", "admin", "member"])
         .eq("status", "active"),
-      // All contacts (owners / admins / members / leads) across companies,
-      // joined to persons for name + email + phone + source + auth status.
+      // Membership contacts (owners / admins / members) joined to persons.
+      // Role-filtered in the QUERY, not just the mapping: sales leads
+      // (role='contact') dominate this table (1,200+ rows) and an
+      // unbounded select silently truncates at PostgREST's 1,000-row cap
+      // with arbitrary ordering — real owners randomly vanished from the
+      // Users column once the pipeline grew past the cap.
       supabase
         .from("company_contacts")
-        .select("id, company_id, role, status, last_contacted_at, next_follow_up_at, notes, person:persons(id, first_name, last_name, email, phone, phone_country_code, source, auth_user_id)"),
+        .select("id, company_id, role, status, last_contacted_at, next_follow_up_at, notes, person:persons(id, first_name, last_name, email, phone, phone_country_code, source, auth_user_id)")
+        .in("role", ["owner", "admin", "member"]),
     ])
 
   if (companiesQuery.error) {

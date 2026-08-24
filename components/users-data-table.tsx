@@ -416,7 +416,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
             <div className="flex items-center gap-3">
               {row.original.avatarUrl ? (
                 <div className="arco-table-avatar">
-                  <img src={row.original.avatarUrl} alt={row.original.displayName} />
+                  <img src={row.original.avatarUrl} alt={row.original.displayName} referrerPolicy="no-referrer" />
                 </div>
               ) : (
                 <div className="arco-table-avatar" style={{ background: "#f5f5f4", color: "#6b6b68" }}>

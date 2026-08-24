@@ -937,6 +937,44 @@ export async function changeCompanyOwnerAction(input: {
   // demotes any prior owner contact and upserts the new one.
   await ensureCompanyOwnerContact(serviceClient, idResult.data, targetUser.id)
 
+  // Team-member row — part of the claim convention (dashboard team list,
+  // credit attribution) that a backend transfer previously skipped.
+  const { data: existingPro } = await serviceClient
+    .from("professionals")
+    .select("id")
+    .eq("user_id", targetUser.id)
+    .eq("company_id", idResult.data)
+    .maybeSingle()
+  if (!existingPro) {
+    await serviceClient
+      .from("professionals")
+      .insert({ user_id: targetUser.id, company_id: idResult.data, is_available: true } as any)
+  }
+
+  // Lifecycle: "listed" means CLAIMED. A transfer out of a catalogue
+  // status promotes the company — listed when it has live published
+  // work, created (claimed, not yet listed) otherwise. This also lets
+  // the DB trigger mark the company's prospects as converted.
+  const { data: companyRow } = await serviceClient
+    .from("companies")
+    .select("status")
+    .eq("id", idResult.data)
+    .maybeSingle()
+  if (companyRow && ["added", "prospected", "invited", "unclaimed"].includes(companyRow.status as string)) {
+    const { data: activePP } = await serviceClient
+      .from("project_professionals")
+      .select("id, projects!inner(status)")
+      .eq("company_id", idResult.data)
+      .in("status", ["listed", "live_on_page"])
+      .eq("projects.status", "published")
+      .limit(1)
+    const nextStatus = (activePP?.length ?? 0) > 0 ? "listed" : "created"
+    await serviceClient
+      .from("companies")
+      .update({ status: nextStatus, setup_completed: true } as any)
+      .eq("id", idResult.data)
+  }
+
   revalidatePath("/", "layout")
   return { success: true }
 }

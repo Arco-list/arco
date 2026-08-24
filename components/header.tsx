@@ -624,7 +624,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                     }`}
                   >
                     {avatarUrl ? (
-                      <img src={avatarUrl} alt="" className="w-7 h-7 rounded-full object-cover" />
+                      <img src={avatarUrl} alt="" className="w-7 h-7 rounded-full object-cover" referrerPolicy="no-referrer" />
                     ) : (
                       <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium" style={{ background: transparent && !isScrolled ? "rgba(255,255,255,.2)" : "#1c1c1a", color: "#fff" }}>
                         {userInitial}

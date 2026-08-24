@@ -605,14 +605,27 @@ const SOURCE_LABELS: Record<string, string> = {
   invited: "Invited",
 }
 
+/** Canonical bare-domain form ("valkdesign.nl") — strips protocol, www,
+ *  path and trailing slash so the column reads uniformly regardless of
+ *  what an import or paste stored. */
+function normalizeDomain(input: string | null | undefined): string {
+  if (!input) return ""
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .split("/")[0]
+}
+
 function DomainCell({ company, onVerify, onRefresh }: { company: AdminCompanyRow; onVerify: () => void; onRefresh: () => void }) {
   const [editing, setEditing] = useState(false)
-  const [value, setValue] = useState(company.domain ?? "")
+  const [value, setValue] = useState(normalizeDomain(company.domain))
 
   const handleSave = async () => {
     setEditing(false)
-    const trimmed = value.trim().toLowerCase()
-    if (trimmed === (company.domain ?? "")) return
+    const trimmed = normalizeDomain(value)
+    if (trimmed === normalizeDomain(company.domain)) return
     const supabase = getBrowserSupabaseClient()
     await supabase.from("companies").update({ domain: trimmed || null } as any).eq("id", company.id)
     toast.success("Domain updated")
@@ -628,7 +641,7 @@ function DomainCell({ company, onVerify, onRefresh }: { company: AdminCompanyRow
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onBlur={handleSave}
-        onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") { setValue(company.domain ?? ""); setEditing(false) } }}
+        onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") { setValue(normalizeDomain(company.domain)); setEditing(false) } }}
         onClick={(e) => e.stopPropagation()}
       />
     )
@@ -643,7 +656,7 @@ function DomainCell({ company, onVerify, onRefresh }: { company: AdminCompanyRow
         onClick={(e) => { e.stopPropagation(); setEditing(true) }}
         title="Click to edit domain"
       >
-        {company.domain || <span className="text-[#c4c4c2] italic">Add domain...</span>}
+        {normalizeDomain(company.domain) || <span className="text-[#c4c4c2] italic">Add domain...</span>}
       </button>
       <button
         type="button"

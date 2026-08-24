@@ -276,11 +276,20 @@ async function attachResolvedContacts(
 
     let resolved: ProspectResolvedContact
 
-    if ((r.status === "company" || r.status === "active") && ownerProfile) {
+    // Resolve to the owner profile ONLY when this prospect IS the owner
+    // (email match). The old status-only condition rebranded EVERY
+    // prospect of a converted company as the owner — three colleagues at
+    // one firm all displayed under the claimer's name.
+    const ownerEmail = ownerId ? emailByUserId.get(ownerId) ?? null : null
+    const prospectIsOwner = Boolean(
+      ownerEmail && r.email && ownerEmail.toLowerCase() === r.email.toLowerCase(),
+    )
+
+    if ((r.status === "company" || r.status === "active") && ownerProfile && prospectIsOwner) {
       resolved = {
         source: "owner",
         name: nameFromProfile(ownerProfile),
-        email: (ownerId && emailByUserId.get(ownerId)) ?? null,
+        email: ownerEmail,
         avatarUrl: ownerProfile.avatar_url ?? null,
         userId: ownerId,
       }
