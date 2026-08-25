@@ -34,7 +34,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { path: "", priority: 1.0, changeFrequency: "daily" },
     { path: "/projects", priority: 0.9, changeFrequency: "daily" },
     { path: "/professionals", priority: 0.9, changeFrequency: "daily" },
-    { path: "/businesses", priority: 0.6, changeFrequency: "monthly" },
+    // /businesses 307s to /businesses/architects — list the target, not
+    // the redirect (GSC flags redirecting sitemap URLs as not-indexed).
+    { path: "/businesses/architects", priority: 0.6, changeFrequency: "monthly" },
+    { path: "/businesses/professionals", priority: 0.6, changeFrequency: "monthly" },
     { path: "/about", priority: 0.4, changeFrequency: "monthly" },
   ]
 
