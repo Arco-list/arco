@@ -1059,6 +1059,33 @@ export async function updateProjectProfessionalStatusAction(input: {
     status: statusResult.data,
   })
 
+  // OWNER credits carry the project itself: unlisting the owner while
+  // projects.status stays 'published' left the project live in discover
+  // with a hidden owner (Wildenberg, Aug 25). Mirror the credit status
+  // onto the project — the inverse of company listing, which publishes
+  // owned projects. Contributor credits stay credit-only.
+  const { data: ppRow } = await supabase
+    .from("project_professionals")
+    .select("is_project_owner")
+    .eq("project_id", projectIdResult.data)
+    .eq("company_id", companyIdResult.data)
+    .maybeSingle()
+  if (ppRow?.is_project_owner) {
+    if (statusResult.data === "unlisted") {
+      await supabase
+        .from("projects")
+        .update({ status: "draft" })
+        .eq("id", projectIdResult.data)
+        .eq("status", "published")
+    } else if (statusResult.data === "live_on_page" || statusResult.data === "listed") {
+      await supabase
+        .from("projects")
+        .update({ status: "published" })
+        .eq("id", projectIdResult.data)
+        .eq("status", "draft")
+    }
+  }
+
   // Sync company listed status based on active projects
   await syncCompanyListedStatus(companyIdResult.data)
 
