@@ -909,7 +909,7 @@ export async function sendReply(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("inbound_emails")
-    .select("id, from_email, subject, thread_id, metadata, prospect_id")
+    .select("id, from_email, to_emails, subject, thread_id, metadata, prospect_id")
     .eq("id", id)
     .maybeSingle()
   if (error || !data) return { success: false, error: error?.message ?? "Email not found" }

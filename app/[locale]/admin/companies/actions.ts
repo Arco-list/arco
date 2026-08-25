@@ -246,10 +246,12 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
   // Funnel follows deliberate Showcase decisions (direction-sensitive):
   //
   //   Showcased -> Added   = "we're pulling this one": unpublishes the
-  //     page (status change above) AND exits its prospects from the
-  //     Sales funnel — status 'removed', sequences finished, pending
-  //     drip rows cancelled. Same semantic as the panel's Remove from
-  //     funnel.
+  //     page (status change above) and stops the outreach — sequences
+  //     finished, pending drip rows cancelled. Prospects that were
+  //     actually emailed KEEP their funnel presence at 'contacted' so
+  //     the Sales history (sends, opens, replies) stays visible
+  //     (Wildenberg asked to be delisted, Aug 25 — the row vanished);
+  //     never-emailed prospects exit as 'removed' like before.
   //   Added -> Showcased   = re-entering: revive 'removed' prospects to
   //     'prospect' so the company reappears on Sales. Sequence status
   //     is left alone — the panel offers Start/Restart as appropriate.
@@ -259,21 +261,35 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
   try {
     const svcFunnel = createServiceRoleSupabaseClient()
     if (oldStatus === "prospected" && parsedStatus.data === "added") {
+      const { data: kept } = await (svcFunnel as any)
+        .from("prospects")
+        .update({ status: "contacted", sequence_status: "finished" })
+        .eq("company_id", parsedCompanyId.data)
+        .gt("emails_sent", 0)
+        .not("status", "in", "(removed,contacted)")
+        .select("id")
       const { data: exited } = await (svcFunnel as any)
         .from("prospects")
         .update({ status: "removed", sequence_status: "finished" })
         .eq("company_id", parsedCompanyId.data)
+        .eq("emails_sent", 0)
         .neq("status", "removed")
         .select("id, status")
+      const keptRows = (kept ?? []) as Array<{ id: string }>
       const rows = (exited ?? []) as Array<{ id: string }>
-      if (rows.length > 0) {
-        await svcFunnel.from("prospect_events").insert(
-          rows.map((r) => ({
+      if (keptRows.length > 0 || rows.length > 0) {
+        await svcFunnel.from("prospect_events").insert([
+          ...keptRows.map((r) => ({
+            prospect_id: r.id,
+            event_type: "status_changed",
+            metadata: { new_status: "contacted", trigger: "company_demoted_to_added" },
+          })),
+          ...rows.map((r) => ({
             prospect_id: r.id,
             event_type: "status_changed",
             metadata: { new_status: "removed", trigger: "company_demoted_to_added" },
           })),
-        )
+        ])
         const { cancelPendingDripRows } = await import("@/lib/drip-queue")
         await cancelPendingDripRows(svcFunnel, { companyId: parsedCompanyId.data, reason: "manual" })
       }
