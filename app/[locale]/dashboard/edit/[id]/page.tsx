@@ -3001,6 +3001,9 @@ export default function ListingEditorPage() {
     }
   }
 
+  // In-flight lock for saveTier23Company — see comment inside.
+  const tier23SavingRef = useRef(false)
+
   // Save a tier 2/3 company after email is provided
   const saveTier23Company = async (inviteId: string, email: string) => {
     const trimmed = email.trim()
@@ -3009,6 +3012,14 @@ export default function ListingEditorPage() {
     const domain = getDomain(trimmed)
     if (domain && BLOCKED_EMAIL_DOMAINS.includes(domain)) { toast.error(tToast("use_company_email")); return }
     if (!projectId || !pendingTier23) return
+
+    // The email input calls this from BOTH Enter and blur — when the
+    // save's teardown unmounts the input, blur re-fires with the same
+    // value and dispatched a second invite email (steellife, Aug 25:
+    // two provider sends 9s apart for one credit). One save at a time;
+    // after success pendingTier23 is null so the blur echo no-ops, and
+    // an error clears the flag for a real retry.
+    if (tier23SavingRef.current) return
 
     // Check if company is already on the project (draft card may have companyId from Arco search)
     const checkCompanyId = draftCard?.companyId ?? null
@@ -3030,6 +3041,7 @@ export default function ListingEditorPage() {
 
     if (!userId) { toast.error(tToast("not_authenticated")); return }
 
+    tier23SavingRef.current = true
     try {
       const result = await createUnlistedCompanyAction({
         name: pendingTier23.companyName,
@@ -3155,6 +3167,8 @@ export default function ListingEditorPage() {
       toast.error(tToast("add_professional_failed"))
       // Keep pendingTier23 and re-open email field so user can retry
       setEditingInviteField({ inviteId, field: "email" })
+    } finally {
+      tier23SavingRef.current = false
     }
   }
 
