@@ -124,6 +124,16 @@ function ConnectionBadge({
         {conns.length === 1 ? conns[0].gmail_address : `${conns.length} mailboxes`}
         {" · "}last sync {lastSyncLabel}
       </span>
+      {/* The connections table and sync cron are per-address already —
+          this link is all it takes to bring a second mailbox (e.g. the
+          niek@ sender that showcase/outreach replies land in) into the
+          same inbox. */}
+      <Link
+        href="/api/auth/gmail"
+        className="text-[11px] text-[#016D75] hover:underline"
+      >
+        + Add mailbox
+      </Link>
     </div>
   )
 }
