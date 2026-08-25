@@ -377,7 +377,9 @@ export async function syncGscIndexation(): Promise<GscSyncResult> {
             ? p.position
             : (perf.position * prevImp + (p.position ?? 0) * p.impressions) / Math.max(1, perf.impressions)
         }
-        if (perf) perf.ctr = perf.impressions > 0 ? perf.clicks / perf.impressions : 0
+        // Stored as a PERCENT (33.33, not 0.3333) — same unit as the
+        // per-row mapping above; the admin tables append "%" verbatim.
+        if (perf) perf.ctr = perf.impressions > 0 ? Math.round((perf.clicks / perf.impressions) * 100 * 100) / 100 : 0
         const update = {
           seo_indexed: inspection.indexed,
           seo_indexation_state: inspection.state,
