@@ -1734,7 +1734,7 @@ export default function ListingEditorPage() {
   const companySearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [ownerCompanyServices, setOwnerCompanyServices] = useState<{ id: string; name: string; parentName?: string | null }[]>([])
   // Map of companyId → services for invited Arco companies (non-owner)
-  const [inviteCompanyServices, setInviteCompanyServices] = useState<Record<string, { id: string; name: string; parentName?: string | null }[]>>({})
+  const [inviteCompanyServices, setInviteCompanyServices] = useState<Record<string, { id: string; name: string; slug?: string | null; parentName?: string | null }[]>>({})
   const [confirmDeleteInviteId, setConfirmDeleteInviteId] = useState<string | null>(null)
   const [draftCard, setDraftCard] = useState<{ serviceIds: string[]; serviceName: string; companyName: string; companyLogo: string | null; email: string; companyId?: string | null } | null>(null)
 
@@ -2385,7 +2385,7 @@ export default function ListingEditorPage() {
     if (!data?.services_offered?.length) return
     const { data: cats } = await supabase
       .from("categories")
-      .select("id, name, parent_id")
+      .select("id, name, slug, parent_id")
       .in("id", data.services_offered)
     if (!cats) return
     // Resolve parent names for grouping
@@ -2397,9 +2397,26 @@ export default function ListingEditorPage() {
     }
     setInviteCompanyServices(prev => ({
       ...prev,
-      [companyId]: cats.map(c => ({ id: c.id, name: c.name, parentName: c.parent_id ? parentMap.get(c.parent_id) ?? null : null })),
+      [companyId]: cats.map(c => ({ id: c.id, name: c.name, slug: (c as any).slug ?? null, parentName: c.parent_id ? parentMap.get(c.parent_id) ?? null : null })),
     }))
   }, [supabase])
+
+  // Single-service companies: pre-select that service on the draft card
+  // so the publisher never opens the dropdown for e.g. a bathroom
+  // specialist that only does bathrooms. Runs whenever the (async)
+  // services arrive; only fires while nothing is selected yet, so a
+  // deliberate deselection isn't fought.
+  useEffect(() => {
+    if (!draftCard?.companyId || draftCard.serviceIds.length > 0) return
+    const services = inviteCompanyServices[draftCard.companyId]
+    if (services?.length !== 1) return
+    const only = services[0]
+    const displayName = translateProfessionalService((only as any).slug ?? only.name, locale) ?? only.name
+    setDraftCard(d => {
+      if (!d || d.companyId !== draftCard.companyId || d.serviceIds.length > 0) return d
+      return { ...d, serviceIds: [only.id], serviceName: displayName }
+    })
+  }, [draftCard?.companyId, inviteCompanyServices]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load services for all companies on non-owner invite cards
   useEffect(() => {
@@ -2956,6 +2973,25 @@ export default function ListingEditorPage() {
                         }
                       : prev
                   )
+                  // Places has no email field — scrape the company site
+                  // for one (footer / contact page) and prefill. Skipped
+                  // if the publisher already started typing a local part.
+                  if (hostname) {
+                    fetch(`/api/scrape-email?domain=${encodeURIComponent(hostname)}`)
+                      .then(r => (r.ok ? r.json() : null))
+                      .then(j => {
+                        const email = typeof j?.email === "string" ? j.email : null
+                        if (!email) return
+                        const inp = document.querySelector<HTMLInputElement>(".email-prefix-inp")
+                        if (inp && inp.value.trim()) return
+                        setPendingTier23(prev =>
+                          prev && prev.googlePlaceId === googlePlaceId
+                            ? { ...prev, prefillEmail: email }
+                            : prev
+                        )
+                      })
+                      .catch(() => {})
+                  }
                 }
               }
             )
@@ -5245,8 +5281,11 @@ export default function ListingEditorPage() {
                             <input
                               autoFocus
                               className="email-prefix-inp"
+                              // Scraped from the company site — remount via
+                              // key so the async prefill lands in the field.
+                              key={pendingTier23.prefillEmail?.startsWith("@") === false ? pendingTier23.prefillEmail : "empty"}
                               ref={el => { if (el) autoSizeInput(el) }}
-                              defaultValue=""
+                              defaultValue={pendingTier23.prefillEmail && !pendingTier23.prefillEmail.startsWith("@") ? pendingTier23.prefillEmail.split("@")[0] : ""}
                               onChange={e => autoSizeInput(e.target)}
                               onBlur={e => {
                                 const name = e.target.value.trim()
@@ -5611,8 +5650,9 @@ export default function ListingEditorPage() {
                           <input
                             autoFocus
                             className="email-prefix-inp"
+                            key={pendingTier23.prefillEmail?.startsWith("@") === false ? pendingTier23.prefillEmail : "empty"}
                             ref={el => { if (el) autoSizeInput(el) }}
-                            defaultValue=""
+                            defaultValue={pendingTier23.prefillEmail && !pendingTier23.prefillEmail.startsWith("@") ? pendingTier23.prefillEmail.split("@")[0] : ""}
                             onChange={e => autoSizeInput(e.target)}
                             onBlur={e => {
                               const name = e.target.value.trim()
