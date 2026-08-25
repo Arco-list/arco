@@ -49,6 +49,9 @@ export type InboundEmailRow = {
   id: string
   fromEmail: string
   fromName: string | null
+  /** Which of our mailboxes received it (hello@ vs niek@) — the first
+   *  arcolist.com address in the To header. */
+  toEmail: string | null
   subject: string | null
   snippet: string | null
   receivedAt: string
@@ -103,7 +106,7 @@ export async function fetchInboundEmails(opts: FetchOpts = {}): Promise<FetchInb
   let query = (supabase as any)
     .from("inbound_emails")
     .select(
-      "id, from_email, from_name, subject, snippet, received_at, status, prospect_id",
+      "id, from_email, from_name, to_emails, subject, snippet, received_at, status, prospect_id",
       { count: "exact" },
     )
     .order("received_at", { ascending: false })
@@ -324,10 +327,12 @@ export async function fetchInboundEmails(opts: FetchOpts = {}): Promise<FetchInb
       ?? companyDomainMatch?.id
       ?? null
 
+    const toEmails = (r.to_emails ?? []) as string[]
     return {
       id: r.id,
       fromEmail: r.from_email,
       fromName: r.from_name,
+      toEmail: toEmails.find((e) => e.toLowerCase().endsWith("@arcolist.com")) ?? toEmails[0] ?? null,
       subject: r.subject,
       snippet: r.snippet,
       receivedAt: r.received_at,
@@ -500,10 +505,12 @@ export async function fetchInboundEmailDetail(id: string): Promise<InboundEmailD
       .then(() => undefined)
   }
 
+  const detailToEmails = (row.to_emails ?? []) as string[]
   return {
     id: row.id,
     fromEmail: row.from_email,
     fromName: row.from_name,
+    toEmail: detailToEmails.find((e) => e.toLowerCase().endsWith("@arcolist.com")) ?? detailToEmails[0] ?? null,
     subject: row.subject,
     snippet: row.snippet,
     receivedAt: row.received_at,
@@ -919,6 +926,11 @@ export async function sendReply(
 
   try {
     const { sendGmailReply } = await import("@/lib/gmail/send")
+    // Reply from the mailbox that received the message — thread ids are
+    // per-mailbox, so hello@ replying to a thread synced from niek@ 404s.
+    const rowToEmails = (row.to_emails ?? []) as string[]
+    const receivingMailbox =
+      rowToEmails.find((e) => e.toLowerCase().endsWith("@arcolist.com")) ?? null
     await sendGmailReply(supabase, {
       to: row.from_email,
       subject: replySubject,
@@ -926,6 +938,7 @@ export async function sendReply(
       threadId: row.thread_id ?? null,
       inReplyTo,
       references,
+      preferredAddress: receivingMailbox,
     })
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Send failed" }

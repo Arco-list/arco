@@ -39,6 +39,12 @@ export type SendReplyArgs = {
   inReplyTo?: string | null
   /** RFC 5322 References chain, if any. We append inReplyTo if both are missing. */
   references?: string | null
+  /** Our mailbox that RECEIVED the message being replied to (e.g.
+   *  "niek@arcolist.com"). Gmail thread ids are per-mailbox, so the
+   *  reply must go out through the same connection — sending via
+   *  another mailbox with this thread id 404s ("Requested entity was
+   *  not found"). Falls back to the oldest connection when absent. */
+  preferredAddress?: string | null
 }
 
 export type SendReplyResult = {
@@ -55,14 +61,22 @@ export async function sendGmailReply(
     .from("gmail_connections")
     .select("id, gmail_address, refresh_token, access_token, access_token_expires_at")
     .order("created_at", { ascending: true })
-    .limit(1)
 
   if (connErr) throw new Error(`Could not load gmail_connections: ${connErr.message}`)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const conn = ((connections ?? []) as any[])[0]
+  const conns = (connections ?? []) as any[]
+  const preferred = args.preferredAddress?.toLowerCase() ?? null
+  const matched = preferred
+    ? conns.find((c) => String(c.gmail_address).toLowerCase() === preferred) ?? null
+    : null
+  const conn = matched ?? conns[0]
   if (!conn) {
     throw new Error("No connected Gmail mailbox — connect one at /admin/inbox first.")
   }
+  // Thread ids only exist within their own mailbox — if we couldn't
+  // match the receiving mailbox's connection, drop the threadId and
+  // let In-Reply-To/References do the threading instead of 404ing.
+  const threadId = matched || !preferred ? args.threadId ?? null : null
 
   const accessToken = await getValidAccessToken(supabase, conn)
   const fromAddress = `Niek van Leeuwen <${conn.gmail_address}>`
@@ -77,7 +91,7 @@ export async function sendGmailReply(
   })
 
   const body: { raw: string; threadId?: string } = { raw }
-  if (args.threadId) body.threadId = args.threadId
+  if (threadId) body.threadId = threadId
 
   const r = await fetch(`${GMAIL_API_BASE}/users/me/messages/send`, {
     method: "POST",

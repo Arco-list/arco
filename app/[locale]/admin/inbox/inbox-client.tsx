@@ -338,6 +338,7 @@ export function InboxClient({
           <thead>
             <tr>
               <th>From</th>
+              <th>To</th>
               <th>Company</th>
               <th>Subject</th>
               <th style={{ textAlign: "right" }}>Received</th>
@@ -347,7 +348,7 @@ export function InboxClient({
           <tbody>
             {emails.length === 0 && (
               <tr>
-                <td colSpan={5} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
+                <td colSpan={6} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
                   {search ? "No emails match your search." : "No emails yet."}
                 </td>
               </tr>
@@ -387,6 +388,19 @@ export function InboxClient({
                         {row.fromEmail}
                       </span>
                     </div>
+                  </td>
+
+                  {/* To — which of our mailboxes it landed in, local part
+                      only ("Niek" / "Hello"); full address on hover. */}
+                  <td>
+                    {row.toEmail && (
+                      <span className="arco-table-secondary" title={row.toEmail}>
+                        {(() => {
+                          const local = row.toEmail.split("@")[0]
+                          return local.charAt(0).toUpperCase() + local.slice(1)
+                        })()}
+                      </span>
+                    )}
                   </td>
 
                   {/* Company — populated either via the prospect path or
@@ -547,7 +561,7 @@ export function InboxClient({
                             ? handleUnarchive(row.id)
                             : handleArchive(row.id)
                         }
-                        className="h-8 px-2.5 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
+                        className="h-8 px-2.5 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors whitespace-nowrap"
                       >
                         {row.status === "archived" ? "Move back" : "Archive"}
                       </button>
@@ -688,7 +702,7 @@ export function InboxClient({
 
             <div className="mt-4 flex items-center justify-between gap-2">
               <p className="text-[10px] text-[#a1a1a0]">
-                Sends from <code className="text-[10px]">hello@arcolist.com</code> via Gmail. Threaded to the original conversation.
+                Sends from <code className="text-[10px]">{respondTarget?.toEmail ?? "hello@arcolist.com"}</code> via Gmail. Threaded to the original conversation.
               </p>
               <div className="flex items-center gap-2">
                 <button
