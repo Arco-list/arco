@@ -19,7 +19,6 @@ import {
   type SalesSortDir,
   type SequenceStatus,
   type SequenceFilterValue,
-  promoteCompanyToShowcase,
 } from "./actions"
 import {
   DropdownMenu,
@@ -2004,58 +2003,27 @@ function LogPill({ onActivate }: { onActivate: () => void }) {
  *  the outreach company to a visible showcase ("prospected") — the
  *  bridge from the Sales pipeline to the marketplace. */
 function ShowcasePill({ companyId, slug }: { companyId: string; slug: string | null }) {
-  const [state, setState] = useState<"idle" | "busy" | "done">("idle")
+  const [clicked, setClicked] = useState(false)
   void slug
-  if (state === "done") {
-    return (
-      <a
-        href={`/dashboard/company?company_id=${companyId}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={(e) => e.stopPropagation()}
-        className="text-[11px] text-[#016D75] hover:underline shrink-0"
-      >
-        Showcase ✓
-      </a>
-    )
-  }
+  // A real <a target="_blank"> is never popup-blocked — the previous
+  // window.open()-after-await approach silently failed in Safari. The
+  // route promotes server-side, then redirects the new tab into the
+  // company editor.
   return (
-    <span
-      role="button"
-      tabIndex={0}
-      onClick={async (e) => {
-        e.preventDefault()
+    <a
+      href={`/api/admin/promote-showcase?company_id=${companyId}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => {
         e.stopPropagation()
-        if (state === "busy") return
-        setState("busy")
-        // Open the tab synchronously, inside the click gesture — calling
-        // window.open after the await gets popup-blocked (the gesture
-        // context is gone by then), so the edit page never appeared. No
-        // "noopener" either: it makes window.open return null, and we
-        // need the handle to point the tab at the edit page on success.
-        const tab = window.open("", "_blank")
-        const result = await promoteCompanyToShowcase(companyId)
-        // Absolute URL: the pre-opened tab is about:blank, and a relative
-        // href assigned to another window resolves against about:blank
-        // (not our origin) in some browsers — the tab then stays blank.
-        const editUrl = `${window.location.origin}/dashboard/company?company_id=${companyId}`
-        if (result.success) {
-          setState("done")
-          toast.success("Showcase actief — bedrijfspagina wordt geopend")
-          if (tab) tab.location.href = editUrl
-          else window.location.assign(editUrl)
-        } else {
-          tab?.close()
-          setState("idle")
-          toast.error(result.error ?? "Promoveren mislukt")
-        }
+        setClicked(true)
+        toast.success("Showcase actief — bedrijfspagina geopend in nieuw tabblad")
       }}
-      className={ACTION_PILL_CLASS}
-      style={{ opacity: state === "busy" ? 0.5 : undefined }}
+      className={clicked ? "text-[11px] text-[#016D75] hover:underline shrink-0" : ACTION_PILL_CLASS}
       title="Maak zichtbaar als showcase op de marketplace"
     >
-      Showcase
-    </span>
+      {clicked ? "Showcase ✓" : "Showcase"}
+    </a>
   )
 }
 
