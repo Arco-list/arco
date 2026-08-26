@@ -65,6 +65,9 @@ type LinkedCompany = {
   status: string
   isOwner: boolean
   companyStatus: string
+  /** Photographer credits are documentation, not trades — excluded from
+   *  the accepted/invited Professionals counts. */
+  isPhotographer: boolean
 }
 
 const COMPANY_STATUS_DOT: Record<string, string> = {
@@ -566,13 +569,25 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
     {
       id: "linkedCount",
       header: "Professionals",
-      accessorFn: (row) => row.companies.length,
-      sortingFn: (rowA, rowB) => rowA.original.companies.length - rowB.original.companies.length,
+      // Accepted (live_on_page/listed credits) vs still-invited, excluding
+      // photographers. Sorts by accepted first so the most-converted
+      // projects rise together.
+      accessorFn: (row) => row.companies.filter((c) => !c.isPhotographer && (c.status === "live_on_page" || c.status === "listed")).length,
+      sortingFn: (rowA, rowB) => {
+        const accepted = (r: typeof rowA) => r.original.companies.filter((c) => !c.isPhotographer && (c.status === "live_on_page" || c.status === "listed")).length
+        const invited = (r: typeof rowA) => r.original.companies.filter((c) => !c.isPhotographer && c.status === "invited").length
+        return accepted(rowA) - accepted(rowB) || invited(rowA) - invited(rowB)
+      },
       cell: ({ row }) => {
-        const count = row.original.companies.length
-        return count > 0
-          ? <span className="arco-table-primary">{count}</span>
-          : <span className="arco-table-secondary">—</span>
+        const accepted = row.original.companies.filter((c) => !c.isPhotographer && (c.status === "live_on_page" || c.status === "listed")).length
+        const invited = row.original.companies.filter((c) => !c.isPhotographer && c.status === "invited").length
+        if (accepted === 0 && invited === 0) return <span className="arco-table-secondary">—</span>
+        return (
+          <span title={`${accepted} accepted · ${invited} invited`} className="arco-table-nowrap">
+            <span className="arco-table-primary">{accepted}</span>
+            {invited > 0 && <span className="arco-table-secondary"> · {invited} invited</span>}
+          </span>
+        )
       },
     },
     {

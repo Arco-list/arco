@@ -205,6 +205,10 @@ export type AdminCompanyRow = {
   contacts: AdminCompanyContact[]
   projectsAccepted: number
   projectsPending: number
+  /** Contributors on projects this company OWNS: accepted (live/listed)
+   *  vs still-invited credits — the per-anchor tagging metric. */
+  teamAccepted: number
+  teamInvited: number
   projects: AdminLinkedProject[]
   createdAt: string | null
   logoUrl: string | null
@@ -1291,6 +1295,27 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 </DropdownMenu>
               )}
             </div>
+          )
+        },
+      },
+      {
+        id: "teamCount",
+        header: "Professionals",
+        // Contributors on projects this company owns — mirrors the
+        // Projects table's accepted · invited split.
+        accessorFn: (row) => row.teamAccepted,
+        enableSorting: true,
+        sortingFn: (rowA, rowB) =>
+          rowA.original.teamAccepted - rowB.original.teamAccepted
+          || rowA.original.teamInvited - rowB.original.teamInvited,
+        cell: ({ row }) => {
+          const { teamAccepted, teamInvited } = row.original
+          if (teamAccepted === 0 && teamInvited === 0) return <span className="arco-table-secondary">—</span>
+          return (
+            <span title={`${teamAccepted} accepted · ${teamInvited} invited`} className="arco-table-nowrap">
+              <span className="arco-table-primary">{teamAccepted}</span>
+              {teamInvited > 0 && <span className="arco-table-secondary"> · {teamInvited} invited</span>}
+            </span>
           )
         },
       },

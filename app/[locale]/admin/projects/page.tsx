@@ -32,7 +32,7 @@ async function loadAdminProjectsData() {
     serviceSupabase.from("project_taxonomy_options").select("id, name, slug"),
     serviceSupabase
       .from("project_professionals")
-      .select("project_id, status, is_project_owner, company:companies(id, name, slug, status)")
+      .select("project_id, status, is_project_owner, company:companies(id, name, slug, status, primary_service:categories!companies_primary_service_id_fkey(slug))")
       .not("company_id", "is", null),
   ])
 
@@ -84,14 +84,14 @@ async function loadAdminProjectsData() {
   }
 
   // Build per-project companies map
-  type LinkedCompany = { id: string; name: string; slug: string | null; status: string; isOwner: boolean; companyStatus: string }
+  type LinkedCompany = { id: string; name: string; slug: string | null; status: string; isOwner: boolean; companyStatus: string; isPhotographer: boolean }
   const statusSortOrder: Record<string, number> = {
     listed: 0, live_on_page: 1, invited: 2, unlisted: 3, rejected: 4, removed: 5,
   }
   const projectCompaniesMap = new Map<string, LinkedCompany[]>()
   for (const row of projectProfessionalsResult.data ?? []) {
     if (!row.project_id) continue
-    const company = row.company as unknown as { id: string; name: string; slug: string | null; status: string | null } | null
+    const company = row.company as unknown as { id: string; name: string; slug: string | null; status: string | null; primary_service: { slug: string | null } | null } | null
     if (!company?.id || !company?.name) continue
     const existing = projectCompaniesMap.get(row.project_id) ?? []
     if (!existing.some((c) => c.id === company.id)) {
@@ -102,6 +102,7 @@ async function loadAdminProjectsData() {
         status: (row as any).status ?? "invited",
         isOwner: !!(row as any).is_project_owner,
         companyStatus: company.status ?? "unlisted",
+        isPhotographer: company.primary_service?.slug === "photographer",
       })
       projectCompaniesMap.set(row.project_id, existing)
     }

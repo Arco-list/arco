@@ -46,7 +46,7 @@ async function loadAdminCompaniesData() {
       // Architect, Interior Designer, …).
       supabase
         .from("categories")
-        .select("id, name, can_publish_projects, parent_id, sort_order")
+        .select("id, name, slug, can_publish_projects, parent_id, sort_order")
         .eq("is_active", true)
         .eq("category_type", "Professional")
         .order("sort_order", { ascending: true, nullsFirst: false }),
@@ -135,6 +135,42 @@ async function loadAdminCompaniesData() {
         professional_count: typeof row.professional_count === "number" ? row.professional_count : 0,
         projects_linked: typeof row.projects_linked === "number" ? row.projects_linked : 0,
       })
+    }
+  }
+
+  // Contributors pulled in by each anchor: non-owner credits on projects
+  // this company OWNS, split accepted (live/listed) vs still-invited —
+  // the per-anchor tagging metric. Photographer credits are documentation,
+  // not trades — excluded from the counts.
+  const photographerServiceIds = new Set(
+    (servicesQuery.data ?? [])
+      .filter((c) => (c as { slug?: string | null }).slug === "photographer")
+      .map((c) => c.id),
+  )
+  const photographerCompanyIds = new Set(
+    (companiesQuery.data ?? [])
+      .filter((c) => c.primary_service_id && photographerServiceIds.has(c.primary_service_id))
+      .map((c) => c.id),
+  )
+  const projectOwnerCompany = new Map<string, string>()
+  for (const row of projectProfessionalsQuery.data ?? []) {
+    const project = row?.project as unknown as { id: string } | null
+    if (row?.is_project_owner && row.company_id && project?.id) {
+      projectOwnerCompany.set(project.id, row.company_id as string)
+    }
+  }
+  const companyTeamAccepted = new Map<string, number>()
+  const companyTeamInvited = new Map<string, number>()
+  for (const row of projectProfessionalsQuery.data ?? []) {
+    if (!row?.company_id || row.is_project_owner) continue
+    if (photographerCompanyIds.has(row.company_id)) continue
+    const project = row.project as unknown as { id: string } | null
+    const ownerId = project?.id ? projectOwnerCompany.get(project.id) : undefined
+    if (!ownerId) continue
+    if (row.status === "listed" || row.status === "live_on_page") {
+      companyTeamAccepted.set(ownerId, (companyTeamAccepted.get(ownerId) ?? 0) + 1)
+    } else if (row.status === "invited") {
+      companyTeamInvited.set(ownerId, (companyTeamInvited.get(ownerId) ?? 0) + 1)
     }
   }
 
@@ -357,6 +393,8 @@ async function loadAdminCompaniesData() {
       ownerAvatarUrl: isUnclaimed ? null : (ownerProfile?.avatar_url ?? null),
       projectsAccepted: companyProjectsAccepted.get(company.id) ?? 0,
       projectsPending: companyProjectsPending.get(company.id) ?? 0,
+      teamAccepted: companyTeamAccepted.get(company.id) ?? 0,
+      teamInvited: companyTeamInvited.get(company.id) ?? 0,
       projects: companyProjectsList.get(company.id) ?? [],
       createdAt: company.created_at ?? null,
       logoUrl: company.logo_url ?? null,
@@ -426,6 +464,8 @@ async function loadAdminCompaniesData() {
         ownerAvatarUrl: null,
         projectsAccepted: 0,
         projectsPending: data.count,
+        teamAccepted: 0,
+        teamInvited: 0,
         projects: [],
         createdAt: data.latestInvitedAt,
         logoUrl: null,
