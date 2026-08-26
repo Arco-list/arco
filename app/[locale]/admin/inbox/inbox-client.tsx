@@ -1,7 +1,24 @@
 "use client"
 
 import { useCallback, useEffect, useState, useTransition } from "react"
+import { ArrowUpRight } from "lucide-react"
 import { toast } from "sonner"
+
+// Sender domains that are personal inboxes, not company websites — no
+// external-site arrow for these.
+const FREE_MAIL_DOMAINS = new Set([
+  "gmail.com", "googlemail.com",
+  "outlook.com", "hotmail.com", "hotmail.nl", "live.com", "live.nl",
+  "yahoo.com", "yahoo.nl", "icloud.com", "me.com",
+  "proton.me", "protonmail.com",
+  "ziggo.nl", "kpn.nl", "kpnmail.nl", "planet.nl", "home.nl",
+])
+
+function externalSiteFor(email: string): string | null {
+  const dom = email.split("@")[1]?.toLowerCase()
+  if (!dom || FREE_MAIL_DOMAINS.has(dom)) return null
+  return `https://${dom}`
+}
 import {
   archiveInboundEmail,
   fetchInboundEmails,
@@ -502,6 +519,21 @@ export function InboxClient({
                             )
                           })()}
                         </span>
+                        {(() => {
+                          const site = externalSiteFor(row.fromEmail)
+                          return site ? (
+                            <a
+                              href={site}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="shrink-0 text-[#a2a29f] hover:text-[#016D75] transition-colors"
+                              title={site}
+                            >
+                              <ArrowUpRight className="h-3.5 w-3.5" />
+                            </a>
+                          ) : null
+                        })()}
                         {row.prospectSequence && (
                           <span className="status-pill">
                             <span
@@ -517,7 +549,24 @@ export function InboxClient({
                         )}
                       </div>
                     ) : (
-                      <span className="arco-table-secondary">—</span>
+                      <span className="arco-table-secondary inline-flex items-center gap-1">
+                        —
+                        {(() => {
+                          const site = externalSiteFor(row.fromEmail)
+                          return site ? (
+                            <a
+                              href={site}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="shrink-0 text-[#a2a29f] hover:text-[#016D75] transition-colors"
+                              title={site}
+                            >
+                              <ArrowUpRight className="h-3.5 w-3.5" />
+                            </a>
+                          ) : null
+                        })()}
+                      </span>
                     )}
                   </td>
 
