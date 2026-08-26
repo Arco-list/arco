@@ -366,3 +366,77 @@ export async function dispatchProfessionalInvite(
 
   return { success: introResult.success, sequence: "drip" }
 }
+
+/**
+ * Dispatch invites that were credited while the project was still a
+ * draft. The per-credit dispatcher refuses unpublished projects, and
+ * nothing re-triggered on publish — 8 credits on "Hedendaags" (Aug 25)
+ * sat at Not started forever. Call this whenever a project transitions
+ * to published.
+ *
+ * Guards: only non-owner credits with status 'invited' and an email;
+ * skips recipients who ever received a new-professional-invite already
+ * (re-publish, or credited on a second project — one invite chain per
+ * recipient is enough, the drip dedup handles the rest).
+ */
+export async function dispatchPendingInvitesForProject(
+  supabase: Supabase,
+  projectId: string,
+): Promise<{ dispatched: number; skipped: number }> {
+  const { data: credits } = await supabase
+    .from("project_professionals")
+    .select("invited_email, company_id")
+    .eq("project_id", projectId)
+    .eq("is_project_owner", false)
+    .eq("status", "invited")
+    .not("invited_email", "is", null)
+    .neq("invited_email", "")
+
+  const rows = (credits ?? []) as Array<{ invited_email: string; company_id: string | null }>
+  if (rows.length === 0) return { dispatched: 0, skipped: 0 }
+
+  // Inviter display name: the project owner's company.
+  const { data: ownerPP } = await supabase
+    .from("project_professionals")
+    .select("company_id")
+    .eq("project_id", projectId)
+    .eq("is_project_owner", true)
+    .maybeSingle()
+  let inviterName = "the project owner"
+  if (ownerPP?.company_id) {
+    const { data: ownerCompany } = await supabase
+      .from("companies")
+      .select("name")
+      .eq("id", ownerPP.company_id)
+      .maybeSingle()
+    if (ownerCompany?.name) inviterName = ownerCompany.name
+  }
+
+  let dispatched = 0
+  let skipped = 0
+  for (const credit of rows) {
+    const email = credit.invited_email.trim().toLowerCase()
+    if (!email) { skipped++; continue }
+    const { data: alreadySent } = await supabase
+      .from("email_events")
+      .select("id")
+      .eq("recipient_email", email)
+      .eq("template", "new-professional-invite")
+      .limit(1)
+      .maybeSingle()
+    if (alreadySent) { skipped++; continue }
+    try {
+      const result = await dispatchProfessionalInvite(supabase, {
+        recipientEmail: credit.invited_email,
+        projectId,
+        inviterName,
+        recipientCompanyId: credit.company_id ?? undefined,
+      })
+      if (result.success) dispatched++
+      else skipped++
+    } catch {
+      skipped++
+    }
+  }
+  return { dispatched, skipped }
+}

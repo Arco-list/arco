@@ -239,3 +239,30 @@ export async function sendInviteEmailAction(input: {
     return { success: false }
   }
 }
+
+/**
+ * Fire invites that were credited while the project was still a draft.
+ * Called by the edit page right after a successful publish (the
+ * auto-approve path updates projects.status client-side, so the
+ * publish-time dispatch can't live there). Safe to call repeatedly —
+ * the helper skips recipients who already received an invite.
+ */
+export async function dispatchPendingInvitesAction(
+  projectId: string,
+): Promise<{ dispatched: number; skipped: number } | { error: string }> {
+  try {
+    const supabase = createServiceRoleSupabaseClient()
+    const { data: project } = await supabase
+      .from("projects")
+      .select("status")
+      .eq("id", projectId)
+      .maybeSingle()
+    if (!project || (project.status !== "published" && project.status !== "completed")) {
+      return { error: "Project is not published" }
+    }
+    const { dispatchPendingInvitesForProject } = await import("@/lib/invites/dispatch-professional-invite")
+    return await dispatchPendingInvitesForProject(supabase, projectId)
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) }
+  }
+}

@@ -281,6 +281,26 @@ export async function setProjectStatusAction(input: {
     await syncCompanyListedStatus(cId as string)
   }
 
+  // Invites credited while the project was a draft were skipped by the
+  // dispatcher ("project not published") and nothing re-triggered them
+  // on publish — they stranded at Not started. Fire them now.
+  if (statusResult.data === "published") {
+    try {
+      const { dispatchPendingInvitesForProject } = await import("@/lib/invites/dispatch-professional-invite")
+      const invites = await dispatchPendingInvitesForProject(supabase, idResult.data)
+      if (invites.dispatched > 0) {
+        logger.info("Dispatched pending invites on publish", {
+          projectId: idResult.data,
+          ...invites,
+        })
+      }
+    } catch (err) {
+      logger.error("Failed to dispatch pending invites on publish", {
+        projectId: idResult.data,
+      }, err instanceof Error ? err : undefined)
+    }
+  }
+
   // Retry materialized view refresh with exponential backoff
   const serviceClient = createServiceRoleSupabaseClient()
   const warnings: string[] = []

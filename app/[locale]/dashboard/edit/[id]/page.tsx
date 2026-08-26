@@ -1910,6 +1910,11 @@ export default function ListingEditorPage() {
         setShowStatusModal(false)
         if (autoApprove && projectId) {
           trackProjectPublished(projectId, detailsForm.projectTitle || t("untitled_project"))
+          // Invites credited while this project was a draft were held by
+          // the dispatcher — fire them now that it's published.
+          import("@/app/dashboard/edit/actions").then(({ dispatchPendingInvitesAction }) =>
+            dispatchPendingInvitesAction(projectId),
+          ).catch(() => {})
         }
         toast.success(autoApprove ? tToast("project_published") : tToast("submitted_for_review"))
       }
