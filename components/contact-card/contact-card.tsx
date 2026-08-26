@@ -9,7 +9,7 @@ import { getContactByEmail, type ContactByEmailData } from "@/lib/contacts/get-c
 import { getContactByProspectId } from "@/lib/contacts/get-contact-by-prospect"
 import { updateProfileByEmail } from "@/lib/contacts/update-profile-by-email"
 import { updateProspectById } from "@/lib/contacts/update-prospect-by-id"
-import { removeProspectFromFunnel } from "@/app/admin/sales/actions"
+import { markProspectNotInterested, removeProspectFromFunnel } from "@/app/admin/sales/actions"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { ProspectTimelineFused, TransactionalOnlyTimeline } from "./prospect-timeline-fused"
 import { LogOutboundModal } from "@/app/admin/sales/log-outbound-modal"
@@ -50,6 +50,10 @@ type Props = {
    *  funnel via the panel's bottom link. Parent should close the panel
    *  and refresh its list so the row disappears. */
   onRemoved?: () => void
+  /** Called after ANY in-card mutation (sequence action, not-interested
+   *  toggle, log outbound) — host page refreshes its table; the card
+   *  itself also re-fetches so both stay in sync without reopening. */
+  onChanged?: () => void
   /** When provided AND the contact has a linked auth profile, the
    *  footer shows a "Delete user" link that hands the profile id back
    *  to the host page — /admin/users passes its existing
@@ -59,12 +63,15 @@ type Props = {
   onClose: () => void
 }
 
-export function ContactCard({ email, prospectId, onEmailAssigned, onRemoved, onDeleteUser, onClose }: Props) {
+export function ContactCard({ email, prospectId, onEmailAssigned, onRemoved, onChanged, onDeleteUser, onClose }: Props) {
   const [state, setState] = useState<{
     kind: "idle" | "loading" | "error" | "ready"
     data?: ContactByEmailData
     error?: string
   }>({ kind: "idle" })
+  // Bumped after in-card mutations so the load effect re-fetches the
+  // card data; silent (no loading flash) — see effect below.
+  const [refreshTick, setRefreshTick] = useState(0)
 
   const isOpen = Boolean(email || prospectId)
 
@@ -74,7 +81,9 @@ export function ContactCard({ email, prospectId, onEmailAssigned, onRemoved, onD
       return
     }
     let cancelled = false
-    setState({ kind: "loading" })
+    // Initial open shows the loading state; refreshTick re-fetches keep
+    // the current data on screen until the new payload lands.
+    setState((prev) => (prev.kind === "ready" ? prev : { kind: "loading" }))
     const load = email
       ? getContactByEmail(email)
       : getContactByProspectId(prospectId!)
@@ -84,7 +93,7 @@ export function ContactCard({ email, prospectId, onEmailAssigned, onRemoved, onD
       else setState({ kind: "error", error: result.error })
     })
     return () => { cancelled = true }
-  }, [email, prospectId, isOpen])
+  }, [email, prospectId, isOpen, refreshTick])
 
   // Esc closes; also traps double-close in prod. Registered only when
   // the panel is actually open so it doesn't fight with other keyboard
@@ -174,6 +183,7 @@ export function ContactCard({ email, prospectId, onEmailAssigned, onRemoved, onD
               prospectIdFromUrl={prospectId ?? null}
               onEmailAssigned={onEmailAssigned}
               onRemoved={onRemoved}
+              onChanged={() => { setRefreshTick((n) => n + 1); onChanged?.() }}
               onDeleteUser={onDeleteUser}
             />
           )}
@@ -188,12 +198,14 @@ function CardBody({
   prospectIdFromUrl,
   onEmailAssigned,
   onRemoved,
+  onChanged,
   onDeleteUser,
 }: {
   data: ContactByEmailData
   prospectIdFromUrl: string | null
   onEmailAssigned?: (newEmail: string) => void
   onRemoved?: () => void
+  onChanged?: () => void
   onDeleteUser?: (userId: string) => void
 }) {
   const companies = groupByCompany(data)
@@ -233,6 +245,7 @@ function CardBody({
           contactLabel={pickDisplayName(data)}
           companyLabel={primaryProspect.company_name ?? data.companiesById[primaryProspect.company_id ?? ""]?.name ?? null}
           contactPhone={data.profile?.phone ?? primaryProspect.phone ?? null}
+          onMutated={onChanged}
         />
       ) : (
         // No prospect record — still show transactional sends (magic
@@ -244,8 +257,10 @@ function CardBody({
 
       <CardFooter
         prospectId={primaryProspect?.id ?? null}
+        notInterestedAt={primaryProspect?.not_interested_at ?? null}
         profileId={data.profile?.id ?? null}
         onRemoved={onRemoved}
+        onChanged={onChanged}
         onDeleteUser={onDeleteUser}
       />
     </div>
@@ -265,16 +280,22 @@ function CardBody({
  *  the link doesn't render there. */
 function CardFooter({
   prospectId,
+  notInterestedAt,
   profileId,
   onRemoved,
+  onChanged,
   onDeleteUser,
 }: {
   prospectId: string | null
+  notInterestedAt: string | null
   profileId: string | null
   onRemoved?: () => void
+  onChanged?: () => void
   onDeleteUser?: (userId: string) => void
 }) {
   const [pending, setPending] = useState(false)
+  const [niPending, setNiPending] = useState(false)
+  const [notInterested, setNotInterested] = useState(Boolean(notInterestedAt))
   const showRemove = Boolean(prospectId)
   const showDelete = Boolean(profileId && onDeleteUser)
   if (!showRemove && !showDelete) return null
@@ -300,6 +321,32 @@ function CardFooter({
         gap: 10,
       }}
     >
+      {showRemove && prospectId && (
+        <button
+          type="button"
+          disabled={niPending}
+          onClick={async () => {
+            setNiPending(true)
+            const next = !notInterested
+            const result = await markProspectNotInterested(prospectId, next)
+            setNiPending(false)
+            if (result.success) {
+              setNotInterested(next)
+              toast.success(next ? "Marked as not interested — sequence stopped" : "Not-interested cleared")
+              onChanged?.()
+            } else {
+              toast.error(result.error ?? "Failed to update")
+            }
+          }}
+          style={{ ...linkStyle(niPending), color: "#b45309" }}
+        >
+          {niPending
+            ? "Saving\u2026"
+            : notInterested
+              ? "Not interested \u2713 \u2014 undo"
+              : "Mark as not interested"}
+        </button>
+      )}
       {showRemove && prospectId && (
         <button
           type="button"

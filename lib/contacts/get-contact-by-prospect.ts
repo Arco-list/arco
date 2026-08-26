@@ -48,7 +48,7 @@ export async function getContactByProspectId(id: string): Promise<ContactByEmail
   const { data: prospect, error } = await svc
     .from("prospects")
     .select(
-      "id, company_id, email, contact_name, phone, status, sequence_status, emails_sent, source, created_at, next_follow_up_at, last_email_sent_at, user_id",
+      "id, company_id, email, contact_name, phone, status, sequence_status, emails_sent, source, created_at, next_follow_up_at, last_email_sent_at, user_id, not_interested_at",
     )
     .eq("id", trimmed)
     .maybeSingle()
@@ -120,6 +120,7 @@ export async function getContactByProspectId(id: string): Promise<ContactByEmail
         next_follow_up_at: prospect.next_follow_up_at,
         last_email_sent_at: prospect.last_email_sent_at,
         user_id: prospect.user_id,
+        not_interested_at: (prospect as { not_interested_at?: string | null }).not_interested_at ?? null,
       }],
       companyContacts: [],
       memberships: [],

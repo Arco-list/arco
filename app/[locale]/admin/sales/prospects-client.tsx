@@ -79,6 +79,7 @@ const SEQUENCE_FILTER_OPTIONS: { value: SequenceFilterValue; label: string; dot:
   { value: "bounced", label: "Bounced", dot: "bg-red-500" },
   { value: "complained", label: "Complained", dot: "bg-red-500" },
   { value: "unsubscribed", label: "Unsubscribed", dot: "bg-red-500" },
+  { value: "not_interested", label: "Not interested", dot: "bg-red-500" },
 ]
 const SEQUENCE_FILTER_LABEL: Record<SequenceFilterValue, { label: string; dot: string }> = Object.fromEntries(
   SEQUENCE_FILTER_OPTIONS.map((o) => [o.value, { label: o.label, dot: o.dot }]),
@@ -111,11 +112,13 @@ const CHANNEL_OPTIONS: { value: string; label: string }[] = [
 // (the override is enough; we don't need to repeat "bounced" on every
 // cancelled row).
 const SUPPRESSED_CANCEL_REASONS = new Set(["bounced", "complained", "unsubscribed"])
-function getSuppressionState(contact: { bouncedAt: string | null; complainedAt: string | null; unsubscribedAt: string | null }):
-  { label: "Bounced" | "Complained" | "Unsubscribed" } | null {
-  if (contact.complainedAt) return { label: "Complained" }
-  if (contact.bouncedAt) return { label: "Bounced" }
-  if (contact.unsubscribedAt) return { label: "Unsubscribed" }
+function getSuppressionState(contact: { bouncedAt: string | null; complainedAt: string | null; unsubscribedAt: string | null; notInterestedAt?: string | null }):
+  { label: "Bounced" | "Complained" | "Unsubscribed" | "Not interested"; dot: string } | null {
+  if (contact.complainedAt) return { label: "Complained", dot: "bg-red-500" }
+  if (contact.bouncedAt) return { label: "Bounced", dot: "bg-red-500" }
+  if (contact.unsubscribedAt) return { label: "Unsubscribed", dot: "bg-red-500" }
+  // Polite decline — sequence over, retouch with care.
+  if (contact.notInterestedAt) return { label: "Not interested", dot: "bg-red-500" }
   return null
 }
 
@@ -1657,6 +1660,7 @@ export function ProspectsClient({
           contactParam.close()
           reload({ offset })
         }}
+        onChanged={() => reload({ offset })}
         onClose={contactParam.close}
       />
     </>
@@ -1848,7 +1852,7 @@ function CompanyRowView({
       {/* Sequence (aggregated single value, or suppression override) */}
       <td>
         <div className="flex items-center gap-1.5">
-          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${suppression ? "bg-red-500" : sequenceCfg.dot}`} />
+          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${suppression ? suppression.dot : sequenceCfg.dot}`} />
           <span className="arco-table-primary" style={{ whiteSpace: "nowrap", fontWeight: 400 }}>
             {suppression ? suppression.label : sequenceCfg.label}
           </span>
@@ -2042,7 +2046,7 @@ function ContactInline({ contact, afterName, companyShowcased = false }: { conta
   return (
     <>
       <span className="arco-table-status">
-        <span className={`arco-table-status-dot ${suppression ? "bg-red-500" : sequenceCfg.dot}`} />
+        <span className={`arco-table-status-dot ${suppression ? suppression.dot : sequenceCfg.dot}`} />
         <span className="truncate max-w-[160px]">{displayName}</span>
       </span>
       {afterName}

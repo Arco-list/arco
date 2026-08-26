@@ -1,5 +1,6 @@
 "use client"
 
+import { Pause, Play, RotateCcw } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import {
@@ -69,6 +70,9 @@ type Props = {
   contactLabel?: string
   companyLabel?: string | null
   contactPhone?: string | null
+  /** Fired after any successful mutation inside the panel (sequence
+   *  action, logged outbound) — host refreshes card + table. */
+  onMutated?: () => void
 }
 
 type Bundle = {
@@ -81,7 +85,7 @@ type Bundle = {
   transactional: TransactionalEmailRow[]
 }
 
-export function ProspectTimelineFused({ prospectId, email, emails, contactLabel, companyLabel, contactPhone }: Props) {
+export function ProspectTimelineFused({ prospectId, email, emails, contactLabel, companyLabel, contactPhone, onMutated }: Props) {
   const [state, setState] = useState<
     | { kind: "loading" }
     | { kind: "error"; message: string }
@@ -151,7 +155,7 @@ export function ProspectTimelineFused({ prospectId, email, emails, contactLabel,
         bundle={bundle}
         prospectId={prospectId}
         onLogOutbound={() => setLogOpen(true)}
-        onSequenceActionComplete={() => setReloadTick((n) => n + 1)}
+        onSequenceActionComplete={() => { setReloadTick((n) => n + 1); onMutated?.() }}
       />
       <div>
         <SectionLabel>Timeline</SectionLabel>
@@ -181,6 +185,7 @@ export function ProspectTimelineFused({ prospectId, email, emails, contactLabel,
           onLogged={() => {
             setLogOpen(false)
             setReloadTick((n) => n + 1)
+            onMutated?.()
           }}
         />
       )}
@@ -235,6 +240,7 @@ function ActivitySection({
   const suppression = p?.bounced_at ? "bounced"
     : p?.complained_at ? "complained"
     : p?.unsubscribed_at ? "unsubscribed"
+    : p?.not_interested_at ? "not interested"
     : null
 
   return (
@@ -848,21 +854,25 @@ function SequenceActionLink({
 }) {
   const [pending, setPending] = useState(false)
 
-  const action = (() => {
+  type SeqAction = { label: string; verb: string; Icon: typeof Play; run: () => Promise<unknown> }
+  const restart: SeqAction = { label: "Restart", verb: "restarted", Icon: RotateCcw, run: () => restartProspectSequence(prospectId) }
+  const actions: SeqAction[] = (() => {
     switch (status) {
-      case "not_started": return { label: "Start", verb: "started", run: () => startProspectSequence(prospectId) }
-      case "paused":      return { label: "Continue", verb: "resumed", run: () => resumeProspectSequence(prospectId) }
-      case "active":      return { label: "Pause", verb: "paused", run: () => pauseProspectSequence(prospectId) }
+      case "not_started": return [{ label: "Start", verb: "started", Icon: Play, run: () => startProspectSequence(prospectId) }]
+      case "paused":      return [{ label: "Continue", verb: "resumed", Icon: Play, run: () => resumeProspectSequence(prospectId) }]
+      // Restart alongside Pause: after a bounce the rep corrects the
+      // email (clearing the bounce stamp) and re-fires from step one.
+      case "active":      return [{ label: "Pause", verb: "paused", Icon: Pause, run: () => pauseProspectSequence(prospectId) }, restart]
       case "finished":
       case "cancelled":
-      case "failed":      return { label: "Restart", verb: "restarted", run: () => restartProspectSequence(prospectId) }
-      default:            return null
+      case "failed":      return [restart]
+      default:            return []
     }
   })()
 
-  if (!action) return null
+  if (actions.length === 0) return null
 
-  const handleClick = async () => {
+  const handleClick = async (action: SeqAction) => {
     setPending(true)
     try {
       const result = await action.run() as { success: boolean; error?: string; warning?: string }
@@ -878,15 +888,24 @@ function SequenceActionLink({
     }
   }
 
+  // Icon-only pills — the verb lives in the tooltip (title) so the row
+  // stays compact; aria-label keeps it readable for screen readers.
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={pending}
-      className="shrink-0 rounded-[12px] border border-[#016D75] text-[#016D75] text-[10px] font-medium px-2 py-[2px] leading-normal cursor-pointer hover:bg-[#f0f7f6] transition-colors disabled:opacity-50 disabled:cursor-wait"
-    >
-      {pending ? "…" : action.label}
-    </button>
+    <span style={{ display: "inline-flex", gap: 4 }}>
+      {actions.map((action) => (
+        <button
+          key={action.label}
+          type="button"
+          onClick={() => handleClick(action)}
+          disabled={pending}
+          title={action.label}
+          aria-label={action.label}
+          className="shrink-0 inline-flex items-center justify-center rounded-[12px] border border-[#016D75] text-[#016D75] px-2 py-[3px] leading-none cursor-pointer hover:bg-[#f0f7f6] transition-colors disabled:opacity-50 disabled:cursor-wait"
+        >
+          {pending ? <span className="text-[10px]">…</span> : <action.Icon size={10} strokeWidth={2.5} />}
+        </button>
+      ))}
+    </span>
   )
 }
 

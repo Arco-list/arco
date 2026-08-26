@@ -62,6 +62,7 @@ export type Prospect = {
   unsubscribed_at: string | null
   bounced_at: string | null
   complained_at: string | null
+  not_interested_at: string | null
   notes: string | null
   created_at: string
   updated_at: string
@@ -101,6 +102,7 @@ export type SequenceFilterValue =
   | "bounced"
   | "complained"
   | "unsubscribed"
+  | "not_interested"
 
 type FetchProspectsFilters = {
   /** Empty / undefined = no status filter (all statuses). Multi-select. */
@@ -164,11 +166,12 @@ export async function fetchProspects(filters: FetchProspectsFilters = {}) {
     if (realStatuses.length > 0) {
       const list = realStatuses.map((s) => `"${s}"`).join(",")
       // sequence_status in (...) AND not suppressed
-      orParts.push(`and(sequence_status.in.(${list}),bounced_at.is.null,complained_at.is.null,unsubscribed_at.is.null)`)
+      orParts.push(`and(sequence_status.in.(${list}),bounced_at.is.null,complained_at.is.null,unsubscribed_at.is.null,not_interested_at.is.null)`)
     }
     if (sequences.includes("bounced")) orParts.push("bounced_at.not.is.null")
     if (sequences.includes("complained")) orParts.push("complained_at.not.is.null")
     if (sequences.includes("unsubscribed")) orParts.push("unsubscribed_at.not.is.null")
+    if (sequences.includes("not_interested")) orParts.push("not_interested_at.not.is.null")
     if (orParts.length > 0) {
       query = query.or(orParts.join(","))
     }
@@ -393,6 +396,10 @@ export type SalesContact = {
    *  our mail as spam). Treated identically to bounced from a "stop
    *  sending" perspective. */
   complainedAt: string | null
+  /** Polite decline — sequence end-state like bounced/unsubscribed
+   *  (no follow-ups, gated from marketing sends) but amber, not red:
+   *  it can be deliberately undone when they re-engage. */
+  notInterestedAt: string | null
   createdAt: string
   updatedAt: string
   refCode: string
@@ -813,7 +820,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     "emails_sent", "emails_delivered", "emails_opened", "emails_clicked",
     "last_email_sent_at", "last_email_opened_at", "last_email_clicked_at",
     "created_at", "updated_at", "ref_code", "user_id", "website",
-    "unsubscribed_at", "bounced_at", "complained_at",
+    "unsubscribed_at", "bounced_at", "complained_at", "not_interested_at",
     "last_outbound_at", "next_follow_up_at",
   ].join(", ")
   const { rows: data, error } = await fetchAllPages<Record<string, unknown>>(
@@ -878,6 +885,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     unsubscribedAt: (p as any).unsubscribed_at ?? null,
     bouncedAt: (p as any).bounced_at ?? null,
     complainedAt: (p as any).complained_at ?? null,
+    notInterestedAt: (p as any).not_interested_at ?? null,
     createdAt: p.created_at,
     updatedAt: p.updated_at,
     refCode: p.ref_code,
@@ -1161,7 +1169,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   const nowMs = Date.now()
   const callTierFor = (r: SalesCompanyRow): { tier: number; reason: string } | null => {
     const c = r.primaryContact
-    if (c.complainedAt || c.bouncedAt || c.unsubscribedAt) return null
+    if (c.complainedAt || c.bouncedAt || c.unsubscribedAt || c.notInterestedAt) return null
     if (r.nextOutboundAt && r.nextOutboundAt <= endOfTodayIso) return { tier: 1, reason: "Follow-up due" }
     if (r.nextOutboundAt && r.nextOutboundAt > endOfTodayIso) return null
     if (r.lastOutboundAt && nowMs - new Date(r.lastOutboundAt).getTime() < CALL_COOLDOWN_MS) return null
@@ -1565,6 +1573,7 @@ export async function fetchSalesContactForProspect(prospectId: string): Promise<
     unsubscribedAt: (p as any).unsubscribed_at ?? null,
     bouncedAt: (p as any).bounced_at ?? null,
     complainedAt: (p as any).complained_at ?? null,
+    notInterestedAt: (p as any).not_interested_at ?? null,
     createdAt: p.created_at,
     updatedAt: p.updated_at,
     refCode: p.ref_code,
@@ -1759,6 +1768,53 @@ export async function deleteProspect(id: string) {
  * (Apollo cron, invite resync) can resurface the same email without
  * losing engagement history.
  */
+/**
+ * Toggle "Not interested" — a sequence end-state like bounced or
+ * unsubscribed: the sequence is over, no follow-ups go out (the
+ * isOptedOutOfMarketing gate reads not_interested_at), and the row is
+ * excluded from the call list. Amber, undoable — a polite decline, not
+ * a deliverability problem. Keeps the funnel status and full history.
+ */
+export async function markProspectNotInterested(prospectId: string, value: boolean) {
+  const supabase = createServiceRoleSupabaseClient()
+
+  const { data: prospect } = await supabase
+    .from("prospects")
+    .select("id, company_id, sequence_status")
+    .eq("id", prospectId)
+    .single()
+
+  if (!prospect) return { success: false, error: "Prospect not found" }
+
+  const update: Record<string, unknown> = { not_interested_at: value ? new Date().toISOString() : null }
+  if (value && prospect.sequence_status === "active") update.sequence_status = "finished"
+
+  const { error } = await supabase
+    .from("prospects")
+    .update(update as never)
+    .eq("id", prospectId)
+
+  if (error) return { success: false, error: error.message }
+
+  if (value && prospect.company_id) {
+    try {
+      const { cancelPendingDripRows } = await import("@/lib/drip-queue")
+      await cancelPendingDripRows(supabase, { companyId: prospect.company_id, reason: "manual" })
+    } catch (err) {
+      console.error("Failed to cancel drip rows for not-interested prospect", err)
+    }
+  }
+
+  await supabase.from("prospect_events").insert({
+    prospect_id: prospectId,
+    event_type: "status_changed",
+    event_source: "admin",
+    metadata: { trigger: value ? "marked_not_interested" : "not_interested_cleared" },
+  })
+
+  return { success: true }
+}
+
 export async function removeProspectFromFunnel(prospectId: string) {
   const supabase = createServiceRoleSupabaseClient()
 
@@ -1907,7 +1963,9 @@ export async function syncPlatformProspects() {
         company_name: info.companyName,
         city: info.city,
         source: "invites",
-        status: "prospect",
+        // An invite email IS first contact — same funnel stage as an
+        // outreach intro. Only never-emailed invites start at 'prospect'.
+        status: info.hasSentEmail ? "contacted" : "prospect",
         sequence_status: info.hasSentEmail ? "finished" : "not_started",
         emails_sent: info.hasSentEmail ? info.inviteCount : 0,
         emails_delivered: info.hasSentEmail ? info.inviteCount : 0,

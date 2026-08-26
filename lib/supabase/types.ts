@@ -3135,6 +3135,7 @@ export type Database = {
           last_outbound_at: string | null
           metadata: Json | null
           next_follow_up_at: string | null
+          not_interested_at: string | null
           notes: string | null
           phone: string | null
           project_id: string | null
@@ -3180,6 +3181,7 @@ export type Database = {
           last_outbound_at?: string | null
           metadata?: Json | null
           next_follow_up_at?: string | null
+          not_interested_at?: string | null
           notes?: string | null
           phone?: string | null
           project_id?: string | null
@@ -3225,6 +3227,7 @@ export type Database = {
           last_outbound_at?: string | null
           metadata?: Json | null
           next_follow_up_at?: string | null
+          not_interested_at?: string | null
           notes?: string | null
           phone?: string | null
           project_id?: string | null
@@ -3931,6 +3934,7 @@ export type Database = {
         Args: { _company_id: string }
         Returns: boolean
       }
+      is_company_editor: { Args: { p_company_id: string }; Returns: boolean }
       is_own_profile_avatar_path: { Args: { _path: string }; Returns: boolean }
       is_professional: { Args: never; Returns: boolean }
       is_project_photo_owner: {
@@ -3939,6 +3943,10 @@ export type Database = {
       }
       is_project_photo_owner_by_path: {
         Args: { _path: string }
+        Returns: boolean
+      }
+      is_project_team_editor: {
+        Args: { p_project_id: string }
         Returns: boolean
       }
       person_visible_to_current_user: {

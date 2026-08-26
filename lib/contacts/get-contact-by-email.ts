@@ -63,6 +63,7 @@ export type ContactByEmailProspect = {
   next_follow_up_at: string | null
   last_email_sent_at: string | null
   user_id: string | null
+  not_interested_at: string | null
 }
 
 export type ContactByEmailCompanyContact = {
@@ -129,7 +130,7 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
   const { data: prospectsQueryData, error: prospectsErr } = await svc
     .from("prospects")
     .select(
-      "id, company_id, email, contact_name, phone, status, sequence_status, emails_sent, source, created_at, next_follow_up_at, last_email_sent_at, user_id",
+      "id, company_id, email, contact_name, phone, status, sequence_status, emails_sent, source, created_at, next_follow_up_at, last_email_sent_at, user_id, not_interested_at",
     )
     .ilike("email", email)
 
@@ -221,7 +222,7 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
     const { data: extra } = await svc
       .from("prospects")
       .select(
-        "id, company_id, email, contact_name, phone, status, sequence_status, emails_sent, source, created_at, next_follow_up_at, last_email_sent_at, user_id",
+        "id, company_id, email, contact_name, phone, status, sequence_status, emails_sent, source, created_at, next_follow_up_at, last_email_sent_at, user_id, not_interested_at",
       )
       .eq("user_id", resolvedUserId)
     const seen = new Set(prospectsRaw.map((p) => p.id))
@@ -327,6 +328,7 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
     next_follow_up_at: p.next_follow_up_at,
     last_email_sent_at: p.last_email_sent_at,
     user_id: p.user_id,
+    not_interested_at: (p as { not_interested_at?: string | null }).not_interested_at ?? null,
   }))
 
   const companyContacts: ContactByEmailCompanyContact[] = companyContactsRaw.map((c) => ({

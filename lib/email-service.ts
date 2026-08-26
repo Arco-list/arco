@@ -345,12 +345,13 @@ async function isOptedOutOfMarketing(email: string, userId: string | null): Prom
     }
 
     // Single roundtrip — any prospect row for this email with any of
-    // the three suppression timestamps set means we don't send.
+    // the suppression timestamps set means we don't send. not_interested
+    // is the soft one (polite decline) but blocks automated sends the same.
     const { data: prospect } = await (supabase as any)
       .from('prospects')
-      .select('id, unsubscribed_at, bounced_at, complained_at')
+      .select('id, unsubscribed_at, bounced_at, complained_at, not_interested_at')
       .ilike('email', email)
-      .or('unsubscribed_at.not.is.null,bounced_at.not.is.null,complained_at.not.is.null')
+      .or('unsubscribed_at.not.is.null,bounced_at.not.is.null,complained_at.not.is.null,not_interested_at.not.is.null')
       .limit(1)
     if (Array.isArray(prospect) && prospect.length > 0) return true
 
