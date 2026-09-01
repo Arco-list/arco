@@ -34,3 +34,11 @@ package-lock.json
 # supabase cli local cache
 supabase/.temp/
 
+# macOS Finder metadata. Per-folder view state, different on every
+# machine, and it records the directory's file names — which this repo
+# being public makes worth keeping out.
+.DS_Store
+
+# editor/tool backups
+*.bak
+
