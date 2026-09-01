@@ -188,6 +188,8 @@ const TEMPLATE_NAMES: Record<string, string> = {
   "prospect-intro": "Showcase Intro",
   "prospect-followup": "Showcase Follow-up",
   "prospect-final": "Showcase Final",
+  // Manual sends from the contact-card compose popup.
+  "manual-compose": "Personal email",
   // Invite — peer-to-peer from another professional on a real project.
   "new-professional-invite": "Invite Intro",
   "new-professional-followup": "Invite Follow-up",

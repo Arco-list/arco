@@ -1693,6 +1693,7 @@ export type InboundEmailForProspect = {
    *  Respond popup is submitted. Used to hydrate the `admin_replied`
    *  prospect_event's expand body without a second round-trip. */
   replied_text: string | null
+  replied_at: string | null
 }
 
 /**
@@ -1710,6 +1711,12 @@ export type InboundEmailForProspect = {
  */
 export async function fetchProspectInboundEmails(
   prospectId: string,
+  /** Every known address for the contact (primary + aliases). Inbound
+   *  rows link to whichever prospect row matched at sync time — an
+   *  alias's reply was linked to the alias's own prospect row and never
+   *  surfaced on the primary card (Grego, May 5). Matching by all
+   *  addresses closes that gap. */
+  contactEmails?: string[],
 ): Promise<{ emails: InboundEmailForProspect[]; error?: string }> {
   const supabase = createServiceRoleSupabaseClient()
 
@@ -1721,12 +1728,18 @@ export async function fetchProspectInboundEmails(
   const prospectEmail = prospect?.email?.toLowerCase() ?? null
 
   const filters = [`prospect_id.eq.${prospectId}`]
-  if (prospectEmail) filters.push(`from_email.eq.${prospectEmail}`)
+  const allEmails = new Set<string>()
+  if (prospectEmail) allEmails.add(prospectEmail)
+  for (const e of contactEmails ?? []) {
+    const trimmed = e.trim().toLowerCase()
+    if (trimmed) allEmails.add(trimmed)
+  }
+  for (const e of allEmails) filters.push(`from_email.eq.${e}`)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("inbound_emails")
-    .select("id, from_email, from_name, subject, snippet, body_text, received_at, status, replied_text")
+    .select("id, from_email, from_name, subject, snippet, body_text, received_at, status, replied_text, replied_at")
     .or(filters.join(","))
     .order("received_at", { ascending: false })
   if (error) {

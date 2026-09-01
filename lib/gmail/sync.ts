@@ -192,6 +192,15 @@ export async function getValidAccessToken(
     && new Date(conn.access_token_expires_at).getTime() - Date.now() > 60_000
   if (stillValid && conn.access_token) return conn.access_token
 
+  // Local dev doesn't have the Vercel-sensitive refresh secrets. The
+  // production sync cron keeps access_token fresh in the DB, so best
+  // effort: hand out the stored token anyway — Gmail answers 401 if it
+  // really expired, which beats dying on the missing env var.
+  if (!process.env.GMAIL_TOKEN_ENCRYPTION_KEY && conn.access_token) {
+    console.warn("[gmail] GMAIL_TOKEN_ENCRYPTION_KEY not set — using stored access token without refresh (dev fallback)")
+    return conn.access_token
+  }
+
   const refreshed = await refreshAccessToken(decryptRefreshToken(conn.refresh_token))
   await (supabase as any)
     .from("gmail_connections")

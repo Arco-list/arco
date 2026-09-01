@@ -601,6 +601,8 @@ export async function sendTestEmail(template: string, toEmail: string): Promise<
     project_link: 'https://arcolist.com',
     dashboard_link: 'https://arcolist.com/dashboard',
     confirmUrl: 'https://arcolist.com',
+    // Real invites carry this, so "Send test" must exercise the same CTA.
+    accept_url: 'https://arcolist.com/invite/accept?t=preview-token',
     rejection_reason: 'This is a test rejection reason.',
     company_name: 'Marco van Veldhuizen',
     code: '123456',

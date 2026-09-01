@@ -23,7 +23,10 @@ type CreateUnlistedCompanyInput = {
 }
 
 type CreateUnlistedCompanyResult =
-  | { success: true; companyId: string; emailSent: boolean }
+  /** emailSent=false means nothing went out. When emailOptedOut is also
+   *  true that was deliberate (the recipient unsubscribed) and no caller
+   *  should retry or promise a send. */
+  | { success: true; companyId: string; emailSent: boolean; emailOptedOut?: boolean }
   | { duplicate: true; existingCompanyId: string; existingCompanyName: string; existingCompanyLogo: string | null; existingCompanyProjectCount: number; matchType: "domain" | "name" }
   | { error: string }
 
@@ -124,6 +127,7 @@ export async function createUnlistedCompanyAction(
     // dispatcher will fire the three-step new-professional-invite sequence
     // (intro now via Resend, followup + final via the drip queue).
     let emailSent = false
+    let emailOptedOut = false
     try {
       const result = await dispatchProfessionalInvite(supabase, {
         recipientEmail: input.email,
@@ -132,11 +136,12 @@ export async function createUnlistedCompanyAction(
         recipientCompanyId: company.id,
       })
       emailSent = result.success
+      emailOptedOut = result.reason === "recipient opted out"
     } catch (e) {
       console.error("Failed to dispatch invite email:", e)
     }
 
-    return { success: true, companyId: company.id, emailSent }
+    return { success: true, companyId: company.id, emailSent, emailOptedOut }
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
     console.error("createUnlistedCompanyAction error:", msg, error)

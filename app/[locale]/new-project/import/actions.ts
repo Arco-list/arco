@@ -706,8 +706,28 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
     return { error: "Only http/https URLs are supported." }
   }
 
-  // Admin mode: skip domain verification, use provided company ID
+  // Admin mode: skip domain verification, use provided company ID.
+  // The caller MUST be entitled to that company — this path links the
+  // project with the service role, so without the check any signed-in
+  // user could attach projects to any company by passing its id.
   let resolvedCompanyId: string | null = adminCompanyId ?? null
+
+  if (adminCompanyId) {
+    const { data: profileRow } = await supabase
+      .from("profiles")
+      .select("user_types, admin_role")
+      .eq("id", user.id)
+      .maybeSingle()
+    const isAdmin = !!(profileRow && isAdminUser(profileRow.user_types, profileRow.admin_role))
+    if (!isAdmin) {
+      // Not an admin — allow only if they actually edit this company
+      // (owner / team member), same rule the RLS helper enforces.
+      const { data: canEdit } = await (supabase as unknown as {
+        rpc: (fn: string, params: Record<string, unknown>) => Promise<{ data: boolean | null }>
+      }).rpc("is_company_editor", { p_company_id: adminCompanyId })
+      if (!canEdit) return { error: "You don't have access to that company." }
+    }
+  }
 
   if (!adminCompanyId) {
     // 3b. Domain verification — URL must match company's verified domain

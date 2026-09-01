@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation"
-import { canonicalizeScope, getProjectTranslation, translateCategoryName, translateProjectStyle, translateScope } from "@/lib/project-translations"
+import { canonicalizeScope, getProjectTranslation, translateCategoryName, translateProfessionalService, translateProjectStyle, translateScope } from "@/lib/project-translations"
 import type { Metadata } from "next"
 import { getTranslations, setRequestLocale } from "next-intl/server"
 
@@ -293,7 +293,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           professional_id,
           company_id,
           is_project_owner,
-          companies!inner(id, name, slug, status, logo_url, primary_service_id, services_offered, audience)
+          companies!inner(id, name, slug, status, owner_id, logo_url, primary_service_id, services_offered, audience)
         `)
         .eq("project_id", project.id)
         .not("company_id", "is", null)
@@ -305,7 +305,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         // In preview mode, show listed/featured professionals + the project owner
         q = q.or("status.in.(live_on_page,listed),is_project_owner.eq.true")
       } else {
-        q = q.in("status", ["live_on_page", "listed"]).neq("companies.status", "unlisted").neq("companies.status", "unclaimed")
+        q = q.in("status", ["live_on_page", "listed", "invited"]).neq("companies.status", "deactivated")
       }
       return q
     })(),
@@ -396,13 +396,15 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const { data: categories } = categoryIds.length > 0
     ? await supabase
         .from("categories")
-        .select("id, name, sort_order")
+        // slug drives the service icon shown when a company has no logo.
+        .select("id, name, slug, sort_order")
         .in("id", categoryIds)
         .order("sort_order", { ascending: true, nullsFirst: false })
         .order("name", { ascending: true })
     : { data: [] }
 
   const categoryMap = new Map(categories?.map(c => [c.id, c.name]) ?? [])
+  const categorySlugMap = new Map(categories?.map(c => [c.id, (c as { slug?: string | null }).slug ?? null]) ?? [])
   // sort_order map for ordering services like the admin table
   const categorySortOrder = new Map(categories?.map((c, i) => [c.id, i]) ?? [])
 
@@ -448,6 +450,15 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     }
   })
 
+  // A company is "on Arco" when it has been claimed and has a public page.
+  // Both the ordering and the card's hasPage flag key on this, so the rule
+  // lives in one place rather than being restated in two.
+  const hasCompanyPage = (p: typeof professionals[number]) => Boolean(
+    (p.companies as any)?.owner_id
+    && (p.companies as any)?.slug
+    && ["listed", "prospected"].includes(String((p.companies as any)?.status)),
+  )
+
   // Format professionals data for components — project owner first
   const formattedProfessionals = professionals
     .sort((a, b) => {
@@ -455,6 +466,12 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       const aOwner = a.is_project_owner ? 1 : 0
       const bOwner = b.is_project_owner ? 1 : 0
       if (aOwner !== bOwner) return bOwner - aOwner
+      // Then companies with a page on Arco. They are the only credits a
+      // reader can follow through to, so they lead — the grid's first
+      // cells are the ones that go somewhere.
+      const aPage = hasCompanyPage(a) ? 1 : 0
+      const bPage = hasCompanyPage(b) ? 1 : 0
+      if (aPage !== bPage) return bPage - aPage
       // Then sort by primary service order
       const aServices = (a.invited_service_category_ids as string[] | null) ?? []
       const bServices = (b.invited_service_category_ids as string[] | null) ?? []
@@ -473,10 +490,17 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           serviceIds = [company.services_offered[0]]
         }
       }
+      // categories.name is stored in English, so the credit eyebrow has to
+      // be translated for display — keyed on the slug, falling back to the
+      // English name for a category with no translation yet.
       const serviceCategories = serviceIds
         .slice()
         .sort((a, b) => (categorySortOrder.get(a) ?? 999) - (categorySortOrder.get(b) ?? 999))
-        .map(sid => categoryMap.get(sid))
+        .map(sid => {
+          const name = categoryMap.get(sid)
+          if (!name) return null
+          return translateProfessionalService(categorySlugMap.get(sid) ?? name, locale) ?? name
+        })
         .filter((name): name is string => Boolean(name))
       return {
         id: p.id,
@@ -488,6 +512,10 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         logo: p.companies?.logo_url ?? (p.company_id ? companyLogoMap.get(p.company_id) ?? null : null),
         projectsCount: p.company_id ? (companyProjectCounts.get(p.company_id)?.size ?? 0) : 0,
         isProjectOwner: Boolean(p.is_project_owner),
+        // Primary service slug — the icon stands in for a missing logo,
+        // so it says what they DO rather than showing dead initials.
+        serviceSlug: serviceIds.length > 0 ? categorySlugMap.get(serviceIds[0]) ?? null : null,
+        hasPage: hasCompanyPage(p),
       }
     })
 

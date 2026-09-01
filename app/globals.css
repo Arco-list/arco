@@ -27,10 +27,20 @@
   --arco-mid: #6b6b68;
   --arco-light: #a1a1a0;
   --arco-rule: #e5e5e4;
+  --arco-wash: #ECF3F3;
 
   /* Primary Colors */
   --primary: #016D75;
   --primary-hover: #015660;
+  /* Accent as TEXT. --primary is tuned for fills; as 14px ink in dark
+     mode it lands at 4.2:1 and fails AA, so ink forks from fill. */
+  --primary-ink: #016D75;
+  /* Border-weight accent: lighter than the label so the outline reads as
+     a boundary rather than a second label, and so hover has somewhere to
+     go (it strengthens to --primary-ink). 0.78 is the lightest value
+     that still clears the 3:1 SC 1.4.11 asks of a control's own
+     boundary — 0.55 measured 2.36:1 and failed. */
+  --primary-ink-soft: rgba(1, 109, 117, 0.78);
   --primary-active: #016D75;
   --primary-foreground: #FFFFFF;
 
@@ -131,10 +141,13 @@
   --arco-mid: #a0a0a0;
   --arco-light: #666666;
   --arco-rule: #404040;
+  --arco-wash: #1c2b2c;
 
   /* Primary Colors - Dark Mode */
   --primary: #018A95;
   --primary-hover: #01A3B5;
+  --primary-ink: #01A3B5;
+  --primary-ink-soft: rgba(1, 163, 181, 0.78);
   --primary-active: #018A95;
   --primary-foreground: #FFFFFF;
 
@@ -430,21 +443,29 @@ html, body {
   color: var(--text-secondary);
 }
 
+/* Inline links carry their rule at rest, so hover only darkens it —
+   the text colour never moves, which keeps a link from jumping out of
+   the sentence it sits in. The offset is generous so the rule reads as
+   separate from the descenders rather than crowding them. */
 .arco-body-text a,
 .arco-small-text a,
 p a {
   color: inherit;
   text-decoration: underline;
   text-decoration-color: var(--arco-rule);
-  text-underline-offset: 2px;
+  /* Pinned rather than `auto`: auto rounds up at some sizes and zoom
+     levels, so the rule appeared to thicken on hover when in fact only
+     its colour was changing, from near-invisible #e5e5e4 to black. */
+  text-decoration-thickness: 1px;
+  text-underline-offset: 5px;
   transition: all 0.15s ease;
 }
 
 .arco-body-text a:hover,
 .arco-small-text a:hover,
 p a:hover {
-  color: var(--primary);
-  text-decoration-color: var(--primary);
+  color: inherit;
+  text-decoration-color: var(--arco-black);
 }
 
 /* .arco-nav-text is aliased to .arco-small-text during migration.
@@ -476,6 +497,59 @@ p a:hover {
   color: var(--primary);
 }
 
+/* The header's hover rule lands ON the header's bottom border rather
+   than under the word — the same gesture as .sub-nav-link's tab
+   indicator, wiping in from the left.
+
+   -23px is the distance from the link box to that border: 16px of the
+   header's py-4, 6px of the nav row's own centring, and the 1px border
+   itself. The header's box model is fixed by contract — see the comment
+   on headerClasses in header.tsx, which requires identical padding and
+   border in the transparent and scrolled states so the page does not
+   shift — so this offset holds in both.
+
+   currentColor means the rule picks up whatever the link hovers to:
+   teal on the solid header, white over a transparent hero. */
+/* Every control wearing the rule is forced to the nav row's own height,
+   so one offset serves all of them regardless of their natural size: a
+   20px text link and a 32px icon button both end at the row's baseline,
+   17px above the border (16px of the header's py-4, plus the 1px border
+   itself). Without this the rule would sit at a different height under
+   the search icon than under the nav links. */
+.header-rule {
+  position: relative;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.header-rule::after {
+  content: "";
+  position: absolute;
+  bottom: -17px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.header-rule:hover::after {
+  opacity: 1;
+}
+
+/* A group keeps its rule while the pointer is anywhere inside it — the
+   panel included. Without this the rule would blink out the moment you
+   moved off the label and down into the menu it opened. */
+[data-nav-group]:hover .header-rule::after {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header-rule::after { transition: none; }
+}
+
 .arco-header-link.active {
   color: var(--primary);
 }
@@ -486,6 +560,7 @@ p a:hover {
 
 .arco-header-link.nav-transparent:hover {
   color: #fff;
+  text-decoration-color: #fff;
 }
 
 /* Menu item — icon + text row in dropdown menus */
@@ -577,18 +652,61 @@ a.arco-nav-text.nav-transparent:hover {
   opacity: 0.88;
 }
 
+/* The footer sits on #161614 in BOTH themes, so it cannot use the
+   theme-flipping tokens: --text-secondary is #6b6b68 in light, which is
+   3.39:1 on that ground and fails AA, and --arco-white inverts to
+   #1a1a1a in dark, which would hover a link to near-black on near-black.
+   Fixed light-on-dark values instead, chosen for contrast: links 7.79:1,
+   headings and meta 5.1:1, hover 17.35:1.
+
+   These must also stay UNLAYERED. The footer markup previously carried
+   `arco-small-text text-white/50 hover:text-white`, and .arco-small-text
+   — unlayered, so it beats Tailwind's layered utilities regardless of
+   order — won every time. That is why hover:text-white silently did
+   nothing and the links sat at #6b6b68. Do not add .arco-small-text
+   alongside these classes; they already carry the same typography. */
 .footer-link {
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 400;
   line-height: 1.5;
-  color: var(--text-secondary);
+  color: #AAAAA9;
   text-decoration: none;
   transition: color 0.15s ease;
 }
 
+/* Column labels — deliberately quieter than the links they head. Scoped
+   to the element so it outranks .arco-eyebrow, which is also a single
+   class and sits later in this file. */
+footer .footer-heading {
+  color: #888886;
+}
+
+/* Tagline and copyright. */
+.footer-meta {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #888886;
+}
+
 .footer-link:hover {
-  color: var(--arco-white);
+  color: #FAFAF9;
+}
+
+/* The footer's language switcher, on the same tones as .footer-link so
+   the row reads as one set. Colour rather than opacity: the previous
+   `opacity: .6` dimmed the globe icon along with the label, and an
+   inline style cannot carry a hover state at all. No underline — the
+   footer is the one place the platform leaves it off. */
+.footer-lang {
+  color: #AAAAA9;
+  transition: color 0.15s ease;
+}
+
+.footer-lang:hover {
+  color: #FAFAF9;
 }
 
 .arco-card-subtitle {
@@ -820,13 +938,20 @@ a.arco-nav-text.nav-transparent:hover {
     opacity: 1;
   }
 
+  /* Matches .btn-primary / .btn-secondary exactly: same type size, same
+     radius, same box. Padding is 1px tighter than theirs because this is
+     the only one with a visible border, so the rendered height is equal. */
   .btn-tertiary {
     @apply bg-transparent text-tertiary-foreground;
     font-family: var(--font-sans);
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 400;
-    @apply py-3 px-4;
+    padding: 9px 19px;
+    border-radius: 3px;
     border: 1px solid var(--border);
+    cursor: pointer;
+    transition: border-color 0.15s;
+    text-decoration: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -835,6 +960,25 @@ a.arco-nav-text.nav-transparent:hover {
 
   .btn-tertiary:hover:not(:disabled) {
     border-color: var(--arco-black);
+  }
+
+  /* Accent-outlined tertiary: same geometry, border AND label both in
+     accent ink. A 1px hairline is too little ink to carry the accent on
+     its own — with a near-black label the border antialiases away on
+     fractional-DPI screens and this silently degrades to a plain
+     tertiary. Use inside a bounded surface (banner, card, modal footer),
+     at most one per surface, never as the page-header action. */
+  .btn-tertiary-accent {
+    border-color: var(--primary-ink-soft);
+    color: var(--primary-ink);
+  }
+
+  /* Hover strengthens the outline to full accent — a legible change
+     without a background fill, which would break consistency with the
+     other tertiary buttons. */
+  .btn-tertiary-accent:hover:not(:disabled) {
+    border-color: var(--primary-ink);
+    color: var(--primary-hover);
   }
 
   .btn-tertiary:disabled {
@@ -1244,6 +1388,21 @@ a.arco-nav-text.nav-transparent:hover {
 
 /* Editorial layout — tablet gap handled by --grid-gap */
 
+/* ── Text links ──────────────────────────────────────────────────────
+   One family, three tones. Every variant underlines on hover — that is
+   the platform's link affordance — and the tone decides what the text
+   and the rule do on the way there:
+
+     (default)  grey  text -> black text, black rule
+     --primary  teal  text -> teal  text, teal  rule
+     --black    black text -> black text, teal  rule
+
+   The trailing arrow is markup, not a variant: include the glyph or
+   leave it out, the flex gap handles the spacing either way.
+
+   `.view-all-link` is the original name, kept as an alias because 18
+   call sites still use it, so both selectors carry every rule. */
+.arco-text-link,
 .view-all-link {
   font-family: var(--font-sans);
   font-size: 14px;
@@ -1263,8 +1422,72 @@ a.arco-nav-text.nav-transparent:hover {
   white-space: nowrap;
 }
 
+.arco-text-link:hover,
 .view-all-link:hover {
   color: var(--arco-black);
+  text-decoration: underline;
+  text-decoration-color: var(--arco-black);
+  /* The `text-decoration` shorthand above resets thickness to `auto`,
+     which renders heavier than the 1px inline links carry. Pinned so
+     every rule on the platform is the same weight. */
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+
+/* Accent tone — already teal at rest, so the rule carries the hover and
+   the text holds its colour. */
+.arco-text-link--primary { color: var(--primary-ink); }
+
+.arco-text-link--primary:hover {
+  color: var(--primary-ink);
+  text-decoration-color: var(--primary-ink);
+}
+
+/* The rule belongs to the words, never to a glyph beside them. Wrap the
+   words in .arco-text-link-label whenever the link also carries an icon,
+   a plus or an arrow, and the underline moves off the container onto the
+   label alone.
+
+   Keyed on the label rather than on `svg` because the icons in play are
+   not all SVG — the Read more toggle's plus is an aria-hidden span. A
+   link with no label span (the common text-only case, including every
+   existing .view-all-link) keeps the rule on the whole element, which is
+   also what browsers without :has() fall back to. */
+.arco-text-link:hover:has(.arco-text-link-label),
+.view-all-link:hover:has(.arco-text-link-label) {
+  text-decoration: none;
+}
+
+.arco-text-link:hover .arco-text-link-label,
+.view-all-link:hover .arco-text-link-label {
+  text-decoration: underline;
+  text-decoration-color: var(--arco-black);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+
+.arco-text-link--primary:hover .arco-text-link-label,
+.arco-text-link--black:hover .arco-text-link-label {
+  text-decoration-color: var(--primary-ink);
+}
+
+/* For a text link sitting inside running prose rather than standing on
+   its own: drops the flex box and the nowrap, so a long company name
+   wraps with the sentence instead of forcing an overflow. */
+.arco-text-link--inline {
+  display: inline;
+  white-space: normal;
+  font-size: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+}
+
+/* Black tone — the accent rule is the only thing that moves. */
+.arco-text-link--black { color: var(--arco-black); }
+
+.arco-text-link--black:hover {
+  color: var(--arco-black);
+  text-decoration-color: var(--primary-ink);
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -2331,6 +2554,64 @@ a.arco-nav-text.nav-transparent:hover {
   opacity: 0.85;
 }
 
+/* A credit with no page behind it: same layout, nothing interactive. */
+.credit-card--plain {
+  cursor: default;
+}
+
+.credit-card--plain:hover {
+  opacity: 1;
+}
+
+/* Project count doubles as the way into the portfolio, so it is the
+   link — replacing the separate "View portfolio →" row. */
+.credit-card-projects {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--primary-ink);
+  margin: 0;
+  transition: color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* The accent tone of the text-link family: text holds its teal, the
+   rule carries the hover. The label wears the underline on its own so
+   it is not drawn under the arrow beside it. */
+.credit-card:hover .credit-card-projects {
+  color: var(--primary-ink);
+}
+
+.credit-card:hover .credit-card-projects-label {
+  text-decoration: underline;
+  text-decoration-color: var(--primary-ink);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+
+/* The arrow only appears on cards that lead somewhere, so it is the
+   card's one signal that the count is a way through rather than a stat.
+   It steps right on hover to confirm the direction. */
+.credit-card-arrow {
+  flex: none;
+  transition: transform 0.15s ease;
+}
+
+.credit-card:hover .credit-card-arrow {
+  transform: translateX(2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .credit-card-arrow,
+  .credit-card:hover .credit-card-arrow {
+    transition: none;
+    transform: none;
+  }
+}
+
 .credit-card .arco-eyebrow {
   margin-bottom: 16px;
   display: flex;
@@ -2352,6 +2633,15 @@ a.arco-nav-text.nav-transparent:hover {
   overflow: hidden;
 }
 
+/* Stand-in for a missing logo: the service mark. The disc is 1.9x the
+   mark, the ratio the whole set is drawn to — smaller and the mark
+   reads as lost in the circle rather than placed in it. */
+.credit-icon-service {
+  width: 53px;
+  height: 53px;
+  color: var(--arco-mid);
+}
+
 .credit-icon-initials {
   font-family: var(--font-sans);
   font-size: 32px;
@@ -2361,10 +2651,18 @@ a.arco-nav-text.nav-transparent:hover {
   user-select: none;
 }
 
+/* Same treatment as .company-icon-image on the company page: the logo
+   IS the circle. Uploaded logos are square in practice — 12 of the 14 on
+   the platform are exactly 1:1, the other two are 1.25 and 1.5 photos —
+   so cover crops nothing that matters. The earlier contain + padding
+   guarded against wide scraped wordmarks, which no longer exist now that
+   scraping is gone; all it does today is inset the logo so its own
+   background shows as a square against the disc. */
 .credit-icon img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: 50%;
 }
 
 .credit-card .arco-label {
@@ -4790,6 +5088,10 @@ body.no-scroll {
 /* Stack spacing: only between adjacent alerts, so a group doesn't add
    trailing margin before neighbouring form fields. */
 .arco-alert + .arco-alert { margin-top: 12px; }
+
+/* In the status modal the alert sits directly above the option list;
+   without this the message and the first option touch. */
+.status-modal-alert { margin-bottom: 20px; }
 
 .arco-alert-icon {
   width: 16px;
@@ -7516,4 +7818,195 @@ body.no-scroll {
   font-weight: 300;
   margin: 2px 0 0;
   color: var(--arco-light);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   NOTICE BANNER
+   Three tiers, one component. Which tier a message gets is a product
+   decision, not a per-page styling one.
+     --quiet      empty states in place; no dismiss, it leaves when the
+                  state changes; any number per page
+     --highlight  one nudge per page you want acted on; dismissible
+     --moment     something happened, shown once; never with a highlight
+   Serif title so the banner speaks in the page's voice rather than as a
+   system alert. Errors and warnings use .arco-alert instead — serif is
+   for an invitation, never for a problem.
+   ═══════════════════════════════════════════════════════════════ */
+
+.arco-banner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 22px 26px;
+  border-radius: 5px;
+  background: var(--arco-surface);
+}
+
+/* Reserve the top-right corner so the close never collides with the
+   action button, which sits vertically centred at the same edge. */
+.arco-banner:has(.arco-banner-close) { padding-right: 56px; }
+
+.arco-banner--highlight { background: var(--arco-wash); }
+
+/* The accent ground is the loudest surface in the system — reserved for
+   a moment that happened, shown once, never stacked with a highlight. */
+.arco-banner--moment {
+  background: var(--primary);
+  color: #fff;
+}
+
+.arco-banner-title {
+  font-family: var(--font-serif);
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.2px;
+  color: var(--arco-black);
+  margin: 0 0 5px;
+}
+
+.arco-banner--moment .arco-banner-title { color: #fff; }
+
+.arco-banner-body {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--arco-mid);
+  margin: 0;
+  /* Wide enough that a two-sentence notice holds two lines even with a
+     long project name interpolated into it; the banner has the room. */
+  max-width: 76ch;
+}
+
+.arco-banner--moment .arco-banner-body { color: rgba(255, 255, 255, 0.86); }
+
+.arco-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-shrink: 0;
+}
+
+/* Labelled dismiss, for a postponement. The word is load-bearing: this
+   banner's dismiss writes a hidden, user-unrecoverable flag and returns
+   only on the next uncredited publish — a consequence "×" cannot carry,
+   since × means "closed, reopen when you like". Colour is --arco-mid
+   (4.74:1 on the wash), not --arco-light (2.30:1, fails). Padding gives
+   it a 24px-tall target (WCAG 2.5.8) without shifting its baseline. */
+.arco-banner-dismiss {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  color: var(--arco-mid);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 4px;
+  margin: -6px -4px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s;
+  white-space: nowrap;
+}
+
+.arco-banner-dismiss:hover { color: var(--arco-black); }
+
+/* The Quiet tier's action: a text link, accent-coloured because it is
+   the action. Same padded hit area as the dismiss. */
+.arco-banner-link {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  color: var(--primary-ink);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 4px;
+  margin: -6px -4px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s;
+  white-space: nowrap;
+}
+
+/* Accent tone of the text-link family: teal text holds, the rule moves. */
+.arco-banner-link:hover {
+  color: var(--primary-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--primary-ink);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+.arco-banner-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 2px; }
+.arco-banner-dismiss:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 2px; }
+
+/* Icon dismiss, for a TERMINAL close — the Moment tier only, where the
+   payload has already been delivered and nothing is forgone. Same idiom
+   as .popup-close, and honest there. */
+.arco-banner-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--arco-light);
+  cursor: pointer;
+  transition: color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.arco-banner-close:hover { color: var(--arco-black); }
+.arco-banner-close:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.arco-banner--moment .arco-banner-close { color: rgba(255, 255, 255, 0.75); }
+.arco-banner--moment .arco-banner-close:hover { color: #fff; }
+.arco-banner--moment .arco-banner-close:focus-visible { outline-color: #fff; }
+.arco-banner--moment .arco-banner-dismiss { color: rgba(255, 255, 255, 0.88); }
+.arco-banner--moment .arco-banner-dismiss:hover { color: #fff; }
+.arco-banner--moment .arco-banner-dismiss:focus-visible,
+.arco-banner--moment .arco-banner-link:focus-visible { outline-color: #fff; }
+.arco-banner--moment .arco-banner-link { color: #fff; }
+
+/* 0.45 white composited over the accent ground measured 2.47:1 — below
+   the 3:1 that SC 1.4.11 requires of a control's own boundary. 0.62
+   clears it while staying visibly lighter than the label. */
+.arco-banner--moment .btn-tertiary,
+.arco-banner--moment .btn-tertiary-accent {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.62);
+}
+
+.arco-banner--moment .btn-tertiary:hover,
+.arco-banner--moment .btn-tertiary-accent:hover {
+  border-color: #fff;
+  color: #fff;
+}
+
+@media (max-width: 640px) {
+  .arco-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 18px;
+  }
+  .arco-banner-title { font-size: 22px; }
+  .arco-banner:has(.arco-banner-close) { padding-right: 48px; }
 }

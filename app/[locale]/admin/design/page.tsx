@@ -1,5 +1,6 @@
 import { FAQPreview } from "./faq-preview"
 import { DiscoverCardPreview } from "./discover-card-preview"
+import { ServiceMarksPreview } from "./service-marks-preview"
 
 export const dynamic = "force-dynamic"
 
@@ -227,22 +228,33 @@ export default function DesignPage() {
               <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
                 <p className="arco-small-text">
                   All buttons use <strong>Standard</strong> typography. Color differentiates role:<br />
-                  <strong>.btn-primary</strong> — Teal bg, white text · <strong>.btn-secondary</strong> — Black bg, white text · <strong>.btn-tertiary</strong> — Transparent, rule border
+                  <strong>.btn-primary</strong> — Teal bg, white text · <strong>.btn-secondary</strong> — Black bg, white text · <strong>.btn-tertiary</strong> — Transparent, rule border · <strong>.btn-tertiary-accent</strong> — Transparent, accent border + accent label
                 </p>
               </div>
             </div>
 
-            <div>
+            <div style={{ marginBottom: 48 }}>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Links</h4>
               <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 30 }}>
+
                   <div>
-                    <div className="arco-eyebrow" style={{ marginBottom: 12 }}>Header links — .arco-header-link</div>
-                    <div style={{ display: "flex", gap: 24 }}>
-                      <a href="#" className="arco-header-link active">Projects</a>
-                      <a href="#" className="arco-header-link">Professionals</a>
+                    <div className="arco-eyebrow" style={{ marginBottom: 12 }}>Header links — .arco-header-link .header-rule</div>
+                    {/* Shown inside a bar of the real header's geometry —
+                        64px tall over a 1px rule — because .header-rule
+                        anchors its underline to that bottom border. */}
+                    <div style={{ height: 65, boxSizing: "border-box", borderBottom: "1px solid var(--rule)", display: "flex", alignItems: "center", gap: 24 }}>
+                      <a href="#" className="arco-header-link header-rule active">Projects</a>
+                      <a href="#" className="arco-header-link header-rule">Professionals</a>
                     </div>
+                    <p className="arco-small-text" style={{ marginTop: 14, color: "var(--arco-mid)" }}>
+                      The rule lands on the header&rsquo;s bottom border rather than under the
+                      word, wiping in from the left — the same gesture as the{" "}
+                      <strong>.sub-nav-link</strong> tab indicator. Groups open their dropdown
+                      on hover, on pointer devices only.
+                    </p>
                   </div>
+
                   <div>
                     <div className="arco-eyebrow" style={{ marginBottom: 12 }}>Menu items — .arco-menu-item</div>
                     <div style={{ maxWidth: 220 }}>
@@ -255,34 +267,137 @@ export default function DesignPage() {
                         Company
                       </a>
                     </div>
+                    <p className="arco-small-text" style={{ marginTop: 10, color: "var(--arco-mid)" }}>
+                      No underline — the row already highlights, and a rule under an
+                      icon-plus-label pair reads as clutter.
+                    </p>
                   </div>
+
                   <div>
                     <div className="arco-eyebrow" style={{ marginBottom: 12 }}>Footer links — .footer-link</div>
-                    <div style={{ background: "#1c1c1a", padding: "16px 20px", borderRadius: 4, display: "inline-flex", gap: 12 }}>
+                    <div style={{ background: "#161614", padding: "16px 20px", borderRadius: 4, display: "inline-flex", gap: 12 }}>
                       <a href="#" className="footer-link">About</a>
-                      <span style={{ color: "#6b6b68" }}>·</span>
+                      <span style={{ color: "#888886" }}>·</span>
                       <a href="#" className="footer-link">Help Center</a>
                     </div>
+                    <p className="arco-small-text" style={{ marginTop: 10, color: "var(--arco-mid)" }}>
+                      No underline — grey to white on near-black is a contrast jump from
+                      7.79:1 to 17.35:1, which carries the state on its own.
+                    </p>
                   </div>
+
                   <div>
-                    <div className="arco-eyebrow" style={{ marginBottom: 12 }}>View all — .view-all-link</div>
-                    <a href="#" className="view-all-link">View all projects →</a>
+                    <div className="arco-eyebrow" style={{ marginBottom: 16 }}>Text links — .arco-text-link</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "120px 1fr 1fr", gap: "18px 32px", alignItems: "center", maxWidth: 620 }}>
+                      <span className="arco-micro-text" style={{ color: "var(--arco-mid)" }}>&nbsp;</span>
+                      <span className="arco-micro-text" style={{ color: "var(--arco-mid)" }}>Without arrow</span>
+                      <span className="arco-micro-text" style={{ color: "var(--arco-mid)" }}>With arrow</span>
+
+                      <span className="arco-small-text">Grey</span>
+                      <a href="#" className="arco-text-link">View all projects</a>
+                      <a href="#" className="arco-text-link"><span className="arco-text-link-label">View all projects</span><span aria-hidden>→</span></a>
+
+                      <span className="arco-small-text">Primary</span>
+                      <a href="#" className="arco-text-link arco-text-link--primary">6 projecten</a>
+                      <a href="#" className="arco-text-link arco-text-link--primary"><span className="arco-text-link-label">6 projecten</span><span aria-hidden>→</span></a>
+
+                      <span className="arco-small-text">Black</span>
+                      <a href="#" className="arco-text-link arco-text-link--black">Alle bedrijven</a>
+                      <span />
+                    </div>
+                    <p className="arco-body-text" style={{ marginTop: 18, maxWidth: 600 }}>
+                      Add <strong>--inline</strong> when the link sits in running prose rather
+                      than standing on its own, as with{" "}
+                      <a href="#" className="arco-text-link arco-text-link--primary arco-text-link--inline">Maxim Winkelaar Architects</a>{" "}
+                      — it drops the flex box and the nowrap so a long name wraps with the
+                      sentence.
+                    </p>
                   </div>
+
                   <div>
                     <div className="arco-eyebrow" style={{ marginBottom: 12 }}>Inline link</div>
                     <p className="arco-body-text" style={{ maxWidth: 600 }}>
                       Arco is where leading architects publish their work. We help <a href="#">discerning clients</a> discover exceptional teams.
                     </p>
                   </div>
+
                 </div>
               </div>
               <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
                 <p className="arco-small-text">
-                  All links use <strong>Small</strong> typography. Differentiated by color and hover:<br />
-                  <strong>.arco-header-link</strong> — Primary → Teal · <strong>.arco-menu-item</strong> — icon + text → Teal · <strong>.footer-link</strong> — Mid Gray → White · <strong>.view-all-link</strong> — Light Gray → Teal · <strong>Inline</strong> — Inherit, gray underline → Teal
+                  All links use <strong>Small</strong> typography. <strong>The underline is the
+                  platform&rsquo;s hover affordance</strong> — the two places it is omitted are
+                  omitted on purpose, because colour alone already carries the state there.<br />
+                  <strong>.arco-header-link</strong> — Black → Teal, teal underline at 6px offset ·{" "}
+                  <strong>.arco-menu-item</strong> — icon + text → Teal, no underline ·{" "}
+                  <strong>.footer-link</strong> — Grey → White, no underline<br />
+                  <strong>.arco-text-link</strong> — Grey → black text + black rule ·{" "}
+                  <strong>--primary</strong> — teal text holds, teal rule ·{" "}
+                  <strong>--black</strong> — black text holds, teal rule ·{" "}
+                  <strong>--inline</strong> — for use inside prose. The trailing arrow is markup,
+                  not a variant, and composes with any tone. When a link carries an icon or
+                  an arrow, wrap the words in <strong>.arco-text-link-label</strong>: the rule
+                  belongs to the text and never runs under a glyph.<br />
+                  <strong>Inline</strong> — rule at rest in <strong>--arco-rule</strong>, darkening
+                  to black on hover; the text colour never moves, so a link does not jump out of
+                  the sentence it sits in.
                 </p>
               </div>
             </div>
+
+            <div>
+              <h4 className="arco-label" style={{ marginBottom: 20 }}>Notice banners</h4>
+              <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16, display: "flex", flexDirection: "column", gap: 28 }}>
+                <div>
+                  <div className="arco-eyebrow" style={{ marginBottom: 12 }}>Quiet — .arco-banner</div>
+                  <div className="arco-banner">
+                    <div style={{ minWidth: 0 }}>
+                      <p className="arco-banner-title">Nog geen professionals toegevoegd</p>
+                      <p className="arco-banner-body">Vermeld wie aan dit project heeft meegewerkt. Zij worden uitgenodigd en het project verschijnt ook op hun bedrijfspagina.</p>
+                    </div>
+                    <div className="arco-banner-actions">
+                      <span className="arco-banner-link">Professional toevoegen</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="arco-eyebrow" style={{ marginBottom: 12 }}>Highlight — .arco-banner.arco-banner--highlight</div>
+                  <div className="arco-banner arco-banner--highlight">
+                    <div style={{ minWidth: 0 }}>
+                      <p className="arco-banner-title">Vermeld de professionals achter je projecten</p>
+                      <p className="arco-banner-body">Je hebt 7 projecten gepubliceerd zonder vermelde professionals. Begin bij je nieuwste project, Villa op een Landgoed.</p>
+                    </div>
+                                        <div className="arco-banner-actions">
+                      <button type="button" className="arco-banner-dismiss">Later</button>
+                      <button type="button" className="btn-tertiary btn-tertiary-accent">Professional toevoegen</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="arco-eyebrow" style={{ marginBottom: 12 }}>Moment — .arco-banner.arco-banner--moment</div>
+                  <div className="arco-banner arco-banner--moment">
+                    <div style={{ minWidth: 0 }}>
+                      <p className="arco-banner-title">Je project staat live</p>
+                      <p className="arco-banner-body">Villa op een Landgoed is nu zichtbaar op Arco. Vermeld de professionals die meewerkten — zij ontvangen een uitnodiging.</p>
+                    </div>
+                                        <div className="arco-banner-actions">
+                      <button type="button" className="arco-banner-dismiss">Sluiten</button>
+                      <button type="button" className="btn-tertiary">Professional toevoegen</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
+                <p className="arco-small-text">
+                  Serif title so the banner speaks in the page&rsquo;s voice, not as a system alert — errors and warnings use <strong>.arco-alert</strong> instead.<br />
+                  <strong>Quiet</strong> — empty states in place, no dismiss, any number per page · <strong>Highlight</strong> — one dismissible nudge per page · <strong>Moment</strong> — shown once, never alongside a Highlight.<br />
+                  Dismiss matches the speech act, not the CSS class: <strong>Highlight</strong> postpones, so it is a labelled <strong>.arco-banner-dismiss</strong> (&ldquo;×&rdquo; would promise a terminal close it does not perform) · <strong>Moment</strong> is terminal, so the same control reads &ldquo;Sluiten&rdquo; · <strong>Quiet</strong> has none.
+                </p>
+              </div>
+            </div>
+
           </div>
 
           {/* FORM ELEMENTS */}
@@ -1019,6 +1134,27 @@ export default function DesignPage() {
                 Every pin, regardless of aspect, links to the same <code>/projects/{"{slug}"}</code>.
               </p>
             </div>
+          </div>
+
+          {/* SERVICE MARKS */}
+          <div style={{ marginBottom: 80 }}>
+            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Service marks</h2>
+            <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
+              One hand-drawn mark per service, drawn as a single family rather than picked
+              from a stock icon set: 24 × 24, stroke only, four to eight strokes, curves
+              over boxes, nothing mirrored, and a scene rather than a symbol — the object
+              sits on a floor line, a shelf, a ceiling. They render at stroke weight 1 in
+              <code> --arco-mid</code>, filling a disc 1.9 × their size.
+            </p>
+            <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
+              A mark stands in wherever a company has no logo — on project credits, on
+              discover cards, in the editor — so it says what a firm <em>does</em> rather
+              than showing dead initials. Each is resolved here through{" "}
+              <code>resolveProfessionalServiceIcon</code> from the service&rsquo;s real
+              <code> categories.slug</code>, so this is exactly what the product renders;
+              a service that falls through to the generic briefcase is a missing mapping.
+            </p>
+            <ServiceMarksPreview />
           </div>
 
           {/* PHOTO GALLERY LAYOUTS */}

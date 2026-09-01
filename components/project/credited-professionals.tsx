@@ -4,6 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Link } from "@/i18n/navigation"
 import Image from "next/image"
 import { useTranslations } from "next-intl"
+import { ArrowRight } from "lucide-react"
+
+import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services"
 
 interface Professional {
   id: string
@@ -14,6 +17,10 @@ interface Professional {
   serviceCategories?: string[]
   logo: string | null
   projectsCount: number
+  /** Claimed and publicly visible — only then is there a page to link to. */
+  hasPage?: boolean
+  /** Category slug, used to pick a stand-in icon when there is no logo. */
+  serviceSlug?: string | null
 }
 
 interface CreditedProfessionalsProps {
@@ -98,16 +105,15 @@ export function CreditedProfessionals({ professionals }: CreditedProfessionalsPr
         <div className="credits-grid">
           {professionals.map((professional) => {
             const initials = getInitials(professional.companyName)
-            const href = professional.companySlug
+            // Every credit shows the same way — service, icon, name. Only
+            // a claimed company has a page behind it, so only that one is
+            // a link; the rest are plain text rather than dead links.
+            const href = professional.hasPage && professional.companySlug
               ? `/professionals/${professional.companySlug}`
-              : '#'
+              : null
 
-            return (
-              <Link
-                key={professional.id}
-                href={href}
-                className="credit-card"
-              >
+            const body = (
+              <>
                 <ServiceLabel services={professional.serviceCategories} fallback={professional.serviceCategory} />
 
                 <div className="credit-icon">
@@ -116,19 +122,49 @@ export function CreditedProfessionals({ professionals }: CreditedProfessionalsPr
                       src={professional.logo}
                       alt={professional.companyName}
                       fill
-                      className="object-cover"
+                      className="object-contain"
                     />
                   ) : (
-                    <span className="credit-icon-initials">{initials}</span>
+                    // Initials of a company you have never heard of say
+                    // nothing. The service icon at least tells you what
+                    // this firm did on the project, until they upload a
+                    // logo of their own.
+                    (() => {
+                      const Icon = resolveProfessionalServiceIcon(
+                        professional.serviceSlug,
+                        professional.serviceCategories?.[0] ?? professional.serviceCategory,
+                      )
+                      return <Icon className="credit-icon-service" strokeWidth={1} aria-hidden />
+                    })()
                   )}
                 </div>
 
                 <h3 className="arco-label">{professional.companyName}</h3>
-                <p className="arco-card-subtitle">
-                  {t("projects_count", { count: professional.projectsCount })}
-                </p>
-                <span className="text-link-plain">{t("view_portfolio")} →</span>
+                {/* The project count IS the way through to the portfolio,
+                    so it carries the link instead of a separate row. */}
+                {href && (
+                  <p className="credit-card-projects">
+                    {/* The label wears the hover underline on its own, so
+                        the rule is not drawn under the arrow too. */}
+                    <span className="credit-card-projects-label">
+                      {t("projects_count", { count: professional.projectsCount })}
+                    </span>
+                    {/* The count is the only thing on the card that leads
+                        anywhere; the arrow is what says so. */}
+                    <ArrowRight className="credit-card-arrow" size={14} strokeWidth={1.5} aria-hidden />
+                  </p>
+                )}
+              </>
+            )
+
+            return href ? (
+              <Link key={professional.id} href={href} className="credit-card">
+                {body}
               </Link>
+            ) : (
+              <div key={professional.id} className="credit-card credit-card--plain">
+                {body}
+              </div>
             )
           })}
         </div>

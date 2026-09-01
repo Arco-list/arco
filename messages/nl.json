@@ -371,7 +371,8 @@
       "list_company_success": "Je bedrijfspagina is nu live.",
       "later": "Ik doe dit later"
     },
-    "tour_replay": "Rondleiding bekijken"
+    "tour_replay": "Rondleiding bekijken",
+    "add_project": "Project toevoegen"
   },
   "verify_domain": {
     "title": "Domein verifiëren",
@@ -971,7 +972,6 @@
     "status_modal_submit": "Indienen",
     "invite_team_member": "Teamlid uitnodigen",
     "team_member_count": "{count, plural, one {# lid} other {# leden}}",
-    "pending_count": "{count} in afwachting",
     "you": "(jij)",
     "role_admin": "Admin",
     "role_member": "Lid",
@@ -1167,7 +1167,16 @@
     "pricing_included_in_pro": "Inbegrepen in Pro",
     "pricing_contrib_cta_body": "Sta jij op projecten die op Arco verschijnen? Claim je gratis vermelding en bedrijfspagina — het kost twee minuten.",
     "pricing_contrib_cta_button": "Maak je bedrijfspagina",
-    "pricing_contrib_cta_title": "Claim je plek op de projecten die jij hebt gerealiseerd"
+    "pricing_contrib_cta_title": "Claim je plek op de projecten die jij hebt gerealiseerd",
+    "add_project": "Project toevoegen",
+    "credited_label": "{count, plural, one {professional toegevoegd} other {professionals toegevoegd}}",
+    "accepted_label": "geaccepteerd",
+    "card_add_professional": "Professional toevoegen",
+    "pending_count": "{count} in afwachting",
+    "credit_nudge_title": "Vermeld de professionals achter je projecten",
+    "credit_nudge_body": "Je hebt {count} projecten zonder vermelde professionals. Begin bij {project} — zij worden uitgenodigd en tonen het project ook op hun pagina.",
+    "credit_nudge_dismiss": "Later",
+    "credit_nudge_dismiss_hint": "Deze melding komt terug wanneer je een nieuw project publiceert zonder vermelde professionals."
   },
   "business": {
     "for_architects": "Voor Architecten",
@@ -1384,7 +1393,8 @@
       "unlisted": "Niet vermeld",
       "listed": "Vermeld",
       "live_on_page": "Uitgelicht",
-      "contributor_rejected": "Afgewezen"
+      "contributor_rejected": "Afgewezen",
+      "removed": "Verwijderd"
     },
     "featured": {
       "label": "Uitgelicht",
@@ -1401,6 +1411,16 @@
       "label": "Niet vermeld",
       "description_contributor": "Niet vermeld op de projectpagina en niet zichtbaar in je portfolio.",
       "description_listing": "Project is niet zichtbaar voor gebruikers."
+    },
+    "rejection_reasons": {
+      "not_residential": "Geen woonproject",
+      "insufficient_photos": "Te weinig foto’s",
+      "low_quality_images": "Beeldkwaliteit te laag",
+      "missing_details": "Projectgegevens ontbreken",
+      "duplicate": "Dubbel project",
+      "inappropriate": "Ongepaste inhoud",
+      "not_architecture": "Geen architectuur of interieurontwerp",
+      "none_given": "Geen reden opgegeven"
     }
   },
   "project_edit": {
@@ -1408,7 +1428,8 @@
       "listings": "Listings",
       "company": "Bedrijf",
       "team": "Team",
-      "plans": "Abonnementen"
+      "plans": "Abonnementen",
+      "inbox": "Inbox"
     },
     "tour": {
       "step_of": "Stap {current} van {total}",
@@ -1569,7 +1590,19 @@
       "duplicate_dialog_description": "Dit bedrijf staat al op Arco. Koppel ze om hun werk aan dit project te crediteren.",
       "duplicate_link_company": "Bedrijf koppelen",
       "project_count_one": "{count} project",
-      "project_count_other": "{count} projecten"
+      "project_count_other": "{count} projecten",
+      "col_company": "Bedrijf",
+      "col_service": "Dienst",
+      "col_email": "E-mail",
+      "col_status": "Status",
+      "add_dialog_hint": "Zoek het bedrijf dat je wilt vermelden",
+      "add_dialog_typing_hint": "Begin met typen om het bedrijf te zoeken",
+      "add_dialog_change": "wijzigen",
+      "change_professional": "Professional wijzigen",
+      "col_contact": "Contact",
+      "contact_you": "Jij",
+      "empty_title": "Nog geen professionals toegevoegd",
+      "empty_body": "Vermeld wie aan dit project heeft meegewerkt. Zij worden uitgenodigd en het project verschijnt ook op hun bedrijfspagina."
     },
     "delete_project": {
       "trigger": "Project verwijderen",
@@ -1598,7 +1631,7 @@
       "req_min_photos": "Minimaal 5 foto's",
       "rec_more_photos": "Voeg 20+ foto's toe voor een complete projectpresentatie",
       "rec_tag_photos": "Tag foto's aan ruimtes voor een geleide fototour",
-      "rec_credit_more": "Crediteer 5+ professionals om de zichtbaarheid van het project te vergroten",
+      "rec_credit_more": "Voeg de professionals toe die meewerkten ({count, plural, =0 {nog niemand toegevoegd} one {# toegevoegd} other {# toegevoegd}})",
       "invites_note": "Vermelde professionals worden uitgenodigd op Arco zodra je project is goedgekeurd en gepubliceerd."
     },
     "low_res": {
@@ -1684,7 +1717,8 @@
       "not_authenticated": "Niet geverifieerd",
       "min_one_service": "Minstens één dienst is vereist",
       "max_three_services": "Maximaal 3 diensten per professional",
-      "upload_failed_count": "{count, plural, one {1 foto kon niet worden geüpload} other {# foto's konden niet worden geüpload}}"
+      "upload_failed_count": "{count, plural, one {1 foto kon niet worden geüpload} other {# foto's konden niet worden geüpload}}",
+      "professional_opted_out": "Deze ontvanger heeft zich afgemeld voor e-mail — er is geen uitnodiging verstuurd."
     },
     "errors": {
       "generic_save": "Er ging iets mis tijdens het opslaan.",
@@ -1735,5 +1769,35 @@
     "body_placeholder": "Uitgebreide projecttekst (verschijnt achter 'Lees meer')…",
     "body_divider": "Achter 'Lees meer'",
     "word_count": "{count} / {max} woorden"
+  },
+  "invite_accept": {
+    "eyebrow": "Uitnodiging",
+    "title": "Je bent vermeld op {project}",
+    "this_project": "dit project",
+    "your_company": "je bedrijf",
+    "body": "Accepteer de vermelding om {company} op de projectpagina te tonen. Het project verschijnt dan ook op je eigen bedrijfspagina op Arco.",
+    "body_with_owner": "{owner} heeft {company} vermeld als betrokken professional. Accepteer om op de projectpagina te verschijnen — het project komt dan ook op je eigen bedrijfspagina te staan.",
+    "accept": "Uitnodiging accepteren",
+    "accepting": "Bezig…",
+    "view_project": "Bekijk project",
+    "accepted_title": "Vermelding geaccepteerd",
+    "accepted_body": "Je staat nu op de projectpagina en het project is zichtbaar op je bedrijfspagina.",
+    "signin_title": "Log in om te accepteren",
+    "signin_body": "Dit bedrijf heeft al een account op Arco. Log in met dat account om de vermelding te accepteren.",
+    "signin": "Inloggen",
+    "wrong_account_title": "Ander account",
+    "wrong_account_body": "Je bent ingelogd met een account dat niet bij dit bedrijf hoort. Wissel van account en probeer het opnieuw.",
+    "invalid_title": "Dit is niet gelukt",
+    "invalid_body": "De vermelding kon niet worden geaccepteerd. Neem contact op met de projecteigenaar.",
+    "error_expired_title": "Deze link is verlopen",
+    "error_expired_body": "Uitnodigingslinks zijn zeven dagen geldig. Vraag de projecteigenaar om een nieuwe uitnodiging.",
+    "error_malformed_title": "Deze link klopt niet",
+    "error_malformed_body": "Controleer of je de volledige link uit de e-mail hebt geopend.",
+    "error_bad_signature_title": "Deze link klopt niet",
+    "error_bad_signature_body": "Controleer of je de volledige link uit de e-mail hebt geopend.",
+    "error_not_found_title": "Vermelding niet gevonden",
+    "error_not_found_body": "Deze vermelding bestaat niet meer, of het project is niet langer gepubliceerd.",
+    "error_withdrawn_title": "Vermelding ingetrokken",
+    "error_withdrawn_body": "De projecteigenaar heeft deze vermelding verwijderd."
   }
 }

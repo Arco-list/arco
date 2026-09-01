@@ -26,7 +26,7 @@ export function ReadMoreBody({ paragraphs, moreLabel, lessLabel }: {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="inline-flex items-center gap-1.5 text-[13px] text-[#016D75] hover:text-[#014f55] transition-colors bg-transparent border-none cursor-pointer p-0"
+        className="arco-text-link arco-text-link--primary"
         style={{ marginTop: 4 }}
       >
         {/* Same affordance as the FAQ toggle: a + that rotates 45° into
@@ -44,7 +44,8 @@ export function ReadMoreBody({ paragraphs, moreLabel, lessLabel }: {
         >
           +
         </span>
-        {open ? lessLabel : moreLabel}
+        {/* Labelled so the hover rule lands on the words, not the plus. */}
+        <span className="arco-text-link-label">{open ? lessLabel : moreLabel}</span>
       </button>
     </>
   )

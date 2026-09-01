@@ -56,6 +56,7 @@ type SearchProfessionalsRow = {
   company_latitude: number | null
   company_longitude: number | null
   primary_specialty: string | null
+  primary_specialty_slug: string | null
   primary_service_name: string | null
   services_offered: string[] | null
   is_verified: boolean | null
@@ -114,6 +115,7 @@ const mapRowToCard = (row: SearchProfessionalsRow, locale: string = "en"): Profe
     professionalId: row.id,
     name,
     profession,
+    primaryServiceSlug: row.primary_specialty_slug ?? null,
     location,
     image: row.cover_photo_url || row.company_logo || PLACEHOLDER_IMAGE,
     logoUrl: row.company_logo ?? null,

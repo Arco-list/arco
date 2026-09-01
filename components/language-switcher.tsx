@@ -56,15 +56,13 @@ export function LanguageSwitcher() {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="text-sm font-normal transition-colors flex items-center gap-1.5"
+        className="footer-lang text-sm font-normal flex items-center gap-1.5"
         style={{
           padding: "4px 8px",
           borderRadius: 3,
           border: "none",
           background: "none",
           cursor: "pointer",
-          color: "inherit",
-          opacity: 0.6,
         }}
       >
         <Globe size={14} />

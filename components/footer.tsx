@@ -37,40 +37,40 @@ export function Footer() {
               <div className="mb-5">
                 <Image src="/images/arco-logo-white.svg" alt="Arco" width={48} height={17} className="h-auto w-[48px]" />
               </div>
-              <p className="arco-small-text text-white/35 max-w-[220px] leading-relaxed">
+              <p className="footer-meta max-w-[220px] leading-relaxed">
                 {t("tagline")}
               </p>
             </div>
 
             <div className="footer-links-grid">
               <div className="footer-col">
-                <h4 className="arco-eyebrow text-white/35 mb-1.5">{t("discover")}</h4>
-                <Link href="/projects" className="arco-small-text text-white/50 hover:text-white transition-colors">{tn("projects")}</Link>
-                <Link href="/professionals" className="arco-small-text text-white/50 hover:text-white transition-colors">{tn("professionals")}</Link>
+                <h4 className="arco-eyebrow footer-heading mb-1.5">{t("discover")}</h4>
+                <Link href="/projects" className="footer-link">{tn("projects")}</Link>
+                <Link href="/professionals" className="footer-link">{tn("professionals")}</Link>
               </div>
 
               <div className="footer-col">
-                <h4 className="arco-eyebrow text-white/35 mb-1.5">{t("businesses")}</h4>
-                <Link href="/businesses/architects" className="arco-small-text text-white/50 hover:text-white transition-colors">{tn("for_architects")}</Link>
-                <Link href="/businesses/professionals" className="arco-small-text text-white/50 hover:text-white transition-colors">{tn("for_professionals")}</Link>
+                <h4 className="arco-eyebrow footer-heading mb-1.5">{t("businesses")}</h4>
+                <Link href="/businesses/architects" className="footer-link">{tn("for_architects")}</Link>
+                <Link href="/businesses/professionals" className="footer-link">{tn("for_professionals")}</Link>
                 {hasAdminRole && (
-                  <Link href="/businesses/photography" className="arco-small-text text-white/50 hover:text-white transition-colors">{tn("photography")}</Link>
+                  <Link href="/businesses/photography" className="footer-link">{tn("photography")}</Link>
                 )}
-                <Link href="/pricing" className="arco-small-text text-white/50 hover:text-white transition-colors">{tn("pricing")}</Link>
+                <Link href="/pricing" className="footer-link">{tn("pricing")}</Link>
               </div>
 
               <div className="footer-col">
-                <h4 className="arco-eyebrow text-white/35 mb-1.5">{t("company")}</h4>
-                <Link href="/about" className="arco-small-text text-white/50 hover:text-white transition-colors">{t("about")}</Link>
-                <Link href="/help-center" className="arco-small-text text-white/50 hover:text-white transition-colors">{t("help_faq")}</Link>
-                <Link href="/privacy" className="arco-small-text text-white/50 hover:text-white transition-colors">{t("privacy")}</Link>
-                <Link href="/terms" className="arco-small-text text-white/50 hover:text-white transition-colors">{t("terms")}</Link>
+                <h4 className="arco-eyebrow footer-heading mb-1.5">{t("company")}</h4>
+                <Link href="/about" className="footer-link">{t("about")}</Link>
+                <Link href="/help-center" className="footer-link">{t("help_faq")}</Link>
+                <Link href="/privacy" className="footer-link">{t("privacy")}</Link>
+                <Link href="/terms" className="footer-link">{t("terms")}</Link>
               </div>
             </div>
           </div>
 
           <div className="footer-bottom-flex">
-            <span className="arco-small-text text-white/25">
+            <span className="footer-meta">
               {t("copyright", { year: new Date().getFullYear() })}
             </span>
             <LanguageSwitcher />

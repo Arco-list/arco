@@ -500,9 +500,12 @@ function DetailsSection({
     const trimmed = next?.trim().toLowerCase() || null
     if ((trimmed ?? "") === (domainLocal ?? "")) return
     const supabase = getBrowserSupabaseClient()
+    // Website follows the domain: the external-link arrows prefer
+    // companies.website, so leaving it stale kept pointing at the old
+    // site after a domain edit (MVD Interior Design).
     const { error } = await supabase
       .from("companies")
-      .update({ domain: trimmed } as { domain: string | null })
+      .update({ domain: trimmed, ...(trimmed ? { website: `https://${trimmed}` } : {}) } as { domain: string | null; website?: string })
       .eq("id", primaryCompanyId)
     if (error) {
       setDomainLocal(domain)

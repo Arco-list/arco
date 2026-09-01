@@ -411,6 +411,32 @@ export async function claimCompanyAction(input: {
     return { success: false, error: "Unable to claim this company." }
   }
 
+  // A company that was credited on a live project before anyone claimed
+  // it is already earning its page — list it now. The helper only
+  // promotes when an accepted credit on a published project exists, so a
+  // company claimed with no credits stays 'created' and keeps going
+  // through normal setup.
+  try {
+    const { syncCompanyListedStatus } = await import("@/lib/companies/sync-listed-status")
+    await syncCompanyListedStatus(companyId)
+  } catch (err) {
+    logger.error("Failed to sync listed status after claim", { userId: user.id, companyId }, err as Error)
+  }
+
+  // Now that the company has declared what it does, correct any credit
+  // naming a service it does not offer — otherwise the editor's service
+  // dropdown (which lists only the company's services) leaves that
+  // credit holding an unselectable value.
+  try {
+    const { reconcileCreditServicesToCompany } = await import("@/lib/companies/reconcile-credit-services")
+    const res = await reconcileCreditServicesToCompany(companyId)
+    if (res.updated > 0) {
+      logger.info("Reconciled credit services on company claim", { userId: user.id, companyId, ...res })
+    }
+  } catch (err) {
+    logger.error("Failed to reconcile credit services after claim", { userId: user.id, companyId }, err as Error)
+  }
+
   // Fetch current profile
   const { data: profile } = await supabase
     .from("profiles")

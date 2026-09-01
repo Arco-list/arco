@@ -12,6 +12,8 @@ import { ImportProjectModal } from "@/components/import-project-modal"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useRouter } from "next/navigation"
+import { getTourSeen, markTourSeen } from "@/lib/tours/actions"
+import { translateRejectionReason } from "@/lib/rejection-reasons"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { Database } from "@/lib/supabase/types"
 import { DashboardListingsFilter, type FilterState } from "@/components/dashboard-listings-filter"
@@ -67,6 +69,28 @@ type ListingProjectPhoto = {
   orderIndex: number | null
 }
 
+/** A credit row on one of the company's own projects, as embedded by
+ *  the listings query. */
+type CreditRow = {
+  id: string
+  status: string
+  is_project_owner: boolean
+  company_id: string | null
+  invited_email: string | null
+  companies: { audience: string | null } | null
+}
+
+/** Non-owner, non-photographer credits still standing on a project.
+ *  Placeholder addresses ("link without email") never went anywhere. */
+const liveCredits = (rows: CreditRow[] | null | undefined) =>
+  (rows ?? []).filter(r =>
+    !r.is_project_owner
+    && r.companies?.audience !== "pro"
+    && r.status !== "rejected"
+    && r.status !== "removed"
+    && !/@arcolist\.com$/i.test(r.invited_email ?? ""),
+  )
+
 type ListingProject = {
   id: string
   title: string
@@ -91,6 +115,15 @@ type ListingProject = {
   invitedServiceCategory?: string | null
   rejectionReason?: string | null
   rawProjectStatus?: string
+  /** Professionals credited on this project (owner view only). */
+  creditedCount: number
+  /** …of which have accepted (credit visible: listed / live_on_page). */
+  acceptedCount: number
+  /** Identity per credit (company, else the invited address), so totals
+   *  across projects count professionals rather than credits — the same
+   *  studio on three projects is one professional. */
+  creditKeys: string[]
+  acceptedKeys: string[]
 }
 
 const isUuid = (value?: string | null): value is string =>
@@ -102,6 +135,7 @@ const MIN_YEAR = 2000
 export default function DashboardListingsPage() {
   const t = useTranslations("dashboard")
   const tStatus = useTranslations("project_status")
+  const tReason = useTranslations("project_status.rejection_reasons")
   const listingStatusOptions = useMemo(() => buildListingStatusOptions((k) => tStatus(k)), [tStatus])
   const ownerStatusOptions = useMemo(() => buildOwnerStatusOptions((k) => tStatus(k)), [tStatus])
   const contributorStatusOptions = useMemo(() => buildContributorStatusOptions((k) => tStatus(k)), [tStatus])
@@ -109,6 +143,7 @@ export default function DashboardListingsPage() {
   const supabase = useMemo(() => getBrowserSupabaseClient(), [])
   const searchParams = useSearchParams()
   const companyIdParam = searchParams.get("company_id")
+  const [overrideCompanyId, setOverrideCompanyId] = useState<string | null>(null)
 
   // SECURITY: Validate RLS policies are enforced
   const { isSecure: isRLSSecure, loading: rlsLoading } = useTableRLSValidation("projects", {
@@ -151,6 +186,11 @@ export default function DashboardListingsPage() {
   })
   const MAX_CACHE_SIZE = 100 // Reasonable limit for taxonomy options
   const router = useRouter()
+  // Credit nudge: dismissal is keyed to the SITUATION, not to "forever".
+  // Dismiss at 7 published projects and it stays gone through those 7;
+  // publishing an 8th uncredited project makes a new key, so it returns
+  // with a genuinely new reason to ask.
+  const [creditNudgeDismissed, setCreditNudgeDismissed] = useState<boolean | null>(null)
   const { canPublishProjects, error: entitlementsError } = useCompanyEntitlements()
   const [userId, setUserId] = useState<string | null>(null)
   const [companyId, setCompanyId] = useState<string | null>(null)
@@ -224,6 +264,11 @@ export default function DashboardListingsPage() {
         // Find professional record for this user + company
         const { data: proMatch } = await supabase.from("professionals").select("id, company_id").eq("user_id", authData.user.id).eq("company_id", companyIdParam).maybeSingle()
         resolvedProfessionalId = proMatch?.id ?? null
+        // No own professionals row for this company → the page is being
+        // viewed via the company_id override (admin or team member).
+        // Import needs that company explicitly; the server action
+        // verifies the entitlement.
+        setOverrideCompanyId(proMatch?.company_id ? null : companyIdParam)
         // If no professional record for this company, try any professional record
         if (!resolvedProfessionalId) {
           const { data: anyPro } = await supabase.from("professionals").select("id").eq("user_id", authData.user.id).maybeSingle()
@@ -289,7 +334,8 @@ export default function DashboardListingsPage() {
             rejection_reason,
             client_id,
             project_type_category:categories!projects_project_type_category_id_fkey(name, slug),
-            project_photos(id, url, is_primary, order_index)
+            project_photos(id, url, is_primary, order_index),
+            project_professionals(id, status, is_project_owner, company_id, invited_email, companies(audience))
           )
         `)
         .eq("company_id", resolvedCompanyId!)
@@ -322,6 +368,7 @@ export default function DashboardListingsPage() {
       const projectRows = Array.from(projectMap.values()).map(pp => ({
         ...pp.projects,
         project_professionals: [{ is_project_owner: pp.is_project_owner }],
+        credit_rows: (((pp.projects as unknown as { project_professionals?: CreditRow[] }).project_professionals) ?? []) as CreditRow[],
         project_professional_id: pp.id,
         project_professional_status: pp.status,
         invited_service_category_ids: (pp.invited_service_category_ids as string[] | null) ?? [],
@@ -330,6 +377,7 @@ export default function DashboardListingsPage() {
         project_type_category: { name: string | null; slug: string | null } | null
         invited_service_category_ids?: string[] | null
         contributor_cover_photo_id: string | null
+        credit_rows: CreditRow[]
       })[]
 
       // Collect style IDs that need resolution (styles can't be JOINed due to array column)
@@ -421,17 +469,17 @@ export default function DashboardListingsPage() {
 
         if (["draft", "in_progress", "rejected"].includes(projectStatus)) {
           statusKey = projectStatus
-          statusLabel = PROJECT_STATUS_LABELS[projectStatus] ?? projectStatus
+          statusLabel = tStatus(`labels.${projectStatus}`)
           statusChipClass = PROJECT_STATUS_CHIP_CLASS[projectStatus] ?? "bg-surface text-text-secondary"
           statusDotClass = PROJECT_STATUS_DOT_CLASS[projectStatus] ?? "bg-muted-foreground"
         } else if (ppStatus) {
           statusKey = ppStatus
-          statusLabel = CONTRIBUTOR_STATUS_LABELS[ppStatus] ?? ppStatus
+          statusLabel = tStatus(`labels.${ppStatus === "rejected" ? "contributor_rejected" : ppStatus}`)
           statusChipClass = CONTRIBUTOR_STATUS_CHIP_CLASS[ppStatus] ?? "bg-surface text-text-secondary"
           statusDotClass = CONTRIBUTOR_STATUS_DOT_CLASS[ppStatus] ?? "bg-muted-foreground"
         } else {
           statusKey = projectStatus
-          statusLabel = PROJECT_STATUS_LABELS[projectStatus] ?? projectStatus
+          statusLabel = tStatus(`labels.${projectStatus}`)
           statusChipClass = PROJECT_STATUS_CHIP_CLASS[projectStatus] ?? "bg-surface text-text-secondary"
           statusDotClass = PROJECT_STATUS_DOT_CLASS[projectStatus] ?? "bg-muted-foreground"
         }
@@ -482,11 +530,24 @@ export default function DashboardListingsPage() {
           legacyText
 
         const locationLabel = project.address_city || null
+        // Credits only mean something on the company's own projects.
+        const credits = role === "owner" ? liveCredits(project.credit_rows) : []
+        const creditKey = (r: CreditRow) => r.company_id ?? `email:${(r.invited_email ?? "").trim().toLowerCase()}`
+        const creditKeys = Array.from(new Set(credits.map(creditKey)))
+        const acceptedKeys = Array.from(new Set(
+          credits.filter(r => r.status === "listed" || r.status === "live_on_page").map(creditKey),
+        ))
+        const creditedCount = creditKeys.length
+        const acceptedCount = acceptedKeys.length
         const subtitle = [projectTypeLabel, locationLabel].filter(Boolean).join(" · ")
 
         return {
           id: project.id,
           title: project.title,
+          creditedCount,
+          acceptedCount,
+          creditKeys,
+          acceptedKeys,
           status: statusKey,
           statusLabel,
           statusChipClass,
@@ -615,7 +676,7 @@ export default function DashboardListingsPage() {
         throw error
       }
 
-      const newStatusLabel = PROJECT_STATUS_LABELS[selectedStatus as ProjectStatus]
+      const newStatusLabel = tStatus(`labels.${selectedStatus}`)
       const newStatusChipClass = PROJECT_STATUS_CHIP_CLASS[selectedStatus as ProjectStatus]
       const newStatusDotClass = PROJECT_STATUS_DOT_CLASS[selectedStatus as ProjectStatus]
 
@@ -811,7 +872,7 @@ export default function DashboardListingsPage() {
       }
 
       // Update local state with new contributor status and derived display fields
-      const newStatusLabel = CONTRIBUTOR_STATUS_LABELS[selectedContributorStatus as ContributorStatus]
+      const newStatusLabel = tStatus(`labels.${selectedContributorStatus === "rejected" ? "contributor_rejected" : selectedContributorStatus}`)
       const newStatusChipClass = CONTRIBUTOR_STATUS_CHIP_CLASS[selectedContributorStatus as ContributorStatus]
       const newStatusDotClass = CONTRIBUTOR_STATUS_DOT_CLASS[selectedContributorStatus as ContributorStatus]
 
@@ -991,6 +1052,44 @@ export default function DashboardListingsPage() {
   const displayedProjects = filteredProjects
   const hasProjects = projects.length > 0
 
+  // ── Credit nudge ──────────────────────────────────────────────
+  // Shown to an owner with several published projects and nobody
+  // credited on any of them. It explains WHY once; the per-card links
+  // are the ongoing path and survive dismissal.
+  const publishedOwnerProjects = useMemo(
+    () => projects
+      .filter(p => p.role === "owner" && (p.rawProjectStatus === "published" || p.rawProjectStatus === "completed"))
+      .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "")),
+    [projects],
+  )
+  const totalCredited = useMemo(() => new Set(projects.flatMap(p => p.creditKeys)).size, [projects])
+  // The newest one: recall of who worked on it is freshest, and it is
+  // the project they most recently cared about.
+  const newestUncredited = publishedOwnerProjects.find(p => p.creditedCount === 0) ?? publishedOwnerProjects[0]
+  const creditNudgeKey = companyId
+    ? `credit-nudge:${companyId}:${publishedOwnerProjects.length}`
+    : null
+  const showCreditNudge =
+    !isLoading
+    && creditNudgeDismissed === false
+    && publishedOwnerProjects.length >= 2
+    && totalCredited === 0
+    && Boolean(newestUncredited)
+
+  useEffect(() => {
+    if (!creditNudgeKey) return
+    let cancelled = false
+    void getTourSeen(creditNudgeKey)
+      .then(seen => { if (!cancelled) setCreditNudgeDismissed(seen) })
+      .catch(() => { if (!cancelled) setCreditNudgeDismissed(true) })
+    return () => { cancelled = true }
+  }, [creditNudgeKey])
+
+  const dismissCreditNudge = () => {
+    setCreditNudgeDismissed(true)
+    if (creditNudgeKey) void markTourSeen(creditNudgeKey).catch(() => {})
+  }
+
   return (
     <div className="min-h-screen bg-white flex flex-col" style={{ paddingTop: 60 }}>
       <Header navLinks={[
@@ -1007,7 +1106,7 @@ export default function DashboardListingsPage() {
           <h2 className="arco-section-title">{t("listings")}</h2>
           {canPublishProjects && hasProjects && (
             <button onClick={() => setImportModalOpen(true)} className="btn-primary" style={{ fontSize: 14, padding: "10px 20px" }}>
-              {t("publish_your_project")}
+              {t("add_project")}
             </button>
           )}
         </div>
@@ -1053,6 +1152,42 @@ export default function DashboardListingsPage() {
               </div>
             )}
 
+            {showCreditNudge && newestUncredited && (
+              <div className="arco-banner arco-banner--highlight" style={{ marginBottom: 22 }}>
+                <div style={{ minWidth: 0 }}>
+                  <p className="arco-banner-title">{t("credit_nudge_title")}</p>
+                  <p className="arco-banner-body">
+                    {t("credit_nudge_body", {
+                      count: publishedOwnerProjects.length,
+                      project: newestUncredited.title,
+                    })}
+                  </p>
+                </div>
+                <div className="arco-banner-actions">
+                  {/* Visible word IS the accessible name (no aria-label
+                      overriding it), so voice control "click Later" works
+                      and screen readers hear the postponement, not
+                      "dismiss". The return condition rides along in a
+                      description. */}
+                  <button
+                    type="button"
+                    className="arco-banner-dismiss"
+                    onClick={dismissCreditNudge}
+                    aria-describedby="credit-nudge-hint"
+                  >
+                    {t("credit_nudge_dismiss")}
+                  </button>
+                  <span id="credit-nudge-hint" className="sr-only">{t("credit_nudge_dismiss_hint")}</span>
+                  <Link
+                    href={`/dashboard/edit/${newestUncredited.id}?focus=professionals`}
+                    className="btn-tertiary btn-tertiary-accent"
+                  >
+                    {t("card_add_professional")}
+                  </Link>
+                </div>
+              </div>
+            )}
+
             {/* Result count */}
             {!isLoading && hasProjects && (
               <div className="discover-results-meta">
@@ -1061,6 +1196,24 @@ export default function DashboardListingsPage() {
                     {displayedProjects.length.toLocaleString()}
                   </strong>{" "}
                   {t("project_count", { count: displayedProjects.length }).replace(String(displayedProjects.length), "").trim()}
+                  {(() => {
+                    // Across all own projects, not just the filtered view.
+                    // Deduped: this counts professionals, not credits, so
+                    // one studio on three projects is 1 here (the card
+                    // counts stay per-project). Numbers bold like the
+                    // project count; a segment only appears once it has
+                    // something to say.
+                    const credited = new Set(projects.flatMap(p => p.creditKeys)).size
+                    const accepted = new Set(projects.flatMap(p => p.acceptedKeys)).size
+                    if (credited === 0) return null
+                    const num = (n: number) => <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{n.toLocaleString()}</strong>
+                    return (
+                      <>
+                        {" · "}{num(credited)} {t("credited_label", { count: credited })}
+                        {accepted > 0 && <>{" · "}{num(accepted)} {t("accepted_label", { count: accepted })}</>}
+                      </>
+                    )
+                  })()}
                 </p>
               </div>
             )}
@@ -1281,11 +1434,35 @@ export default function DashboardListingsPage() {
                       <h3 className="discover-card-title">{project.title}</h3>
                       {project.status === "rejected" && project.rejectionReason ? (
                         <p className="discover-card-sub" style={{ color: "#dc2626" }}>
-                          {project.rejectionReason}
+                          {translateRejectionReason(project.rejectionReason, tReason)}
                         </p>
                       ) : (
                         <>
-                          <p className="discover-card-sub">{project.subtitle}</p>
+                          {/* One line: type · city · either the credit
+                              count or, when there is none, the action
+                              that fixes it. */}
+                          <p className="discover-card-sub">
+                            {project.subtitle}
+                            {project.role === "owner" && project.creditedCount > 0 && (
+                              <>
+                                {project.subtitle ? " · " : ""}
+                                <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{project.creditedCount}</strong>
+                                {" "}{t("credited_label", { count: project.creditedCount })}
+                              </>
+                            )}
+                            {project.role === "owner" && project.creditedCount === 0 && (
+                              <>
+                                {project.subtitle ? " · " : ""}
+                                <Link
+                                  href={`/dashboard/edit/${project.id}?focus=professionals`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="arco-text-link arco-text-link--primary arco-text-link--inline"
+                                >
+                                  {t("card_add_professional")}
+                                </Link>
+                              </>
+                            )}
+                          </p>
                           {project.invitedServiceCategory && project.role === "contributor" && (
                             <p className="discover-card-sub" style={{ color: "var(--primary)" }}>
                               {project.invitedServiceCategory}
@@ -1473,6 +1650,7 @@ export default function DashboardListingsPage() {
         userId={userId}
         companyId={companyId}
         professionalId={professionalId}
+        adminCompanyId={overrideCompanyId ?? undefined}
       />
 
       <Footer maxWidth="max-w-7xl" />

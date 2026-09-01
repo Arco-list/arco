@@ -27,6 +27,7 @@ import {
 } from "@/app/dashboard/company/actions"
 import { syncCompanyListedStatus } from "@/app/admin/projects/actions"
 import { getCompanyTranslation } from "@/lib/company-translations"
+import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services"
 import { translateProfessionalService } from "@/lib/project-translations"
 import { PHOTOGRAPHER_SPECIALTIES } from "@/lib/photographer-specialties"
 import type { Database } from "@/lib/supabase/types"
@@ -432,7 +433,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       setCompanyProjects(prev => prev.map(p => p.id === selectedCardProject.id ? {
         ...p,
         status: selectedProjectStatus,
-        statusLabel: PROJECT_STATUS_LABELS[selectedProjectStatus as ProjectStatus],
+        statusLabel: tStatus(`labels.${selectedProjectStatus}`),
         statusDotClass: PROJECT_STATUS_DOT_CLASS[selectedProjectStatus as ProjectStatus],
       } : p))
       toast.success(t("listing_updated"))
@@ -455,7 +456,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         ...p,
         projectProfessionalStatus: selectedContributorStatus,
         status: selectedContributorStatus,
-        statusLabel: CONTRIBUTOR_STATUS_LABELS[selectedContributorStatus],
+        statusLabel: tStatus(`labels.${selectedContributorStatus === "rejected" ? "contributor_rejected" : selectedContributorStatus}`),
         statusDotClass: CONTRIBUTOR_STATUS_DOT_CLASS[selectedContributorStatus],
       } : p))
       // Sync company listed status
@@ -1266,7 +1267,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         <div className="wrap" style={{ position: "relative", height: 0 }}>
           <button
             onClick={() => setTourForceRun((n) => n + 1)}
-            className="absolute right-5 md:right-[60px] text-[12px] text-[#016D75] hover:text-[#014f55] transition-colors bg-transparent border-none cursor-pointer p-0"
+            className="arco-text-link arco-text-link--primary absolute right-5 md:right-[60px]"
             style={{ top: 76 }}
           >
             {t("tour_replay")}
@@ -1358,7 +1359,17 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
             {logoUrl ? (
               <Image src={logoUrl} alt={name} width={100} height={100} className="company-icon-image" unoptimized />
             ) : (
-              <div className="company-icon-initials">{getInitials(name)}</div>
+              (() => {
+                // Primary service (servicesOffered is ordered) stands in
+                // for a missing logo — same idea as the credit avatars.
+                const primary = services.find((svc) => svc.id === servicesOffered[0])
+                const ServiceIcon = resolveProfessionalServiceIcon(primary?.slug ?? primary?.name ?? null, (primary as { parentName?: string | null } | undefined)?.parentName ?? null)
+                return (
+                  <div className="company-icon-initials">
+                    <ServiceIcon size={40} strokeWidth={1.25} aria-hidden />
+                  </div>
+                )
+              })()
             )}
             <input ref={logoInputRef} type="file" hidden accept="image/jpeg,image/png,image/svg+xml" onChange={handleLogoUpload} />
           </div>
@@ -1704,7 +1715,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                   style={{ fontSize: 13, padding: "8px 18px" }}
                   onClick={() => setImportModalOpen(true)}
                 >
-                  {t("publish_your_project")}
+                  {t("add_project")}
                 </button>
               )}
             </div>

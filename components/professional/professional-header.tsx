@@ -2,6 +2,7 @@
 
 import Image from "next/image"
 import { useEffect, useRef, useState } from "react"
+import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services"
 
 const MAX_VISIBLE = 3
 
@@ -12,6 +13,9 @@ interface ProfessionalHeaderProps {
   description: string | null
   companyIcon: string | null
   companyInitials: string
+  /** categories.slug of the primary service — picks the fallback icon.
+   *  A slug rather than a label, so the icon is the same in every locale. */
+  primaryServiceSlug?: string | null
 }
 
 export function ProfessionalHeader({
@@ -21,6 +25,7 @@ export function ProfessionalHeader({
   description,
   companyIcon,
   companyInitials,
+  primaryServiceSlug,
 }: ProfessionalHeaderProps) {
   const cleanDescription = description
     ? description.replace(/<[^>]*>/g, '').trim()
@@ -54,9 +59,17 @@ export function ProfessionalHeader({
             className="company-icon-image"
           />
         ) : (
-          <div className="company-icon-initials">
-            {companyInitials}
-          </div>
+          (() => {
+            // `services` is a display string ("Architect · Amsterdam"
+            // style); the first segment is the primary service, which the
+            // resolver normalises into an icon.
+            const Icon = resolveProfessionalServiceIcon(primaryServiceSlug ?? services?.split("·")[0]?.trim() ?? null)
+            return (
+              <div className="company-icon-initials">
+                <Icon size={40} strokeWidth={1.25} aria-hidden />
+              </div>
+            )
+          })()
         )}
       </div>
 

@@ -267,6 +267,7 @@ type SearchProfessionalsRpcRow = {
   company_latitude: number | null
   company_longitude: number | null
   primary_specialty: string | null
+  primary_specialty_slug: string | null
   primary_service_name: string | null
   services_offered: string[] | null
   is_verified: boolean | null
@@ -309,6 +310,7 @@ const mapRpcRowToProfessionalCard = (row: SearchProfessionalsRpcRow, locale: str
     professionalId: row.id,
     name,
     profession,
+    primaryServiceSlug: row.primary_specialty_slug ?? null,
     location,
     image: row.cover_photo_url ?? row.company_logo ?? PLACEHOLDER_IMAGE,
     logoUrl: row.company_logo ?? null,
@@ -532,8 +534,8 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
 
   // Query companies table first (company-centric approach)
   const companyQuery = isUuid(slugOrId)
-    ? supabase.from("companies").select("*, primary_service:categories!companies_primary_service_id_fkey(name, name_nl)").eq("id", slugOrId).maybeSingle()
-    : supabase.from("companies").select("*, primary_service:categories!companies_primary_service_id_fkey(name, name_nl)").eq("slug", slugOrId).maybeSingle()
+    ? supabase.from("companies").select("*, primary_service:categories!companies_primary_service_id_fkey(name, name_nl, slug)").eq("id", slugOrId).maybeSingle()
+    : supabase.from("companies").select("*, primary_service:categories!companies_primary_service_id_fkey(name, name_nl, slug)").eq("slug", slugOrId).maybeSingle()
 
   const companyResult = await companyQuery
 
@@ -926,7 +928,7 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
   const companyLanguages = toNonEmptyStrings(company.languages)
   const languages = companyLanguages
 
-  const primaryServiceRow = company.primary_service as { name: string; name_nl?: string | null } | null
+  const primaryServiceRow = company.primary_service as { name: string; name_nl?: string | null; slug?: string | null } | null
   const rawPrimaryServiceName = primaryServiceRow?.name ?? null
   const primaryServiceName =
     (detailLocale === "nl" && primaryServiceRow?.name_nl) ||
@@ -979,6 +981,8 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
       city: company.city ?? null,
       country: company.country ?? null,
       primaryService: primaryServiceName,
+      // Locale-stable identifier for the service icon fallback.
+      primaryServiceSlug: primaryServiceRow?.slug ?? null,
       services: companyServices,
       languages: companyLanguages,
       certificates: toNonEmptyStrings(company.certificates),

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { checkRateLimit } from "@/lib/rate-limit"
+import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 
 /**
  * GET /api/scrape-email?domain=example.nl
@@ -62,16 +63,44 @@ function pickEmail(html: string, domain: string): string | null {
   return pool[0]
 }
 
+/** Hostnames that could point the fetcher at infrastructure rather than
+ *  a company website. The public-TLD regex already rejects bare IPs. */
+const PRIVATE_SUFFIXES = [".local", ".internal", ".lan", ".home", ".corp", ".intranet", ".localhost"]
+
 export async function GET(request: NextRequest) {
   const domain = request.nextUrl.searchParams.get("domain")?.trim().toLowerCase()
   if (!domain || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) {
     return NextResponse.json({ error: "valid domain required" }, { status: 400 })
+  }
+  if (PRIVATE_SUFFIXES.some((suffix) => domain.endsWith(suffix))) {
+    return NextResponse.json({ error: "unsupported domain" }, { status: 400 })
   }
 
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+  }
+
+  // Without a cap this endpoint is a general-purpose page fetcher for
+  // anyone with an account. 60/hour is far above crediting a project's
+  // contributors and far below useful abuse.
+  const rl = await checkRateLimit(`scrape-email:${user.id}`, { limit: 60, window: 3600 })
+  if (!rl.success) {
+    return NextResponse.json({ error: "Too many lookups. Try again later." }, { status: 429 })
+  }
+
+  // Already known? Then it's a database read, not a fetch.
+  const svc = createServiceRoleSupabaseClient()
+  const { data: known } = await svc
+    .from("companies")
+    .select("id, email")
+    .eq("domain", domain)
+    .not("email", "is", null)
+    .limit(1)
+    .maybeSingle()
+  if (known?.email) {
+    return NextResponse.json({ email: known.email, source: "database" })
   }
 
   // Homepage first (footers usually carry the inbox), then the usual
@@ -87,7 +116,16 @@ export async function GET(request: NextRequest) {
     const html = await fetchPage(url)
     if (!html) continue
     const email = pickEmail(html, domain)
-    if (email) return NextResponse.json({ email })
+    if (email) {
+      // Store it on the company that has none, so the next credit for
+      // this domain resolves from the database instantly.
+      await svc
+        .from("companies")
+        .update({ email })
+        .eq("domain", domain)
+        .is("email", null)
+      return NextResponse.json({ email, source: "scrape" })
+    }
   }
   return NextResponse.json({ email: null })
 }

@@ -44,6 +44,10 @@ export type DispatchInviteInput = {
   /** When the caller already knows the company (e.g. linkExistingCompany
    *  action), pass it to skip the lookup. */
   recipientCompanyId?: string
+  /** The project_professionals row this invite is for. When known, the
+   *  dispatch stamp lands on exactly that row; otherwise on the row(s)
+   *  matching (project, email). */
+  creditId?: string
 }
 
 export type DispatchInviteResult = {
@@ -55,6 +59,30 @@ export type DispatchInviteResult = {
 }
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://www.arcolist.com"
+
+/** Cold recipients get one invite chain at a time: a second project's
+ *  credit inside this window is skipped by the publish sweep, after it
+ *  they're eligible again (new project, new reason to claim). */
+export const RECENT_INVITE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
+
+/** Stamp the credit row(s) an invite covered, so the publish-time sweep
+ *  never emails the same credit twice (publish → unlist → publish again
+ *  used to). Keyed on the row id when the caller has it, else on
+ *  (project, email). */
+async function markInviteDispatched(
+  supabase: Supabase,
+  input: { creditId?: string; projectId: string; recipientEmail: string },
+): Promise<void> {
+  const base = supabase
+    .from("project_professionals")
+    .update({ invite_dispatched_at: new Date().toISOString() })
+    .eq("is_project_owner", false)
+    .is("invite_dispatched_at", null)
+  const { error } = input.creditId
+    ? await base.eq("id", input.creditId)
+    : await base.eq("project_id", input.projectId).ilike("invited_email", input.recipientEmail.trim())
+  if (error) console.error("markInviteDispatched failed", error.message)
+}
 
 /** Resolve project-shaped variables once; reused for every email in the
  *  series. Returns nullish when the project is missing or unpublished. */
@@ -178,6 +206,34 @@ export async function dispatchProfessionalInvite(
 
   const recipient = await resolveRecipientCompany(supabase, input)
 
+  // One-click acceptance. Resolve the credit row this invite is for so
+  // the token can be bound to it (the caller passes creditId on the
+  // publish sweep; otherwise match on project + address).
+  let acceptUrl: string | undefined
+  {
+    let creditId = input.creditId
+    if (!creditId) {
+      const { data: row } = await supabase
+        .from("project_professionals")
+        .select("id")
+        .eq("project_id", input.projectId)
+        .eq("is_project_owner", false)
+        .ilike("invited_email", input.recipientEmail.trim())
+        .maybeSingle()
+      creditId = row?.id
+    }
+    if (creditId) {
+      try {
+        const { signAcceptToken } = await import("./accept-token")
+        const token = signAcceptToken({ creditId, email: input.recipientEmail })
+        acceptUrl = `${SITE_URL}/invite/accept?t=${encodeURIComponent(token)}`
+      } catch (err) {
+        // Missing signing secret must not block the invite itself.
+        console.error("Could not sign accept token", err)
+      }
+    }
+  }
+
   // Build the variables shared by every email in the series.
   const baseVars: EmailVariables = {
     project_owner: input.inviterName,
@@ -206,9 +262,13 @@ export async function dispatchProfessionalInvite(
   }
 
   // ── Branch on claim status ──
-  if (recipient && recipient.ownerId != null) {
-    // Claimed: existing one-shot behavior. confirmUrl carries the project
-    // context so a sign-in lands them on the invite acceptance page.
+  // Claimed company, or no company row at all, gets the one-shot invite.
+  // (A credit whose email resolves to no company — legacy email-only rows
+  // — still deserves the plain invite; the drip sequence needs a page to
+  // claim, so it only runs for unclaimed companies.)
+  if (!recipient || recipient.ownerId != null) {
+    // confirmUrl carries the project context so a sign-in lands them on
+    // the invite acceptance page.
     const { confirmUrl } = await checkUserAndGenerateInviteUrl(input.recipientEmail, input.projectId)
     const result = await sendProfessionalInviteEmail(input.recipientEmail, {
       project_owner: input.inviterName,
@@ -222,17 +282,14 @@ export async function dispatchProfessionalInvite(
       project_type: ctx.projectType ?? undefined,
       project_link: ctx.projectLink,
       confirmUrl,
+      accept_url: acceptUrl,
     } as any)
+    if (result.skipped) return { success: false, sequence: "skipped", reason: "recipient opted out" }
+    if (result.success) await markInviteDispatched(supabase, input)
     return { success: result.success, sequence: "one-shot" }
   }
 
   // ── Unclaimed: kick off the new three-step sequence ──
-  if (!recipient) {
-    // No company row yet (shouldn't happen — the calling action either
-    // just inserted the company or the link was already in place). Bail
-    // gracefully so a missing row doesn't break the project save.
-    return { success: false, sequence: "skipped", reason: "recipient company not resolved" }
-  }
 
   const claimUrl = `${SITE_URL}/businesses/professionals?inviteEmail=${encodeURIComponent(input.recipientEmail)}&companyId=${recipient.id}`
   const companyPageUrl = `${SITE_URL}/professionals/${recipient.slug ?? recipient.id}`
@@ -254,6 +311,7 @@ export async function dispatchProfessionalInvite(
     inviter_subtitle: ctx.ownerCompanySubtitle ?? undefined,
     inviter_page_url: ctx.ownerCompanyPageUrl ?? undefined,
     claim_url: claimUrl,
+    accept_url: acceptUrl,
   }
 
   // 1. Intro — direct Resend send.
@@ -263,6 +321,12 @@ export async function dispatchProfessionalInvite(
     sequenceVars,
     { companyId: recipient.id },
   )
+  // Opted out: nothing went out, so nothing downstream may claim it did
+  // (no Contacted status, no followups, no dispatch stamp).
+  if (introResult.skipped) {
+    return { success: false, sequence: "skipped", reason: "recipient opted out" }
+  }
+  if (introResult.success) await markInviteDispatched(supabase, input)
 
   // Mirror the prospect-intro flow: log every direct intro send to
   // company_outreach so the Outreach Sequence popup in /admin/sales has a
@@ -375,9 +439,11 @@ export async function dispatchProfessionalInvite(
  * to published.
  *
  * Guards: only non-owner credits with status 'invited' and an email;
- * skips recipients who ever received a new-professional-invite already
- * (re-publish, or credited on a second project — one invite chain per
- * recipient is enough, the drip dedup handles the rest).
+ * skips credits whose invite already went out (invite_dispatched_at —
+ * re-publish never re-sends), and cold recipients who started an invite
+ * chain within RECENT_INVITE_WINDOW_MS on another project. Claimed
+ * companies get their one-shot per credit regardless: accepting a credit
+ * on project B is a different action from accepting one on project A.
  */
 export async function dispatchPendingInvitesForProject(
   supabase: Supabase,
@@ -385,14 +451,14 @@ export async function dispatchPendingInvitesForProject(
 ): Promise<{ dispatched: number; skipped: number }> {
   const { data: credits } = await supabase
     .from("project_professionals")
-    .select("invited_email, company_id")
+    .select("id, invited_email, company_id, invite_dispatched_at")
     .eq("project_id", projectId)
     .eq("is_project_owner", false)
     .eq("status", "invited")
     .not("invited_email", "is", null)
     .neq("invited_email", "")
 
-  const rows = (credits ?? []) as Array<{ invited_email: string; company_id: string | null }>
+  const rows = (credits ?? []) as Array<{ id: string; invited_email: string; company_id: string | null; invite_dispatched_at: string | null }>
   if (rows.length === 0) return { dispatched: 0, skipped: 0 }
 
   // Inviter display name: the project owner's company.
@@ -414,23 +480,75 @@ export async function dispatchPendingInvitesForProject(
 
   let dispatched = 0
   let skipped = 0
+  const recentSince = new Date(Date.now() - RECENT_INVITE_WINDOW_MS).toISOString()
+
+  // Preserved from the legacy admin publish loop: a credit whose address
+  // belongs to someone who has since joined Arco gets linked to their
+  // company, so the project shows up in that company's Listings. The
+  // editor does this at insert time; this catches credits whose owner
+  // joined afterwards.
+  // professionals has no email column — identity lives in auth.users,
+  // which is how the legacy loop resolved it too.
+  const linkKnownProfessionals = async () => {
+    const unlinked = rows.filter(r => !r.company_id && r.invited_email?.trim())
+    if (unlinked.length === 0) return
+    const { data: userList } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 })
+    const idByEmail = new Map(
+      (userList?.users ?? [])
+        .filter(u => u.email)
+        .map(u => [u.email!.toLowerCase(), u.id] as const),
+    )
+    for (const row of unlinked) {
+      const userId = idByEmail.get(row.invited_email.trim().toLowerCase())
+      if (!userId) continue
+      const { data: pro } = await supabase
+        .from("professionals")
+        .select("id, company_id")
+        .eq("user_id", userId)
+        .maybeSingle()
+      if (!pro?.company_id) continue
+      await supabase
+        .from("project_professionals")
+        .update({ professional_id: pro.id, company_id: pro.company_id })
+        .eq("id", row.id)
+      row.company_id = pro.company_id
+    }
+  }
+  await linkKnownProfessionals()
   for (const credit of rows) {
     const email = credit.invited_email.trim().toLowerCase()
     if (!email) { skipped++; continue }
-    const { data: alreadySent } = await supabase
-      .from("email_events")
-      .select("id")
-      .eq("recipient_email", email)
-      .eq("template", "new-professional-invite")
-      .limit(1)
-      .maybeSingle()
-    if (alreadySent) { skipped++; continue }
+    // Placeholder addresses from "link company without email" never
+    // went anywhere and never should.
+    if (/@arcolist\.com$/i.test(email)) { skipped++; continue }
+    // This credit's invite already went out.
+    if (credit.invite_dispatched_at) { skipped++; continue }
+    // The 30-day window only applies to COLD recipients: it exists to
+    // avoid stacking claim-chains on someone who hasn't engaged. A
+    // claimed company is a customer being told about a new credit, so it
+    // always gets its one-shot.
+    const { data: recipientCompany } = credit.company_id
+      ? await supabase.from("companies").select("owner_id").eq("id", credit.company_id).maybeSingle()
+      : { data: null }
+    if (!recipientCompany?.owner_id) {
+      const { data: recentChain } = await supabase
+        .from("email_events")
+        .select("id")
+        .eq("recipient_email", email)
+        .eq("template", "new-professional-invite")
+        .eq("event_type", "sent")
+        .gte("occurred_at", recentSince)
+        .limit(1)
+        .maybeSingle()
+      if (recentChain) { skipped++; continue }
+    }
     try {
       const result = await dispatchProfessionalInvite(supabase, {
         recipientEmail: credit.invited_email,
         projectId,
         inviterName,
         recipientCompanyId: credit.company_id ?? undefined,
+        creditId: credit.id,
       })
       if (result.success) dispatched++
       else skipped++

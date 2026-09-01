@@ -14,6 +14,9 @@ export type ProfessionalCard = {
   professionalId: string
   name: string
   profession: string
+  /** categories.slug of the primary service. `profession` is a localised
+   *  label and cannot be used to look up an icon; this can. */
+  primaryServiceSlug?: string | null
   location: string
   image: string
   logoUrl: string | null
@@ -91,6 +94,8 @@ export type ProfessionalDetail = {
     city: string | null
     country: string | null
     primaryService: string | null
+  /** categories.slug of the primary service — drives the icon fallback. */
+  primaryServiceSlug?: string | null
     services: string[]
     languages: string[]
     certificates: string[]

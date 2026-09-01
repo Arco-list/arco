@@ -3,6 +3,8 @@
 import { AlertTriangle } from "lucide-react"
 import { useTranslations } from "next-intl"
 
+import { translateRejectionReason } from "@/lib/rejection-reasons"
+
 export type ListingStatusModalOption<T extends string> = {
   value: T
   label: string
@@ -53,6 +55,7 @@ export function ListingStatusModal<TStatus extends string>({
   isSubmittingForReview = false,
 }: ListingStatusModalProps<TStatus>) {
   const t = useTranslations("dashboard")
+  const tReason = useTranslations("project_status.rejection_reasons")
 
   if (!open || !project) {
     return null
@@ -93,12 +96,12 @@ export function ListingStatusModal<TStatus extends string>({
         )}
 
         {isRejected && (
-          <div className="arco-alert arco-alert--danger">
+          <div className="arco-alert arco-alert--danger status-modal-alert">
             <AlertTriangle className="arco-alert-icon" />
             <div>
               <p style={{ fontWeight: 500 }}>{t("status_modal_rejected")}</p>
               {rejectionReason && (
-                <p>{rejectionReason}</p>
+                <p>{translateRejectionReason(rejectionReason, tReason)}</p>
               )}
             </div>
           </div>

@@ -18,6 +18,9 @@ const TEST_VARS = {
   service_category: 'Villa',
   dashboard_link: 'https://arcolist.com/dashboard',
   confirmUrl: 'https://arcolist.com/dashboard/listings',
+  // One-click acceptance — present on real invites, so the preview must
+  // show the CTA the recipient actually gets.
+  accept_url: 'https://arcolist.com/invite/accept?t=preview-token',
   rejection_reason: 'The project photos do not meet our quality guidelines. Please upload higher resolution images and resubmit.',
   company_name: 'Marco van Veldhuizen',
   code: '847291',

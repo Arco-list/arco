@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl"
 
 import { ShareModal } from "@/components/share-modal"
 import { AdminFeatureStar } from "@/components/admin-feature-star"
+import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services"
 import type { ProfessionalCard as ProfessionalCardData } from "@/lib/professionals/types"
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=400&width=600"
@@ -140,9 +141,19 @@ export const ProfessionalCard = memo(function ProfessionalCard({
               decoding="async"
             />
           ) : (
-            <div className="pro-card-logo pro-card-logo-placeholder">
-              {professional.name.charAt(0).toUpperCase()}
-            </div>
+            (() => {
+              // No logo: show the service mark instead of an initial.
+              // Prefers the real categories.slug so the icon is identical
+              // in every locale; the localised name is only a fallback.
+              const ServiceIcon = resolveProfessionalServiceIcon(
+                professional.primaryServiceSlug || professional.profession || allServices[0] || null,
+              )
+              return (
+                <div className="pro-card-logo pro-card-logo-placeholder">
+                  <ServiceIcon size={18} strokeWidth={1.4} aria-hidden />
+                </div>
+              )
+            })()
           )}
 
           <div>

@@ -371,7 +371,8 @@
       "list_company_success": "Your company page is now live.",
       "later": "I'll do this later"
     },
-    "tour_replay": "View tour"
+    "tour_replay": "View tour",
+    "add_project": "Add project"
   },
   "verify_domain": {
     "title": "Verify domain",
@@ -971,7 +972,6 @@
     "status_modal_submit": "Submit",
     "invite_team_member": "Invite team member",
     "team_member_count": "{count, plural, one {# member} other {# members}}",
-    "pending_count": "{count} pending",
     "you": "(you)",
     "role_admin": "Admin",
     "role_member": "Member",
@@ -1167,7 +1167,16 @@
     "pricing_included_in_pro": "Included in Pro",
     "pricing_contrib_cta_body": "Are you credited on projects that appear on Arco? Claim your free credit and company page — it takes two minutes.",
     "pricing_contrib_cta_button": "Create your company page",
-    "pricing_contrib_cta_title": "Claim your place on the projects you helped realise"
+    "pricing_contrib_cta_title": "Claim your place on the projects you helped realise",
+    "add_project": "Add project",
+    "credited_label": "{count, plural, one {professional credited} other {professionals credited}}",
+    "accepted_label": "accepted",
+    "card_add_professional": "Add professional",
+    "pending_count": "{count} pending",
+    "credit_nudge_title": "Credit the professionals behind your projects",
+    "credit_nudge_body": "You have {count} projects with no professionals credited. Start with {project} — they get invited and show the project on their own page.",
+    "credit_nudge_dismiss": "Later",
+    "credit_nudge_dismiss_hint": "This notice returns when you publish another project with no professionals credited."
   },
   "business": {
     "for_architects": "For Architects",
@@ -1384,7 +1393,8 @@
       "unlisted": "Unlisted",
       "listed": "Listed",
       "live_on_page": "Featured",
-      "contributor_rejected": "Declined"
+      "contributor_rejected": "Declined",
+      "removed": "Removed"
     },
     "featured": {
       "label": "Featured",
@@ -1401,6 +1411,16 @@
       "label": "Unlisted",
       "description_contributor": "Not listed on the project page and not shown in your portfolio.",
       "description_listing": "Project is not visible to users."
+    },
+    "rejection_reasons": {
+      "not_residential": "Not a residential project",
+      "insufficient_photos": "Insufficient photos",
+      "low_quality_images": "Low quality images",
+      "missing_details": "Missing project details",
+      "duplicate": "Duplicate project",
+      "inappropriate": "Inappropriate content",
+      "not_architecture": "Not architecture or interior design",
+      "none_given": "No reason provided"
     }
   },
   "project_edit": {
@@ -1408,7 +1428,8 @@
       "listings": "Listings",
       "company": "Company",
       "team": "Team",
-      "plans": "Plans"
+      "plans": "Plans",
+      "inbox": "Inbox"
     },
     "tour": {
       "step_of": "Step {current} of {total}",
@@ -1569,7 +1590,19 @@
       "duplicate_dialog_description": "This company is already on Arco. Link them to credit their work on this project.",
       "duplicate_link_company": "Link company",
       "project_count_one": "{count} project",
-      "project_count_other": "{count} projects"
+      "project_count_other": "{count} projects",
+      "col_company": "Company",
+      "col_service": "Service",
+      "col_email": "Email",
+      "col_status": "Status",
+      "add_dialog_hint": "Search for the company you want to credit",
+      "add_dialog_typing_hint": "Start typing to search for the company",
+      "add_dialog_change": "change",
+      "change_professional": "Change professional",
+      "col_contact": "Contact",
+      "contact_you": "You",
+      "empty_title": "No professionals credited yet",
+      "empty_body": "Credit the people who worked on this project. They get invited and the project also appears on their company page."
     },
     "delete_project": {
       "trigger": "Delete project",
@@ -1598,7 +1631,7 @@
       "req_min_photos": "Minimum 5 photos",
       "rec_more_photos": "Add 20+ photos for a complete project showcase",
       "rec_tag_photos": "Tag photos to spaces for a guided photo tour",
-      "rec_credit_more": "Credit 5+ professionals to increase project visibility",
+      "rec_credit_more": "Credit the professionals who worked on it ({count, plural, =0 {none credited yet} one {# credited} other {# credited}})",
       "invites_note": "Credited professionals will be invited to Arco once your project is approved and listed."
     },
     "low_res": {
@@ -1684,7 +1717,8 @@
       "not_authenticated": "Not authenticated",
       "min_one_service": "At least one service is required",
       "max_three_services": "Maximum 3 services per professional",
-      "upload_failed_count": "{count, plural, one {Could not upload 1 photo} other {Could not upload # photos}}"
+      "upload_failed_count": "{count, plural, one {Could not upload 1 photo} other {Could not upload # photos}}",
+      "professional_opted_out": "This recipient unsubscribed from email — no invite was sent."
     },
     "errors": {
       "generic_save": "Something went wrong while saving.",
@@ -1735,5 +1769,35 @@
     "body_placeholder": "Extended project text (shown behind 'Read more')…",
     "body_divider": "Behind 'Read more'",
     "word_count": "{count} / {max} words"
+  },
+  "invite_accept": {
+    "eyebrow": "Invitation",
+    "title": "You are credited on {project}",
+    "this_project": "this project",
+    "your_company": "your company",
+    "body": "Accept the credit to show {company} on the project page. The project then also appears on your own company page on Arco.",
+    "body_with_owner": "{owner} credited {company} as a professional on this project. Accept to appear on the project page — the project will also show on your own company page.",
+    "accept": "Accept invitation",
+    "accepting": "Working…",
+    "view_project": "View project",
+    "accepted_title": "Credit accepted",
+    "accepted_body": "You now appear on the project page, and the project is visible on your company page.",
+    "signin_title": "Sign in to accept",
+    "signin_body": "This company already has an Arco account. Sign in with that account to accept the credit.",
+    "signin": "Sign in",
+    "wrong_account_title": "Different account",
+    "wrong_account_body": "You are signed in with an account that does not belong to this company. Switch accounts and try again.",
+    "invalid_title": "That did not work",
+    "invalid_body": "The credit could not be accepted. Please contact the project owner.",
+    "error_expired_title": "This link has expired",
+    "error_expired_body": "Invitation links are valid for seven days. Ask the project owner to send a new invitation.",
+    "error_malformed_title": "This link is not valid",
+    "error_malformed_body": "Check that you opened the complete link from the email.",
+    "error_bad_signature_title": "This link is not valid",
+    "error_bad_signature_body": "Check that you opened the complete link from the email.",
+    "error_not_found_title": "Credit not found",
+    "error_not_found_body": "This credit no longer exists, or the project is no longer published.",
+    "error_withdrawn_title": "Credit withdrawn",
+    "error_withdrawn_body": "The project owner removed this credit."
   }
 }

@@ -35,7 +35,12 @@ export async function ProjectHeader({ title, architectName, architectSlug, descr
         <p className="architect-attribution">
           {t("by_architect")}{' '}
           {architectSlug ? (
-            <Link href={`/professionals/${architectSlug}`}>{architectName}</Link>
+            <Link
+              href={`/professionals/${architectSlug}`}
+              className="arco-text-link arco-text-link--primary arco-text-link--inline"
+            >
+              {architectName}
+            </Link>
           ) : (
             <span>{architectName}</span>
           )}

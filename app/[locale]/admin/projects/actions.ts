@@ -8,7 +8,7 @@ import { isAdminUser } from "@/lib/auth-utils"
 import { logger } from "@/lib/logger"
 import { generateUniqueSlug, isValidSlug } from "@/lib/seo-utils"
 import { getSiteUrl } from "@/lib/utils"
-import { sendProjectStatusEmail, sendProfessionalInviteEmail, checkUserAndGenerateInviteUrl } from "@/lib/email-service"
+import { sendProjectStatusEmail } from "@/lib/email-service"
 import { 
   ActionResult, 
   createErrorResponse, 
@@ -493,91 +493,11 @@ export async function setProjectStatusAction(input: {
           })
         }
 
-        // Get owner company name + logo for invite emails
-        const { data: ownerCompanyRow } = ownerPP?.company_id
-          ? await serviceClient.from("companies").select("name, logo_url").eq("id", ownerPP.company_id).maybeSingle()
-          : { data: null }
-        const ownerCompanyName = ownerCompanyRow?.name ?? undefined
-        const ownerCompanyLogoUrl = ownerCompanyRow?.logo_url ?? undefined
-
-        // Get ALL professional invites and send emails (both 'invited' and 'listed')
-        // Exclude project owner from receiving invite email
-        const { data: invites } = await supabase
-          .from('project_professionals')
-          .select('id, invited_email')
-          .eq('project_id', idResult.data)
-          .neq('status', 'rejected')
-
-        for (const invite of invites || []) {
-          // Skip sending email to project owner
-          if (ownerEmail && invite.invited_email.toLowerCase() === ownerEmail.toLowerCase()) {
-            logger.info("Skipping invite email for project owner", {
-              scope: "admin-projects",
-              projectId: idResult.data
-            })
-            continue
-          }
-
-          try {
-            // Check if email belongs to existing professional and link them
-            const { findProfessionalByEmailAction } = await import('@/app/new-project/actions')
-            const { data: existingProfessional } = await findProfessionalByEmailAction(invite.invited_email)
-
-            if (existingProfessional) {
-              // Update the invite record to link professional_id and company_id
-              await serviceClient
-                .from('project_professionals')
-                .update({
-                  professional_id: existingProfessional.id,
-                  company_id: existingProfessional.company_id
-                })
-                .eq('id', invite.id)
-
-              logger.info("Linked existing professional to invite", {
-                scope: "admin-projects",
-                projectId: idResult.data,
-                inviteId: invite.id,
-                professionalId: existingProfessional.id,
-                companyId: existingProfessional.company_id
-              })
-            }
-
-            // Generate smart URL based on user type
-            const { confirmUrl } = await checkUserAndGenerateInviteUrl(
-              invite.invited_email,
-              idResult.data
-            )
-
-            await sendProfessionalInviteEmail(
-              invite.invited_email,
-              {
-                project_owner: ownerFullName,
-                company_name: ownerCompanyName,
-                company_logo_url: ownerCompanyLogoUrl,
-                project_name: project?.title || 'Project',
-                project_title: project?.title || 'Project',
-                project_image: projectPhoto?.url ?? undefined,
-                project_type: projectTypeLabel,
-                project_location: (project as any)?.address_city ?? (project as any)?.location ?? undefined,
-                project_link: `${baseUrl}/projects/${(project as any)?.slug ?? idResult.data}`,
-                confirmUrl
-              }
-            )
-
-            logger.info("Professional invite email sent", {
-              scope: "admin-projects",
-              projectId: idResult.data,
-              inviteId: invite.id
-            })
-          } catch (inviteEmailError) {
-            logger.error("Failed to send professional invite email", {
-              scope: "admin-projects",
-              projectId: idResult.data,
-              inviteId: invite.id,
-              error: getErrorMessage(inviteEmailError)
-            })
-          }
-        }
+        // Professional invites for this publish are dispatched above
+        // (dispatchPendingInvitesForProject), one per credit, with
+        // per-credit dedup. The loop that used to live here re-sent a
+        // plain invite to every credit on every publish — including
+        // professionals who had already accepted — on top of that.
       }
     } catch (emailError) {
       logger.warn("Email sending failed during project status update", {
@@ -957,81 +877,11 @@ const ppStatusSchema = z.enum(["invited", "listed", "live_on_page", "unlisted", 
  * - If none → set to "unlisted"
  */
 export async function syncCompanyListedStatus(companyId: string) {
-  const supabase = createServiceRoleSupabaseClient()
-
-  // Check if company has any active (listed/featured) project links on published projects
-  const { data: activePPs } = await supabase
-    .from("project_professionals")
-    .select("id, projects!inner(status)")
-    .eq("company_id", companyId)
-    .in("status", ["listed", "live_on_page"])
-    .eq("projects.status", "published")
-    .limit(1)
-
-  const hasActiveProjects = (activePPs?.length ?? 0) > 0
-
-  const { data: company } = await supabase
-    .from("companies")
-    .select("status, manually_unlisted, owner_id")
-    .eq("id", companyId)
-    .maybeSingle()
-
-  if (!company) return
-
-  let statusChanged = false
-  // Auto-list from both `unlisted` (previously listed, then hidden) and
-  // `draft` (Created — company claimed but never listed) — UNLESS the
-  // owner explicitly toggled Unlisted from the visibility popup (in
-  // which case manually_unlisted = true and we respect their choice).
-  // See migration 185 for the mirroring DB-side trigger that keeps this
-  // consistent across every project-add code path, not just callers of
-  // this JS helper.
-  // Auto-list from any pre-live state — draft, unlisted, prospected,
-  // invited, unclaimed, added. Excluded: listed (already there),
-  // deactivated (admin intent, do not override).
-  //
-  // "Listed" means CLAIMED: a company without owner_id can only ever
-  // reach "prospected" (Showcase) here — admin-added catalogue companies
-  // whose projects go live are showcases, not listed members. The DB
-  // mirror (sync_company_listed_status, migration 208 revision) bails on
-  // ownerless companies entirely; this helper promotes them to showcase.
-  const hasOwner = Boolean((company as { owner_id?: string | null }).owner_id)
-  const targetStatus = hasOwner ? "listed" : "prospected"
-  const AUTO_LIST_ELIGIBLE = new Set(["created", "unlisted", "prospected", "invited", "unclaimed", "added"])
-  if (
-    hasActiveProjects
-    && AUTO_LIST_ELIGIBLE.has(company.status as string)
-    && company.status !== targetStatus
-    && !company.manually_unlisted
-  ) {
-    // Flip setup_completed when auto-listing from draft — this is the
-    // moment the pro effectively "completed" onboarding without going
-    // through the manual chain, and leaving it false keeps the popup
-    // + tour firing on subsequent loads.
-    const update: Record<string, unknown> = { status: targetStatus }
-    if (company.status === "created" && hasOwner) update.setup_completed = true
-    await supabase.from("companies").update(update).eq("id", companyId)
-    logger.info("admin-projects", "Company status synced (has active projects)", { companyId, from: company.status, to: targetStatus })
-    statusChanged = true
-  } else if (!hasActiveProjects && company.status === "listed" && hasOwner) {
-    // Auto-unlist: leave manually_unlisted alone. It's still false
-    // (the previous listed was auto or explicitly user-chosen), so a
-    // future active credit will auto-relist.
-    await supabase.from("companies").update({ status: "unlisted" }).eq("id", companyId)
-    logger.info("admin-projects", "Company auto-unlisted (no active projects)", { companyId })
-    statusChanged = true
-  }
-
-  if (statusChanged) {
-    try {
-      const { syncCompanyToApollo } = await import('@/lib/company-apollo-sync')
-      await syncCompanyToApollo(companyId)
-    } catch (err) {
-      logger.error("admin-projects", "Failed to sync company to Apollo after status sync", { companyId }, err as Error)
-    }
-  }
+  // Implementation lives in lib/companies/sync-listed-status.ts so
+  // server-side callers outside the actions layer can use it directly.
+  const { syncCompanyListedStatus: run } = await import("@/lib/companies/sync-listed-status")
+  return run(companyId)
 }
-
 export async function updateProjectProfessionalStatusAction(input: {
   projectId: string
   companyId: string

@@ -295,6 +295,10 @@ export interface EmailVariables {
   dashboard_link?: string
   rejection_reason?: string
   confirmUrl?: string
+  /** One-click credit acceptance (signed token). When present it becomes
+   *  the invite's primary CTA — accepting is the action we want, and
+   *  finding the credit by hand is what kills the funnel. */
+  accept_url?: string
   code?: string
   businessname?: string
   client_name?: string
@@ -307,6 +311,10 @@ interface EmailResponse {
   success: boolean
   message?: string
   messageId?: string
+  /** Set when nothing was sent on purpose (recipient opted out). success
+   *  stays true so callers that treat false as a delivery failure don't
+   *  retry — but anything that records "invited" must check this. */
+  skipped?: 'opted_out'
 }
 
 /**
@@ -702,6 +710,7 @@ function renderProfessionalInvite(vars: EmailVariables, locale: EmailLocale = 'e
         intro: `${ownerLabel} heeft je bedrijf toegevoegd aan een project op Arco.`,
         accept: 'Accepteer de uitnodiging om dit project te tonen op je bedrijfspagina.',
         button: 'Bekijk uitnodiging',
+        acceptButton: 'Uitnodiging accepteren',
       }
     : {
         subject: `${ownerLabel} credited you on ${projectName}`,
@@ -709,6 +718,7 @@ function renderProfessionalInvite(vars: EmailVariables, locale: EmailLocale = 'e
         intro: `${ownerLabel} added your company to a project on Arco.`,
         accept: 'Accept the invitation to showcase this project on your company page.',
         button: 'View invitation',
+        acceptButton: 'Accept invitation',
       }
   return {
     subject: copy.subject,
@@ -718,7 +728,9 @@ function renderProfessionalInvite(vars: EmailVariables, locale: EmailLocale = 'e
       ${body(copy.intro)}
       ${projectLink ? linkedProjectCard(vars, projectLink) : projectCard(vars)}
       ${body(copy.accept)}
-      ${vars.confirmUrl ? button(copy.button, vars.confirmUrl) : ''}
+      ${vars.accept_url
+        ? button((copy as { acceptButton?: string }).acceptButton ?? copy.button, vars.accept_url)
+        : vars.confirmUrl ? button(copy.button, vars.confirmUrl) : ''}
     `, locale),
   }
 }
@@ -774,7 +786,9 @@ function renderTeamInvite(vars: EmailVariables, locale: EmailLocale = 'en'): { s
       ${inviterBadge}
       ${body(copy.intro)}
       ${body(copy.accept)}
-      ${vars.confirmUrl ? button(copy.button, vars.confirmUrl) : ''}
+      ${vars.accept_url
+        ? button((copy as { acceptButton?: string }).acceptButton ?? copy.button, vars.accept_url)
+        : vars.confirmUrl ? button(copy.button, vars.confirmUrl) : ''}
     `, locale),
   }
 }
@@ -1840,7 +1854,7 @@ export async function sendTransactionalEmail(
     const optedOut = await isOptedOutOfMarketing(email, opts.userId ?? null)
     if (optedOut) {
       console.log(`Skipping ${template} to ${email} — recipient opted out of marketing`)
-      return { success: true, message: 'recipient opted out of marketing' }
+      return { success: true, skipped: 'opted_out', message: 'recipient opted out of marketing' }
     }
   }
 

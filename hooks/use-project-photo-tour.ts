@@ -2221,6 +2221,33 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
           .from("project_features")
           .update({ cover_photo_id: reorderedPhotoIds[0] })
           .eq("id", dbFeatureId)
+        // Mirror it locally: deletePhoto clears a photo's cover
+        // references before deleting, and only sees this state.
+        setFeatureCoverPhotos((prev) => ({ ...prev, [featureId]: reorderedPhotoIds[0] }))
+      }
+
+      // Persist the new order. Photos are loaded ordered by
+      // order_index, so without this the reorder only lived in local
+      // state and silently reverted on refresh. The room's photos are
+      // shuffled within the order_index slots they already occupy, so
+      // other rooms keep their positions.
+      if (reorderedPhotoIds.length > 1) {
+        const { data: slotRows } = await supabase
+          .from("project_photos")
+          .select("id, order_index")
+          .in("id", reorderedPhotoIds)
+        const slots = (slotRows ?? [])
+          .map((r) => (r as { order_index: number | null }).order_index)
+          .filter((n): n is number => typeof n === "number")
+          .sort((a, b) => a - b)
+        const distinct = new Set(slots).size === reorderedPhotoIds.length
+        const base = slots.length > 0 ? slots[0] : 0
+        const targets = distinct ? slots : reorderedPhotoIds.map((_, i) => base + i)
+        await Promise.all(
+          reorderedPhotoIds.map((photoId, i) =>
+            supabase.from("project_photos").update({ order_index: targets[i] }).eq("id", photoId),
+          ),
+        )
       }
     },
     [featureIdMap, supabase],

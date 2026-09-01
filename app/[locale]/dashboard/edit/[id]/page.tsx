@@ -30,6 +30,24 @@ import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services"
 import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core"
+import {
+  SortableContext,
+  arrayMove,
+  rectSortingStrategy,
+  sortableKeyboardCoordinates,
+  useSortable,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -135,7 +153,7 @@ type ProjectLocationUpdate = Pick<
 const PROJECT_TOUR_STEPS: TourStep[] = [
   { anchor: "project-details",       titleKey: "details_title",       bodyKey: "details_body" },
   { anchor: "project-photo-tile",    titleKey: "photos_title",        bodyKey: "photos_body", placement: "top" },
-  { anchor: "project-professionals", titleKey: "professionals_title", bodyKey: "professionals_body", placement: "top" },
+  { anchor: "project-professionals", titleKey: "professionals_title", bodyKey: "professionals_body", placement: "bottom" },
   { anchor: "project-cover",         titleKey: "cover_title",         bodyKey: "cover_body" },
   { anchor: "project-submit",        titleKey: "submit_title",        bodyKey: "submit_body" },
 ]
@@ -147,6 +165,69 @@ const PROJECT_TOUR_STEPS: TourStep[] = [
 const PROJECT_TOUR_PHOTO_STEP = 1
 
 const BLOCKED_EMAIL_DOMAINS = ["gmail.com", "hotmail.com", "yahoo.com", "outlook.com", "icloud.com"]
+// Credited-professionals editor layout: "rows" is the compact management
+// list; "grid" is the previous public-page-mirror cards. Same DOM and
+// state either way — flip back to "grid" to roll back.
+/**
+ * Sortable wrapper for a photo tile. A render prop (not a wrapping
+ * element) so the existing tile div stays the grid item — no extra DOM,
+ * no layout change. Hooks can't run inside a .map callback, hence the
+ * component boundary.
+ */
+function SortablePhoto({
+  id,
+  disabled,
+  children,
+}: {
+  id: string
+  disabled?: boolean
+  children: (args: {
+    setNodeRef: (node: HTMLElement | null) => void
+    style: React.CSSProperties
+    handleProps: Record<string, unknown>
+    isDragging: boolean
+  }) => React.ReactNode
+}) {
+  const { setNodeRef, transform, transition, attributes, listeners, isDragging } = useSortable({ id, disabled })
+  return (
+    <>
+      {children({
+        setNodeRef,
+        style: {
+          transform: CSS.Transform.toString(transform),
+          transition,
+          opacity: isDragging ? 0.4 : undefined,
+          zIndex: isDragging ? 5 : undefined,
+          cursor: disabled ? undefined : "grab",
+          touchAction: disabled ? undefined : "manipulation",
+        },
+        handleProps: disabled ? {} : { ...attributes, ...listeners },
+        isDragging,
+      })}
+    </>
+  )
+}
+
+const CREDITS_EDIT_LAYOUT: "rows" | "grid" = "rows"
+
+// Add-professional flow: "dialog" renders the draft card as a centered
+// popup (bottom sheet on mobile); "inline" keeps the in-list draft row.
+// Same DOM and state either way — flip to "inline" to roll back.
+const CREDITS_ADD_FLOW: "dialog" | "inline" = "dialog"
+
+// A credit's identity is the company. Changing it in place leaves the
+// invite already sent to the previous firm — and their invites-sourced
+// prospect row — pointing at this project with nothing in the credit
+// list referencing them; deleting a credit cleans both up. So the wrong
+// company is fixed by removing the credit and adding the right one.
+// (The dialog's change-mode still works if this is flipped to true.)
+const CREDITS_ALLOW_COMPANY_CHANGE = false
+
+// Logo-less credits show their service's icon instead of gray initials.
+// Rolling out per service — extend as icons are validated per category.
+// (Was a per-slug allowlist for the service-icon fallback; every service
+// resolves now, so the credit avatar is always meaningful.)
+
 const EMAIL_REGEX = /^(?:[a-zA-Z0-9_'^&+-])+(?:\.(?:[a-zA-Z0-9_'^&+-])+)*@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/
 
 
@@ -195,6 +276,11 @@ type ProfessionalInviteSummary = {
   primaryService: string | null
   projectsCount: number
   isListedCompany: boolean
+  /** Account holder of a claimed company — the person who actually
+   *  sees this credit on Arco. Null when nobody has claimed it. */
+  ownerFirstName: string | null
+  ownerFullName: string | null
+  ownerEmail: string | null
 }
 
 type ProfessionalSectionData = {
@@ -461,6 +547,7 @@ export default function ListingEditorPage() {
 
   // ── Admin review mode ──────────────────────────────────────────────────────
   const isAdminReview = searchParams.get("review") === "1"
+  const focusSection = searchParams.get("focus")
   const [isAdmin, setIsAdmin] = useState(false)
   const [isApproving, setIsApproving] = useState(false)
   const [showRejectModal, setShowRejectModal] = useState(false)
@@ -814,6 +901,25 @@ export default function ListingEditorPage() {
       cancelled = true
     }
   }, [supabase])
+
+  // Admin detection on every visit — the tour-replay link (and other
+  // admin-only affordances) show outside review mode too; previously
+  // isAdmin was only computed under ?review, so the link vanished on
+  // published projects for admins.
+  useEffect(() => {
+    if (!userId) return
+    let cancelled = false
+    void supabase
+      .from("profiles")
+      .select("user_types")
+      .eq("id", userId)
+      .maybeSingle()
+      .then(({ data }) => {
+        const types = (data as { user_types?: string[] | null } | null)?.user_types ?? null
+        if (!cancelled) setIsAdmin(Array.isArray(types) && types.includes("admin"))
+      })
+    return () => { cancelled = true }
+  }, [userId, supabase])
 
   // ── Admin review: check admin status and load review queue ─────────────────
   useEffect(() => {
@@ -1735,7 +1841,85 @@ export default function ListingEditorPage() {
   const [ownerCompanyServices, setOwnerCompanyServices] = useState<{ id: string; name: string; parentName?: string | null }[]>([])
   // Map of companyId → services for invited Arco companies (non-owner)
   const [inviteCompanyServices, setInviteCompanyServices] = useState<Record<string, { id: string; name: string; slug?: string | null; parentName?: string | null }[]>>({})
+  /** companies.primary_service_id per company — pre-selects the service
+   *  on a credit when the company offers several. */
+  const [inviteCompanyPrimary, setInviteCompanyPrimary] = useState<Record<string, string | null>>({})
   const [confirmDeleteInviteId, setConfirmDeleteInviteId] = useState<string | null>(null)
+  // Touch stand-in for hover: the tapped row is "active" and reveals its
+  // trash (desktop reveals it on hover). Cleared by a tap anywhere else.
+  const [activeCreditId, setActiveCreditId] = useState<string | null>(null)
+  useEffect(() => {
+    if (!activeCreditId) return
+    const clear = (e: PointerEvent) => {
+      if (!(e.target as HTMLElement | null)?.closest?.(".credits-rows .credit-card-edit")) setActiveCreditId(null)
+    }
+    document.addEventListener("pointerdown", clear)
+    return () => document.removeEventListener("pointerdown", clear)
+  }, [activeCreditId])
+  // Deep link from the Listings card ("+ Professional toevoegen"): scroll
+  // to the credits section once it exists. Runs once per visit.
+  const focusedRef = useRef(false)
+  useEffect(() => {
+    // focusedRef marks COMPLETED alignment, not "started": this effect
+    // re-runs when professionalsLoading flips, and its cleanup stops the
+    // loop — a "started" guard would block the restart and leave the
+    // page parked halfway.
+    if (focusSection !== "professionals" || focusedRef.current || professionalsLoading) return
+    const el = document.getElementById("professionals")
+    if (!el) return
+    // The sections above (photos) keep growing as their images land, so a
+    // single scroll drifts. Keep re-aligning on layout changes until the
+    // page settles or the user takes over the scroll — whichever first.
+    // Land exactly where the sub-nav's PROFESSIONALS tab lands
+    // (components/project/edit-sub-nav.tsx handleClick).
+    const NAV_OFFSET = 120
+    const targetY = () => Math.max(0, el.offsetTop - NAV_OFFSET)
+    let done = false
+    let settled = 0
+    let raf = 0
+    // Photo data arrives client-side well after readyState "complete"
+    // (measured: the section stops moving ~4.5s in), so keep correcting
+    // for a minimum window rather than trusting a load signal.
+    const MIN_CORRECT_MS = 5000
+    const startedAt = performance.now()
+    const finish = () => {
+      if (done) return
+      done = true
+      cancelAnimationFrame(raf)
+      window.removeEventListener("wheel", finish)
+      window.removeEventListener("touchstart", finish)
+      window.removeEventListener("keydown", finish)
+    }
+    // Photos above this section load progressively and keep pushing it
+    // down, so a single scroll drifts. Correct toward the goal each frame
+    // until the section actually sits at the top and stays there — or
+    // until the page can't scroll further, or the user takes over.
+    const tick = () => {
+      if (done) return
+      const want = targetY()
+      const offBy = want - window.scrollY
+      const atBottom = window.scrollY >= document.documentElement.scrollHeight - window.innerHeight - 2
+      if (Math.abs(offBy) <= 4 || (offBy > 0 && atBottom)) {
+        // Only call it done once the page has stopped loading — photos
+        // above land late and would otherwise push the section away
+        // right after we stopped correcting.
+        if (++settled > 20 && performance.now() - startedAt > MIN_CORRECT_MS) {
+          focusedRef.current = true
+          return finish()
+        }
+      } else {
+        settled = 0
+        window.scrollTo({ top: want })
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    window.addEventListener("wheel", finish, { passive: true })
+    window.addEventListener("touchstart", finish, { passive: true })
+    window.addEventListener("keydown", finish)
+    raf = requestAnimationFrame(tick)
+    const stop = setTimeout(finish, 20000)
+    return () => { clearTimeout(stop); finish() }
+  }, [focusSection, professionalsLoading])
   const [draftCard, setDraftCard] = useState<{ serviceIds: string[]; serviceName: string; companyName: string; companyLogo: string | null; email: string; companyId?: string | null } | null>(null)
 
   // 3-tier company lookup state
@@ -1938,19 +2122,19 @@ export default function ListingEditorPage() {
 
   const currentStatusLabel = useMemo(() => {
     if (useProjectLevelStatus && projectStatus) {
-      return PROJECT_STATUS_LABELS[projectStatus]
+      return tStatus(`labels.${projectStatus}`)
     }
     if (currentStatusValue && statusOptionByValue.has(currentStatusValue)) {
       return statusOptionByValue.get(currentStatusValue)!.label
     }
     if (currentStatusValue) {
-      return CONTRIBUTOR_STATUS_LABELS[currentStatusValue] ?? currentStatusValue
+      return tStatus(`labels.${currentStatusValue === "rejected" ? "contributor_rejected" : currentStatusValue}`)
     }
     if (projectStatus) {
-      return PROJECT_STATUS_LABELS[projectStatus]
+      return tStatus(`labels.${projectStatus}`)
     }
     return t("status_set_status")
-  }, [currentStatusValue, projectStatus, statusOptionByValue, useProjectLevelStatus, t])
+  }, [currentStatusValue, projectStatus, statusOptionByValue, useProjectLevelStatus, t, tStatus])
 
   const statusIndicatorClass = useMemo(() => {
     if (useProjectLevelStatus && projectStatus) {
@@ -2143,6 +2327,7 @@ export default function ListingEditorPage() {
     let companyProjectCounts = new Map<string, number>()
     let companyStatusMap = new Map<string, string>()
     let companyAudienceMap = new Map<string, string>()
+    const companyOwnerMap = new Map<string, { firstName: string | null; fullName: string | null; email: string | null }>()
     if (allCompanyIds.length) {
       const [{ data: projectCounts }, { data: companyStatuses }] = await Promise.all([
         supabase
@@ -2152,7 +2337,7 @@ export default function ListingEditorPage() {
           .eq("projects.status" as any, "published"),
         supabase
           .from("companies")
-          .select("id, status, audience")
+          .select("id, status, audience, owner_id")
           .in("id", allCompanyIds),
       ])
       // Count unique published projects per company
@@ -2164,10 +2349,26 @@ export default function ListingEditorPage() {
         }
       })
       countSets.forEach((projects, companyId) => companyProjectCounts.set(companyId, projects.size))
+      const ownerIdByCompany = new Map<string, string>()
       companyStatuses?.forEach((c: any) => {
         companyStatusMap.set(c.id, c.status)
         if (c.audience) companyAudienceMap.set(c.id, c.audience)
+        if (c.owner_id) ownerIdByCompany.set(c.id, c.owner_id)
       })
+      // Claimed companies: resolve who holds the account, so the contact
+      // column can name a person instead of a guessed inbox.
+      if (ownerIdByCompany.size > 0) {
+        const { data: ownerProfiles } = await supabase
+          .from("profiles")
+          .select("id, first_name, last_name")
+          .in("id", Array.from(new Set(ownerIdByCompany.values())))
+        const byId = new Map((ownerProfiles ?? []).map((p: any) => [p.id, p]))
+        ownerIdByCompany.forEach((ownerId, companyId) => {
+          const prof: any = byId.get(ownerId)
+          const full = prof ? [prof.first_name, prof.last_name].filter(Boolean).join(" ").trim() || null : null
+          companyOwnerMap.set(companyId, { firstName: prof?.first_name ?? null, fullName: full, email: null })
+        })
+      }
     }
 
     const invitesByService: Record<string, ProfessionalInviteSummary[]> = {}
@@ -2200,6 +2401,9 @@ export default function ListingEditorPage() {
         primaryService: professionalData?.primary_specialty ?? null,
         projectsCount: companyId ? (companyProjectCounts.get(companyId) ?? 0) : 0,
         isListedCompany: isListed,
+        ownerFirstName: companyId ? companyOwnerMap.get(companyId)?.firstName ?? null : null,
+        ownerFullName: companyId ? companyOwnerMap.get(companyId)?.fullName ?? null : null,
+        ownerEmail: companyId ? companyOwnerMap.get(companyId)?.email ?? null : null,
       }
 
       if (summary.isOwner) {
@@ -2380,18 +2584,35 @@ export default function ListingEditorPage() {
     return () => { cancelled = true }
   }, [projectOwnerInvite?.companyId, supabase])
 
+  // Scraped/prefilled full email (tier-2/3 flow) → dialog email prefix,
+  // unless the admin already typed one.
+  useEffect(() => {
+    const pe = pendingTier23?.prefillEmail
+    if (pe && !pe.startsWith("@") && !dialogEmailPrefix.trim()) {
+      setDialogEmailPrefix(pe.split("@")[0])
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingTier23?.prefillEmail])
+
   // Fetch services for an Arco company and cache in inviteCompanyServices
   const loadCompanyServices = useCallback(async (companyId: string) => {
     const { data } = await supabase
       .from("companies")
-      .select("services_offered")
+      .select("services_offered, primary_service_id")
       .eq("id", companyId)
       .maybeSingle()
-    if (!data?.services_offered?.length) return
+    const primaryId = (data as { primary_service_id?: string | null } | null)?.primary_service_id ?? null
+    // Fall back to the primary service when a company lists none —
+    // otherwise its service dropdown would come up empty.
+    const serviceIds = data?.services_offered?.length
+      ? data.services_offered
+      : primaryId ? [primaryId] : []
+    if (serviceIds.length === 0) return
+    setInviteCompanyPrimary(prev => ({ ...prev, [companyId]: primaryId }))
     const { data: cats } = await supabase
       .from("categories")
       .select("id, name, slug, parent_id")
-      .in("id", data.services_offered)
+      .in("id", serviceIds)
     if (!cats) return
     // Resolve parent names for grouping
     const parentIds = [...new Set(cats.map(c => c.parent_id).filter(Boolean))] as string[]
@@ -2406,22 +2627,26 @@ export default function ListingEditorPage() {
     }))
   }, [supabase])
 
-  // Single-service companies: pre-select that service on the draft card
-  // so the publisher never opens the dropdown for e.g. a bathroom
-  // specialist that only does bathrooms. Runs whenever the (async)
-  // services arrive; only fires while nothing is selected yet, so a
-  // deliberate deselection isn't fought.
+  // Pre-select the credit's service so the publisher rarely opens the
+  // dropdown: a company offering one service uses it; a company already
+  // on the platform that offers several uses its primary service.
+  // Always changeable — this only fires while nothing is selected yet,
+  // so a deliberate choice or deselection is never overwritten.
   useEffect(() => {
     if (!draftCard?.companyId || draftCard.serviceIds.length > 0) return
     const services = inviteCompanyServices[draftCard.companyId]
-    if (services?.length !== 1) return
-    const only = services[0]
-    const displayName = translateProfessionalService((only as any).slug ?? only.name, locale) ?? only.name
+    if (!services?.length) return
+    const primaryId = inviteCompanyPrimary[draftCard.companyId] ?? null
+    const pick = services.length === 1
+      ? services[0]
+      : (primaryId ? services.find(sv => sv.id === primaryId) ?? null : null)
+    if (!pick) return
+    const displayName = translateProfessionalService((pick as any).slug ?? pick.name, locale) ?? pick.name
     setDraftCard(d => {
       if (!d || d.companyId !== draftCard.companyId || d.serviceIds.length > 0) return d
-      return { ...d, serviceIds: [only.id], serviceName: displayName }
+      return { ...d, serviceIds: [pick.id], serviceName: displayName }
     })
-  }, [draftCard?.companyId, inviteCompanyServices]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [draftCard?.companyId, inviteCompanyServices, inviteCompanyPrimary]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load services for all companies on non-owner invite cards
   useEffect(() => {
@@ -2855,7 +3080,12 @@ export default function ListingEditorPage() {
     const domain = getDomain(trimmed)
     if (domain && BLOCKED_EMAIL_DOMAINS.includes(domain)) { toast.error(tToast("use_company_email")); return }
     try {
-      const updateData: Record<string, unknown> = { invited_email: trimmed }
+      const updateData: Record<string, unknown> = {
+        invited_email: trimmed,
+        // A different address is a different recipient: the old dispatch
+        // stamp must not suppress their invite.
+        invite_dispatched_at: null,
+      }
       const { data: foundPro } = await findProfessionalByEmailAction(trimmed)
       if (foundPro) {
         updateData.professional_id = foundPro.id
@@ -2982,6 +3212,7 @@ export default function ListingEditorPage() {
                   // for one (footer / contact page) and prefill. Skipped
                   // if the publisher already started typing a local part.
                   if (hostname) {
+                    setDialogEmailLoading(true)
                     fetch(`/api/scrape-email?domain=${encodeURIComponent(hostname)}`)
                       .then(r => (r.ok ? r.json() : null))
                       .then(j => {
@@ -2996,6 +3227,7 @@ export default function ListingEditorPage() {
                         )
                       })
                       .catch(() => {})
+                      .finally(() => setDialogEmailLoading(false))
                   }
                 }
               }
@@ -3008,6 +3240,35 @@ export default function ListingEditorPage() {
 
   // In-flight lock for saveTier23Company — see comment inside.
   const tier23SavingRef = useRef(false)
+
+  // ── Add-professional dialog form (CREDITS_ADD_FLOW "dialog") ──
+  // Staged selection: picking a company no longer saves immediately —
+  // the dialog shows service + email fields and an explicit submit.
+  const [dialogArcoCompany, setDialogArcoCompany] = useState<null | {
+    id: string; name: string; city: string | null; logoUrl: string | null
+    email: string | null; ownerId: string | null; domain: string | null
+  }>(null)
+  const [dialogEmailPrefix, setDialogEmailPrefix] = useState("")
+  const [dialogSaving, setDialogSaving] = useState(false)
+  /** Email lookup in flight — the field shows a searching placeholder
+   *  instead of looking empty/stuck. */
+  const [dialogEmailLoading, setDialogEmailLoading] = useState(false)
+  /** Credit being changed via the dialog. null = adding a new one.
+   *  Company, service and invite email cascade together, so changing
+   *  the company runs through the same dialog rather than editing the
+   *  name inline and leaving the other two pointing at the old firm. */
+  const [editingCreditId, setEditingCreditId] = useState<string | null>(null)
+
+  // Photo drag-to-reorder sensors. Mouse and touch are split on purpose:
+  // PointerSensor would treat a 5px touch-scroll as a drag and break
+  // scrolling on phones. Mouse drags start after 5px (so tile clicks —
+  // lightbox, room menu, delete — still work); touch requires a 250ms
+  // press-and-hold; keyboard gives arrow-key reordering for free.
+  const photoSensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
 
   // Save a tier 2/3 company after email is provided
   const saveTier23Company = async (inviteId: string, email: string) => {
@@ -3146,23 +3407,43 @@ export default function ListingEditorPage() {
         if (foundPro) {
           insertData.professional_id = foundPro.id
         }
+        // The action dispatched before this row existed, so its stamp
+        // found nothing — carry it here or the publish sweep re-sends.
+        if (result.emailSent) insertData.invite_dispatched_at = new Date().toISOString()
         const { error } = await supabase.from("project_professionals").insert(insertData)
         if (error) throw error
         setDraftCard(null)
         await refreshProfessionalSection()
-        if (!result.emailSent) {
-          const isPublished = projectStatus === "published" || projectStatus === "completed"
-          toast.success(tToast("professional_added"), { description: !isPublished ? tToast("professional_added_pending") : undefined })
+        // The action already dispatched the invite when the project is
+        // published; sending again from here is what produced the
+        // duplicate invite emails. Only fall back to the client-side
+        // send when the action did not send.
+        if (result.emailSent) {
+          toast.success(tToast("invite_email_sent"))
+        } else if (result.emailOptedOut) {
+          toast.success(tToast("professional_added"), { description: tToast("professional_opted_out") })
         } else {
           sendInviteWithUndo(trimmed, pendingTier23?.companyName)
         }
       } else {
         // For existing card: update company_id and email
         await saveInviteCompany(inviteId, result.companyId, trimmed)
-        if (!result.emailSent) {
-          toast.success(tToast("company_linked"))
-        } else {
+        const isPublished = projectStatus === "published" || projectStatus === "completed"
+        if (result.emailSent) {
+          // Stamp by id: the dispatcher ran before invited_email was
+          // rewritten, so its (project, email) match may have missed.
+          await supabase
+            .from("project_professionals")
+            .update({ invite_dispatched_at: new Date().toISOString() })
+            .eq("id", inviteId)
+            .is("invite_dispatched_at", null)
+          toast.success(tToast("invite_email_sent"))
+        } else if (result.emailOptedOut) {
+          toast.success(tToast("company_linked"), { description: tToast("professional_opted_out") })
+        } else if (isPublished) {
           sendInviteWithUndo(trimmed, pendingTier23?.companyName)
+        } else {
+          toast.success(tToast("company_linked"))
         }
       }
       setPendingTier23(null)
@@ -3262,15 +3543,19 @@ export default function ListingEditorPage() {
             invited_service_category_ids: draftCard?.serviceIds ?? [],
             company_id: result.companyId,
           }
+          // Same stamp reasoning as the draft-card path above.
+          if (result.emailSent) updateData.invite_dispatched_at = new Date().toISOString()
           const { error } = await supabase.from("project_professionals").insert(updateData)
           if (error) throw error
           setDraftCard(null)
           await refreshProfessionalSection()
+          // Same rule as above: the action's send is the send.
           if (result.emailSent) {
-            sendInviteWithUndo(dupWarning.pendingInput.email, dupWarning.pendingInput.name)
+            toast.success(tToast("invite_email_sent"))
+          } else if (result.emailOptedOut) {
+            toast.success(tToast("professional_added"), { description: tToast("professional_opted_out") })
           } else {
-            const isPublished = projectStatus === "published" || projectStatus === "completed"
-            toast.success(tToast("professional_added"), { description: !isPublished ? tToast("professional_added_pending") : undefined })
+            sendInviteWithUndo(dupWarning.pendingInput.email, dupWarning.pendingInput.name)
           }
         } catch {
           toast.error(tToast("add_professional_failed"))
@@ -3293,11 +3578,15 @@ export default function ListingEditorPage() {
       setIsSearchingCompanies(true)
       try {
         // Parallel: DB + Google Places
+        // Same scope as the create-company modal: every company except
+        // deactivated ones. The old status filter hid catalogue/showcase
+        // rows (added/prospected/invited), so crediting a company that
+        // already existed on Arco silently created a Google duplicate.
         const dbPromise = supabase
           .from("companies")
           .select("id, name, city, logo_url, email, owner_id, domain")
           .ilike("name", `%${query.trim()}%`)
-          .in("status", ["listed", "unlisted", "created"])
+          .neq("status", "deactivated")
           .limit(6)
 
         const googlePromise = (async (): Promise<GooglePlaceResult[]> => {
@@ -3449,6 +3738,7 @@ export default function ListingEditorPage() {
       })
 
       // If RLS blocks the insert, fall back to server action
+      let dispatchedByAction = false
       if (insertError) {
         console.error("Direct insert failed, trying server action:", insertError.message)
         const result = await createUnlistedCompanyAction({
@@ -3461,6 +3751,7 @@ export default function ListingEditorPage() {
           skipDedup: true,
         })
         if ("error" in result) throw new Error(result.error)
+        dispatchedByAction = result.emailSent
       }
       setDraftCard(null)
 
@@ -3473,11 +3764,11 @@ export default function ListingEditorPage() {
 
       await refreshProfessionalSection()
 
-      if (inviteEmail) {
+      if (inviteEmail && !dispatchedByAction) {
         const companyName = companySearchResults.find(c => c.id === companyId)?.name
         sendInviteWithUndo(inviteEmail, companyName ?? undefined)
       } else {
-        toast.success(tToast("professional_added"))
+        toast.success(dispatchedByAction ? tToast("invite_email_sent") : tToast("professional_added"))
       }
     } catch (err) {
       console.error("saveDraftCardWithCompany error:", err)
@@ -3488,6 +3779,92 @@ export default function ListingEditorPage() {
     setCompanySearchResults([])
     setGoogleResults([])
   }
+
+  // Dialog form derived state — which company is staged, which domain
+  // the invite email uses, and whether the form is complete. The same
+  // dialog adds a credit (editingCreditId null) or changes an existing
+  // one, so the pending-tier key follows the credit being edited.
+  const dialogPendingKey = editingCreditId ?? "__draft__"
+  const dialogCompanySelected = Boolean(
+    dialogArcoCompany
+    || pendingTier23?.inviteId === dialogPendingKey
+    || (editingCreditId && draftCard?.companyName),
+  )
+  const dialogEmailDomain = dialogArcoCompany
+    ? (dialogArcoCompany.email?.includes("@")
+        ? dialogArcoCompany.email.split("@")[1]
+        : dialogArcoCompany.domain?.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0] ?? null)
+    : pendingTier23?.inviteId === dialogPendingKey
+      ? pendingTier23.domain
+      // Changing an existing credit: keep its current invite domain.
+      : (editingCreditId && draftCard?.email?.includes("@") ? draftCard.email.split("@")[1] : null)
+  const dialogEmailOk = (!editingCreditId && Boolean(dialogArcoCompany?.ownerId))
+    || (dialogEmailDomain ? dialogEmailPrefix.trim().length > 0 : /\S+@\S+/.test(dialogEmailPrefix))
+  const canSubmitDialog = Boolean(
+    draftCard && dialogCompanySelected && (draftCard.serviceIds.length > 0) && dialogEmailOk,
+  )
+
+  /** Open the dialog on an existing credit. Company, service and email
+   *  are pre-filled; saving updates that credit rather than adding. */
+  const openChangeCreditDialog = (inv: ProfessionalInviteSummary) => {
+    setEditingCreditId(inv.id)
+    setPendingTier23(null)
+    setDialogArcoCompany(null)
+    setDraftCard({
+      serviceIds: inv.serviceIds ?? [],
+      serviceName: inv.serviceIds?.length ? (professionalServices.find(o => o.id === inv.serviceIds[0])?.name ?? "") : "",
+      companyName: inv.companyName ?? "",
+      companyLogo: inv.companyLogo ?? null,
+      companyId: inv.companyId ?? undefined,
+      email: inv.email ?? "",
+    })
+    setDialogEmailPrefix(inv.email?.includes("@") ? inv.email.split("@")[0] : "")
+    setCompanySearchQuery("")
+    setCompanySearchResults([])
+    setGoogleResults([])
+    companySearchActive.current = false
+    if (inv.companyId) void loadCompanyServices(inv.companyId)
+  }
+
+  const submitAddDialog = async () => {
+    if (!draftCard || dialogSaving) return
+    setDialogSaving(true)
+    try {
+      const typed = dialogEmailPrefix.trim()
+      const composed = dialogEmailDomain && typed && !typed.includes("@")
+        ? `${typed}@${dialogEmailDomain}`
+        : typed.includes("@") ? typed : null
+
+      if (editingCreditId) {
+        // Change an existing credit — company, service and email move
+        // together so none is left pointing at the previous firm.
+        if (dialogArcoCompany) {
+          await saveInviteCompany(editingCreditId, dialogArcoCompany.id, composed ?? dialogArcoCompany.email)
+        } else if (pendingTier23?.inviteId === editingCreditId) {
+          await saveTier23Company(editingCreditId, composed ?? "")
+        } else if (composed && composed !== draftCard.email) {
+          await supabase.from("project_professionals").update({ invited_email: composed }).eq("id", editingCreditId)
+        }
+        await supabase
+          .from("project_professionals")
+          .update({ invited_service_category_ids: draftCard.serviceIds } as never)
+          .eq("id", editingCreditId)
+        await refreshProfessionalSection()
+        toast.success(tToast("professional_added"))
+        setDraftCard(null)
+        setEditingCreditId(null)
+      } else if (dialogArcoCompany) {
+        await saveDraftCardWithCompany(dialogArcoCompany.id, composed ?? dialogArcoCompany.email, !!dialogArcoCompany.ownerId)
+      } else if (pendingTier23?.inviteId === "__draft__") {
+        await saveTier23Company("__draft__", composed ?? typed)
+      }
+    } finally {
+      setDialogSaving(false)
+      setDialogArcoCompany(null)
+      setDialogEmailPrefix("")
+    }
+  }
+
 
   const handleDeleteInvite = async (invite: ProfessionalInviteSummary) => {
     if (isInviteMutating) {
@@ -3603,7 +3980,7 @@ export default function ListingEditorPage() {
       const { error } = await supabase.from("projects").delete().eq("id", projectId).eq("client_id", userId)
       if (error) throw error
       toast.success(tToast("project_deleted"))
-      router.push("/dashboard/listings")
+      router.push(projectOwnerInvite?.companyId ? `/dashboard/listings?company_id=${projectOwnerInvite.companyId}` : "/dashboard/listings")
     } catch {
       toast.error(tToast("delete_failed"))
     } finally {
@@ -3813,6 +4190,21 @@ export default function ListingEditorPage() {
             .filter((p): p is UploadedPhoto => p != null)
         : allPhotosSorted
 
+    // Drag-to-reorder is only meaningful inside a room: that's where an
+    // explicit order is persisted (reorderFeaturePhotos). The All /
+    // Untagged views show a derived order, so dragging is disabled there.
+    const canDragReorder = Boolean(activeEditFeature && activeEditFeature !== "__untagged__")
+
+    const handleDragEnd = (event: DragEndEvent) => {
+      const { active, over } = event
+      if (!over || active.id === over.id || !activeEditFeature) return
+      const currentIds = featurePhotos[activeEditFeature] ?? []
+      const from = currentIds.indexOf(String(active.id))
+      const to = currentIds.indexOf(String(over.id))
+      if (from === -1 || to === -1) return
+      void reorderFeaturePhotos(activeEditFeature, arrayMove(currentIds, from, to))
+    }
+
     return (
       <>
         {/* Room / feature tabs */}
@@ -3848,6 +4240,12 @@ export default function ListingEditorPage() {
         </div>
 
         {/* Photo grid */}
+        <DndContext
+          sensors={photoSensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+        <SortableContext items={filteredPhotos.map(p => p.id)} strategy={rectSortingStrategy}>
         <div className="photo-edit-grid">
           {/* Add photo tile — first */}
           <label className="photo-add-tile">
@@ -3908,9 +4306,13 @@ export default function ListingEditorPage() {
             )
 
             return (
+              <SortablePhoto key={photo.id} id={photo.id} disabled={!canDragReorder}>
+                {({ setNodeRef, style: dragStyle, handleProps, isDragging }) => (
               <div
-                key={photo.id}
-                className="photo-edit-thumb"
+                ref={setNodeRef}
+                style={dragStyle}
+                {...handleProps}
+                className={`photo-edit-thumb${isDragging ? " is-dragging" : ""}`}
                 {...(photoIndex === 0 ? { "data-tour": "project-photo-tile", "data-photo-id": photo.id } : {})}
               >
                 <img src={photo.url} alt="" />
@@ -4024,9 +4426,13 @@ export default function ListingEditorPage() {
                   </div>
                 )}
               </div>
+                )}
+              </SortablePhoto>
             )
           })}
         </div>
+        </SortableContext>
+        </DndContext>
 
         {/* Empty state */}
         {filteredPhotos.length === 0 && !isUploading && (
@@ -4333,8 +4739,25 @@ export default function ListingEditorPage() {
         })
       }
     }
-    // Sort non-owner by service order (primary service of each invite)
+    // Status leads the ordering: the credits that are already live come
+    // first, then the ones still waiting on the professional, then the
+    // ones that ended badly. Service order breaks ties inside a band, so
+    // the old trade grouping survives within each status.
+    // Anything unrecognised sorts at 3 — where a company that exists but
+    // is not yet listed belongs.
+    const STATUS_RANK: Record<string, number> = {
+      live_on_page: 1, // Featured / Uitgelicht
+      listed: 2,
+      created: 3,
+      invited: 4,
+      unlisted: 5,
+      rejected: 6,
+      removed: 7,
+    }
     nonOwner.sort((a, b) => {
+      const aRank = STATUS_RANK[a.status] ?? 3
+      const bRank = STATUS_RANK[b.status] ?? 3
+      if (aRank !== bRank) return aRank - bRank
       const aOrder = Math.min(...a.serviceIds.map(id => serviceOrder.get(id) ?? 999))
       const bOrder = Math.min(...b.serviceIds.map(id => serviceOrder.get(id) ?? 999))
       return aOrder - bOrder
@@ -4418,6 +4841,193 @@ export default function ListingEditorPage() {
         .add-pro-tile::before { content: ''; position: absolute; inset: -10px -14px; border: 1px dashed #c8c8c6; border-radius: 5px; transition: border-color .18s, background .18s; pointer-events: none; }
         .add-pro-tile:hover::before { border-color: #016D75; background: rgba(1,109,117,.03); }
         .add-pro-tile:hover .add-pro-icon { color: #016D75; }
+
+        /* ── Credited professionals: row layout (CREDITS_EDIT_LAYOUT
+           "rows"). Identical DOM/state to the grid cards, reflowed into
+           management rows — icon · name · service · email/status.
+           Rollback: flip CREDITS_EDIT_LAYOUT to "grid". ── */
+        /* The card grid is centred in a 1400px box (globals). A row
+           list must instead share the section header's left edge, or the
+           title and the rows read as two different columns. */
+        .credits-rows { display: flex; flex-direction: column; gap: 0; max-width: none; margin: 0; }
+        .credits-rows-head { display: flex; align-items: center; gap: 18px; padding: 0 8px 10px; border-bottom: 1px solid #eeeeed; }
+        .credits-rows .company-search-menu { left: 0; transform: none; }
+        .credits-rows .service-menu { left: 0; transform: none; }
+        .credits-rows-head-icon { flex: 0 0 44px; }
+        @media (max-width: 768px) { .credits-rows-head { display: none; } }
+        .credits-rows .credit-card-edit { display: flex; align-items: center; gap: 18px; text-align: left; padding: 13px 8px; margin: 0; border-bottom: 1px solid #eeeeed; }
+        .credits-rows .credit-card-edit::before { inset: 0 -6px; }
+        .credits-rows .credit-card-edit .ec-badge { display: none; }
+        .credits-rows .card-del { top: 50%; transform: translateY(-50%); right: 4px; }
+        .credits-rows .credit-icon { order: -2; width: 44px; height: 44px; margin: 0; flex-shrink: 0; }
+        .credits-rows .credit-icon-initials { font-size: 15px; }
+        .credits-rows .credit-slot-name { order: -1; flex: 1 1 auto; min-width: 0; width: auto !important; margin: 0 !important; }
+        /* Uniform row typography: name, service and email all 14px
+           regular — no eyebrow caps, no editable underlines (the row
+           hover outline + cursor already signal editability). */
+        .credits-rows .credit-slot-name h3 { margin: 0; font-size: 14px; font-weight: 400; color: var(--arco-black); line-height: 1.5; display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* Editing must not move the text: the shared card input is
+           center-aligned for the old card layout — left-align it here
+           and match the row typography exactly. */
+        .credits-rows .credit-card-edit .card-field-inp { text-align: left; font-size: 14px; font-weight: 400; line-height: 1.5; }
+        .credits-rows .credit-card-edit .email-prefix-inp { text-align: left; }
+        .credits-rows .credit-slot-service .arco-eyebrow { font-size: 14px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--text-secondary, #6b6b68); line-height: 1.5; }
+        .credits-rows .credit-card-edit .editable-hint { border-bottom-color: transparent; }
+        .credits-rows .credit-slot-service .editable-hint:hover { border-bottom-color: #1c1c1a; }
+        .credits-rows .credit-slot-name .editable-hint,
+        .credits-rows .credit-slot-name .editable-hint:hover { border-bottom-color: transparent; }
+        .credits-rows .credit-slot-service { order: 0; flex: 0 0 190px; margin: 0 !important; }
+        .credits-rows .credit-card-edit > .arco-card-subtitle { order: 1; flex: 0 0 250px; margin: 0 !important; }
+        /* Service and contact are peer attributes of the same row, so they
+           share one colour. The inherited .arco-card-subtitle grey
+           (#a1a1a0) was both a false hierarchy and below the 4.5:1
+           contrast floor. */
+        .credits-rows .credit-slot-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary, #6b6b68); }
+        /* Service and email share one edit affordance: a pencil that
+           appears on hover, a dashed rule under the editable text only
+           (for email that is the local part, never the fixed domain),
+           and primary colour while the field is open. */
+        .credits-rows .credit-edit-pencil { display: inline-block; vertical-align: middle; margin-left: 6px; opacity: 0; color: #a1a1a0; transition: opacity .15s; }
+        .credits-rows .credit-card-edit:hover .credit-edit-pencil { opacity: 1; }
+        /* Delete confirm: the row dims (clear "this one is about to
+           go"), with the question and answers kept at the right end
+           where the trash sits, so the pointer doesn't travel. */
+        /* Same scrim as the photo confirm, spanning the row's full
+           outlined box (the ::before outline sits at inset 0 -6px, so a
+           plain inset:0 left a light ring around the overlay). Question
+           and buttons stay at the right end, by the trash. */
+        .credits-rows .card-del-confirm { position: absolute; inset: 0 -6px; background: rgba(0,0,0,.7); flex-direction: row; align-items: center; justify-content: flex-end; gap: 14px; padding: 0 14px; border-radius: 5px; z-index: 4; }
+        .credits-rows .card-del-confirm p { color: #fff; font-size: 13px; font-weight: 500; margin: 0; white-space: nowrap; }
+        .credits-rows .credit-email-local { border-bottom: 1px dashed transparent; transition: border-color .15s; }
+        .credits-rows .credit-slot-email:hover .credit-email-local { border-bottom-color: #1c1c1a; }
+        /* --arco-mid-grey is not defined anywhere in the app, so this
+           rule never rendered; the domain simply inherits the cell now. */
+        .credits-rows .credit-slot-email .credit-email-domain { color: inherit; }
+        /* A first name reads as a person next to an address without help
+           from colour, so it sits at the same weight as its neighbours. */
+        .credits-rows .credit-contact-known { color: var(--text-secondary, #6b6b68); }
+        /* Open editors read as primary. */
+        .credits-rows .email-prefix-inp { color: #016D75; }
+        .credits-rows .credit-slot-status { order: 2; flex: 0 0 130px; justify-content: flex-start !important; margin: 0 !important; }
+        /* The global .status-pill is 10px, tuned for dense admin tables.
+           These rows sit at the same scale as a Listings project card, so
+           the pill matches that card's 12px chip instead. Scoped here so
+           the admin tables keep their tighter size. */
+        .credits-rows .credit-slot-status .status-pill { font-size: 12px; padding: 3px 10px; }
+        .credits-rows .add-pro-tile { min-height: 56px; flex-direction: row; gap: 10px; justify-content: flex-start; padding: 0 8px; margin-top: 10px; }
+        .credits-rows .add-pro-tile::before { inset: 0 -6px; }
+        /* Empty state uses the shared .arco-banner (highlight tier);
+           only its position in the list is local. */
+        .credits-rows .credits-empty { margin-top: 10px; }
+
+
+        /* ── Add-professional dialog (CREDITS_ADD_FLOW "dialog") ──
+           The draft card, lifted out of the list: centered popup on
+           desktop, bottom sheet on mobile. Children restacked into a
+           form — title, company search, email, service. */
+        .add-pro-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); z-index: 480; }
+        .credits-grid .credit-card-edit.add-pro-modal { position: fixed; z-index: 490; top: 50%; left: 50%; transform: translate(-50%,-50%); width: min(480px, calc(100vw - 32px)); background: #fff; border-radius: 12px; border-bottom: none; box-shadow: 0 24px 80px rgba(0,0,0,.18); padding: 0; margin: 0; text-align: left; overflow: visible !important; display: flex !important; flex-direction: column; align-items: stretch !important; gap: 0; cursor: default; }
+        .add-pro-modal-head { order: -2; display: flex; align-items: center; justify-content: space-between; padding: 20px 28px; background: var(--arco-off-white); border-radius: 12px 12px 0 0; flex-shrink: 0; }
+        .add-pro-modal-hint { order: -1; color: var(--arco-mid-grey); margin: 12px 28px 16px !important; }
+        .credit-card-edit.add-pro-modal::before { display: none; }
+        .add-pro-modal .ec-badge { display: none !important; }
+        .add-pro-modal .credit-icon { display: none; }
+        .add-pro-modal .add-pro-selected .credit-icon { display: flex; }
+        .add-pro-modal .card-del { display: none; }
+        /* Dialog form: dedicated search / email / submit blocks; the
+           legacy name + subtitle slots are hidden (the service slot
+           stays — it IS the service dropdown field, revealed once a
+           company is staged). Flex order: head(-2) hint(-1) search(1)
+           service(3) email(4) footer(6). */
+        .add-pro-modal .credit-slot-name { display: none !important; }
+        .add-pro-modal > .arco-card-subtitle { display: none !important; }
+        .add-pro-search { order: 1; margin: 0 28px; }
+        .add-pro-search .form-input:focus { border-color: var(--arco-black); }
+        .add-pro-under-hint { font-size: 12px; color: var(--arco-mid-grey); margin: 8px 0 0; }
+        .add-pro-results { margin-top: 8px; border: 1px solid var(--arco-rule); border-radius: 3px; box-shadow: 0 8px 28px rgba(0,0,0,.14); max-height: 280px; overflow-y: auto; padding: 4px 0; background: #fff; }
+        .add-pro-result-row { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 9px 14px; font-size: 13px; font-weight: 300; color: var(--arco-black); cursor: pointer; gap: 8px; transition: background .1s; background: none; border: none; text-align: left; }
+        .add-pro-result-row:hover { background: var(--arco-off-white); }
+        /* Selected state: the modal becomes a grid so the icon spans the
+           name + service rows — one connected list item — with the email
+           aligned to the same content column. display:contents lets the
+           icon and name escape their wrapper into the grid, so the
+           service slot (a sibling in the draft-card DOM) can sit
+           directly under the name without moving any markup. */
+        .add-pro-selected { order: 2; display: contents; }
+        .credits-grid .credit-card-edit.add-pro-modal.add-pro-has-company { display: grid !important; align-items: center !important; grid-template-columns: 44px 14px minmax(0, 1fr); align-items: center; padding: 0 28px 28px; row-gap: 2px; }
+        /* Rows are pinned, not auto-placed: the mobile row-layout rules
+           (.credits-rows .credit-slot-service { grid-row: 2 }) also match
+           inside this dialog and would otherwise push the service above
+           the name. head 1 · icon 2-3 · name 2 · service 3 · email/footer
+           auto-place after. */
+        .credits-grid .add-pro-modal.add-pro-has-company .add-pro-modal-head { grid-column: 1 / -1; grid-row: 1; margin: 0 -28px 10px; }
+        .credits-grid .add-pro-modal.add-pro-has-company .add-pro-selected .credit-icon { grid-column: 1; grid-row: 2 / 4; display: flex; width: 44px; height: 44px; margin: 0; }
+        .credits-grid .add-pro-modal.add-pro-has-company .add-pro-name-row { grid-column: 3; grid-row: 2; align-self: end; }
+        .add-pro-name-row { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+        .add-pro-name { font-size: 15px; font-weight: 500; color: var(--arco-black); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .add-pro-change { background: none; border: none; padding: 0; font-size: 12px; color: #016D75; cursor: pointer; flex-shrink: 0; }
+        .add-pro-change:hover { text-decoration: underline; }
+        .add-pro-modal .credit-slot-service { display: none; }
+        .credits-grid .add-pro-modal.add-pro-has-company .credit-slot-service { display: block; grid-column: 3; grid-row: 3; align-self: start; width: auto !important; margin: 0 !important; padding: 0; border: none; background: transparent; }
+        /* Service reads as the item's subtitle, with a dropdown caret. */
+        .add-pro-modal .credit-slot-service .arco-eyebrow { font-size: 13px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+        .add-pro-modal .credit-slot-service .arco-eyebrow::after { content: ""; display: inline-block; margin-left: 7px; vertical-align: middle; border-left: 3.5px solid transparent; border-right: 3.5px solid transparent; border-top: 4px solid currentColor; opacity: .75; }
+        .add-pro-modal .credit-slot-service .arco-eyebrow:hover { text-decoration: underline; }
+        .credits-grid .add-pro-modal.add-pro-has-company .add-pro-email { grid-column: 3; margin: 14px 0 0 !important; }
+        .add-pro-email { order: 4; padding: 0; font-size: 14px; background: transparent; display: flex; align-items: center; border: none; }
+        .add-pro-email input { border: none; outline: none; font: inherit; padding: 0; background: transparent; min-width: 30px; color: var(--arco-black); }
+        /* Only the local part is a field; the domain sits outside the
+           box as plain text so it reads as fixed, not editable. */
+        .add-pro-email { flex-wrap: wrap; row-gap: 6px; column-gap: 10px; }
+        .add-pro-email input.add-pro-email-input { flex: 1 1 auto; min-width: 80px; border: 1px solid var(--arco-rule); border-radius: 3px; padding: 10px 14px; background: #fff; font: inherit; color: var(--arco-black); outline: none; }
+        .add-pro-email input.add-pro-email-input:focus { border-color: var(--arco-black); }
+        /* Spacing via the container's column-gap, not a margin, so the
+           domain lines up with the input's edge when it wraps below it
+           on narrow screens. */
+        .add-pro-email-domain { color: var(--arco-mid-grey); flex-shrink: 0; white-space: nowrap; }
+        .credits-grid .add-pro-modal.add-pro-has-company .add-pro-footer { grid-column: 1 / -1; margin: 20px 0 0 !important; }
+        .add-pro-footer { order: 6; margin: 20px 28px 28px; display: flex; justify-content: flex-end; }
+        .add-pro-modal .editable-hint { border-bottom: none; }
+        .add-pro-modal .card-field-inp, .add-pro-modal .email-prefix-inp { border-bottom: none; text-align: left; font-size: 15px; }
+        .add-pro-modal .service-menu { left: -1px; right: -1px; transform: none; min-width: 0; top: calc(100% + 8px); border: 1px solid var(--arco-rule); border-radius: 3px; box-shadow: 0 8px 28px rgba(0,0,0,.14); }
+        @media (max-width: 768px) {
+          .credits-grid .credit-card-edit.add-pro-modal { top: auto; bottom: 0; left: 0; right: 0; transform: none; width: 100%; border-radius: 14px 14px 0 0; padding: 0 0 calc(16px + env(safe-area-inset-bottom)); max-height: 82vh; overflow: visible; animation: addProSheetUp .28s cubic-bezier(.16,1,.3,1); grid-template-columns: none; column-gap: 0; row-gap: 0; }
+          .add-pro-modal-head { border-radius: 14px 14px 0 0; }
+          .add-pro-modal .credit-slot-service { margin-left: 18px !important; margin-right: 18px !important; }
+          .add-pro-search, .add-pro-email { margin-left: 18px !important; margin-right: 18px !important; }
+          .add-pro-footer { margin: 16px 18px calc(16px + env(safe-area-inset-bottom)) !important; }
+          .add-pro-modal-hint { margin: 12px 18px 14px !important; }
+          /* Email on one line: full width (the content column alone is
+             too narrow for input + domain), input flexes, domain keeps
+             priority and only ellipsizes in the extreme. */
+          .credits-grid .add-pro-modal.add-pro-has-company .add-pro-email { grid-column: 1 / -1; flex-wrap: nowrap; }
+          .credits-grid .add-pro-modal.add-pro-has-company .add-pro-email input.add-pro-email-input { flex: 1 1 0; min-width: 72px; }
+          .credits-grid .add-pro-modal.add-pro-has-company .add-pro-email-domain { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+        }
+        @keyframes addProSheetUp { from { transform: translateY(18%); opacity: .5; } to { transform: translateY(0); opacity: 1; } }
+        @media (max-width: 768px) {
+          /* Mobile: the add-professional popup's lockup — icon spanning
+             name + service (one connected item), status pill top-right,
+             email on its own line under the service. Same DOM as desktop. */
+          .credits-rows .credit-card-edit {
+            display: grid !important;
+            grid-template-columns: 44px minmax(0, 1fr) auto;
+            column-gap: 14px; row-gap: 0;
+            align-items: center;
+          }
+          .credits-rows .credit-icon { grid-row: 1 / 3; grid-column: 1; width: 44px; height: 44px; align-self: center; }
+          .credits-rows .credit-icon-initials { font-size: 15px; }
+          .credits-rows .credit-slot-name { grid-row: 1; grid-column: 2; min-width: 0; align-self: end; }
+          .credits-rows .credit-slot-name h3 { font-size: 15px; font-weight: 500; line-height: 1.35; }
+          .credits-rows .credit-card-edit .card-field-inp { font-size: 15px; font-weight: 500; line-height: 1.35; }
+          .credits-rows .credit-slot-status { grid-row: 1; grid-column: 3; justify-self: end; align-self: start; margin: 0 !important; }
+          .credits-rows .credit-slot-service { grid-row: 2; grid-column: 2 / 4; flex: none; align-self: start; margin-top: 2px !important; }
+          .credits-rows .credit-slot-service .arco-eyebrow { font-size: 13px; line-height: 1.4; }
+          .credits-rows .credit-card-edit > .arco-card-subtitle { grid-row: 3; grid-column: 2 / 4; min-width: 0; margin-top: 6px !important; padding-right: 34px; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          /* Trash: out of the grid flow, bottom-right beside the email
+             (which reserves its width) — never over the status pill. */
+          .credits-rows .card-del { top: auto; bottom: 10px; right: 0; transform: none; width: 26px; height: 26px; }
+        }
         .add-pro-tile:hover .add-pro-label { color: #016D75; }
         .card-del-confirm { position: absolute; inset: -10px -14px; background: rgba(0,0,0,.7); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; z-index: 10; border-radius: 5px; }
         .card-del-confirm p { color: #fff; font-size: 13px; font-weight: 500; margin: 0; }
@@ -4429,7 +5039,13 @@ export default function ListingEditorPage() {
         .company-search-row { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 7px 13px; font-size: 12.5px; font-weight: 300; color: #1c1c1a; cursor: pointer; gap: 8px; transition: background .1s; background: none; border: none; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .company-search-row:hover { background: #f5f5f3; }
         .company-search-row.sel { font-weight: 500; }
-        .service-menu { position: absolute; left: 50%; transform: translateX(-50%); top: calc(100% + 6px); background: #fff; border: 1px solid #e8e8e6; border-radius: var(--radius-sm); box-shadow: 0 8px 28px rgba(0,0,0,.14); min-width: 220px; padding: 4px 0; z-index: 30; max-height: 300px; overflow-y: auto; }
+        .service-menu { position: absolute; left: 50%; transform: translateX(-50%); top: calc(100% + 10px); background: var(--background, #fff); border: 1px solid var(--arco-rule, #e8e8e6); border-radius: 4px; box-shadow: 0 8px 32px rgba(0,0,0,.09); min-width: 224px; padding: 8px 0; z-index: 30; max-height: 320px; overflow-y: auto; }
+        /* Rows mirror the discover filter dropdowns (filter-dropdown-option
+           + filter-checkbox from globals.css); button reset on top. */
+        .service-menu .filter-dropdown-option { width: 100%; border: none; background: transparent; font: inherit; text-align: left; }
+        .service-menu .filter-dropdown-option:hover { background: var(--arco-surface, #f5f5f4); }
+        .service-menu .filter-dropdown-option.disabled { opacity: .45; cursor: default; }
+        .service-menu .filter-dropdown-option.disabled:hover { background: transparent; }
         .service-group-label { padding: 8px 13px 4px; font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #a1a1a0; pointer-events: none; }
         .service-row { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 6px 13px 6px 20px; font-size: 12.5px; font-weight: 300; color: #1c1c1a; cursor: pointer; gap: 8px; transition: background .1s; background: none; border: none; text-align: left; }
         .service-row:hover { background: #f5f5f3; }
@@ -4463,6 +5079,17 @@ export default function ListingEditorPage() {
         /* Reorder arrows — bottom center, visible on hover */
         .photo-reorder-arrows { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; opacity: 0; transition: opacity .15s; z-index: 3; }
         .photo-edit-thumb:hover .photo-reorder-arrows { opacity: 1; }
+        .photo-edit-thumb.is-dragging { cursor: grabbing; }
+        /* Touch devices have no hover: keep the arrows visible so
+           reordering stays discoverable next to long-press drag. */
+        @media (hover: none) {
+          .photo-reorder-arrows { opacity: 1; }
+          /* Tap = hover: the tapped row shows its trash and the same
+             outline hover gives on desktop, instead of every row
+             carrying a trash permanently. */
+          .credits-rows .credit-card-edit.is-active .card-del { opacity: 1; }
+          .credits-rows .credit-card-edit.is-active::before { border-color: #1c1c1a; }
+        }
         .photo-reorder-btn { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.55); color: #fff; border: 1px solid rgba(255,255,255,.25); cursor: pointer; transition: background .12s; }
         .photo-reorder-btn:hover { background: rgba(0,0,0,.75); }
 
@@ -4502,7 +5129,16 @@ export default function ListingEditorPage() {
         .ccm-row:hover { background: #f5f5f3; }
       `}</style>
 
-      <Header navLinks={[{ href: "/dashboard/listings", label: tNav("listings") }, { href: "/dashboard/company", label: tNav("company") }, { href: "/dashboard/team", label: tNav("team") }, { href: "/dashboard/pricing", label: tNav("plans") }]} />
+      {/* Carry the owner company on the nav links so an admin (no
+          professional profile of their own) lands on THIS company's
+          listings/company pages instead of "No professional profile". */}
+      <Header navLinks={[
+        { href: projectOwnerInvite?.companyId ? `/dashboard/listings?company_id=${projectOwnerInvite.companyId}` : "/dashboard/listings", label: tNav("listings") },
+        { href: projectOwnerInvite?.companyId ? `/dashboard/company?company_id=${projectOwnerInvite.companyId}` : "/dashboard/company", label: tNav("company") },
+        { href: projectOwnerInvite?.companyId ? `/dashboard/team?company_id=${projectOwnerInvite.companyId}` : "/dashboard/team", label: tNav("team") },
+        { href: "/dashboard/inbox", label: tNav("inbox") },
+        { href: "/dashboard/pricing", label: tNav("plans") },
+      ]} />
 
       <div>
 
@@ -4633,7 +5269,7 @@ export default function ListingEditorPage() {
           <div className="wrap" style={{ position: "relative", height: 0 }}>
             <button
               onClick={() => setTourForceRun((n) => n + 1)}
-              className="absolute right-5 md:right-[60px] text-[12px] text-[#016D75] hover:text-[#014f55] transition-colors bg-transparent border-none cursor-pointer p-0"
+              className="arco-text-link arco-text-link--primary absolute right-5 md:right-[60px]"
               style={{ top: 12 }}
             >
               {t("tour_replay")}
@@ -5013,11 +5649,36 @@ export default function ListingEditorPage() {
 
         {/* ── Professionals ─────────────────────────────────────────── */}
         <section id="professionals" className="wrap" style={{ paddingTop: 72, paddingBottom: 120 }}>
-          <div style={{ marginBottom: 40 }}>
-            <h2 className="arco-section-title">{tTeam("title")}</h2>
-            <p className="arco-body-text" style={{ marginTop: 6, maxWidth: 600 }}>
-              {tTeam("description")}
-            </p>
+          <div style={{ marginBottom: 40, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+            <div>
+              <h2 className="arco-section-title">{tTeam("title")}</h2>
+              <p className="arco-body-text" style={{ marginTop: 6, maxWidth: 600 }}>
+                {tTeam("description")}
+              </p>
+            </div>
+            {/* Same action as the dashed row at the bottom of the list —
+                always in view when the list grows long. */}
+            <button
+              type="button"
+              onClick={() => {
+                if (draftCard) return
+                setDraftCard({ serviceIds: [], serviceName: "", companyName: "", companyLogo: null, email: "" })
+                if (CREDITS_ADD_FLOW === "dialog") {
+                  companySearchActive.current = false
+                  setCompanySearchQuery("")
+                  setCompanySearchResults([])
+                  setGoogleResults([])
+                  setDialogArcoCompany(null)
+                  setDialogEmailPrefix("")
+                }
+              }}
+              disabled={Boolean(draftCard)}
+              className="btn-primary shrink-0 gap-1.5"
+              data-tour="project-professionals"
+            >
+              <Plus size={14} />
+              {tTeam("add_professional")}
+            </button>
           </div>
 
           {professionalsError && (
@@ -5026,7 +5687,16 @@ export default function ListingEditorPage() {
             </div>
           )}
 
-          <div className="credits-grid">
+          <div className={CREDITS_EDIT_LAYOUT === "rows" ? "credits-grid credits-rows" : "credits-grid"}>
+            {CREDITS_EDIT_LAYOUT === "rows" && (
+              <div className="credits-rows-head" aria-hidden>
+                <span className="credits-rows-head-icon" />
+                <span className="arco-eyebrow" style={{ flex: "1 1 auto", minWidth: 0 }}>{tTeam("col_company")}</span>
+                <span className="arco-eyebrow" style={{ flex: "0 0 190px" }}>{tTeam("col_service")}</span>
+                <span className="arco-eyebrow" style={{ flex: "0 0 250px" }}>{tTeam("col_contact")}</span>
+                <span className="arco-eyebrow" style={{ flex: "0 0 130px" }}>{tTeam("col_status")}</span>
+              </div>
+            )}
             {flatInvites.map(inv => {
               const initials = inv.companyName
                 ? (inv.companyName.split(" ").filter(Boolean).length >= 2
@@ -5047,11 +5717,18 @@ export default function ListingEditorPage() {
               return (
                 <div
                   key={inv.id}
-                  className="credit-card-edit"
+                  className={`credit-card-edit${activeCreditId === inv.id ? " is-active" : ""}`}
                   style={{ overflow: isConfirmingDelete ? "visible" : undefined }}
-                  onClick={!inv.isOwner && inv.status === "invited" && !inv.isListedCompany && !isEditingCompany && !isEditingService && !isEditingEmail
-                    ? () => setEditingInviteField({ inviteId: inv.id, field: "email" })
-                    : undefined}
+                  onClick={() => {
+                    const touch = typeof window !== "undefined" && window.matchMedia?.("(hover: none)").matches
+                    if (touch) {
+                      if (!inv.isOwner) setActiveCreditId(prev => (prev === inv.id ? null : inv.id))
+                      return
+                    }
+                    if (!inv.isOwner && inv.status === "invited" && !inv.isListedCompany && !isEditingCompany && !isEditingService && !isEditingEmail) {
+                      setEditingInviteField({ inviteId: inv.id, field: "email" })
+                    }
+                  }}
                 >
                   <span className="ec-badge">
                     <span className="ec-ico"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span>
@@ -5073,20 +5750,21 @@ export default function ListingEditorPage() {
                     <div className="card-del-confirm">
                       <p>{tTeam("delete_prompt")}</p>
                       <div className="photo-del-confirm-btns">
-                        <button className="photo-del-yes" onClick={e => { e.stopPropagation(); setConfirmDeleteInviteId(null); void handleDeleteInvite(inv) }}>{tActions("yes")}</button>
-                        <button className="photo-del-no" onClick={e => { e.stopPropagation(); setConfirmDeleteInviteId(null) }}>{tActions("no")}</button>
+                        <button className="photo-del-yes" onClick={e => { e.stopPropagation(); setConfirmDeleteInviteId(null); void handleDeleteInvite(inv) }}>{tActions("delete")}</button>
+                        <button className="photo-del-no" onClick={e => { e.stopPropagation(); setConfirmDeleteInviteId(null) }}>{tActions("cancel")}</button>
                       </div>
                     </div>
                   )}
 
                   {/* Service type — clickable dropdown */}
-                  <div style={{ position: "relative", marginBottom: 16 }}>
+                  <div className="credit-slot-service" style={{ position: "relative", marginBottom: 16 }}>
                     <span
                       className="arco-eyebrow editable-hint"
-                      style={{ display: "inline", cursor: "pointer", paddingBottom: 1, color: inv.serviceIds.length > 0 ? undefined : "#016D75" }}
+                      style={{ display: "inline", cursor: "pointer", paddingBottom: 1, color: isEditingService || inv.serviceIds.length === 0 ? "#016D75" : undefined }}
                       onClick={e => { e.stopPropagation(); setEditingInviteField({ inviteId: inv.id, field: "service" }) }}
                     >
                       {inv.serviceName}
+                      <Pencil className="credit-edit-pencil" size={11} />
                     </span>
                     {isEditingService && (() => {
                       const groups: { label: string; items: typeof serviceDropdownOptions }[] = []
@@ -5110,7 +5788,8 @@ export default function ListingEditorPage() {
                                   return (
                                   <button
                                     key={s.id}
-                                    className={`service-row${isSelected ? " sel" : ""}${atMax ? " disabled" : ""}`}
+                                    className={`filter-dropdown-option service-opt${atMax ? " disabled" : ""}`}
+                                    data-checked={isSelected}
                                     disabled={atMax}
                                     onClick={e => {
                                       e.stopPropagation()
@@ -5132,10 +5811,12 @@ export default function ListingEditorPage() {
                                       setEditingInviteField(null)
                                     }}
                                   >
-                                    <span>{translateProfessionalService((s as any).slug ?? s.name, locale) ?? s.name}</span>
-                                    {isSelected && (
-                                      <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#016D75" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 8l4 4 8-8" /></svg>
-                                    )}
+                                    <div className="filter-dropdown-option-left">
+                                      <div className="filter-checkbox">{isSelected && (
+                                        <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2L7.5 2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                      )}</div>
+                                      <span className="filter-dropdown-label">{translateProfessionalService((s as any).slug ?? s.name, locale) ?? s.name}</span>
+                                    </div>
                                   </button>
                                   )
                                 })}
@@ -5147,21 +5828,44 @@ export default function ListingEditorPage() {
                     })()}
                   </div>
 
-                  {/* Icon */}
+                  {/* Icon — logo, else the service icon (gated per
+                      service), else initials. */}
                   <div className="credit-icon">
                     {inv.companyLogo ? (
                       <img src={inv.companyLogo} alt={inv.companyName ?? ""} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />
-                    ) : (
-                      <span className="credit-icon-initials">{initials}</span>
-                    )}
+                    ) : (() => {
+                      // Initials of an unfamiliar company say nothing; the
+                      // service mark at least says what they did here.
+                      const opt = professionalServices.find(o => o.id === inv.serviceIds[0])
+                      const ServiceIcon = resolveProfessionalServiceIcon(opt?.slug ?? opt?.name ?? null, opt?.parentName ?? null)
+                      return <ServiceIcon size={20} strokeWidth={1.5} style={{ color: "#a1a1a0" }} />
+                    })()}
                   </div>
 
                   {/* Company name — non-editable for owner, search input for others */}
-                  <div style={{ position: "relative", width: "100%", marginBottom: 6 }}>
+                  <div className="credit-slot-name" style={{ position: "relative", width: "100%", marginBottom: 6 }}>
                     <h3
                       className="arco-label"
-                      style={{ cursor: inv.isOwner ? undefined : "text", color: !inv.isOwner && !inv.companyName && !isEditingCompany ? "#b0b0ae" : undefined }}
+                      style={{
+                        cursor: inv.isOwner || (CREDITS_ADD_FLOW === "dialog" && !CREDITS_ALLOW_COMPANY_CHANGE) ? undefined : "text",
+                        color: !inv.isOwner && !inv.companyName && !isEditingCompany ? "#b0b0ae" : undefined,
+                      }}
                       onClick={inv.isOwner ? undefined : (e => {
+                        // Changing the company cascades into the service
+                        // and the invite email, so it runs through the
+                        // dialog rather than editing this field alone.
+                        if (CREDITS_ADD_FLOW === "dialog") {
+                          if (CREDITS_ALLOW_COMPANY_CHANGE) {
+                            e.stopPropagation()
+                            if (!draftCard) openChangeCreditDialog(inv)
+                            return
+                          }
+                          // Nothing to edit here. On touch let the tap
+                          // bubble so the row selects itself (tap = hover);
+                          // on desktop keep swallowing it as before.
+                          if (!window.matchMedia?.("(hover: none)").matches) e.stopPropagation()
+                          return
+                        }
                         e.stopPropagation()
                         if (!isEditingCompany) {
                           companySearchActive.current = false
@@ -5172,7 +5876,7 @@ export default function ListingEditorPage() {
                           setEditingInviteField({ inviteId: inv.id, field: "company" })
                         }
                       })}
-                      onDoubleClick={inv.isOwner ? undefined : (e => {
+                      onDoubleClick={inv.isOwner || CREDITS_ADD_FLOW === "dialog" ? undefined : (e => {
                         e.stopPropagation()
                         if (!isEditingCompany) {
                           companySearchActive.current = false
@@ -5286,6 +5990,54 @@ export default function ListingEditorPage() {
                       )}
                     </h3>
                   </div>
+
+                  {/* Email column — rows layout only. Hidden while one of
+                      the email-editing states below renders its own field
+                      in the same slot. Click opens the existing editor for
+                      pending invites; owner/accepted emails are read-only. */}
+                  {CREDITS_EDIT_LAYOUT === "rows"
+                    && pendingTier23?.inviteId !== inv.id
+                    && !(editingInviteField?.inviteId === inv.id && editingInviteField.field === "email")
+                    && (
+                    <p
+                      className="credit-slot-email arco-card-subtitle"
+                      style={{
+                        cursor: !inv.isOwner && inv.status === "invited" && !inv.isListedCompany ? "pointer" : "default",
+                      }}
+                      onClick={!inv.isOwner && inv.status === "invited" && !inv.isListedCompany
+                        ? (e => { e.stopPropagation(); setEditingInviteField({ inviteId: inv.id, field: "email" }) })
+                        : undefined}
+                      title={inv.ownerFullName ?? inv.email ?? undefined}
+                    >
+                      {(() => {
+                        // The column answers "who hears about this credit":
+                        //   project owner row  → You (whoever is editing
+                        //     does so on the owner's behalf)
+                        //   company on Arco    → the account holder's
+                        //     first name (a person, not a guess)
+                        //   otherwise          → the invite address, a
+                        //     guess the publisher can correct
+                        if (inv.isOwner) {
+                          return <span className="credit-contact-known">{tTeam("contact_you")}</span>
+                        }
+                        if (inv.ownerFirstName) {
+                          return <span className="credit-contact-known">{inv.ownerFirstName}</span>
+                        }
+                        if (!inv.email) return "—"
+                        return (
+                          <>
+                            <span className="credit-email-local">{inv.email.split("@")[0]}</span>
+                            {inv.email.includes("@") && (
+                              <span className="credit-email-domain">@{inv.email.split("@").slice(1).join("@")}</span>
+                            )}
+                            {!inv.isOwner && inv.status === "invited" && !inv.isListedCompany && (
+                              <Pencil className="credit-edit-pencil" size={11} />
+                            )}
+                          </>
+                        )
+                      })()}
+                    </p>
+                  )}
 
                   {/* Subtitle: status label or email input for pending invites */}
                   {pendingTier23?.inviteId === inv.id ? (
@@ -5427,9 +6179,16 @@ export default function ListingEditorPage() {
                         )
                       })()}
                     </p>
-                  ) : (
+                  ) : null}
+                  {/* Status pill — in rows mode it stays visible while the
+                      email editor is open (the editor lives in the email
+                      column), so the row doesn't shift on click. Grid mode
+                      keeps the old swap behavior. */}
+                  {(CREDITS_EDIT_LAYOUT === "rows"
+                    || !(pendingTier23?.inviteId === inv.id
+                      || (isEditingEmail && !inv.isOwner && inv.status === "invited" && !inv.isListedCompany))) && (
                     <>
-                      <div className="flex items-center justify-center gap-1.5" style={{ marginTop: 4 }}>
+                      <div className="credit-slot-status flex items-center justify-center gap-1.5" style={{ marginTop: 4 }}>
                         <span className="status-pill">
                           {(() => {
                             const isPublished = projectStatus === "published" || projectStatus === "completed"
@@ -5458,9 +6217,214 @@ export default function ListingEditorPage() {
               )
             })}
 
-            {/* Draft card — new professional being added */}
+            {/* Draft card — new professional being added. In dialog
+                mode the same card renders as a centered popup / mobile
+                bottom sheet over a backdrop. */}
             {draftCard && (
-              <div className="credit-card-edit">
+              <>
+                {CREDITS_ADD_FLOW === "dialog" && (
+                  <div
+                    className="add-pro-overlay"
+                    onClick={() => { setDraftCard(null); setPendingTier23(null); setEditingInviteField(null); setCompanySearchQuery(""); setCompanySearchResults([]); setGoogleResults([]); setDialogArcoCompany(null); setDialogEmailPrefix(""); setDialogEmailLoading(false); setEditingCreditId(null) }}
+                  />
+                )}
+              <div className={CREDITS_ADD_FLOW === "dialog" ? `credit-card-edit popup-card add-pro-modal${dialogCompanySelected ? " add-pro-has-company" : ""}` : "credit-card-edit"}>
+                {CREDITS_ADD_FLOW === "dialog" && (
+                  <>
+                    {/* Header — grey band, exact create-company pattern */}
+                    <div className="add-pro-modal-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 28px", flexShrink: 0, textAlign: "left" }}>
+                      <h3 className="arco-section-title" style={{ margin: 0, textAlign: "left" }}>{editingCreditId ? tTeam("change_professional") : tTeam("add_professional")}</h3>
+                      <button
+                        type="button"
+                        className="popup-close"
+                        aria-label={tActions("close")}
+                        onClick={() => { setDraftCard(null); setPendingTier23(null); setEditingInviteField(null); setCompanySearchQuery(""); setCompanySearchResults([]); setGoogleResults([]); setDialogArcoCompany(null); setDialogEmailPrefix(""); setDialogEmailLoading(false); setEditingCreditId(null) }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    {!dialogCompanySelected && (
+                      <p className="arco-body-text add-pro-modal-hint" style={{ textAlign: "left", color: "var(--arco-mid-grey)", margin: "12px 28px 16px" }}>{tTeam("add_dialog_hint")}</p>
+                    )}
+
+                    {/* Company search — form-input with inline results */}
+                    {!dialogCompanySelected && (
+                    <div className="add-pro-search" style={{ textAlign: "left", margin: "0 28px 28px" }}>
+                      <input
+                        className="form-input"
+                        style={{ width: "100%", marginBottom: 0 }}
+                        autoFocus
+                        value={companySearchQuery}
+                        onChange={e => {
+                          companySearchActive.current = true
+                          if (dialogArcoCompany) setDialogArcoCompany(null)
+                          if (pendingTier23) setPendingTier23(null)
+                          searchCompanies(e.target.value)
+                        }}
+                        placeholder={tTeam("company_search_placeholder")}
+                        disabled={dialogSaving}
+                      />
+                      {!companySearchActive.current && (
+                        <p className="add-pro-under-hint" style={{ textAlign: "left", fontSize: 13, color: "var(--arco-mid-grey)", margin: "8px 0 0" }}>{tTeam("add_dialog_typing_hint")}</p>
+                      )}
+                      {companySearchActive.current && !dialogCompanySelected
+                        && (companySearchResults.length > 0 || googleResults.length > 0 || isSearchingCompanies) && (
+                        <div className="add-pro-results">
+                          {companySearchResults.map(c => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              className="add-pro-result-row"
+                              onClick={() => {
+                                companySearchActive.current = false
+                                setPendingTier23(null)
+                                setDialogArcoCompany({
+                                  id: c.id, name: c.name, city: c.city ?? null,
+                                  logoUrl: (c as { logo_url?: string | null }).logo_url ?? null,
+                                  email: c.email ?? null, ownerId: c.owner_id ?? null,
+                                  domain: (c as { domain?: string | null }).domain ?? null,
+                                })
+                                setDraftCard(d => d ? { ...d, companyName: c.name, companyId: c.id, companyLogo: (c as { logo_url?: string | null }).logo_url ?? null } : d)
+                                setDialogEmailPrefix(c.email?.includes("@") ? c.email.split("@")[0] : "")
+                                setCompanySearchQuery(c.name)
+                                void loadCompanyServices(c.id)
+                                // No address on file → scrape the company
+                                // site for one, same as the Places path.
+                                // Skipped for free-mail domains, where
+                                // there's no site to read.
+                                const cDomain = ((c as { domain?: string | null }).domain ?? "")
+                                  .replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].toLowerCase()
+                                if (!c.email && cDomain && !BLOCKED_EMAIL_DOMAINS.includes(cDomain)) {
+                                  setDialogEmailLoading(true)
+                                  fetch(`/api/scrape-email?domain=${encodeURIComponent(cDomain)}`)
+                                    .then(r => (r.ok ? r.json() : null))
+                                    .then(j => {
+                                      const found = typeof j?.email === "string" ? j.email : null
+                                      if (found) setDialogEmailPrefix(prev => prev.trim() ? prev : found.split("@")[0])
+                                    })
+                                    .catch(() => {})
+                                    .finally(() => setDialogEmailLoading(false))
+                                }
+                              }}
+                            >
+                              <span>{c.name}{c.city ? ` · ${c.city}` : ""}</span>
+                              {c.owner_id && <span className="tier-badge arco">{tTeam("tier_on_arco")}</span>}
+                            </button>
+                          ))}
+                          {googleResults.length > 0 && companySearchResults.length > 0 && <div className="company-search-divider" />}
+                          {googleResults.map(g => (
+                            <button
+                              key={g.placeId}
+                              type="button"
+                              className="add-pro-result-row"
+                              onClick={() => {
+                                companySearchActive.current = false
+                                setDialogArcoCompany(null)
+                                setDialogEmailPrefix("")
+                                setDraftCard(d => d ? { ...d, companyName: g.name, companyLogo: null } : d)
+                                setCompanySearchQuery(g.name)
+                                handleSelectTier23Company(dialogPendingKey, g.name, g.placeId, g.city)
+                              }}
+                            >
+                              <span>{g.name}{g.city ? ` · ${g.city}` : ""}</span>
+                            </button>
+                          ))}
+                          {isSearchingCompanies && (
+                            <div className="add-pro-result-row" style={{ color: "var(--arco-mid-grey)", cursor: "default" }}>{tSpecs("searching")}</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    )}
+
+                    {/* Selected company — summary card: icon, name, change
+                        link; service + email follow as plain rows. */}
+                    {dialogCompanySelected && (
+                      <div className="add-pro-selected">
+                        <div className="credit-icon">
+                          {dialogArcoCompany?.logoUrl ? (
+                            <img src={dialogArcoCompany.logoUrl} alt={dialogArcoCompany.name} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />
+                          ) : (
+                            (() => {
+                              // Service mark, matching the credit rows —
+                              // the staged service if one is chosen, else
+                              // the company's own primary service.
+                              const opt = professionalServices.find(o => o.id === (draftCard.serviceIds?.[0] ?? inviteCompanyPrimary[dialogPendingKey]))
+                              const Icon = resolveProfessionalServiceIcon(opt?.slug ?? opt?.name ?? null, opt?.parentName ?? null)
+                              return <Icon size={20} strokeWidth={1.5} style={{ color: "#a1a1a0" }} />
+                            })()
+                          )}
+                        </div>
+                        <div className="add-pro-name-row">
+                          <span className="add-pro-name">
+                            {dialogArcoCompany?.name ?? draftCard.companyName}
+                          </span>
+                          <button
+                            type="button"
+                            className="add-pro-change"
+                            onClick={() => {
+                              setDialogArcoCompany(null)
+                              setPendingTier23(null)
+                              setDialogEmailPrefix("")
+                              setDraftCard(d => d ? { ...d, companyName: "", companyId: undefined, companyLogo: null } : d)
+                              setCompanySearchQuery("")
+                              setCompanySearchResults([])
+                              setGoogleResults([])
+                              companySearchActive.current = false
+                            }}
+                          >
+                            {tTeam("add_dialog_change")}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Email — prefix editable before the fixed @domain.
+                        Hidden for claimed companies (invite goes to the
+                        account). */}
+                    {dialogCompanySelected && !dialogArcoCompany?.ownerId && (
+                      <div className="add-pro-email">
+                        {dialogEmailDomain ? (
+                          <>
+                            <input
+                              className="add-pro-email-input"
+                              value={dialogEmailPrefix}
+                              onChange={e => setDialogEmailPrefix(e.target.value)}
+                              placeholder={dialogEmailLoading ? "…" : tTeam("name_placeholder")}
+                              disabled={dialogSaving}
+                              autoComplete="off"
+                              spellCheck={false}
+                            />
+                            <span className="add-pro-email-domain">@{dialogEmailDomain}</span>
+                          </>
+                        ) : (
+                          <input
+                            value={dialogEmailPrefix}
+                            onChange={e => setDialogEmailPrefix(e.target.value)}
+                            placeholder={tTeam("email_invite_placeholder")}
+                            disabled={dialogSaving}
+                            style={{ width: "100%" }}
+                          />
+                        )}
+                      </div>
+                    )}
+
+                    {/* Submit — only once a company is staged */}
+                    {dialogCompanySelected && (
+                    <div className="add-pro-footer" style={{ display: "flex", justifyContent: "flex-end", margin: "20px 28px 28px" }}>
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        disabled={!canSubmitDialog || dialogSaving}
+                        onClick={() => void submitAddDialog()}
+                      >
+                        {dialogSaving ? "…" : editingCreditId ? tTeam("change_professional") : tTeam("add_professional")}
+                      </button>
+                    </div>
+                    )}
+                  </>
+                )}
                 <span className="ec-badge">
                   <span className="ec-ico"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span>
                   <span className="ec-txt">{t("edit_badge")}</span>
@@ -5474,7 +6438,7 @@ export default function ListingEditorPage() {
                 </button>
 
                 {/* Service — dropdown */}
-                <div style={{ position: "relative", marginBottom: 16 }}>
+                <div className="credit-slot-service" style={{ position: "relative", marginBottom: 16 }}>
                   <span
                     className="arco-eyebrow editable-hint"
                     style={{ display: "inline", cursor: "pointer", paddingBottom: 1, color: draftCard.serviceIds.length > 0 ? undefined : "#016D75" }}
@@ -5509,7 +6473,8 @@ export default function ListingEditorPage() {
                                 return (
                                 <button
                                   key={s.id}
-                                  className={`service-row${isSelected ? " sel" : ""}${atMax ? " disabled" : ""}`}
+                                  className={`filter-dropdown-option service-opt${atMax ? " disabled" : ""}`}
+                                  data-checked={isSelected}
                                   disabled={atMax}
                                   onClick={e => {
                                     e.stopPropagation()
@@ -5535,10 +6500,12 @@ export default function ListingEditorPage() {
                                     setEditingInviteField(null)
                                   }}
                                 >
-                                  <span>{translateProfessionalService(s.slug ?? s.name, locale) ?? s.name}</span>
-                                  {isSelected && (
-                                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#016D75" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 8l4 4 8-8" /></svg>
-                                  )}
+                                  <div className="filter-dropdown-option-left">
+                                    <div className="filter-checkbox">{isSelected && (
+                                      <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2L7.5 2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                    )}</div>
+                                    <span className="filter-dropdown-label">{translateProfessionalService(s.slug ?? s.name, locale) ?? s.name}</span>
+                                  </div>
                                 </button>
                                 )
                               })}
@@ -5555,16 +6522,16 @@ export default function ListingEditorPage() {
                   {draftCard.companyLogo ? (
                     <img src={draftCard.companyLogo} alt={draftCard.companyName} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />
                   ) : (
-                    <span className="credit-icon-initials" style={{ color: draftCard.companyName ? undefined : "#d4d4d2" }}>
-                      {draftCard.companyName
-                        ? draftCard.companyName.split(" ").filter(Boolean).slice(0, 2).map((w: string) => w[0]).join("").toUpperCase()
-                        : "?"}
-                    </span>
+                    (() => {
+                      const opt = professionalServices.find(o => o.id === draftCard.serviceIds?.[0])
+                      const Icon = resolveProfessionalServiceIcon(opt?.slug ?? opt?.name ?? null, opt?.parentName ?? null)
+                      return <Icon size={20} strokeWidth={1.5} style={{ color: draftCard.companyName ? "#a1a1a0" : "#d4d4d2" }} />
+                    })()
                   )}
                 </div>
 
                 {/* Company name — search */}
-                <div style={{ position: "relative", width: "100%", marginBottom: 6 }}>
+                <div className="credit-slot-name" style={{ position: "relative", width: "100%", marginBottom: 6 }}>
                   <h3
                     className="arco-label"
                     style={{ cursor: "text", color: draftCard.companyName && !(editingInviteField?.inviteId === "__draft__" && editingInviteField.field === "company") ? undefined : "#b0b0ae" }}
@@ -5710,18 +6677,64 @@ export default function ListingEditorPage() {
                   </p>
                 )}
               </div>
+              </>
             )}
 
-            {/* Add Professional card */}
+            {CREDITS_EDIT_LAYOUT === "rows" && !professionalsLoading && !flatInvites.some(inv => !inv.isOwner) && (
+              <div
+                className="arco-banner arco-banner--highlight credits-empty"
+                style={draftCard ? { opacity: 0.4 } : undefined}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <p className="arco-banner-title">{tTeam("empty_title")}</p>
+                  <p className="arco-banner-body">{tTeam("empty_body")}</p>
+                </div>
+                {/* No dismiss: this tier leaves on its own the moment
+                    someone is credited. */}
+                <div className="arco-banner-actions">
+                  <button
+                    type="button"
+                    className="btn-tertiary btn-tertiary-accent"
+                    disabled={Boolean(draftCard)}
+                    onClick={() => {
+                      if (draftCard) return
+                      setDraftCard({ serviceIds: [], serviceName: "", companyName: "", companyLogo: null, email: "" })
+                      companySearchActive.current = false
+                      setCompanySearchQuery("")
+                      setCompanySearchResults([])
+                      setGoogleResults([])
+                      setDialogArcoCompany(null)
+                      setDialogEmailPrefix("")
+                    }}
+                  >
+                    {tTeam("add_professional")}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Add Professional card (grid layout only) */}
+            {CREDITS_EDIT_LAYOUT !== "rows" && (
             <div
               className="add-pro-tile"
-              data-tour="project-professionals"
-              onClick={() => { if (!draftCard) setDraftCard({ serviceIds: [], serviceName: "", companyName: "", companyLogo: null, email: "" }) }}
+              onClick={() => {
+                if (draftCard) return
+                setDraftCard({ serviceIds: [], serviceName: "", companyName: "", companyLogo: null, email: "" })
+                if (CREDITS_ADD_FLOW === "dialog") {
+                  companySearchActive.current = false
+                  setCompanySearchQuery("")
+                  setCompanySearchResults([])
+                  setGoogleResults([])
+                  setDialogArcoCompany(null)
+                  setDialogEmailPrefix("")
+                }
+              }}
               style={draftCard ? { opacity: 0.4, cursor: "default" } : undefined}
             >
               <Plus size={18} className="add-pro-icon" style={{ color: "#a1a1a0", marginBottom: 4, transition: "color .18s" }} />
               <span className="add-pro-label" style={{ fontSize: 12, color: "#a1a1a0", letterSpacing: ".03em", fontWeight: 400, transition: "color .18s" }}>{tTeam("add_professional")}</span>
             </div>
+            )}
           </div>
 
           {/* Dedup warning dialog */}
@@ -5737,7 +6750,7 @@ export default function ListingEditorPage() {
                 </p>
 
                 {/* Company preview */}
-                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", background: "var(--arco-off-white)", borderRadius: 6, marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", background: "var(--arco-off-white, #f7f7f5)", borderRadius: 6, marginBottom: 20 }}>
                   <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--arco-surface)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
                     {dupWarning.existingLogo ? (
                       <img src={dupWarning.existingLogo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -5832,7 +6845,7 @@ export default function ListingEditorPage() {
               style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
                 padding: "20px 28px",
-                background: "var(--arco-off-white)", borderRadius: "12px 12px 0 0", flexShrink: 0,
+                background: "var(--arco-off-white, #f7f7f5)", borderRadius: "12px 12px 0 0", flexShrink: 0,
               }}
             >
               <h3 className="arco-section-title" style={{ margin: 0 }}>{tTeam("select_services_modal_title")}</h3>
@@ -5881,7 +6894,7 @@ export default function ListingEditorPage() {
               style={{
                 display: "flex", gap: 10, justifyContent: "flex-end",
                 padding: "16px 28px", borderTop: "1px solid var(--arco-rule)",
-                background: "var(--arco-off-white)", borderRadius: "0 0 12px 12px", flexShrink: 0,
+                background: "var(--arco-off-white, #f7f7f5)", borderRadius: "0 0 12px 12px", flexShrink: 0,
               }}
             >
               <button type="button" className="btn-tertiary" onClick={() => handleServiceModalOpenChange(false)} disabled={isUpdatingServices} style={{ fontSize: 14, padding: "10px 20px" }}>
@@ -5908,7 +6921,7 @@ export default function ListingEditorPage() {
               style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
                 padding: "20px 28px",
-                background: "var(--arco-off-white)", borderRadius: "12px 12px 0 0", flexShrink: 0,
+                background: "var(--arco-off-white, #f7f7f5)", borderRadius: "12px 12px 0 0", flexShrink: 0,
               }}
             >
               <h3 className="arco-section-title" style={{ margin: 0 }}>{editingInviteId ? tTeam("invite_dialog_title_update") : tTeam("invite_dialog_title_invite")}</h3>
@@ -5960,7 +6973,7 @@ export default function ListingEditorPage() {
               style={{
                 display: "flex", gap: 10, justifyContent: "flex-end",
                 padding: "16px 28px", borderTop: "1px solid var(--arco-rule)",
-                background: "var(--arco-off-white)", borderRadius: "0 0 12px 12px", flexShrink: 0,
+                background: "var(--arco-off-white, #f7f7f5)", borderRadius: "0 0 12px 12px", flexShrink: 0,
               }}
             >
               <button type="button" className="btn-tertiary" onClick={() => handleInviteDialogChange(false)} disabled={isInviteMutating} style={{ fontSize: 14, padding: "10px 20px" }}>
@@ -6041,7 +7054,7 @@ export default function ListingEditorPage() {
           for (const pid of photoIds) taggedPhotoIds.add(pid)
         }
         const taggedCount = taggedPhotoIds.size
-        const profCount = flatInvites.length
+        const profCount = flatInvites.filter(inv => !inv.isOwner).length
 
         const required = [
           { label: tSubmit("req_project_name"), ok: Boolean(title) },
@@ -6057,7 +7070,7 @@ export default function ListingEditorPage() {
         const recommendations = [
           { label: tSubmit("rec_more_photos"), ok: photoCount >= 20 },
           { label: tSubmit("rec_tag_photos"), ok: photoCount > 0 && taggedCount === photoCount },
-          { label: tSubmit("rec_credit_more"), ok: profCount >= 5 },
+          { label: tSubmit("rec_credit_more", { count: profCount }), ok: profCount >= 1 },
         ]
 
         return (

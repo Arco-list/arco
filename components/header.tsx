@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition, type FormEvent, type Dispatch, type SetStateAction, type RefObject } from "react";
 import Image from "next/image";
+import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services";
 import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security";
 import { Link } from "@/i18n/navigation";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -44,7 +45,7 @@ export interface HeaderProps {
 
 type SearchResult = {
   projects: Array<{ id: string; title: string; slug: string; location: string | null; photo: string | null; category: string | null }>;
-  professionals: Array<{ id: string; name: string; slug: string; logo: string | null; city: string | null; service: string | null }>;
+  professionals: Array<{ id: string; name: string; slug: string; logo: string | null; city: string | null; service: string | null; serviceSlug: string | null }>;
 };
 
 function SearchOverlay({ searchQuery, setSearchQuery, inputRef, onSearch, onClose, t }: {
@@ -141,7 +142,17 @@ function SearchOverlay({ searchQuery, setSearchQuery, inputRef, onSearch, onClos
                     {p.logo ? (
                       <Image src={sanitizeImageUrl(p.logo, IMAGE_SIZES.thumbnail)} alt={p.name} width={40} height={40} className="rounded-full object-cover shrink-0" style={{ width: 40, height: 40 }} />
                     ) : (
-                      <div className="w-10 h-10 rounded-full bg-[#f5f5f4] shrink-0 flex items-center justify-center text-xs font-medium text-[#6b6b68]">{p.name.charAt(0).toUpperCase()}</div>
+                      (() => {
+                        // Service mark instead of an initial: it says what
+                        // the company does, which is what you are scanning
+                        // a result list for.
+                        const Icon = resolveProfessionalServiceIcon(p.serviceSlug ?? p.service ?? null)
+                        return (
+                          <div className="w-10 h-10 rounded-full bg-[#f5f5f4] shrink-0 flex items-center justify-center text-[#6b6b68]">
+                            <Icon size={18} strokeWidth={1.4} aria-hidden />
+                          </div>
+                        )
+                      })()
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-[#1c1c1a] truncate">{p.name}</p>
@@ -511,11 +522,32 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                     // needing to open it. Hidden when the sum is 0.
                     const groupBadge = item.children.reduce((sum, c) => sum + (c.badge ?? 0), 0)
                     return (
-                      <div key={item.label} data-nav-group className="relative">
+                      // Opens on hover for pointer users. The click handler
+                      // stays: it is the only way in on touch, where
+                      // mouseenter does not fire reliably, and it keeps the
+                      // control operable from the keyboard.
+                      <div
+                        key={item.label}
+                        data-nav-group
+                        className="relative"
+                        onMouseEnter={() => {
+                          // Touch browsers fire mouseenter on tap, immediately
+                          // followed by click — which would toggle the menu
+                          // straight back shut and make it unopenable. Hover
+                          // opening is for pointer devices; tap uses onClick.
+                          if (window.matchMedia?.("(hover: hover) and (pointer: fine)").matches) {
+                            setOpenGroup(item.label)
+                          }
+                        }}
+                        onMouseLeave={() => setOpenGroup((cur) => (cur === item.label ? null : cur))}
+                      >
                         <button
                           type="button"
+                          aria-expanded={isOpen}
+                          aria-haspopup="menu"
+                          onFocus={() => setOpenGroup(item.label)}
                           onClick={() => setOpenGroup(isOpen ? null : item.label)}
-                          className={`flex items-center gap-1 text-sm font-normal whitespace-nowrap transition-colors ${
+                          className={`header-rule flex items-center gap-1 text-sm font-normal whitespace-nowrap transition-colors ${
                             isActive || isOpen
                               ? "text-primary"
                               : transparent && !isScrolled ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
@@ -532,8 +564,14 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                           </svg>
                         </button>
                         {isOpen && (
-                          <div className="absolute left-0 top-full z-50 w-52 border border-border bg-white shadow-lg mt-2">
-                            <div className="py-2">
+                          // pt-[17px] both drops the panel to the header's
+                          // bottom border and bridges the space above it —
+                          // as padding on a descendant, crossing it no
+                          // longer fires the group's mouseleave. The old
+                          // mt-2 was a dead zone that closed the menu on
+                          // the way to it.
+                          <div className="absolute left-0 top-full z-50 pt-[17px]">
+                            <div className="w-52 border border-border bg-white shadow-lg py-2">
                               {item.children.map((child) => {
                                 const childPath = child.href.split("?")[0]
                                 const childActive = pathname === childPath
@@ -566,7 +604,9 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                     <Link
                       key={item.href}
                       href={item.href}
-                      className={`text-sm font-normal whitespace-nowrap transition-colors ${
+                      // .header-rule draws the hover rule on the header's
+                      // bottom border, matching the sub-nav tab indicator.
+                      className={`header-rule text-sm font-normal whitespace-nowrap transition-colors ${
                         isActive
                           ? "text-primary"
                           : transparent && !isScrolled ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
@@ -588,7 +628,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
               {(!isLoggedIn || companies.length === 0) && (
                 <Link
                   href="/businesses/architects"
-                  className={`hidden md:inline-flex text-sm font-normal whitespace-nowrap transition-colors ${
+                  className={`header-rule hidden md:inline-flex text-sm font-normal whitespace-nowrap transition-colors ${
                     transparent && !isScrolled ? "text-white hover:text-white/80" : "text-primary hover:opacity-70"
                   }`}
                 >
@@ -600,7 +640,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
               {/* Search Icon */}
               <button
                 onClick={toggleSearch}
-                className={`flex items-center justify-center h-8 transition-colors ${
+                className={`header-rule flex items-center justify-center transition-colors ${
                   transparent && !isScrolled ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
                 }`}
                 aria-label="Search"

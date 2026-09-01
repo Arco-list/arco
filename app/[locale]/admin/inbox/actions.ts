@@ -996,3 +996,253 @@ export async function markInboundEmailUnread(id: string): Promise<{ success: boo
   if (error) return { success: false, error: error.message }
   return { success: true }
 }
+
+// ── Contact-card email compose ──────────────────────────────────────
+// The card's Email pill reuses the inbox Respond flow: when the contact
+// has an inbound thread, the send goes through sendReply (threaded via
+// Message-ID/threadId, marks the row replied); a first-touch email goes
+// out fresh via Gmail and lands in the prospect timeline.
+
+export type ContactThreadItem = {
+  direction: "in" | "out"
+  subject: string | null
+  body: string
+  at: string
+}
+
+export async function getContactEmailThread(email: string | string[]): Promise<{
+  success: boolean
+  items: ContactThreadItem[]
+  /** Latest inbound row — replies thread onto this via sendReply. */
+  latestInboundId: string | null
+  error?: string
+}> {
+  // Accepts the contact's full address set (primary + aliases) — an
+  // alias's thread otherwise looked like "no thread" on the merged
+  // card and the popup opened in fresh-compose mode (Grego).
+  const addresses = (Array.isArray(email) ? email : [email])
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean)
+  if (addresses.length === 0) return { success: false, items: [], latestInboundId: null, error: "email required" }
+  const supabase = createServiceRoleSupabaseClient()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("inbound_emails")
+    .select("id, subject, snippet, body_text, received_at, replied_at, replied_text")
+    .or(addresses.map((e) => `from_email.ilike.${e}`).join(","))
+    .order("received_at", { ascending: true })
+    .limit(20)
+  if (error) return { success: false, items: [], latestInboundId: null, error: error.message }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = (data ?? []) as any[]
+  const items: ContactThreadItem[] = []
+  for (const r of rows) {
+    items.push({ direction: "in", subject: r.subject ?? null, body: r.body_text || r.snippet || "", at: r.received_at })
+    if (r.replied_text) {
+      items.push({ direction: "out", subject: r.subject ? `Re: ${r.subject}` : null, body: r.replied_text, at: r.replied_at ?? r.received_at })
+    }
+  }
+  return { success: true, items, latestInboundId: rows.length > 0 ? rows[rows.length - 1].id : null }
+}
+
+/** Plain-text signature for manual composes. Gmail API raw sends skip
+ *  Gmail's own signature settings, so we append one ourselves — after
+ *  stripping the draft's bare "Niek" sign-off to avoid double-signing.
+ *  ("--" is the standard sig separator; clients render it muted.) */
+const MANUAL_EMAIL_SIGNATURE = "--\nNiek van Leeuwen\nArco · www.arcolist.com"
+
+function applyManualSignature(body: string): string {
+  const trimmed = body.trim().replace(/\n\s*Niek[.,!]?\s*$/i, "").trimEnd()
+  return `${trimmed}\n\nNiek\n\n${MANUAL_EMAIL_SIGNATURE}`
+}
+
+export async function sendContactEmail(input: {
+  email: string
+  /** Full address set (primary + aliases) for thread detection. */
+  contactEmails?: string[]
+  prospectId?: string | null
+  subject: string
+  bodyText: string
+}): Promise<{ success: boolean; error?: string }> {
+  const email = input.email.trim()
+  const bodyText = input.bodyText.trim() ? applyManualSignature(input.bodyText) : ""
+  if (!email || !bodyText) return { success: false, error: "Missing recipient or body" }
+  const supabase = createServiceRoleSupabaseClient()
+
+  // Existing thread → the proven reply path (threading, replied status,
+  // few-shot voice memory). Matched across all the contact's addresses;
+  // sendReply answers the thread's own from_email.
+  const addresses = Array.from(new Set([email, ...(input.contactEmails ?? [])]
+    .map((e) => e.trim().toLowerCase()).filter(Boolean)))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: latest } = await (supabase as any)
+    .from("inbound_emails")
+    .select("id")
+    .or(addresses.map((e) => `from_email.ilike.${e}`).join(","))
+    .order("received_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (latest?.id) return await sendReply(latest.id, bodyText)
+
+  const subject = input.subject.trim()
+  if (!subject) return { success: false, error: "Subject is required for a new email" }
+  try {
+    const { sendGmailReply } = await import("@/lib/gmail/send")
+    // Personal founder mail goes out as niek@ — hello@ is the
+    // transactional/support identity. Falls back to the oldest
+    // connection if niek@ isn't connected.
+    await sendGmailReply(supabase, { to: email, subject, bodyText, preferredAddress: "niek@arcolist.com" })
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Send failed" }
+  }
+
+  if (input.prospectId) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from("prospect_events").insert({
+      prospect_id: input.prospectId,
+      event_type: "email_sent",
+      event_source: "admin",
+      metadata: { template: "manual-compose", subject, email },
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from("prospects").update({ last_outbound_at: new Date().toISOString() }).eq("id", input.prospectId)
+  }
+  return { success: true }
+}
+
+/**
+ * Draft a NEW outbound email (no inbound thread) for the contact-card
+ * compose popup — same voice machinery as generateReplyDraft (founder
+ * tone, few-shot from Niek's real sent replies, refine mode on edits)
+ * but prompted as a first-touch/follow-up instead of a reply. When the
+ * admin left the subject empty, the model proposes one (returned as
+ * suggestedSubject, parsed off a leading "SUBJECT:" line).
+ */
+export async function generateComposeDraft(input: {
+  email: string
+  prospectId?: string | null
+  subject?: string
+  userEdit?: string
+}): Promise<{ success: boolean; draft?: string; suggestedSubject?: string; error?: string }> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return { success: false, error: "ANTHROPIC_API_KEY not set" }
+  }
+  const supabase = createServiceRoleSupabaseClient()
+  const email = input.email.trim()
+
+  let prospectContext = ""
+  let contactName: string | null = null
+  if (input.prospectId) {
+    const { data: p } = await supabase
+      .from("prospects")
+      .select("contact_name, company_name, status, source, sequence_status, last_email_sent_at, emails_sent")
+      .eq("id", input.prospectId)
+      .maybeSingle()
+    if (p) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pr = p as any
+      contactName = pr.contact_name ?? null
+      prospectContext = [
+        pr.contact_name ? `Contact: ${pr.contact_name}` : null,
+        pr.company_name ? `Company: ${pr.company_name}` : null,
+        pr.status ? `Funnel stage: ${pr.status}` : null,
+        pr.source ? `Channel: ${pr.source} (arco=Showcase, invites=Invite, apollo=Outreach)` : null,
+        pr.sequence_status ? `Drip sequence: ${pr.sequence_status}` : null,
+        typeof pr.emails_sent === "number" ? `Automated emails already sent: ${pr.emails_sent}` : null,
+        pr.last_email_sent_at ? `Last automated email: ${pr.last_email_sent_at}` : null,
+      ].filter(Boolean).join("\n")
+    }
+  }
+
+  const locale: "nl" | "en" =
+    email.endsWith(".nl") || email.endsWith(".be") || prospectContext ? "nl" : "en"
+
+  // Few-shot voice grounding — same real Niek-edited replies used by
+  // generateReplyDraft.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: examples } = await (supabase as any)
+    .from("inbound_emails")
+    .select("subject, from_name, from_email, body_text, snippet, replied_text")
+    .not("replied_text", "is", null)
+    .order("replied_at", { ascending: false })
+    .limit(5)
+  type FewShotExample = { userMsg: string; assistantMsg: string }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fewShot: FewShotExample[] = ((examples ?? []) as any[])
+    .map((ex) => {
+      const exBody = (ex.body_text || ex.snippet || "").toString().trim()
+      const exReply = (ex.replied_text || "").toString().trim()
+      if (!exBody || !exReply) return null
+      return {
+        userMsg: `Example of an email Niek replied to:\n${exBody.slice(0, 1500)}`,
+        assistantMsg: exReply.slice(0, 1500),
+      } as FewShotExample
+    })
+    .filter((x): x is FewShotExample => x !== null)
+
+  const subjectGiven = (input.subject ?? "").trim()
+  const userEditTrimmed = (input.userEdit ?? "").trim()
+
+  const systemPrompt = [
+    "You are Niek van Leeuwen, founder of Arco — a curated professional network for architects in the Netherlands.",
+    "You're drafting a NEW outbound email to a professional (no prior thread). Voice: friendly, direct, brief, founder-style. Short paragraphs. First person.",
+    "Sign off with just 'Niek' on its own line — no full name, no title.",
+    `Write in ${locale === "nl" ? "Dutch" : "English"}.`,
+    "Keep it short — 3 to 6 sentences. One clear purpose, one clear next step. No pressure tactics.",
+    subjectGiven
+      ? "A subject is already chosen by the admin — write the body for that topic. Return only the email body."
+      : 'No subject chosen yet: return the email as a first line "SUBJECT: <short subject>" followed by an empty line, then the body.',
+    "Open with the contact's first name when known (e.g. 'Hi Marieke,').",
+    fewShot.length > 0
+      ? "The assistant turns below are real Niek-written emails. Match tone, length, and how Niek opens/closes — don't copy phrasing verbatim."
+      : "",
+  ].filter(Boolean).join("\n")
+
+  const userMessage = [
+    prospectContext ? `Recipient context:\n${prospectContext}\n` : `Recipient: ${contactName ?? email}\n`,
+    `To: ${email}`,
+    subjectGiven ? `Subject (chosen): ${subjectGiven}` : "Subject: (propose one)",
+    userEditTrimmed
+      ? [
+          "",
+          "---",
+          "I've been refining the previous draft. My current version is below.",
+          "Improve it while KEEPING my direction, opener, key points and sign-off.",
+          "",
+          "My current draft:",
+          userEditTrimmed,
+        ].join("\n")
+      : null,
+  ].filter((s) => s !== null).join("\n")
+
+  try {
+    const Anthropic = (await import("@anthropic-ai/sdk")).default
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    const messages: { role: "user" | "assistant"; content: string }[] = []
+    for (const ex of [...fewShot].reverse()) {
+      messages.push({ role: "user", content: ex.userMsg })
+      messages.push({ role: "assistant", content: ex.assistantMsg })
+    }
+    messages.push({ role: "user", content: userMessage })
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 700,
+      system: systemPrompt,
+      messages,
+    })
+    let draft = response.content
+      .filter((c) => c.type === "text")
+      .map((c) => (c as { text: string }).text)
+      .join("")
+      .trim()
+    let suggestedSubject: string | undefined
+    const m = draft.match(/^SUBJECT:\s*(.+)\n+/i)
+    if (m) {
+      suggestedSubject = m[1].trim()
+      draft = draft.slice(m[0].length).trim()
+    }
+    return { success: true, draft, suggestedSubject }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Draft generation failed" }
+  }
+}

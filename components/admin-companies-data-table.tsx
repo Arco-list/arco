@@ -631,7 +631,9 @@ function DomainCell({ company, onVerify, onRefresh }: { company: AdminCompanyRow
     const trimmed = normalizeDomain(value)
     if (trimmed === normalizeDomain(company.domain)) return
     const supabase = getBrowserSupabaseClient()
-    await supabase.from("companies").update({ domain: trimmed || null } as any).eq("id", company.id)
+    // Website follows the domain — the external-link arrows (here and
+    // on Sales/Inbox) prefer companies.website over domain.
+    await supabase.from("companies").update({ domain: trimmed || null, ...(trimmed ? { website: `https://${trimmed}` } : {}) } as any).eq("id", company.id)
     toast.success("Domain updated")
     onRefresh()
   }
@@ -690,6 +692,12 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   // top-level mount renders the panel.
   const contactParam = useContactParam()
   const [showAddModal, setShowAddModal] = useState(false)
+  // Inline name edit, opened from the company-name menu. Mirrors
+  // DomainCell: edit in place in the table rather than in a dialog.
+  const [editingName, setEditingName] = useState<{ id: string; value: string } | null>(null)
+  // The company menu is controlled so a click anywhere on the row can
+  // open it, anchored to that row's "…" trigger.
+  const [menuRowId, setMenuRowId] = useState<string | null>(null)
   const [sorting, setSorting] = useState<SortingState>([{ id: "created", desc: true }])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
@@ -930,6 +938,67 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   }
 
   const columns = useMemo<ColumnDef<AdminCompanyRow>[]>(() => {
+    // Row actions, shared by the "…" button and the company-name
+    // trigger so the two menus can never drift apart.
+    const renderCompanyMenuItems = (company: AdminCompanyRow) => {
+      const publicUrl = company.slug ? `/professionals/${company.slug}` : null
+      return (
+        <>
+          {publicUrl && (
+            <DropdownMenuItem asChild>
+              <a href={publicUrl} target="_blank" rel="noopener noreferrer">
+                View company
+              </a>
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem
+            onClick={async () => {
+              const result = await generateCompanyLoginLinkAction({ companyId: company.id })
+              if (result.success && result.loginUrl) {
+                await navigator.clipboard.writeText(result.loginUrl)
+                toast.success("Login link copied — paste in an incognito window")
+              } else {
+                toast.error(result.error ?? "Failed to generate login link")
+              }
+            }}
+          >
+            Copy login link
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <a href={`/dashboard/company?company_id=${company.id}`} target="_blank" rel="noopener noreferrer">
+              Edit company
+            </a>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => setStatusChange({ company, selectedStatus: (company.status === "invited" ? "unlisted" : company.status) as CompanyStatus })}
+            disabled={isPending}
+          >
+            Update status
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => { setChangeOwnerCompany(company); setChangeOwnerEmail("") }}
+          >
+            Change owner
+          </DropdownMenuItem>
+          {company.ownerName && (
+            <DropdownMenuItem
+              className="text-red-600 focus:text-red-600"
+              onClick={() => setRemoveOwnerCompany(company)}
+            >
+              Remove owner
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="text-red-600 focus:text-red-600"
+            onClick={() => { setDeleteCompany(company); setDeleteConfirmText("") }}
+          >
+            Delete
+          </DropdownMenuItem>
+        </>
+      )
+    }
+
     return [
       {
         id: "select",
@@ -1006,13 +1075,37 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               )}
               <div className="flex flex-col min-w-0">
                 <span className="flex items-center gap-1 min-w-0">
-                  {company.slug && company.type === "company" ? (
-                    <Link
-                      href={`/professionals/${company.slug}`}
-                      className="arco-table-primary arco-table-primary--wrap hover:text-[#016D75] transition-colors"
+                  {editingName?.id === company.id ? (
+                    <input
+                      autoFocus
+                      className="arco-table-primary border-b border-[#016D75] bg-transparent outline-none min-w-0 flex-1"
+                      value={editingName.value}
+                      onChange={(e) => setEditingName({ id: company.id, value: e.target.value })}
+                      onBlur={async () => {
+                        const trimmed = editingName.value.trim()
+                        setEditingName(null)
+                        if (!trimmed || trimmed === company.name) return
+                        const supabase = getBrowserSupabaseClient()
+                        const { error } = await supabase.from("companies").update({ name: trimmed } as any).eq("id", company.id)
+                        if (error) { toast.error(error.message); return }
+                        toast.success("Name updated")
+                        router.refresh()
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur()
+                        if (e.key === "Escape") setEditingName(null)
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : company.type === "company" ? (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setEditingName({ id: company.id, value: company.name }) }}
+                      className="arco-table-primary arco-table-primary--wrap hover:text-[#016D75] transition-colors text-left cursor-pointer bg-transparent border-none p-0"
+                      title="Click to edit name"
                     >
                       {company.name}
-                    </Link>
+                    </button>
                   ) : (
                     <span className="arco-table-primary arco-table-primary--wrap">{company.name}</span>
                   )}
@@ -1429,65 +1522,18 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           const isDeactivated = company.status === "deactivated"
 
           return (
-            <DropdownMenu>
+            <DropdownMenu
+              open={menuRowId === company.id}
+              onOpenChange={(open) => setMenuRowId(open ? company.id : null)}
+            >
               <DropdownMenuTrigger asChild>
-                <button className="arco-table-action" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <button className="arco-table-action" style={{ display: "flex", alignItems: "center", justifyContent: "center" }} onClick={(e) => e.stopPropagation()}>
                   <MoreHorizontal className="h-4 w-4" />
                   <span className="sr-only">Open menu</span>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                {publicUrl && (
-                  <DropdownMenuItem asChild>
-                    <a href={publicUrl} target="_blank" rel="noopener noreferrer">
-                      View company
-                    </a>
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem
-                  onClick={async () => {
-                    const result = await generateCompanyLoginLinkAction({ companyId: company.id })
-                    if (result.success && result.loginUrl) {
-                      await navigator.clipboard.writeText(result.loginUrl)
-                      toast.success("Login link copied — paste in an incognito window")
-                    } else {
-                      toast.error(result.error ?? "Failed to generate login link")
-                    }
-                  }}
-                >
-                  Copy login link
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <a href={`/dashboard/company?company_id=${company.id}`} target="_blank" rel="noopener noreferrer">
-                    Edit company
-                  </a>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setStatusChange({ company, selectedStatus: (company.status === "invited" ? "unlisted" : company.status) as CompanyStatus })}
-                  disabled={isPending}
-                >
-                  Update status
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => { setChangeOwnerCompany(company); setChangeOwnerEmail("") }}
-                >
-                  Change owner
-                </DropdownMenuItem>
-                {company.ownerName && (
-                  <DropdownMenuItem
-                    className="text-red-600 focus:text-red-600"
-                    onClick={() => setRemoveOwnerCompany(company)}
-                  >
-                    Remove owner
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-red-600 focus:text-red-600"
-                  onClick={() => { setDeleteCompany(company); setDeleteConfirmText("") }}
-                >
-                  Delete
-                </DropdownMenuItem>
+                {renderCompanyMenuItems(company)}
               </DropdownMenuContent>
             </DropdownMenu>
           )
@@ -1496,7 +1542,10 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         enableHiding: false,
       },
     ]
-  }, [isPending])
+  // editingName is read inside the name cell, so the column defs must
+  // rebuild when it changes — otherwise the cell closes over a stale
+  // null and the inline input never appears.
+  }, [isPending, editingName, menuRowId, router])
 
   const table = useReactTable({
     data: filteredData,
@@ -2205,7 +2254,15 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           <tbody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id}>
+                <tr
+                  key={row.id}
+                  onClick={(e) => {
+                    if (row.original.type === "invite") return
+                    if ((e.target as HTMLElement).closest("button, a, input, select, textarea, [role='menuitem']")) return
+                    setMenuRowId(row.original.id)
+                  }}
+                  style={row.original.type === "invite" ? undefined : { cursor: "pointer" }}
+                >
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} style={cell.column.id === "select" ? { width: 32, paddingRight: 0 } : undefined}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}

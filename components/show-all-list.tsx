@@ -23,7 +23,7 @@ export function ShowAllList({ cap, locale, children }: {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="inline-flex items-center gap-1.5 text-[13px] text-[#016D75] hover:text-[#014f55] transition-colors bg-transparent border-none cursor-pointer p-0"
+        className="arco-text-link arco-text-link--primary"
         style={{ marginTop: 4 }}
       >
         {/* Same affordance as the FAQ / Read more toggle: a + that
@@ -41,7 +41,10 @@ export function ShowAllList({ cap, locale, children }: {
         >
           +
         </span>
-        {open ? (nl ? "Toon minder" : "Show less") : (nl ? "Toon alles" : "Show all")}
+        {/* Labelled so the hover rule lands on the words, not the plus. */}
+        <span className="arco-text-link-label">
+          {open ? (nl ? "Toon minder" : "Show less") : (nl ? "Toon alles" : "Show all")}
+        </span>
       </button>
     </>
   )

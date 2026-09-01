@@ -286,6 +286,7 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
           description={professional.description}
           companyIcon={companyIcon}
           companyInitials={companyInitials}
+          primaryServiceSlug={(professional.company as { primaryServiceSlug?: string | null }).primaryServiceSlug ?? null}
         />
 
         {isPhotographer ? (

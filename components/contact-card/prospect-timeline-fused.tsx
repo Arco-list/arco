@@ -1,6 +1,7 @@
 "use client"
 
 import { Pause, Play, RotateCcw } from "lucide-react"
+import { EmailComposeModal } from "./email-compose-modal"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import {
@@ -93,6 +94,7 @@ export function ProspectTimelineFused({ prospectId, email, emails, contactLabel,
   >({ kind: "loading" })
   const [preview, setPreview] = useState<{ template: string; lang: "en" | "nl" } | null>(null)
   const [logOpen, setLogOpen] = useState(false)
+  const [emailOpen, setEmailOpen] = useState(false)
   // Bumped whenever the modal saves a new log — the outbound_contact_log
   // trigger updates prospects.last_outbound_at, so re-firing the bundle
   // fetch surfaces the new row in the Timeline stream immediately.
@@ -109,7 +111,7 @@ export function ProspectTimelineFused({ prospectId, email, emails, contactLabel,
       fetchProspectById(prospectId),
       fetchProspectEvents(prospectId),
       getProspectSequence(prospectId),
-      fetchProspectInboundEmails(prospectId),
+      fetchProspectInboundEmails(prospectId, emailsKey.split("\n")),
       getTransactionalEmails(emailsKey.split("\n")),
     ])
       .then(async ([prospect, eventsResult, sequenceResult, inboundResult, transactionalResult]) => {
@@ -156,6 +158,7 @@ export function ProspectTimelineFused({ prospectId, email, emails, contactLabel,
         prospectId={prospectId}
         onLogOutbound={() => setLogOpen(true)}
         onSequenceActionComplete={() => { setReloadTick((n) => n + 1); onMutated?.() }}
+        onEmail={() => setEmailOpen(true)}
       />
       <div>
         <SectionLabel>Timeline</SectionLabel>
@@ -189,6 +192,16 @@ export function ProspectTimelineFused({ prospectId, email, emails, contactLabel,
           }}
         />
       )}
+      {emailOpen && (
+        <EmailComposeModal
+          email={email}
+          emails={emailsKey.split("\n")}
+          contactLabel={contactLabel ?? null}
+          prospectId={prospectId}
+          onClose={() => setEmailOpen(false)}
+          onSent={() => { setReloadTick((n) => n + 1); onMutated?.() }}
+        />
+      )}
     </>
   )
 }
@@ -199,11 +212,13 @@ function ActivitySection({
   bundle,
   prospectId,
   onLogOutbound,
+  onEmail,
   onSequenceActionComplete,
 }: {
   bundle: Bundle
   prospectId: string
   onLogOutbound?: () => void
+  onEmail?: () => void
   onSequenceActionComplete?: () => void
 }) {
   const p = bundle.prospect
@@ -245,7 +260,7 @@ function ActivitySection({
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <SectionLabel>Activity</SectionLabel>
         {onLogOutbound && (
           <button
@@ -255,6 +270,16 @@ function ActivitySection({
             title="Log outbound"
           >
             Log
+          </button>
+        )}
+        {onEmail && (
+          <button
+            type="button"
+            onClick={onEmail}
+            className="shrink-0 rounded-[12px] border border-[#016D75] text-[#016D75] text-[10px] font-medium px-2 py-[2px] leading-normal cursor-pointer hover:bg-[#f0f7f6] transition-colors"
+            title="Send email"
+          >
+            Email
           </button>
         )}
       </div>
@@ -455,6 +480,29 @@ function TimelineStream({
     } as ProspectEvent,
   }))
 
+  // The admin's replies (Respond popup / contact-card Email) live as
+  // replied_text on the inbound row — surface each as its own "Email
+  // replied" entry at replied_at, so a sent reply is visible in the
+  // stream instead of only flipping the inbound row's status.
+  const replyRows: StreamRow[] = bundle.inboundEmails
+    .filter((m) => m.replied_text)
+    .map((m) => ({
+      kind: "event" as const,
+      ts: m.replied_at ?? m.received_at,
+      key: `inbound-reply-${m.id}`,
+      event: {
+        id: `admin-replied-${m.id}`,
+        prospect_id: prospect?.id ?? "",
+        event_type: "admin_replied",
+        created_at: m.replied_at ?? m.received_at,
+        metadata: {
+          replied_text: m.replied_text,
+          original_subject: m.subject,
+          inbound_email_id: m.id,
+        },
+      } as ProspectEvent,
+    }))
+
   // Chapter dividers already carry every lifecycle transition:
   // stage row = "PROSPECT" / "CONTACTED" / "VISITOR" / "SIGNUP" /
   // "CREATED" / "LISTED" at the correct timestamp. Drop every event
@@ -498,7 +546,12 @@ function TimelineStream({
   const inboundById = new Map(bundle.inboundEmails.map((m) => [m.id, m]))
   const enrichedEvents = bundle.events
     .filter((ev) => ev.event_type !== "replied")
-    .filter((ev) => ev.event_type !== "email_sent" && ev.event_type !== "email_resent")
+    .filter((ev) => {
+      if (ev.event_type !== "email_sent" && ev.event_type !== "email_resent") return true
+      // Sequence sends are covered by the sequence rows — but manual
+      // composes from the Email popup only exist as this event.
+      return (ev.metadata as { template?: string } | null)?.template === "manual-compose"
+    })
     .filter((ev) => !CHAPTER_EVENT_TYPES.has(ev.event_type) && !ev.event_type.startsWith("status_changed_to_"))
     .map((ev) => {
       if (ev.event_type !== "admin_replied") return ev
@@ -531,7 +584,7 @@ function TimelineStream({
     row: t,
   }))
 
-  const rows: StreamRow[] = [...stageRows, ...sequenceRows, ...scheduledRows, ...inboundRows, ...eventRows, ...transactionalRows]
+  const rows: StreamRow[] = [...stageRows, ...sequenceRows, ...scheduledRows, ...inboundRows, ...replyRows, ...eventRows, ...transactionalRows]
     .sort((a, b) => b.ts.localeCompare(a.ts))
 
   if (rows.length === 0) {

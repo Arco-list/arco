@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       .limit(MAX_RESULTS),
     supabase
       .from("mv_professional_summary")
-      .select("company_id_full, company_name, company_slug, company_logo, company_city, company_state_region, primary_service_name, primary_service_name_nl, company_status")
+      .select("company_id_full, company_name, company_slug, company_logo, company_city, company_state_region, primary_service_name, primary_service_name_nl, primary_specialty_slug, company_status")
       .in("company_status", ["listed", "prospected"])
       .or(`company_name.ilike.${pattern},company_city.ilike.${pattern},company_state_region.ilike.${pattern},primary_service_name.ilike.${pattern},primary_service_name_nl.ilike.${pattern}`)
       .limit(MAX_RESULTS * 2), // fetch extra to account for dedup
@@ -61,6 +61,9 @@ export async function GET(request: NextRequest) {
       logo: p.company_logo,
       city: p.company_city,
       service: p.primary_service_name,
+      // Real categories.slug — the icon must not depend on a localised
+      // display name. Named serviceSlug because `slug` is the company's.
+      serviceSlug: p.primary_specialty_slug,
     })),
   })
 }
