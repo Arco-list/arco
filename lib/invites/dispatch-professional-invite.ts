@@ -84,6 +84,51 @@ async function markInviteDispatched(
   if (error) console.error("markInviteDispatched failed", error.message)
 }
 
+/**
+ * Atomically claim a credit for sending. Returns true only for the caller
+ * that won.
+ *
+ * Reading `invite_dispatched_at` and then sending is a check-then-act with
+ * a gap: the sweep reads every credit's stamp once before its loop, and
+ * writes it only after the email is away, so two overlapping runs both see
+ * null and both send. That is not hypothetical — publishing "Modern Huis
+ * in Noordwijk" on 25 Aug 2026 sent Riho, Buitenhuis and Steellife two
+ * intros each, 9-15s apart, with distinct Resend message ids. The
+ * cold-recipient guard doesn't cover it either: the second run clears that
+ * check before the first run's send reaches email_events.
+ *
+ * The conditional UPDATE is a single statement, so concurrency cannot
+ * split it. Whoever flips null → timestamp owns the send; everyone else
+ * gets zero rows back and skips.
+ */
+async function claimInviteForDispatch(
+  supabase: Supabase,
+  creditId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("project_professionals")
+    .update({ invite_dispatched_at: new Date().toISOString() })
+    .eq("id", creditId)
+    .is("invite_dispatched_at", null)
+    .select("id")
+  if (error) {
+    console.error("claimInviteForDispatch failed", error.message)
+    return false
+  }
+  return (data?.length ?? 0) > 0
+}
+
+/** Hand a claim back when the send didn't happen, so a later run retries.
+ *  Without this a failed send leaves the credit stamped and silently
+ *  never-sent — the exact failure the dispatch sweep exists to prevent. */
+async function releaseInviteClaim(supabase: Supabase, creditId: string): Promise<void> {
+  const { error } = await supabase
+    .from("project_professionals")
+    .update({ invite_dispatched_at: null })
+    .eq("id", creditId)
+  if (error) console.error("releaseInviteClaim failed", error.message)
+}
+
 /** Resolve project-shaped variables once; reused for every email in the
  *  series. Returns nullish when the project is missing or unpublished. */
 async function resolveInviteContext(supabase: Supabase, projectId: string) {
@@ -548,6 +593,16 @@ export async function dispatchPendingInvitesForProject(
         .maybeSingle()
       if (recentChain) { skipped++; continue }
     }
+    // Claim before sending, never after. The stamp is the lock; see
+    // claimInviteForDispatch. `credit.invite_dispatched_at` above was read
+    // before the loop and is only a cheap early-out — this is the check
+    // that actually holds under concurrency.
+    if (!(await claimInviteForDispatch(supabase, credit.id))) { skipped++; continue }
+    // Keep the claim when the outcome is terminal, release it when the
+    // send merely failed. An opted-out recipient must stay retired —
+    // releasing them would have this loop re-claim, re-check and re-release
+    // the same credit every hour forever.
+    let keepClaim = false
     try {
       const result = await dispatchProfessionalInvite(supabase, {
         recipientEmail: credit.invited_email,
@@ -556,11 +611,16 @@ export async function dispatchPendingInvitesForProject(
         recipientCompanyId: credit.company_id ?? undefined,
         creditId: credit.id,
       })
+      keepClaim = result.success || result.reason === "recipient opted out"
       if (result.success) dispatched++
       else skipped++
     } catch {
       skipped++
     }
+    // Nothing went out and nothing retired it — hand the claim back so a
+    // later run retries, rather than leaving the credit stamped and
+    // permanently silent.
+    if (!keepClaim) await releaseInviteClaim(supabase, credit.id)
   }
   return { dispatched, skipped }
 }
