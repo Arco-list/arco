@@ -531,11 +531,17 @@ export async function dispatchPendingInvitesForProject(
       ? await supabase.from("companies").select("owner_id").eq("id", credit.company_id).maybeSingle()
       : { data: null }
     if (!recipientCompany?.owner_id) {
+      // Deliberately template-agnostic. Keying this on
+      // `new-professional-invite` missed two things: an address already
+      // mid-outreach would still get an invite stacked on top, and
+      // `template` is NULL on every email_events row before 6 May 2026
+      // (446 sends across 116 recipients), so anything from that era
+      // read as "never contacted". Any `sent` event inside the window is
+      // reason enough not to add another chain.
       const { data: recentChain } = await supabase
         .from("email_events")
         .select("id")
         .eq("recipient_email", email)
-        .eq("template", "new-professional-invite")
         .eq("event_type", "sent")
         .gte("occurred_at", recentSince)
         .limit(1)
