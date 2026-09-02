@@ -51,7 +51,7 @@ export function HeaderLanguageSwitcher({ isLight }: { isLight?: boolean }) {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className={`header-rule flex items-center justify-center gap-1.5 text-sm font-normal transition-colors ${
+        className={`header-rule flex items-center justify-center h-8 gap-1.5 text-sm font-normal transition-colors ${
           isLight ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
         }`}
         style={{

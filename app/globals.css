@@ -516,11 +516,14 @@ p a:hover {
    17px above the border (16px of the header's py-4, plus the 1px border
    itself). Without this the rule would sit at a different height under
    the search icon than under the nav links. */
+/* Deliberately does NOT set `display`. This rule is unlayered, so a
+   `display` here beats Tailwind's layered `hidden` and every control
+   wearing the class becomes permanently visible — which is exactly what
+   happened to "List with us" below 768px. The 32px height the ::after
+   offset depends on comes from `h-8 inline-flex items-center` on each
+   control instead, where `hidden` can still win. */
 .header-rule {
   position: relative;
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
 }
 
 .header-rule::after {
@@ -6762,9 +6765,28 @@ body.no-scroll {
    DATA TABLE
    ═══════════════════════════════════════════════════════ */
 
+/* The Model table opts out of the wrap's horizontal scroll on desktop:
+   it is sized to fit the content area there, and the zero-width growth
+   indicators spill harmlessly into the right padding rather than forcing
+   a scrollbar. Below 768px the table is genuinely wider than the
+   viewport, so the scroll has to come back or the later months are
+   unreachable — which is what an inline overflowX:visible was doing. */
+.model-table-wrap { overflow-x: auto; }
+
+@media (min-width: 768px) {
+  .model-table-wrap { overflow-x: visible; }
+}
+
 .arco-table-wrap {
   border: 1px solid var(--arco-rule);
   overflow-x: auto;
+  /* Containing block for absolutely-positioned descendants. Without it
+     their containing block is the ICB, and overflow clipping does not
+     apply to an abspos element whose containing block sits outside the
+     scroller — so the .sr-only spans inside a 1769px-wide table landed
+     at x≈1746 in DOCUMENT space and gave the whole page a horizontal
+     scrollbar, even though body itself was correctly clipped. */
+  position: relative;
   /* Flex children default to min-width:auto — the table's
      min-width (800/1100/1200) then pushes this wrap wider than the
      viewport instead of letting its own overflow-x scroll. min-width:0

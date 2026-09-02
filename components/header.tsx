@@ -37,6 +37,26 @@ function isNavGroup(item: NavItem): item is NavGroup {
   return "children" in item;
 }
 
+/**
+ * Admin nav badge counts are rendered by the header, but they change as
+ * a side effect of work done on admin pages — archiving an email drops
+ * the Inbox count, approving a project drops the Projects count. The
+ * header cannot know that happened, and the counts it was handed come
+ * from a server component that will not re-run on its own.
+ *
+ * So a mutation announces it, and the header re-reads /api/admin-badges.
+ * Call this after any admin action that changes a badged count. It is a
+ * no-op on the server and cheap to over-call — the endpoint short-
+ * circuits for non-admins, and the header only listens when the user
+ * has the admin role.
+ */
+export const ADMIN_BADGES_EVENT = "arco:admin-badges-changed";
+
+export function refreshAdminBadges() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(ADMIN_BADGES_EVENT));
+}
+
 export interface HeaderProps {
   transparent?: boolean;
   maxWidth?: string;
@@ -99,7 +119,10 @@ function SearchOverlay({ searchQuery, setSearchQuery, inputRef, onSearch, onClos
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={String(t("search_arco"))}
-              className="w-full h-11 pl-9 pr-4 border border-[#e5e5e4] rounded-[3px] text-sm outline-none focus:border-[#1c1c1a] transition-colors"
+              // 16px on mobile, not text-sm: iOS Safari zooms the page in
+              // whenever a focused input is under 16px, and there is no way
+              // back out without a pinch. Desktop keeps the 14px scale.
+              className="w-full h-11 pl-9 pr-4 border border-[#e5e5e4] rounded-[3px] text-base md:text-sm outline-none focus:border-[#1c1c1a] transition-colors"
               autoFocus
             />
           </div>
@@ -195,7 +218,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
     { href: "/projects", label: t("projects") },
     { href: "/professionals", label: t("professionals") },
   ];
-  const resolvedNavLinks = navLinks ?? defaultNavLinks;
+  let resolvedNavLinks = navLinks ?? defaultNavLinks;
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
@@ -261,6 +284,62 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
     resolvedNavLinks.push({ href: "/products", label: "Products" })
   }
 
+  // Admin badge counts. The admin layout bakes them into navLinks
+  // server-side, which makes them correct on load but frozen after it:
+  // archiving an email mutates the DB, and the layout is a server
+  // component that will not re-render until a navigation or a hard
+  // reload, so the pill kept showing the old number.
+  //
+  // The fetched values are therefore authoritative once they arrive, on
+  // every route including the admin layout's. They refresh on mount,
+  // whenever an admin mutation calls refreshAdminBadges(), and when the
+  // tab regains focus — which also catches changes made in another tab.
+  //
+  // Zeroes are kept in the map rather than filtered out: a count that
+  // has just dropped to 0 has to be able to clear a baked-in badge.
+  const [fetchedAdminBadges, setFetchedAdminBadges] = useState<Record<string, number> | null>(null)
+  useEffect(() => {
+    if (!hasAdminRole) return
+    let cancelled = false
+    const load = () => {
+      fetch("/api/admin-badges")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (cancelled || !data) return
+          const map: Record<string, number> = {}
+          if (typeof data.inboxUnreadCount === "number") map["/admin/inbox"] = data.inboxUnreadCount
+          if (typeof data.projectsToReviewCount === "number") map["/admin/projects"] = data.projectsToReviewCount
+          setFetchedAdminBadges(map)
+        })
+        .catch(() => { /* silent — badges are decorative */ })
+    }
+    load()
+    window.addEventListener(ADMIN_BADGES_EVENT, load)
+    window.addEventListener("focus", load)
+    return () => {
+      cancelled = true
+      window.removeEventListener(ADMIN_BADGES_EVENT, load)
+      window.removeEventListener("focus", load)
+    }
+  }, [hasAdminRole])
+
+  // Overlay the live counts onto whatever the server baked in, before
+  // anything reads them, so the group pill, the dropdown item and the
+  // avatar menu all resolve from one number rather than three.
+  if (fetchedAdminBadges) {
+    const live = fetchedAdminBadges
+    resolvedNavLinks = resolvedNavLinks.map((item) =>
+      isNavGroup(item)
+        ? {
+            ...item,
+            children: item.children.map((child) =>
+              child.href in live ? { ...child, badge: live[child.href] } : child,
+            ),
+          }
+        : item,
+    )
+  }
+
   // Badges by href — used by the account (avatar) dropdown's admin
   // section, which builds its own item list from translation keys and
   // can't consume the resolvedNavLinks tree directly. Also lets the
@@ -271,36 +350,6 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
       for (const child of item.children) {
         if (child.badge && child.badge > 0) badgeByHref[child.href] = child.badge
       }
-    }
-  }
-
-  // The admin layout bakes badge counts into navLinks server-side.
-  // Every other route (homepage, marketplace pages, etc.) renders
-  // Header with the default navLinks — no badges baked in — so we
-  // fetch them lazily via /api/admin-badges when the user has admin
-  // role and no `navLinks` prop was passed. Runs once per mount,
-  // scoped to the account (avatar) dropdown's admin section.
-  const [fetchedAdminBadges, setFetchedAdminBadges] = useState<Record<string, number> | null>(null)
-  useEffect(() => {
-    if (!hasAdminRole || navLinks) return
-    let cancelled = false
-    fetch("/api/admin-badges")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (cancelled || !data) return
-        const map: Record<string, number> = {}
-        if (typeof data.inboxUnreadCount === "number" && data.inboxUnreadCount > 0)
-          map["/admin/inbox"] = data.inboxUnreadCount
-        if (typeof data.projectsToReviewCount === "number" && data.projectsToReviewCount > 0)
-          map["/admin/projects"] = data.projectsToReviewCount
-        setFetchedAdminBadges(map)
-      })
-      .catch(() => { /* silent — badges are decorative */ })
-    return () => { cancelled = true }
-  }, [hasAdminRole, navLinks])
-  if (fetchedAdminBadges) {
-    for (const [href, count] of Object.entries(fetchedAdminBadges)) {
-      if (badgeByHref[href] === undefined) badgeByHref[href] = count
     }
   }
 
@@ -547,7 +596,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                           aria-haspopup="menu"
                           onFocus={() => setOpenGroup(item.label)}
                           onClick={() => setOpenGroup(isOpen ? null : item.label)}
-                          className={`header-rule flex items-center gap-1 text-sm font-normal whitespace-nowrap transition-colors ${
+                          className={`header-rule flex items-center h-8 gap-1 text-sm font-normal whitespace-nowrap transition-colors ${
                             isActive || isOpen
                               ? "text-primary"
                               : transparent && !isScrolled ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
@@ -606,7 +655,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                       href={item.href}
                       // .header-rule draws the hover rule on the header's
                       // bottom border, matching the sub-nav tab indicator.
-                      className={`header-rule text-sm font-normal whitespace-nowrap transition-colors ${
+                      className={`header-rule inline-flex items-center h-8 text-sm font-normal whitespace-nowrap transition-colors ${
                         isActive
                           ? "text-primary"
                           : transparent && !isScrolled ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
@@ -628,7 +677,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
               {(!isLoggedIn || companies.length === 0) && (
                 <Link
                   href="/businesses/architects"
-                  className={`header-rule hidden md:inline-flex text-sm font-normal whitespace-nowrap transition-colors ${
+                  className={`header-rule hidden md:inline-flex items-center h-8 text-sm font-normal whitespace-nowrap transition-colors ${
                     transparent && !isScrolled ? "text-white hover:text-white/80" : "text-primary hover:opacity-70"
                   }`}
                 >
@@ -640,7 +689,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
               {/* Search Icon */}
               <button
                 onClick={toggleSearch}
-                className={`header-rule flex items-center justify-center transition-colors ${
+                className={`header-rule flex items-center justify-center h-8 transition-colors ${
                   transparent && !isScrolled ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
                 }`}
                 aria-label="Search"
