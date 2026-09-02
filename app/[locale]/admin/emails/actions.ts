@@ -136,7 +136,39 @@ function extractTag(
  * added there needs a row here too, otherwise the sent-emails tab will
  * show the raw id instead of a human name.
  */
+/**
+ * Send-time tag → catalog id.
+ *
+ * The auth emails are sent through `sendTransactionalEmail` under their
+ * `EmailTemplate` names (`auth-magic-link`, `auth-recovery`, …), but the
+ * catalog in page.tsx keys the same emails as `magic-link`,
+ * `password-reset`, `signup`. Nothing reconciled the two, so every tagged
+ * auth send landed in a bucket with no catalog row and vanished from the
+ * table: Sign-in Code showed 20 sends — only the pre-6-May untagged rows
+ * recovered by subject regex — while 51 tagged sends sat in an
+ * `auth-magic-link` bucket nothing rendered.
+ *
+ * Every other template tags itself with its catalog id already, so this
+ * map only needs the auth family.
+ */
+const TAG_TO_CATALOG_ID: Record<string, string> = {
+  "auth-magic-link": "magic-link",
+  "auth-confirm-signup": "signup",
+  "auth-recovery": "password-reset",
+  "auth-email-change": "email-change",
+}
+
+function normalizeTemplateId(tag: string): string {
+  return TAG_TO_CATALOG_ID[tag] ?? tag
+}
+
 const TEMPLATE_ID_TO_NAME: Record<string, string> = {
+  // Auth family — keyed by catalog id, post-normalization.
+  "magic-link": "Sign-in Code",
+  signup: "Signup Confirmation",
+  "password-reset": "Password Reset",
+  "email-change": "Email Change",
+  "auth-invite": "Auth Invite",
   "domain-verification": "Domain Verification",
   "professional-invite": "Professional Invite",
   "team-invite": "Team Invite",
@@ -251,8 +283,9 @@ function matchTemplate(subject: string): { id: string; name: string } | null {
  */
 function resolveTemplate(subject: string, tags: unknown): { id: string; name: string } | null {
   const tagTemplate = extractTag(tags, 'template')
-  if (tagTemplate && TEMPLATE_ID_TO_NAME[tagTemplate]) {
-    return { id: tagTemplate, name: TEMPLATE_ID_TO_NAME[tagTemplate] }
+  if (tagTemplate) {
+    const id = normalizeTemplateId(tagTemplate)
+    if (TEMPLATE_ID_TO_NAME[id]) return { id, name: TEMPLATE_ID_TO_NAME[id] }
   }
   return matchTemplate(subject)
 }
@@ -261,13 +294,58 @@ function resolveTemplate(subject: string, tags: unknown): { id: string; name: st
 // pixel within seconds of the send — those aren't humans reading. The
 // webhook flags new ones (metadata.machine); for historical rows the same
 // signature (open < 60s after the send) is applied at read time.
+//
+// A delta of exactly 0 is excluded, because it isn't a timing signal at
+// all: rows backfilled from Resend's list endpoint carry one synthetic
+// event holding the message's final state, stamped with the send
+// timestamp. Treating those as machine opens discarded the only
+// engagement row the message had, dropping it back to `sent` — which is
+// how Signup Confirmation came to read 40% delivered / 0% opened off ten
+// sends that had all in fact arrived.
 const MACHINE_OPEN_WINDOW_MS = 60_000
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function isMachineOpen(metadata: any, occurredAt: string | null | undefined, sentAt: string | null | undefined): boolean {
   if (metadata?.machine === true) return true
   if (!occurredAt || !sentAt) return false
   const delta = new Date(occurredAt).getTime() - new Date(sentAt).getTime()
-  return delta >= 0 && delta < MACHINE_OPEN_WINDOW_MS
+  return delta > 0 && delta < MACHINE_OPEN_WINDOW_MS
+}
+
+// Internal recipients — our own addresses and the throwaways used while
+// building the send paths. 275 of the 1,279 sends on record went to these,
+// and counting them makes the table lie about reach: Professional Invite
+// read 31 sends when every one was a test to ourselves, and Signup
+// Confirmation read 10 for the same reason.
+//
+// Filtered at read time rather than deleted. email_events is the audit
+// trail, and the dispatcher's cold-recipient guard queries it to decide
+// whether an address is already mid-chain — removing rows would let real
+// invites stack.
+const INTERNAL_RECIPIENTS = new Set([
+  "niek.vanleeuwen@gmail.com",
+  "niek@askolli.com",
+  "owner@askolli.com",
+  "niek@lucen.tech",
+  "niek81@lucen.tech",
+  // One-off addresses from the 27 Mar 2026 smoke tests.
+  "niek@test.com",
+  "niek@ollies.nl",
+  "niek@cafeollie.nl",
+  "niek@olliescoffee.nl",
+  "nieksasdasdasdad@ollestee.nl",
+])
+
+function isInternalRecipient(email: string | null | undefined): boolean {
+  if (!email) return false
+  const addr = email.toLowerCase().trim()
+  if (INTERNAL_RECIPIENTS.has(addr)) return true
+  // Every arcolist.com address is ours, including the @arcolist.com
+  // placeholders the invite editor writes for credits with no real email.
+  if (addr.endsWith("@arcolist.com")) return true
+  // Plus-addressed aliases of the accounts above (niek.vanleeuwen+1@…).
+  const [local, domain] = addr.split("@")
+  if (!local || !domain) return false
+  return INTERNAL_RECIPIENTS.has(`${local.split("+")[0]}@${domain}`)
 }
 
 export async function fetchRecentEmails(): Promise<{ emails: ResendEmail[]; error?: string }> {
@@ -357,7 +435,10 @@ export async function fetchRecentEmails(): Promise<{ emails: ResendEmail[]; erro
       // — which doesn't return tags — fall back to subject-regex resolution.
       const storedTemplate = (s.template as string | null) ?? null
       const resolved = storedTemplate
-        ? { id: storedTemplate, name: TEMPLATE_ID_TO_NAME[storedTemplate] ?? storedTemplate }
+        ? (() => {
+            const id = normalizeTemplateId(storedTemplate)
+            return { id, name: TEMPLATE_ID_TO_NAME[id] ?? id }
+          })()
         : resolveTemplate(subject, null)
       const templateId = resolved?.id ?? null
       const templateName = resolved?.name ?? null
@@ -432,7 +513,7 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
       let query = supabase
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .from("email_events" as any)
-        .select("provider_event_id, metadata, event_type, template, subject, occurred_at")
+        .select("provider_event_id, metadata, event_type, template, subject, occurred_at, recipient_email")
         .eq("provider", "resend")
         .order("occurred_at", { ascending: true })
         .range(from, from + 999)
@@ -457,7 +538,7 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
       complained: 4,
       failed: 4,
     }
-    type MsgState = { template: string | null; subject: string | null; state: string }
+    type MsgState = { template: string | null; subject: string | null; state: string; recipient: string | null }
     // Pre-pass: sent time per message, so machine opens (pixel fired
     // < 60s after send — scanner/MPP prefetch) can be excluded below.
     const sentAtByMsg = new Map<string, string>()
@@ -475,28 +556,44 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
       if (candidateState === "opened" && isMachineOpen(e.metadata, e.occurred_at, sentAtByMsg.get(msgId))) continue
       const candidateTemplate = (e.template as string | null) ?? null
       const candidateSubject = (e.subject as string | null) ?? null
+      const candidateRecipient = (e.recipient_email as string | null) ?? null
       const existing = byMsg.get(msgId)
       if (!existing) {
-        byMsg.set(msgId, { template: candidateTemplate, subject: candidateSubject, state: candidateState })
+        byMsg.set(msgId, {
+          template: candidateTemplate,
+          subject: candidateSubject,
+          state: candidateState,
+          recipient: candidateRecipient,
+        })
       } else {
         const newState =
           (STATE_RANK[candidateState] ?? 0) > (STATE_RANK[existing.state] ?? 0)
             ? candidateState
             : existing.state
-        // Sent rows carry the canonical template + subject; preserve them
-        // across engagement events.
+        // Sent rows carry the canonical template + subject + recipient;
+        // preserve them across engagement events.
         const newTemplate = existing.template ?? candidateTemplate
         const newSubject = existing.subject ?? candidateSubject
-        byMsg.set(msgId, { template: newTemplate, subject: newSubject, state: newState })
+        const newRecipient = existing.recipient ?? candidateRecipient
+        byMsg.set(msgId, {
+          template: newTemplate,
+          subject: newSubject,
+          state: newState,
+          recipient: newRecipient,
+        })
       }
     }
 
     const stats: Record<string, TemplateStats> = {}
     for (const m of byMsg.values()) {
+      // Our own test traffic isn't reach. See isInternalRecipient.
+      if (isInternalRecipient(m.recipient)) continue
       // Backfilled rows from Resend's list endpoint don't have a template
       // (the API doesn't return tags). Fall back to subject-regex resolution
       // so historical sends still aggregate into the right bucket.
-      const templateId = m.template ?? resolveTemplate(m.subject ?? "", null)?.id ?? null
+      const templateId = m.template
+        ? normalizeTemplateId(m.template)
+        : resolveTemplate(m.subject ?? "", null)?.id ?? null
       if (!templateId) continue
       if (!stats[templateId]) {
         stats[templateId] = { sends: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0 }
@@ -578,6 +675,21 @@ async function persistStatsCache(stats: Record<string, TemplateStats>): Promise<
     await supabase
       .from('email_stats_cache' as any)
       .upsert(rows, { onConflict: 'template_id' })
+
+    // Drop cache rows for templates the recompute produced nothing for.
+    // Upsert alone can't express this: a template whose every message was
+    // internal (Professional Invite, Signup Confirmation) is absent from
+    // `stats` entirely, so its stale row would survive untouched and keep
+    // being served as first paint forever.
+    // Guarded: an empty recompute is a failed fetch, not "every template
+    // is now zero" — clearing the cache on it would be destructive.
+    if (rows.length > 0) {
+      const keep = rows.map((r) => `"${r.template_id}"`).join(",")
+      await supabase
+        .from('email_stats_cache' as any)
+        .delete()
+        .not('template_id', 'in', `(${keep})`)
+    }
   } catch (err) {
     console.error('[persistStatsCache] Failed:', err)
   }
