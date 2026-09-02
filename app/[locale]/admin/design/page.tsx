@@ -1,6 +1,7 @@
 import { FAQPreview } from "./faq-preview"
 import { DiscoverCardPreview } from "./discover-card-preview"
 import { ServiceMarksPreview } from "./service-marks-preview"
+import { CreditPreviews } from "./credit-previews"
 
 export const dynamic = "force-dynamic"
 
@@ -1155,6 +1156,19 @@ export default function DesignPage() {
               a service that falls through to the generic briefcase is a missing mapping.
             </p>
             <ServiceMarksPreview />
+          </div>
+
+          {/* CREDITED PROFESSIONALS */}
+          <div style={{ marginBottom: 80 }}>
+            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Credited professionals</h2>
+            <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
+              The same credit renders twice: as an editable row while the owner is building
+              the project, and as a public card once it is published. Both lead with the
+              service and the company, and both fall back to the hand-drawn service mark when
+              a company has no logo &mdash; so a credit says what a firm <em>did</em> before
+              you read its name.
+            </p>
+            <CreditPreviews />
           </div>
 
           {/* PHOTO GALLERY LAYOUTS */}

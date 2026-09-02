@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useTransition } from "react"
 import { ArrowUpRight } from "lucide-react"
 import { toast } from "sonner"
+import { refreshAdminBadges } from "@/components/header"
 
 // Sender domains that are personal inboxes, not company websites — no
 // external-site arrow for these.
@@ -164,6 +165,9 @@ export function InboxClient({
     if (result.success) {
       toast.success("Archived")
       reload()
+      // The header's Inbox pill is server-rendered by the admin layout,
+      // which will not re-run for a mutation made on this page.
+      refreshAdminBadges()
     } else {
       toast.error(result.error ?? "Failed to archive")
     }
@@ -174,6 +178,7 @@ export function InboxClient({
     if (result.success) {
       toast.success("Moved back to inbox")
       reload()
+      refreshAdminBadges()
     } else {
       toast.error(result.error ?? "Failed to move back")
     }
@@ -192,6 +197,7 @@ export function InboxClient({
         prev.map((r) => (r.id === row.id ? { ...r, status: "read" } : r)),
       )
       setUnreadCount((c) => Math.max(0, c - 1))
+      refreshAdminBadges()
     }
     setRespondTarget(row)
     setRespondDraft("")
@@ -232,6 +238,7 @@ export function InboxClient({
       toast.success("Reply sent")
       closeRespondForce()
       reload()
+      refreshAdminBadges()
     } else {
       setRespondError(result.error ?? "Failed to send")
     }

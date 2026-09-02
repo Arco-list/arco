@@ -129,7 +129,9 @@ export type MetricRow = {
      *  values and a tone — "muted" reads as grey, "accent" as teal. Use
      *  for supporting absolute metrics that aren't conversion rates
      *  (e.g. SEO impressions / clicks alongside CTR under Ranked pros). */
-    valueRows?: Array<{ label: string; values: number[]; tone?: "muted" | "accent"; format?: "integer" | "percent" }>
+    valueRows?: Array<{ label: string; values: number[]; tone?: "muted" | "accent"; format?: "integer" | "percent" | "decimal"; definition?: string }>
+    /** Render valueRows above the sub's CR rows instead of below. */
+    valueRowsFirst?: boolean
   }>
 }
 
@@ -961,6 +963,64 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     const d = acceptanceDate(pp)
     return d && d >= from
   }).length
+
+  // Projects with contributors — cohorted by PUBLICATION date: of the
+  // projects published in each bucket, how many have since been credited
+  // with at least one contributor. Bucketing by credit date instead would
+  // let "% of published" exceed 100%, because a project published in
+  // January can be credited in August; this way the numerator and the
+  // publishedProjectsBuckets denominator describe the same cohort.
+  const creditedProjectIds = new Set<string>(
+    nonOwnerInvites.map((pp: any) => pp.project_id).filter(Boolean),
+  )
+  const publishedInBucket = (i: number): any[] =>
+    projects.filter((p: any) => {
+      if (p.status !== "published" || !p.published_at) return false
+      const d = new Date(p.published_at)
+      return d >= buckets.starts[i] && d < buckets.ends[i]
+    })
+  // Cumulative snapshot, not a per-period count: every published project
+  // up to the bucket end that carries at least one contributor credit.
+  // Uses the same published_at → created_at fallback as
+  // totalPublishedSnapshotSeries so numerator and denominator line up.
+  const projectsWithContributorsSeries = buckets.ends.map((bucketEnd) =>
+    projects.filter((p: any) => {
+      if (p.status !== "published" || !creditedProjectIds.has(p.id)) return false
+      const ts = publishedTsForBucket(p)
+      return ts !== null && ts <= bucketEnd
+    }).length,
+  )
+  const totalProjectsWithContributors =
+    projectsWithContributorsSeries[projectsWithContributorsSeries.length - 1] ?? 0
+
+  // Contributors per crediting project, to one decimal. Denominator is
+  // the projects that were credited, not every published project — the
+  // question this answers is "when an owner does credit anyone, how many
+  // trades do they name", which is the lever prompting-by-trade attacks.
+  // Averaged across all published projects it would just restate the
+  // "% of published" rate above.
+  const creditCountByProject = new Map<string, number>()
+  for (const pp of nonOwnerInvites as any[]) {
+    if (!pp.project_id) continue
+    creditCountByProject.set(pp.project_id, (creditCountByProject.get(pp.project_id) ?? 0) + 1)
+  }
+  // Invites per CREDITED project, cumulative — total credits over the
+  // projects that carry at least one, both counted to the bucket end.
+  // Shares its denominator with the "Total projects with contributors
+  // invited" row it sits under, so the two read together: N projects
+  // credited, this many contributors each.
+  const creditsPerProjectSeries = buckets.ends.map((bucketEnd) => {
+    let credits = 0
+    let projs = 0
+    for (const p of projects as any[]) {
+      if (p.status !== "published" || !creditedProjectIds.has(p.id)) continue
+      const ts = publishedTsForBucket(p)
+      if (ts === null || ts > bucketEnd) continue
+      projs++
+      credits += creditCountByProject.get(p.id) ?? 0
+    }
+    return projs > 0 ? Math.round((credits / projs) * 10) / 10 : 0
+  })
 
   // Plan tiers retired — no companies pass the subscription filter.
   const subscribers = bucket8([], buckets)
@@ -2049,12 +2109,28 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
           immatureFromIndex: cohortImmatureFromIndex },
       ],
       subs: [
-        { key: "inviters", label: "Inviters", definition: "Unique companies that invited one or more professionals on a project", total: totalInvitersInWindow, datapoints: invitersBucketed },
         {
-          key: "invites_per_project", label: "Invites/project", definition: "Avg. professionals invited per inviting published project", total: invitesPerProject, datapoints: invitesPerProjectSeries,
+          key: "invites_per_project", label: "Invites/project", definition: "Avg. professionals invited per INVITING published project — projects with no credits are excluded from the denominator", total: invitesPerProject, datapoints: invitesPerProjectSeries,
           // Of the invites sent this period, the share that reached a
           // distinct company — repeat tags of the same firm dilute it.
-          customCR: { label: "% Unique", numerator: uniqueInvitedSeries, denominator: totalInvitedSeries },
+          customCR: { label: "% Unique", numerator: uniqueInvitedSeries, denominator: totalInvitedSeries,
+            definition: "Of the invites sent in this period, the share that reached a company not already invited. Crediting the same firm on three projects is 3 invites but 1 company." },
+        },
+        {
+          key: "projects_with_contributors", label: "Total projects with contributors invited",
+          definition: "Cumulative: every published project to date that carries at least one contributor credit",
+          total: totalProjectsWithContributors, datapoints: projectsWithContributorsSeries,
+          customCR: {
+            label: "% of Total projects",
+            numerator: projectsWithContributorsSeries,
+            denominator: totalPublishedSnapshotSeries,
+            definition: "Share of all published projects to date that credit at least one contributor. Step 1 of the contributor-invite loop.",
+          },
+          valueRowsFirst: true,
+          valueRows: [
+            { label: "Invites / Projects", values: creditsPerProjectSeries, tone: "accent", format: "decimal" as const,
+              definition: "Contributor credits per credited project, cumulative to date — the same denominator as the row above, so it reads as 'N projects credited, this many contributors each'. Excludes projects with no credits; Invites/project above answers the same question for the selected period only." },
+          ],
         },
       ],
     },
@@ -2072,7 +2148,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       ],
       subs: [
         {
-          key: "contributors_live", label: "Contributors live", definition: "Accepted contributors whose credit is visible on the project page (status live_on_page)", total: totalLive, datapoints: liveSeries,
+          key: "contributors_live", label: "Contributors listed", definition: "Accepted contributors whose credit is visible on the project page (status live_on_page)", total: totalLive, datapoints: liveSeries,
           customCR: { label: "% Paying (ever)", numerator: empty8, denominator: liveSeries },
         },
       ],

@@ -165,7 +165,7 @@ export const METRIC_DEFS: Record<string, MetricDef> = {
     user: "professional",
     supabaseTable: "project_professionals",
     subs: [
-      { key: "contributors_live", label: "Contributors live", definition: "Accepted contributors whose credit is visible on the project page (live_on_page)", source: "supabase" },
+      { key: "contributors_live", label: "Contributors listed", definition: "Accepted contributors whose credit is visible on the project page (live_on_page)", source: "supabase" },
     ],
   },
   publishers: {

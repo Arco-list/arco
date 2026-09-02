@@ -286,13 +286,15 @@ function ValueRow({
   tone = "muted",
   format = "integer",
   isLast,
+  definition,
 }: {
   label: string
   values: number[]
   columnCount: number
   tone?: "muted" | "accent"
-  format?: "integer" | "percent"
+  format?: "integer" | "percent" | "decimal"
   isLast?: boolean
+  definition?: string
 }) {
   const color = tone === "accent" ? "var(--primary, #016D75)" : "#6b6b68"
   return (
@@ -305,6 +307,7 @@ function ValueRow({
           <span className="text-[10px] font-medium" style={{ color }}>
             {label}
           </span>
+          {definition && <InfoIcon definition={definition} />}
         </div>
       </td>
       {values.map((v, i) => {
@@ -567,7 +570,10 @@ function MetricRowComponent({
                 {/* Self-contained CR (% Retained / % Churn / % Re-activated
                     under MAU). Renders independently of inlineCRTo since
                     these are accounting ratios, not funnel conversions. */}
-                {hasCustomCR && (
+                {/* Order mirrors the Table view: a sub can ask for its
+                    value rows above its CR via valueRowsFirst, so the
+                    ratio sits directly under the count it divides. */}
+                {hasCustomCR && !sub.valueRowsFirst && (
                   <CustomCRRow
                     label={sub.customCR!.label}
                     numerator={sub.customCR!.numerator}
@@ -586,9 +592,21 @@ function MetricRowComponent({
                     columnCount={columnCount}
                     tone={vr.tone}
                     format={vr.format}
-                    isLast={idx === valueRows.length - 1}
+                    definition={vr.definition}
+                    isLast={idx === valueRows.length - 1 && !(hasCustomCR && sub.valueRowsFirst)}
                   />
                 ))}
+                {hasCustomCR && sub.valueRowsFirst && (
+                  <CustomCRRow
+                    label={sub.customCR!.label}
+                    numerator={sub.customCR!.numerator}
+                    denominator={sub.customCR!.denominator}
+                    definition={sub.customCR!.definition}
+                    immatureFromIndex={sub.customCR!.immatureFromIndex}
+                    columnCount={columnCount}
+                    isLast
+                  />
+                )}
               </Fragment>
             )
           })}
@@ -688,11 +706,13 @@ export function GrowthModelClient({ initialRows, initialLabels, initialLastSynce
         ))}
       </div>
 
-      {/* overflowX: visible suppresses the horizontal scrollbar on
-          desktop — the Model table is sized to fit the content area,
-          and the zero-width growth indicators spill into the right
-          padding without forcing scroll. */}
-      <div className="arco-table-wrap rounded-[3px]" style={{ overflowX: "visible" }}>
+      {/* .model-table-wrap keeps the desktop behaviour (overflow visible,
+          so the zero-width growth indicators spill into the right padding
+          without forcing a scrollbar) but restores horizontal scrolling
+          below 768px, where the table is wider than the viewport and the
+          later months were otherwise unreachable. It has to be a class,
+          not an inline style — this needs a media query. */}
+      <div className="arco-table-wrap model-table-wrap rounded-[3px]">
         <table className="arco-table" style={{ minWidth: 0 }}>
           <thead>
             <tr>

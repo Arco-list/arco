@@ -208,7 +208,7 @@ function InlineCRCell({ numerator, denominator, pull = 6, immatureFromIndex }: {
 function ValueCell({ values, tone = "muted", format = "integer", pull = 6 }: {
   values: number[]
   tone?: "muted" | "accent"
-  format?: "integer" | "percent"
+  format?: "integer" | "percent" | "decimal"
   pull?: number
 }) {
   const color = tone === "accent" ? "var(--primary, #016D75)" : "#6b6b68"
@@ -410,7 +410,8 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
               <SubTrendlineCell datapoints={sub.datapoints} />
             </td>
           </tr>
-          {subCRs.map((cr, idx) => {
+          {(sub.valueRowsFirst ? [] : subCRs).map((cr, i) => {
+            const idx = i
             const isLast = idx === attachedCount - 1
             // Sub sparklines carry ~10px of bottom slack — smaller pull
             // than the parent rows, and only for the first attached row.
@@ -447,11 +448,12 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
               </Fragment>
             )
           })}
-          {valueRows.map((vr, idx) => {
-            const isLast = subCRs.length + idx === attachedCount - 1
+          {valueRows.map((vr, i) => {
+            const idx = (sub.valueRowsFirst ? 0 : subCRs.length) + i
+            const isLast = idx === attachedCount - 1
             // Only pull up when this is the first attached row under the
             // sub's sparkline; rows following another CR row have no slack.
-            const pull = subCRs.length === 0 && idx === 0 ? 10 : 6
+            const pull = idx === 0 ? 10 : 6
             const color = vr.tone === "accent" ? "var(--primary, #016D75)" : "#6b6b68"
             return (
               <Fragment key={vr.label}>
@@ -461,10 +463,11 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
                   {...groupProps(sub.key)}
                 >
                   <td>
-                    <div className="flex items-center pl-7" style={{ marginTop: -pull }}>
+                    <div className="flex items-center gap-1.5 pl-7" style={{ marginTop: -pull }}>
                       <span className="text-[10px] font-medium" style={{ color }}>
                         {vr.label}
                       </span>
+                      {vr.definition && <InfoIcon definition={vr.definition} />}
                     </div>
                   </td>
                   <td>
@@ -479,6 +482,42 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
                       </span>
                     </div>
                     <ValueCell values={vr.values} tone={vr.tone} format={vr.format} />
+                  </td>
+                </tr>
+              </Fragment>
+            )
+          })}
+          {(sub.valueRowsFirst ? subCRs : []).map((cr, i) => {
+            const idx = valueRows.length + i
+            const isLast = idx === attachedCount - 1
+            const pull = idx === 0 ? 10 : 6
+            return (
+              <Fragment key={"post-" + cr.label}>
+                <tr
+                  className="hidden md:table-row arco-cr-row"
+                  style={{ ...(isLast ? {} : { borderBottom: "none" }), ...groupBg(sub.key) }}
+                  {...groupProps(sub.key)}
+                >
+                  <td>
+                    <div className="flex items-center gap-1.5 pl-7" style={{ marginTop: -pull }}>
+                      <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
+                        {cr.label}
+                      </span>
+                      {cr.definition && <InfoIcon definition={cr.definition} />}
+                    </div>
+                  </td>
+                  <td>
+                    <InlineCRCell numerator={cr.numerator} denominator={cr.denominator} pull={pull} immatureFromIndex={cr.immatureFromIndex} />
+                  </td>
+                </tr>
+                <tr className="md:hidden arco-cr-row" style={isLast ? undefined : { borderBottom: "none" }}>
+                  <td colSpan={2}>
+                    <div className="flex items-center pl-5 mb-0.5">
+                      <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
+                        {cr.label}
+                      </span>
+                    </div>
+                    <InlineCRCell numerator={cr.numerator} denominator={cr.denominator} immatureFromIndex={cr.immatureFromIndex} />
                   </td>
                 </tr>
               </Fragment>
