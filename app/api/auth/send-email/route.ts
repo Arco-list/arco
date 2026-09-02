@@ -16,6 +16,23 @@ const ACTION_TO_TEMPLATE: Record<string, EmailTemplate> = {
   invite: "auth-invite",
 }
 
+// Action types Supabase can emit that we deliberately don't render.
+// Kept as an explicit set so an absent template means "we decided that"
+// rather than "nobody noticed". Anything outside both this set and
+// ACTION_TO_TEMPLATE is a bug, and logged as one below.
+//
+//   reauthentication         — nothing calls auth.reauthenticate(), so it
+//                              cannot fire today.
+//   email_changed_notification — courtesy notice to the OLD address after
+//                              an email change. A real gap (that address
+//                              currently gets no warning), but email change
+//                              has fired roughly once in the platform's
+//                              life, so the template isn't written yet.
+const INTENTIONALLY_UNSENT = new Set([
+  "reauthentication",
+  "email_changed_notification",
+])
+
 export async function POST(req: NextRequest) {
   try {
     // Read the raw payload for signature verification
@@ -49,7 +66,18 @@ export async function POST(req: NextRequest) {
     const template = ACTION_TO_TEMPLATE[actionType]
 
     if (!template) {
-      console.warn(`[auth-hook] Unknown action type: ${actionType}`)
+      // Returning 200 either way is deliberate: Supabase reads a non-200
+      // as a failed send and surfaces the error to the user, which would
+      // turn a missing template into a blocked auth flow. The send is
+      // dropped, but loudly for the unexpected case.
+      if (INTENTIONALLY_UNSENT.has(actionType)) {
+        console.log(`[auth-hook] No template for '${actionType}' (intentional) — not sending`)
+      } else {
+        console.error(
+          `[auth-hook] No template for action type '${actionType}' — email silently dropped. ` +
+            `Add it to ACTION_TO_TEMPLATE or INTENTIONALLY_UNSENT.`,
+        )
+      }
       return NextResponse.json({})
     }
 
