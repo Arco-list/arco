@@ -336,7 +336,22 @@ export async function dispatchProfessionalInvite(
 
   // ── Unclaimed: kick off the new three-step sequence ──
 
-  const claimUrl = `${SITE_URL}/businesses/professionals?inviteEmail=${encodeURIComponent(input.recipientEmail)}&companyId=${recipient.id}`
+  // The claim funnel CTA: a signed single-use token riding this credit.
+  // Falls back to the old modal-flow URL if minting fails — a working
+  // legacy link beats a broken new one.
+  let claimUrl = `${SITE_URL}/businesses/professionals?inviteEmail=${encodeURIComponent(input.recipientEmail)}&companyId=${recipient.id}`
+  try {
+    const { issueClaimToken } = await import("@/lib/claim/claim-token")
+    const issued = await issueClaimToken({
+      companyId: recipient.id,
+      creditId: input.creditId ?? null,
+      email: input.recipientEmail.toLowerCase(),
+      channel: "invite",
+    })
+    claimUrl = issued.url
+  } catch (err) {
+    console.error("dispatch: claim token mint failed, using legacy claim_url", err)
+  }
   const companyPageUrl = `${SITE_URL}/professionals/${recipient.slug ?? recipient.id}`
   const companySubtitle = [recipient.serviceName, recipient.city].filter(Boolean).join(" · ") || null
 

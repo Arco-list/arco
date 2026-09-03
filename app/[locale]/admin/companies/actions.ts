@@ -1030,7 +1030,25 @@ export async function sendProspectEmailAction(input: {
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.arcolist.com"
   const companyPageUrl = `${siteUrl}/professionals/${company.slug}`
-  const claimUrl = `${siteUrl}/businesses/architects?inviteEmail=${encodeURIComponent(emailResult.data)}&companyId=${company.id}`
+  // The claim funnel CTA — channel resolved from DATA (pending credit →
+  // invite experience, else showcase), so the landing matches the
+  // strongest thing we can show. Falls back to the old landing URL if
+  // minting fails.
+  let claimUrl = `${siteUrl}/businesses/architects?inviteEmail=${encodeURIComponent(emailResult.data)}&companyId=${company.id}`
+  try {
+    const { resolveClaimChannel } = await import("@/lib/claim/resolve-channel")
+    const { issueClaimToken } = await import("@/lib/claim/claim-token")
+    const resolved = await resolveClaimChannel(company.id)
+    const issued = await issueClaimToken({
+      companyId: company.id,
+      creditId: resolved.channel === "invite" ? resolved.creditId : null,
+      email: emailResult.data.toLowerCase(),
+      channel: resolved.channel === "invite" ? "invite" : "showcase",
+    })
+    claimUrl = issued.url
+  } catch (err) {
+    console.error("showcase: claim token mint failed, using legacy claim_url", err)
+  }
   const serviceName = (company.primary_service as any)?.name ?? null
   const locationParts = [serviceName, company.city].filter(Boolean)
 
