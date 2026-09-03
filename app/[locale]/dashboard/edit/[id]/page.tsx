@@ -578,7 +578,7 @@ export default function ListingEditorPage() {
 
   // City lookup state (specs bar location)
   const [cityQuery, setCityQuery] = useState("")
-  const [cityResults, setCityResults] = useState<Array<{ placeId: string; mainText: string; secondaryText: string }>>([])
+  const [cityResults, setCityResults] = useState<Array<{ placeId: string; mainText: string; secondaryText: string; isProvince?: boolean }>>([])
   const [isCitySearching, setIsCitySearching] = useState(false)
   const citySearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cityServiceRef = useRef<any>(null)
@@ -4079,7 +4079,9 @@ export default function ListingEditorPage() {
 
         const predictions = await new Promise<any>((resolve) => {
           cityServiceRef.current.getPlacePredictions(
-            { input: query.trim(), types: ["(cities)"], componentRestrictions: { country: "nl" } },
+            // locality + administrative_area_level_1: plaatsen én
+            // provincies, zonder de postcodes die "(regions)" meebrengt.
+            { input: query.trim(), types: ["locality", "administrative_area_level_1"], componentRestrictions: { country: "nl" } },
             (preds: any, status: string) => { resolve(status === "OK" && preds ? preds : []) },
           )
         })
@@ -4087,20 +4089,49 @@ export default function ListingEditorPage() {
         setCityResults(predictions.slice(0, 5).map((p: any) => ({
           placeId: p.place_id,
           mainText: p.structured_formatting?.main_text ?? "",
-          secondaryText: p.structured_formatting?.secondary_text ?? "",
+          // NL-only zoeker: het land zegt niets, de provincie wel — die
+          // blijft staan wanneer Google hem meegeeft.
+          secondaryText: (p.structured_formatting?.secondary_text ?? "").replace(/,?\s*Nederland$/i, "").trim(),
+          isProvince: Boolean(p.types?.includes("administrative_area_level_1")),
         })))
       } catch { setCityResults([]) }
       setIsCitySearching(false)
     }, 300)
   }, [])
 
-  const handleSelectCity = useCallback((mainText: string) => {
-    const city = mainText
-    setDetailsForm(prev => ({ ...prev, city }))
+  const handleSelectCity = useCallback((mainText: string, placeId?: string, isProvince?: boolean) => {
     setCityQuery("")
     setCityResults([])
     setEditingSpecBar(null)
-    void saveFieldDirect({ location: city, address_city: city })
+    if (isProvince) {
+      // Province-level location: the region IS the pick — no city, no
+      // Details call (the name is the region).
+      setDetailsForm(prev => ({ ...prev, city: "", region: mainText }))
+      void saveFieldDirect({ location: mainText, address_city: null, address_region: mainText })
+      return
+    }
+    const city = mainText
+    setDetailsForm(prev => ({ ...prev, city }))
+    // Provincie hoort bij de plaats: één Details-call levert
+    // administrative_area_level_1, zodat de regiofilters dit project
+    // ook op provincie vinden. Zonder placeId (of bij een mislukte
+    // lookup) blijft het gedrag van vroeger staan: alleen de stad.
+    void (async () => {
+      let region: string | null = null
+      if (placeId) {
+        try {
+          const { resolveAddressDetails } = await import("@/lib/places/resolve-address")
+          region = (await resolveAddressDetails(placeId))?.stateRegion ?? null
+        } catch { region = null }
+      }
+      const regionValue = region
+      if (regionValue) setDetailsForm(prev => ({ ...prev, region: regionValue }))
+      await saveFieldDirect({
+        location: city,
+        address_city: city,
+        ...(region ? { address_region: region } : {}),
+      })
+    })()
   }, [saveFieldDirect])
 
   // Location input change handler
@@ -4672,6 +4703,7 @@ export default function ListingEditorPage() {
 
   const locationDisplayValue =
     detailsForm.city ||
+    detailsForm.region ||
     detailsForm.address ||
     ""
 
@@ -5405,7 +5437,7 @@ export default function ListingEditorPage() {
           {/* Location */}
           <div
             className={`spec-item-edit${editingSpecBar === "location" ? " editing" : ""}`}
-            data-submit-highlight={highlightMissingFields && !detailsForm.city?.trim() ? "true" : undefined}
+            data-submit-highlight={highlightMissingFields && !detailsForm.city?.trim() && !detailsForm.region?.trim() ? "true" : undefined}
             onClick={() => editingSpecBar !== "location" && setEditingSpecBar("location")}
           >
             <span className="ec-badge">
@@ -5436,7 +5468,7 @@ export default function ListingEditorPage() {
                         key={r.placeId}
                         type="button"
                         className="ccm-row"
-                        onMouseDown={e => { e.preventDefault(); handleSelectCity(r.mainText) }}
+                        onMouseDown={e => { e.preventDefault(); handleSelectCity(r.mainText, r.placeId, r.isProvince) }}
                       >
                         <span className="truncate">
                           <span style={{ fontWeight: 400 }}>{r.mainText}</span>
@@ -7044,7 +7076,7 @@ export default function ListingEditorPage() {
       {showSubmitReviewPopup && (() => {
         const title = detailsForm.projectTitle?.trim()
         const desc = descriptionPlainText?.trim()
-        const location = detailsForm.city?.trim()
+        const location = detailsForm.city?.trim() || detailsForm.region?.trim()
         const type = detailsForm.category || detailsForm.projectType
         const scope = specScope
         const style = detailsForm.projectStyle
@@ -7074,11 +7106,11 @@ export default function ListingEditorPage() {
         ]
 
         return (
-          <div className="popup-overlay" onClick={() => setShowSubmitReviewPopup(false)}>
+          <div className="popup-overlay" onClick={() => { setShowSubmitReviewPopup(false); if (!allRequiredMet) setHighlightMissingFields(true) }}>
             <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
               <div className="popup-header">
                 <h3 className="arco-section-title">{tSubmit("title")}</h3>
-                <button type="button" className="popup-close" onClick={() => setShowSubmitReviewPopup(false)} aria-label={tActions("close")}>✕</button>
+                <button type="button" className="popup-close" onClick={() => { setShowSubmitReviewPopup(false); if (!allRequiredMet) setHighlightMissingFields(true) }} aria-label={tActions("close")}>✕</button>
               </div>
 
               {/* Required fields */}

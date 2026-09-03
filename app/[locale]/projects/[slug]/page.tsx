@@ -302,8 +302,13 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         // the Credited professionals section so they don't double up.
         .neq("companies.audience", "pro")
       if (canPreview) {
-        // In preview mode, show listed/featured professionals + the project owner
-        q = q.or("status.in.(live_on_page,listed),is_project_owner.eq.true")
+        // Preview mirrors the LIVE page: invited credits included — a
+        // preview that hides tomorrow's credits misrepresents the page
+        // it exists to show (an owner looking for a tagged colleague
+        // concluded the credit was lost). Only the deactivated-company
+        // filter stays live-only, so an owner can still preview around
+        // a deactivated collaborator.
+        q = q.or("status.in.(live_on_page,listed,invited),is_project_owner.eq.true")
       } else {
         q = q.in("status", ["live_on_page", "listed", "invited"]).neq("companies.status", "deactivated")
       }
@@ -819,7 +824,10 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           />
 
           <SpecificationsBar
-            location={project.address_city}
+            // Stad, of de provincie voor projecten die alleen op
+            // provincieniveau gelokaliseerd zijn — zelfde volgorde als
+            // de detailsbalk in project edit.
+            location={project.address_city || project.address_region}
             year={project.project_year}
             type={resolvedType}
             scope={resolvedScope}
