@@ -8,8 +8,6 @@ import { toast } from "sonner"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useAuth } from "@/contexts/auth-context"
-import { useCreateCompanyModal } from "@/contexts/create-company-modal-context"
-import { useLoginModal } from "@/contexts/login-modal-context"
 import { trackPageView, trackUpgradeIntent } from "@/lib/tracking"
 import { claimFoundingAccess, getFoundingClaimStatus } from "@/app/pricing/actions"
 
@@ -44,18 +42,8 @@ const orderedFeatures = () =>
 export function PricingContributorCta({ showLandingLink = true }: { showLandingLink?: boolean }) {
   const t = useTranslations("dashboard")
   const { user, profile } = useAuth()
-  const { openLoginModal } = useLoginModal()
-  const { openCreateCompanyModal } = useCreateCompanyModal()
   const userTypes = profile?.user_types as string[] | null
   const hasProfessionalRole = userTypes?.includes("professional") ?? false
-
-  const handleStartFree = () => {
-    if (!user) {
-      openLoginModal("/create-company")
-      return
-    }
-    openCreateCompanyModal()
-  }
 
   // Acquisition ask — pointless for logged-in professionals, who
   // already have their company page (e.g. the dashboard pricing page).
@@ -71,9 +59,11 @@ export function PricingContributorCta({ showLandingLink = true }: { showLandingL
         <p className="arco-body-text" style={{ maxWidth: 440, margin: "0 auto 20px" }}>
           {t("pricing_contrib_cta_body")}
         </p>
-        <button onClick={handleStartFree} style={{ padding: "12px 28px", fontSize: 14, fontFamily: "var(--font-sans)", background: "var(--primary)", border: "1px solid var(--primary)", borderRadius: 3, color: "#ffffff", cursor: "pointer" }}>
+        {/* Straight to the /claim funnel — it handles signed-out
+            visitors itself, so no login modal detour anymore. */}
+        <Link href="/claim" style={{ display: "inline-block", padding: "12px 28px", fontSize: 14, fontFamily: "var(--font-sans)", background: "var(--primary)", border: "1px solid var(--primary)", borderRadius: 3, color: "#ffffff" }}>
           {t("pricing_contrib_cta_button")}
-        </button>
+        </Link>
         {showLandingLink && (
           <div style={{ marginTop: 14 }}>
             <Link href="/businesses/professionals" className="text-link-plain">
@@ -90,8 +80,6 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
   const t = useTranslations("dashboard")
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("yearly")
   const { user, profile } = useAuth()
-  const { openLoginModal } = useLoginModal()
-  const { openCreateCompanyModal } = useCreateCompanyModal()
 
   const proPrice = billingCycle === "yearly" ? 39 : 49
 
@@ -105,20 +93,14 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
   }, [])
 
   const handleStartFree = () => {
-    if (!user) {
-      openLoginModal("/create-company")
-      return
-    }
-    if (hasProfessionalRole) {
+    if (user && hasProfessionalRole) {
       window.location.href = "/dashboard/listings"
       return
     }
-    // Open the claim modal in place, like the businesses landing does.
-    // Navigating to /create-company here did a FULL page load; that
-    // page then opens the modal and router.back()s — but back() after a
-    // hard navigation restores pricing as a fresh document, discarding
-    // the tree holding the open-modal state (modal flashed, then gone).
-    openCreateCompanyModal()
+    // The /claim funnel replaces the modal AND the login detour: it
+    // collects the account on its own second step, so signed-out
+    // visitors go straight in.
+    window.location.href = "/claim"
   }
 
   // Whether this professional's company already claimed founding access

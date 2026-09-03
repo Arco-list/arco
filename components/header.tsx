@@ -535,7 +535,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                         <div className="my-1 border-t border-border mx-5" />
                         <Link
                           href="/businesses/architects"
-                          className="block px-5 py-2 text-sm font-normal text-primary hover:opacity-70 transition-colors"
+                          className="block px-5 py-2 text-sm font-normal text-[#1c1c1a] hover:text-primary transition-colors"
                           onClick={() => setIsMobileMenuOpen(false)}
                         >
                           {t("list_with_us")}
@@ -678,7 +678,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                 <Link
                   href="/businesses/architects"
                   className={`header-rule hidden md:inline-flex items-center h-8 text-sm font-normal whitespace-nowrap transition-colors ${
-                    transparent && !isScrolled ? "text-white hover:text-white/80" : "text-primary hover:opacity-70"
+                    transparent && !isScrolled ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
                   }`}
                 >
                   {t("list_with_us")}

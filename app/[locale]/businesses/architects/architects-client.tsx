@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { trackPageView } from "@/lib/tracking"
 import { useSearchParams } from "next/navigation"
+import { Link } from "@/i18n/navigation"
 import { useTranslations } from "next-intl"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import {
   HeroSection,
-  LinkInputRow,
   BenefitsGrid,
   HowItWorks,
   FAQSection,
@@ -70,10 +70,6 @@ export function ArchitectsClient({ projects, preloadedCompany, inviteEmail }: Ar
     }
   }, [searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSubmit = useCallback((url: string) => {
-    setPendingImportUrl(url)
-  }, [])
-
   const companyIdParam = searchParams.get("companyId")
   const selfUrl = inviteEmail
     ? `/businesses/architects?inviteEmail=${encodeURIComponent(inviteEmail)}${companyIdParam ? `&companyId=${companyIdParam}` : ""}`
@@ -105,11 +101,13 @@ export function ArchitectsClient({ projects, preloadedCompany, inviteEmail }: Ar
             Claim {preloadedCompany.name}
           </button>
         ) : (
-          <LinkInputRow
-            placeholder={t("cta_placeholder")}
-            buttonLabel={t("cta_button")}
-            onSubmit={handleSubmit}
-          />
+          /* Fase 3 van de funnel-livegang: de platform-instap is /claim
+             (zoeken → verifiëren → claimen of aanmaken). Het oude
+             projectlink-veld sloeg de bedrijfsstap over en werkte alleen
+             voor wie al importeerbare projecten online had. */
+          <Link href="/claim" className="landing-cta">
+            {t("cta_claim")}
+          </Link>
         )}
       </HeroSection>
 

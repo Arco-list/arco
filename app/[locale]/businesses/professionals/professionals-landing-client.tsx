@@ -20,6 +20,7 @@ import {
 import { useAuth } from "@/contexts/auth-context"
 import { useLoginModal } from "@/contexts/login-modal-context"
 import { useCreateCompanyModal } from "@/contexts/create-company-modal-context"
+import { Link } from "@/i18n/navigation"
 import { trackPageView } from "@/lib/tracking"
 import type { PreloadedCompany } from "@/app/businesses/actions"
 
@@ -81,7 +82,7 @@ export default function ProfessionalsLandingClient({
 
   const ctaLabel = preloadedCompany
     ? t("cta_claim_button", { company: preloadedCompany.name })
-    : t("cta_button")
+    : null
 
   return (
     <>
@@ -92,13 +93,23 @@ export default function ProfessionalsLandingClient({
         title={t("hero_title")}
         body={t("hero_body")}
       >
-        <button
-          type="button"
-          onClick={handleCTA}
-          className="landing-cta"
-        >
-          {ctaLabel}
-        </button>
+        {preloadedCompany ? (
+          /* Oude mail-links (inviteEmail-flow) blijven op de modal tot
+             de laatste verstuurde mails uitgewerkt zijn. */
+          <button
+            type="button"
+            onClick={handleCTA}
+            className="landing-cta"
+          >
+            {ctaLabel}
+          </button>
+        ) : (
+          /* Fase 3: de platform-instap is /claim — zelfde knop en copy
+             als op /businesses/architects. */
+          <Link href="/claim" className="landing-cta">
+            {t("cta_claim")}
+          </Link>
+        )}
       </HeroSection>
 
       {recentProfessionals.length > 0 && (
