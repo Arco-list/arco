@@ -1170,7 +1170,7 @@
     "pricing_link_professionals": "Zo werkt Arco voor professionals",
     "pricing_included_in_pro": "Inbegrepen in Pro",
     "pricing_contrib_cta_body": "Sta jij op projecten die op Arco verschijnen? Claim je gratis vermelding en bedrijfspagina — het kost twee minuten.",
-    "pricing_contrib_cta_button": "Maak je bedrijfspagina",
+    "pricing_contrib_cta_button": "Claim je bedrijfspagina",
     "pricing_contrib_cta_title": "Claim je plek op de projecten die jij hebt gerealiseerd",
     "add_project": "Project toevoegen",
     "credited_label": "{count, plural, one {professional toegevoegd} other {professionals toegevoegd}}",
@@ -1197,8 +1197,6 @@
     "architects": {
       "hero_title": "Publiceer je werk. Vermeld je team. Zet de standaard.",
       "hero_body": "Arco is een gecureerd architectuurplatform waar projecten centraal staan en erkenning wordt verdiend door gebouwd werk — niet door promotie.",
-      "cta_placeholder": "Plak een projectlink van je website",
-      "cta_button": "Project genereren",
       "benefit_1_title": "Gecureerd platform",
       "benefit_1_body": "Word lid van een selectief netwerk van uitzonderlijke architecten. Elk project wordt beoordeeld om de hoge standaard van het platform te waarborgen.",
       "benefit_1_feature_1": "Kwalitatieve redactionele showcases",
@@ -1229,7 +1227,8 @@
       "faq_4_q": "Hoe vinden opdrachtgevers mij op Arco?",
       "faq_4_a": "Opdrachtgevers bladeren door projecten op stijl, locatie en type. Wanneer ze werk vinden dat aanspreekt, nemen ze direct contact op via het platform — geen biedingen nodig.",
       "faq_5_q": "Wat voor soort projecten moet ik indienen?",
-      "faq_5_a": "Dien je beste werk in — voltooid, professioneel gefotografeerd en gevestigd in Nederland. Je kunt internationaal werk laten zien zodra je bent geaccepteerd."
+      "faq_5_a": "Dien je beste werk in — voltooid, professioneel gefotografeerd en gevestigd in Nederland. Je kunt internationaal werk laten zien zodra je bent geaccepteerd.",
+      "cta_claim": "Zet je bedrijf op Arco"
     },
     "photography": {
       "eyebrow": "Fotografie",
@@ -1283,7 +1282,8 @@
       "endorsement_2_role": "Vermeer Architecten — Rotterdam",
       "endorsement_3_quote": "Ik beveel ze aan bij elke opdrachtgever die het vraagt. Dat is het grootste compliment dat ik kan geven.",
       "endorsement_3_name": "Joost Hendriks",
-      "endorsement_3_role": "Hendriks & Partners — Utrecht"
+      "endorsement_3_role": "Hendriks & Partners — Utrecht",
+      "cta_claim": "Zet je bedrijf op Arco"
     }
   },
   "introduction": {
@@ -1827,7 +1827,7 @@
     "invalid_title": "Deze link is niet geldig",
     "invalid_body": "De link is mogelijk onvolledig. Open de uitnodigingsmail opnieuw en gebruik de knop daar.",
     "expired_title": "Deze link is verlopen",
-    "expired_body": "Claimlinks zijn 48 uur geldig. Beantwoord de uitnodigingsmail en we sturen een nieuwe.",
+    "expired_body": "Claimlinks zijn 14 dagen geldig. Beantwoord de uitnodigingsmail en we sturen een nieuwe.",
     "used_title": "Deze link is al gebruikt",
     "used_body": "De claim via deze link is al afgerond. Log in om je pagina te beheren.",
     "claimed_title": "Al geclaimd",
@@ -1854,7 +1854,7 @@
     "last_name_label": "Achternaam",
     "last_name_placeholder": "Achternaam",
     "code_label": "Verificatiecode",
-    "code_sent_note": "Dit adres heeft al een Arco-account — we hebben een inlogcode gestuurd naar {email}.",
+    "code_sent_note": "Dit adres heeft al een Arco-account.",
     "other_email_note": "Een ander adres loopt via de normale inlog — daar kun je ook verdergaan met Google.",
     "open_login_modal": "Log in met een bestaand account of Google",
     "continue_email": "Ga verder met e-mail",
@@ -1874,7 +1874,7 @@
     "back_to_company": "Terug naar bedrijfsgegevens",
     "example_badge": "Voorbeeld",
     "platform_title": "Zet je bedrijf op Arco",
-    "platform_lede": "Zoek je bedrijf. Staat het al op Arco, dan claim je de pagina — anders maken we hem nu aan, gratis.",
+    "platform_lede": "Zoek je bedrijf en claim gratis je pagina — met je werk erop.",
     "find_placeholder": "Bedrijfsnaam…",
     "find_not_listed": "Staat je bedrijf er niet tussen?",
     "field_website": "Website",
@@ -1893,7 +1893,9 @@
     "resend_code": "Ander adres gebruiken of opnieuw versturen",
     "required_verify_email": "Vul het e-mailadres in waarop je de code wilt ontvangen.",
     "other_address_note": "Ander adres — we sturen daar een eenmalige code naartoe.",
-    "find_nl_only": "Arco is voorlopig alleen open voor bedrijven in Nederland."
+    "find_nl_only": "Arco is voorlopig alleen open voor bedrijven in Nederland.",
+    "used_cta": "Log in",
+    "restoring_pick": "Bedrijf laden…"
   },
   "invite_accept": {
     "eyebrow": "Uitnodiging",

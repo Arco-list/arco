@@ -41,9 +41,15 @@ export type ResolvedAddress = {
 let autocompleteService: any = null
 
 async function placesLib(): Promise<any | null> {
-  const g = (window as any).google
-  if (!g?.maps?.importLibrary) return null
-  return g.maps.importLibrary("places")
+  // The layout loads the Maps JS async; a caller that fires on mount
+  // (e.g. the claim funnel rehydrating a pick after a locale switch)
+  // runs before the script lands. Wait for it instead of failing.
+  const deadline = Date.now() + 8000
+  while (!(window as any).google?.maps?.importLibrary) {
+    if (Date.now() > deadline) return null
+    await new Promise((r) => setTimeout(r, 150))
+  }
+  return (window as any).google.maps.importLibrary("places")
 }
 
 /** Debounce-free prediction fetch — callers own their debounce. */
@@ -176,15 +182,27 @@ export async function resolveEstablishmentDetails(placeId: string): Promise<Reso
     const lib = await placesLib()
     if (!lib?.PlacesService) return null
     const service = new lib.PlacesService(document.createElement("div"))
-    const place = await new Promise<any>((resolve, reject) => {
-      service.getDetails(
-        {
-          placeId,
-          fields: ["name", "place_id", "formatted_address", "address_components", "formatted_phone_number", "website", "editorial_summary", "types", "geometry"],
-        },
-        (p: any, status: string) => (status === "OK" && p ? resolve(p) : reject(new Error(status))),
-      )
-    })
+    const getOnce = () =>
+      new Promise<any>((resolve, reject) => {
+        service.getDetails(
+          {
+            placeId,
+            fields: ["name", "place_id", "formatted_address", "address_components", "formatted_phone_number", "website", "editorial_summary", "types", "geometry"],
+          },
+          (p: any, status: string) => (status === "OK" && p ? resolve(p) : reject(new Error(status))),
+        )
+      })
+    let place: any
+    try {
+      place = await getOnce()
+    } catch (first) {
+      // Transient statuses (OVER_QUERY_LIMIT, UNKNOWN_ERROR) often pass
+      // on a second attempt; log the status so a persistent failure is
+      // diagnosable from the console instead of a silent null.
+      console.warn("places details retry after:", first)
+      await new Promise((r) => setTimeout(r, 400))
+      place = await getOnce()
+    }
 
     let city = ""
     let country = ""
@@ -215,7 +233,8 @@ export async function resolveEstablishmentDetails(placeId: string): Promise<Reso
       latitude: typeof place.geometry?.location?.lat === "function" ? place.geometry.location.lat() : null,
       longitude: typeof place.geometry?.location?.lng === "function" ? place.geometry.location.lng() : null,
     }
-  } catch {
+  } catch (err) {
+    console.warn("places details failed:", err)
     return null
   }
 }

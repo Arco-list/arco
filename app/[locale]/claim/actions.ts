@@ -264,6 +264,67 @@ export async function completeClaimAction(input: CompleteInput): Promise<Complet
 }
 
 /**
+ * The commit for the proven address when an account already EXISTS
+ * there. The token proved the mailbox (delivery on the e-mail
+ * channels, the step-1 code on platform), which is exactly what a
+ * sign-in code would prove again — so no second code: claim for the
+ * existing user and mint their session the same way the codeless
+ * account creation does.
+ */
+export async function completeClaimExistingAction(
+  token: string,
+): Promise<{ status: "done"; loginUrl: string } | { status: "no_account" } | { status: "error"; error: string }> {
+  const parsed = await verifyClaimToken(token)
+  if (!parsed.ok) return { status: "error", error: `invalid token (${parsed.reason})` }
+  if (parsed.consumed) return { status: "error", error: "This link has already been used." }
+
+  const svc = createServiceRoleSupabaseClient()
+  const { data: userList } = await svc.auth.admin.listUsers({ page: 1, perPage: 1000 })
+  const existing = (userList?.users ?? []).find(
+    (u) => u.email?.toLowerCase() === parsed.email.toLowerCase(),
+  )
+  // Account gone between check and commit — the caller falls back to
+  // the normal sign-in-code flow.
+  if (!existing) return { status: "no_account" }
+
+  if (!(await consumeClaimToken(parsed.id))) {
+    return { status: "error", error: "This link has already been used." }
+  }
+  try {
+    const claimed = await claimCompanyForUser({
+      userId: existing.id,
+      companyId: parsed.companyId,
+      creditId: parsed.creditId,
+    })
+    if (!claimed.ok) throw new Error(claimed.error)
+
+    const { data: linkData, error: linkError } = await svc.auth.admin.generateLink({
+      type: "magiclink",
+      email: parsed.email,
+    })
+    const actionLink = linkData?.properties?.action_link
+    const tokenHash = actionLink
+      ? new URL(actionLink).searchParams.get("token") ?? linkData?.properties?.hashed_token
+      : linkData?.properties?.hashed_token
+    if (linkError || !tokenHash) throw linkError ?? new Error("no token_hash from generateLink")
+
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
+    const loginUrl = new URL(`${siteUrl}/auth/callback`)
+    loginUrl.searchParams.set("token_hash", tokenHash)
+    loginUrl.searchParams.set("type", "magiclink")
+    loginUrl.searchParams.set(
+      "redirect_to",
+      `/dashboard/company?company_id=${parsed.companyId}&claimed=1`,
+    )
+    return { status: "done", loginUrl: loginUrl.toString() }
+  } catch (err) {
+    logger.error("claim: existing-account complete failed", { companyId: parsed.companyId }, err as Error)
+    await releaseClaimToken(parsed.id)
+    return { status: "error", error: "Something went wrong publishing your page. The link still works — try again." }
+  }
+}
+
+/**
  * The commit for a caller who already holds a session: the swap-address
  * path (they verified a different login with a one-time code) and the
  * existing-account path. The claim token authorises the company; the

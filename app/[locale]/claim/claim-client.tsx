@@ -15,7 +15,7 @@ import { AddressLookup } from "@/components/address-lookup"
 import { HeaderLanguageSwitcher } from "@/components/header-language-switcher"
 import type { ResolvedAddress } from "@/lib/places/resolve-address"
 
-import { saveCompanyStepAction, completeClaimAction, finalizeClaimSignedInAction } from "./actions"
+import { saveCompanyStepAction, completeClaimAction, completeClaimExistingAction, finalizeClaimSignedInAction } from "./actions"
 import { loadPlatformCompanyAction, sendPlatformDomainCodeAction, verifyPlatformDomainAndStartClaimAction } from "./platform-actions"
 import {
   searchEstablishmentPredictions,
@@ -46,13 +46,18 @@ function domainFromWebsite(input: string): string | null {
 
 type SessionUser = { email: string; name: string; avatarUrl: string | null }
 
-export function ClaimClient({ token, email, channel, sessionUser, initialScreen, ctx: initialCtx }: {
+export function ClaimClient({ token, email, channel, sessionUser, initialScreen, ctx: initialCtx, initialPlatformCompanyId = null, initialRestoringPick = false }: {
   token: string
   email: string
   channel: ClaimChannel
   sessionUser: SessionUser | null
   initialScreen: Screen
   ctx: ClaimContext
+  /** Tokenless pick rehydrated server-side (?c=) — arrive picked. */
+  initialPlatformCompanyId?: string | null
+  /** Tokenless Google pick (?p=) resolving client-side — show a
+   *  loading state instead of flashing the search screen. */
+  initialRestoringPick?: boolean
 }) {
   const t = useTranslations("claim")
   const locale = useLocale()
@@ -110,7 +115,8 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
   const isInvited = !isPlatform && emailValue.trim().toLowerCase() === email.toLowerCase()
 
   // Platform: what the commit needs to know about the pick.
-  const [platformCompanyId, setPlatformCompanyId] = useState<string | null>(null)
+  const [platformCompanyId, setPlatformCompanyId] = useState<string | null>(initialPlatformCompanyId)
+  const [restoringPick, setRestoringPick] = useState(initialRestoringPick)
   const [placeData, setPlaceData] = useState<ResolvedEstablishment | null>(null)
   // Find screen search state — Arco DB + Google establishments, debounced.
   const [findQuery, setFindQuery] = useState("")
@@ -123,8 +129,9 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
   // Which claimed row's "already managed" explainer is open.
   const [claimedInfoId, setClaimedInfoId] = useState<string | null>(null)
   // Merged platform step: the form unfolds once a company is picked;
-  // "Wijzig" on the company field folds it back into the search.
-  const [platformPicked, setPlatformPicked] = useState(false)
+  // "Wijzig" on the company field folds it back into the search. A
+  // server-rehydrated pick arrives already unfolded.
+  const [platformPicked, setPlatformPicked] = useState(Boolean(initialPlatformCompanyId))
   // Flipped verification: the code is requested and entered ON the
   // company step; success mints the token and leaves tokenless mode.
   const [verifyLocal, setVerifyLocal] = useState("")
@@ -223,6 +230,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
   // ── platform find screen ──────────────────────────────────────────
   function searchCompanies(q: string) {
     setFindQuery(q)
+    setError(null)
     if (findTimer.current) clearTimeout(findTimer.current)
     if (q.trim().length < 2) { setFindResults([]); return }
     findTimer.current = setTimeout(async () => {
@@ -302,6 +310,29 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
     setPlatformPicked(true)
   }
 
+  /** The pick lives in the querystring too (?c= Arco row, ?p= Google
+   *  place): the language switcher navigates but keeps the query, so a
+   *  locale change — or a refresh — rehydrates the pick instead of
+   *  dropping the visitor back into the search. replaceState, not the
+   *  router: a route transition would remount and lose the rest. */
+  /** Step 2 in the URL too — the locale switcher navigates and keeps
+   *  the query, so a language change on the account step must not
+   *  restart the visitor at the company review. */
+  function writeStepParam(you: boolean) {
+    const url = new URL(window.location.href)
+    if (you) url.searchParams.set("step", "you")
+    else url.searchParams.delete("step")
+    window.history.replaceState(null, "", url.toString())
+  }
+
+  function writePickParam(key: "c" | "p" | null, value?: string) {
+    const url = new URL(window.location.href)
+    url.searchParams.delete("c")
+    url.searchParams.delete("p")
+    if (key && value) url.searchParams.set(key, value)
+    window.history.replaceState(null, "", url.toString())
+  }
+
   async function pickArcoCompany(id: string) {
     setFindBusy(true); setError(null)
     const res = await loadPlatformCompanyAction(id)
@@ -310,17 +341,35 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
     setPlatformCompanyId(id)
     setPlaceData(null)
     setWebsite("")
+    writePickParam("c", id)
     applyPickedCtx(res.ctx)
   }
 
-  async function pickGooglePlace(pred: EstablishmentPrediction) {
+  async function pickGooglePlace(pred: EstablishmentPrediction, opts?: { silent?: boolean }) {
     setFindBusy(true); setError(null)
-    const place = await resolveEstablishmentDetails(pred.placeId)
+    let place = await resolveEstablishmentDetails(pred.placeId)
     setFindBusy(false)
-    if (!place) { setError(t("address_error")); return }
+    if (!place && pred.name) {
+      // Details down ≠ dead end: the prediction already carries name and
+      // city, and the funnel collects the rest anyway (website field for
+      // the domain, address on the token step). Degrade, don't block.
+      place = {
+        name: pred.name, placeId: pred.placeId, formattedAddress: null,
+        city: pred.city, country: null, stateRegion: null, phone: null,
+        website: null, domain: null, editorialSummary: null,
+        googleTypes: null, latitude: null, longitude: null,
+      }
+    }
+    if (!place) {
+      // Rehydration failure is not the visitor's doing: drop the stale
+      // param and land on a clean search, no error banner.
+      if (opts?.silent) { writePickParam(null); return }
+      setError(t("address_error")); return
+    }
     setPlatformCompanyId(null)
     setPlaceData(place)
     setWebsite(place.website ?? "")
+    writePickParam("p", place.placeId)
     applyPickedCtx({
       ...ctx,
       company: {
@@ -333,6 +382,21 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
       creditedService: null, project: null, roster: [],
     })
   }
+
+  // Rehydrate a pick carried in the URL — a locale switch or refresh
+  // lands here with ?c=/?p= still set.
+  const pickRestored = useRef(false)
+  useEffect(() => {
+    if (!isPlatform || platformPicked || pickRestored.current) return
+    pickRestored.current = true
+    const params = new URLSearchParams(window.location.search)
+    const c = params.get("c")
+    const pl = params.get("p")
+    if (c) void pickArcoCompany(c).finally(() => setRestoringPick(false))
+    else if (pl) void pickGooglePlace({ placeId: pl, name: "", city: null }, { silent: true }).finally(() => setRestoringPick(false))
+    else setRestoringPick(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function submitCompany() {
     const fe = {
@@ -364,6 +428,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
     setBusy(false)
     if (!res.ok) { setError(res.error); return }
     setScreen("you")
+    writeStepParam(true)
     window.scrollTo({ top: 0 })
   }
 
@@ -436,6 +501,16 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
     if ("error" in res && res.error) { setBusy(false); setError(res.error.message); return }
     const exists = Boolean((res as { data?: { exists: boolean } }).data?.exists)
     if (exists) {
+      // The PROVEN address (token e-mail) with an existing account
+      // needs no second code — the token already proved this mailbox
+      // (delivery, or the step-1 domain code). Claim + sign in in one
+      // server round trip; any failure falls back to the code flow.
+      if (isInvited) {
+        const done = await completeClaimExistingAction(token)
+        if (done.status === "done") { window.location.href = done.loginUrl; return }
+        if (done.status === "error") { setBusy(false); setError(done.error); return }
+        // no_account: fall through to the normal sign-in code below.
+      }
       const sent = await signInWithOtpAction({ email: addr })
       setBusy(false)
       if ("error" in sent && sent.error) { setError(sent.error.message); return }
@@ -781,7 +856,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
               </h1>
               <p className={`arco-body-text ${styles.lede}`}>
                 {isPlatform
-                  ? (platformPicked ? t("company_lede_plain") : t("platform_lede"))
+                  ? (platformPicked || restoringPick ? t("company_lede_plain") : t("platform_lede"))
                   : channel === "showcase"
                     ? t("showcase_lede", { company: ctx.company.name })
                     : ctx.project?.inviterName
@@ -790,7 +865,17 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
               </p>
             </div>
             <div className={styles.mainArea}>
-              {isPlatform && !platformPicked ? (
+              {isPlatform && !platformPicked && restoringPick ? (
+                /* A locale switch mid-pick: the Google pick is being
+                   re-resolved — show the field as loading, never a
+                   flash of the empty search. */
+                <div className={styles.field}>
+                  <span className={styles.label}>{t("field_company")}</span>
+                  <div className={styles.addrShown}>
+                    <span className={styles.addrText} style={{ color: "var(--arco-light)" }}>{t("restoring_pick")}</span>
+                  </div>
+                </div>
+              ) : isPlatform && !platformPicked ? (
                 /* Merged step: the company field IS the search until a
                    pick lands; the rest of the form unfolds below it. */
                 <div className={styles.field}>
@@ -870,6 +955,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                         setPlatformPicked(false)
                         setClaimedInfoId(null)
                         setError(null)
+                        writePickParam(null)
                         if (name.trim()) searchCompanies(name)
                       }}>
                       {t("find_other_company")}
@@ -1124,7 +1210,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
             {/* Absoluut in de toppadding van de body geplaatst, zodat de
                 H1 op exact dezelfde hoogte staat als op stap 1. */}
             <p style={{ position: "absolute", top: -40, left: 0, margin: 0 }}>
-              <button type="button" className="arco-text-link" onClick={() => { setScreen("company"); setError(null) }}>
+              <button type="button" className="arco-text-link" onClick={() => { setScreen("company"); setError(null); writeStepParam(false) }}>
                 ‹ {t("back_to_company")}
               </button>
             </p>
@@ -1174,9 +1260,18 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
               <>
                 <div className={styles.field}>
                   <label className={styles.label} htmlFor="cl-login">{t("email_label")}</label>
-                  <input className={styles.input} id="cl-login" type="email" value={emailValue}
-                    disabled={namesMode || otpSent}
-                    onChange={(e) => onEmailEdited(e.target.value)} />
+                  <div className={styles.inputWithAction}>
+                    <input className={`${styles.input}${namesMode || otpSent ? ` ${styles.inputActionPadSm}` : ""}`}
+                      id="cl-login" type="email" value={emailValue}
+                      disabled={namesMode || otpSent}
+                      onChange={(e) => onEmailEdited(e.target.value)} />
+                    {(namesMode || otpSent) && (
+                      <button type="button" className={`arco-text-link ${styles.inputAction}`}
+                        onClick={() => onEmailEdited(email)}>
+                        {t("change")}
+                      </button>
+                    )}
+                  </div>
                   {/* Announced only when the address actually differs
                       from the proven one — and gone again once a code
                       is on its way. */}
@@ -1185,15 +1280,9 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                     <p className={styles.note}>{t("other_address_note")}</p>
                   )}
                   {existsFlow && otpSent && (
-                    <div className={styles.warn}><i>!</i><span>{t("code_sent_note", { email: emailValue.trim() })}</span></div>
+                    <p className={styles.note}>{t("code_sent_note", { email: emailValue.trim() })}</p>
                   )}
-                  {(namesMode || otpSent) && (
-                    <div style={{ marginTop: 10 }}>
-                      <button type="button" className="arco-text-link" onClick={() => onEmailEdited(email)}>
-                        {t("change")}
-                      </button>
-                    </div>
-                  )}
+
                 </div>
 
                 {namesMode && (
@@ -1215,7 +1304,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
 
                 {otpSent && (
                   <div className={styles.field}>
-                    <span className={styles.label}>{t("code_label")}</span>
+                    <span className={styles.label}>{t("platform_code_sent", { email: emailValue.trim() })}</span>
                     {otpRow}
                   </div>
                 )}

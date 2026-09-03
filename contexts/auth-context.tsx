@@ -150,6 +150,13 @@ export const AuthProvider = ({ children, initialSession }: AuthProviderProps) =>
           if (typeof window !== "undefined" && (window as any).posthog) {
             (window as any).posthog.reset();
           }
+          // The /claim funnel signs people out as part of "use another
+          // account" on its own account step — the page works signed
+          // out by design (the token lives in the URL), so the global
+          // logged-out-goes-home rule must not yank them off the flow.
+          if (typeof window !== "undefined" && /^\/(?:[a-z]{2}\/)?claim(?:\/|$)/.test(window.location.pathname)) {
+            return;
+          }
           window.location.href = "/";
           return;
         }
