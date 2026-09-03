@@ -191,9 +191,16 @@ export default function DashboardListingsPage() {
   // publishing an 8th uncredited project makes a new key, so it returns
   // with a genuinely new reason to ask.
   const [creditNudgeDismissed, setCreditNudgeDismissed] = useState<boolean | null>(null)
-  const { canPublishProjects, error: entitlementsError } = useCompanyEntitlements()
+  const { canPublishProjects, loading: entitlementsLoading, error: entitlementsError } = useCompanyEntitlements()
   const [userId, setUserId] = useState<string | null>(null)
   const [companyId, setCompanyId] = useState<string | null>(null)
+  // Dismissal survives reloads per browser+company; the banner explains
+  // a standing rule, so once read it may stay away.
+  const [creditGrowthDismissed, setCreditGrowthDismissed] = useState(true)
+  useEffect(() => {
+    if (!companyId) return
+    try { setCreditGrowthDismissed(localStorage.getItem(`arco:credit-growth:${companyId}`) === "1") } catch { setCreditGrowthDismissed(false) }
+  }, [companyId])
   const [professionalId, setProfessionalId] = useState<string | null>(null)
   // Track in-flight requests to prevent race conditions
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -1117,6 +1124,26 @@ export default function DashboardListingsPage() {
           <div className="wrap">
 
             {/* Banners */}
+            {/* Non-publishing trades grow their listings through the
+                project owner's credits — with projects already on the
+                page, the empty-state that explains this never shows, so
+                say it here. Gated on entitlements having loaded, or it
+                flashes for every publisher too. */}
+            {!entitlementsLoading && !canPublishProjects && hasProjects && !creditGrowthDismissed && (
+              <div className="arco-banner arco-banner--highlight" style={{ marginBottom: 22 }}>
+                <div style={{ minWidth: 0 }}>
+                  <p className="arco-banner-title">{t("credit_growth_title")}</p>
+                  <p className="arco-banner-body">{t("credit_growth_body")}</p>
+                </div>
+                <button type="button" className="arco-banner-close" aria-label={t("close")}
+                  onClick={() => {
+                    setCreditGrowthDismissed(true)
+                    try { if (companyId) localStorage.setItem(`arco:credit-growth:${companyId}`, "1") } catch {}
+                  }}>
+                  ×
+                </button>
+              </div>
+            )}
             {entitlementsError && (
               <div style={{ marginBottom: 20, padding: "10px 14px", borderRadius: 6, border: "1px solid #fde68a", background: "#fffbeb", fontSize: 13, color: "#92400e" }}>
                 {entitlementsError}

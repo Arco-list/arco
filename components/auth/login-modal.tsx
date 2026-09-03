@@ -369,10 +369,10 @@ export function LoginModal() {
               <p style={{ fontSize: 12, fontWeight: 300, fontFamily: "var(--font-sans)", color: "var(--arco-mid-grey)", textAlign: "center", marginTop: 20, lineHeight: 1.5 }}>
                 {t.rich("terms_prefix_continue", {
                   terms: (chunks) => (
-                    <Link href="/terms" onClick={handleClose} style={{ color: "var(--arco-black)", textDecoration: "underline" }}>{chunks}</Link>
+                    <Link href="/terms" onClick={handleClose}>{chunks}</Link>
                   ),
                   privacy: (chunks) => (
-                    <Link href="/privacy" onClick={handleClose} style={{ color: "var(--arco-black)", textDecoration: "underline" }}>{chunks}</Link>
+                    <Link href="/privacy" onClick={handleClose}>{chunks}</Link>
                   ),
                 })}
               </p>
@@ -436,10 +436,10 @@ export function LoginModal() {
                 <p style={{ fontSize: 12, fontWeight: 300, fontFamily: "var(--font-sans)", color: "var(--arco-mid-grey)", textAlign: "center", marginTop: 16, lineHeight: 1.5 }}>
                   {t.rich("terms_prefix_signup", {
                     terms: (chunks) => (
-                      <Link href="/terms" onClick={handleClose} style={{ color: "var(--arco-black)", textDecoration: "underline" }}>{chunks}</Link>
+                      <Link href="/terms" onClick={handleClose}>{chunks}</Link>
                     ),
                     privacy: (chunks) => (
-                      <Link href="/privacy" onClick={handleClose} style={{ color: "var(--arco-black)", textDecoration: "underline" }}>{chunks}</Link>
+                      <Link href="/privacy" onClick={handleClose}>{chunks}</Link>
                     ),
                   })}
                 </p>

@@ -356,7 +356,6 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   const [servicePopupOpen, setServicePopupOpen] = useState(false)
   // Manual tour replay (sub-nav "?" pill) — increments to force a run.
   const [tourForceRun, setTourForceRun] = useState(0)
-  const [serviceSearch, setServiceSearch] = useState("")
   const dragItemRef = useRef<number | null>(null)
   const servicesSnapshotRef = useRef<string[]>([])
   const dragOverRef = useRef<number | null>(null)
@@ -400,9 +399,13 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
 
   // On landing in setup mode, open Select services as the first step
   // instead of the old "Create your company page" checklist popup.
-  // Mount-only — closing the popup does not re-trigger.
+  // Mount-only — closing the popup does not re-trigger. Only when
+  // services are actually MISSING: the claim funnel already collects
+  // them on its company step, and re-asking a question the owner just
+  // answered reads as the funnel not having listened. Other missing
+  // fields are the highlight banner's job, not this popup's.
   useEffect(() => {
-    if (!isSetupMode || allRequiredComplete) return
+    if (!isSetupMode || servicesOffered.length > 0) return
     servicesSnapshotRef.current = [...servicesOffered]
     setServicePopupOpen(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -795,16 +798,22 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     })
   }, [foundedYear, teamSizeMin, teamSizeMax, city, country, address, flashSaved])
 
-  const saveContact = useCallback(async (overrides?: Record<string, string>) => {
+  const saveContact = useCallback(async (overrides?: Record<string, string | number>) => {
     setEditSaveStatus("saving")
     startTransition(async () => {
       const result = await updateCompanyContactAction({
-        domain: overrides?.domain ?? domain,
-        email: overrides?.email ?? email,
-        phone: overrides?.phone ?? phone,
-        address: overrides?.address ?? address,
-        city: overrides?.city ?? city,
-        country: overrides?.country ?? country,
+        domain: (overrides?.domain as string) ?? domain,
+        email: (overrides?.email as string) ?? email,
+        phone: (overrides?.phone as string) ?? phone,
+        address: (overrides?.address as string) ?? address,
+        city: (overrides?.city as string) ?? city,
+        country: (overrides?.country as string) ?? country,
+        // Full-location fields — only ever supplied by a Places pick.
+        ...(overrides?.stateRegion ? { stateRegion: overrides.stateRegion as string } : {}),
+        ...(overrides?.googlePlaceId ? { googlePlaceId: overrides.googlePlaceId as string } : {}),
+        ...(typeof overrides?.latitude === "number" && typeof overrides?.longitude === "number"
+          ? { latitude: overrides.latitude, longitude: overrides.longitude }
+          : {}),
         ...socialForm,
       })
       if (!result.success) {
@@ -818,39 +827,31 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
 
   const handleSelectAddress = useCallback(async (placeId: string) => {
     try {
-      const g = (window as any).google
-      if (!g?.maps) return
+      // Shared resolver (lib/places/resolve-address) — returns the FULL
+      // record. The inline version this replaced only kept address/city/
+      // country, silently dropping state_region, place_id and coords on
+      // every owner edit.
+      const { resolveAddressDetails } = await import("@/lib/places/resolve-address")
+      const resolved = await resolveAddressDetails(placeId)
+      if (!resolved) { toast.error(t("address_error")); return }
 
-      const placesLib = await g.maps.importLibrary("places")
-      const div = document.createElement("div")
-      const service = new placesLib.PlacesService(div)
-
-      const place = await new Promise<any>((resolve, reject) => {
-        service.getDetails(
-          { placeId, fields: ["formatted_address", "address_components"] },
-          (p: any, status: string) => { status === "OK" && p ? resolve(p) : reject(new Error("Failed")) },
-        )
-      })
-
-      let newCity = ""
-      let newCountry = ""
-      let street = ""
-      let streetNumber = ""
-      for (const comp of place.address_components ?? []) {
-        if (comp.types.includes("locality")) newCity = comp.long_name
-        if (comp.types.includes("country")) newCountry = comp.long_name
-        if (comp.types.includes("route")) street = comp.long_name
-        if (comp.types.includes("street_number")) streetNumber = comp.long_name
-      }
-
-      const newAddress = [street, streetNumber].filter(Boolean).join(" ")
+      const newAddress = resolved.streetAddress || resolved.formattedAddress
       setAddress(newAddress)
-      if (newCity) setCity(newCity)
-      if (newCountry) setCountry(newCountry)
+      if (resolved.city) setCity(resolved.city)
+      if (resolved.country) setCountry(resolved.country)
       setActiveEditField(null)
       setAddressQuery("")
       setAddressResults([])
-      saveContact({ address: newAddress, city: newCity || city, country: newCountry || country })
+      saveContact({
+        address: newAddress,
+        city: resolved.city || city,
+        country: resolved.country || country,
+        ...(resolved.stateRegion ? { stateRegion: resolved.stateRegion } : {}),
+        googlePlaceId: resolved.placeId,
+        ...(resolved.latitude != null && resolved.longitude != null
+          ? { latitude: resolved.latitude, longitude: resolved.longitude }
+          : {}),
+      })
     } catch {
       toast.error(t("address_error"))
     }
@@ -1167,17 +1168,22 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         .service-popup-body { flex: 1; overflow-y: auto; padding: 12px 28px 28px; }
         .service-popup-footer { display: flex; gap: 10px; justify-content: flex-end; padding: 16px 28px; border-top: 1px solid var(--arco-rule); background: var(--arco-off-white); border-radius: 0 0 12px 12px; flex-shrink: 0; }
         .sp-title { font-family: var(--font-serif); font-size: 18px; font-weight: 500; margin: 0; }
-        .sp-categories { display: flex; flex-direction: column; gap: 20px; }
-        .sp-category-group { display: flex; flex-direction: column; gap: 8px; }
-        .sp-category-label { font-size: 12px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: #5c5c5a; }
+        .sp-categories { display: flex; flex-direction: column; }
+        .sp-category-group { }
+        .sp-category-label { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 9px 0; font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--arco-light); transition: color .15s; }
+        .sp-category-label::-webkit-details-marker { display: none; }
+        .sp-category-label:hover { color: var(--arco-black); }
+        .sp-chevron { display: inline-flex; color: var(--arco-light); transition: transform .15s; }
+        .sp-category-group[open] .sp-chevron { transform: rotate(180deg); }
+        .sp-category-group[open] .sp-available { padding: 4px 0 18px; }
         .service-popup-badge { cursor: pointer; transition: opacity .15s; }
         .service-popup-badge:hover { opacity: 0.7; }
         .sp-search { width: 100%; font-size: 14px; padding: 10px 14px; border: 1px solid var(--arco-rule); border-radius: 3px; outline: none; font-family: inherit; transition: border-color .15s; margin-bottom: 20px; background: white; color: var(--text-primary); }
         .sp-search:focus { border-color: var(--arco-black); }
         .sp-search::placeholder { color: #b0b0ae; }
-        .sp-selected-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 24px; min-height: 44px; padding: 12px; background: #fafaf9; border-radius: 8px; border: 1px solid #e8e8e6; }
+        .sp-selected-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 24px; }
         .sp-selected-empty { font-size: 13px; color: #b0b0ae; text-align: center; padding: 8px 0; }
-        .sp-selected-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #fff; border: 1px solid #e8e8e6; border-radius: 6px; font-size: 13px; color: #1c1c1a; cursor: grab; transition: border-color .15s, box-shadow .15s; user-select: none; }
+        .sp-selected-item { display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: var(--arco-surface); border: 1px solid #e8e8e6; border-radius: 6px; font-size: 15px; color: #1c1c1a; cursor: grab; transition: border-color .15s, box-shadow .15s; user-select: none; }
         .sp-selected-item:hover { border-color: #c8c8c6; }
         .sp-selected-item.dragging { opacity: 0.5; box-shadow: 0 2px 8px rgba(0,0,0,.1); }
         .sp-selected-item.drag-over { border-color: #016D75; }
@@ -1240,7 +1246,14 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
           // sitting with the editors — they've already done their part
           // and the company will auto-list on approval via the
           // sync_company_listed_status trigger.
-          if (isSetupMode && !inReviewProject) setFirstProjectPopupOpen(true)
+          //
+          // Also skipped when the page is ALREADY listed — the claim
+          // funnel arrives that way (claimed + live credit auto-lists),
+          // and the popup's list_company segment would then ask
+          // permission to publish something that is already live. The
+          // funnel made that promise ("with this project on it from day
+          // one") and kept it; an ask-after-the-fact only sows doubt.
+          if (isSetupMode && !inReviewProject && companyStatus !== "listed") setFirstProjectPopupOpen(true)
         }}
       />
 
@@ -2303,21 +2316,23 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         // editor and closes normally on either.
         <div
           className="service-popup-overlay"
-          onClick={isSetupMode ? undefined : () => { setServicesOffered(servicesSnapshotRef.current); setServicePopupOpen(false); setServiceSearch("") }}
+          onClick={isSetupMode ? undefined : () => { setServicesOffered(servicesSnapshotRef.current); setServicePopupOpen(false); }}
         >
           <div className="service-popup" onClick={(e) => e.stopPropagation()}>
             {/* Header — grey background */}
             <div className="service-popup-header">
               <h3 className="arco-section-title" style={{ margin: 0 }}>{t("services_title")}</h3>
               {!isSetupMode && (
-                <button type="button" className="popup-close" onClick={() => { setServicesOffered(servicesSnapshotRef.current); setServicePopupOpen(false); setServiceSearch("") }} aria-label={tc("close")}>✕</button>
+                <button type="button" className="popup-close" onClick={() => { setServicesOffered(servicesSnapshotRef.current); setServicePopupOpen(false); }} aria-label={tc("close")}>✕</button>
               )}
             </div>
 
             {/* Scrollable body */}
             <div className="service-popup-body">
             {/* Selected services — ordered, draggable, first = primary */}
-            <label className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("services_your")}</label>
+            {/* Same field-label voice as the claim funnel's "Je
+                diensten" (.form-label), not an eyebrow. */}
+            <label className="form-label">{t("services_your")}</label>
             <p style={{ fontSize: 12, color: "#9a9a98", margin: "0 0 10px" }}>{t("services_drag_hint")}</p>
             <div className="sp-selected-list">
               {servicesOffered.length === 0 && (
@@ -2368,31 +2383,26 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
             </div>
 
             {/* Available services grouped by category */}
-            <label className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("services_add")}</label>
-            <input
-              className="sp-search"
-              placeholder={t("services_search")}
-              value={serviceSearch}
-              onChange={(e) => setServiceSearch(e.target.value)}
-            />
+            {/* Categorieën als dropdowns — het funnel-ontwerp: eyebrow-label
+                met chevron erachter, teller-badge bij selecties, groep van
+                de primaire dienst open, geen zoekveld, geen lijnen. */}
             <div className="sp-categories">
               {serviceCategories.map((group) => {
-                // Search now matches either the DB English name OR the
-                // localised label — otherwise NL visitors typing
-                // "Aannemer" wouldn't find "Builder".
-                const q = serviceSearch.toLowerCase()
-                const filtered = serviceSearch
-                  ? group.services.filter((s) => {
-                      const translated = translateProfessionalService(s.slug ?? s.name, locale) ?? s.name
-                      return s.name.toLowerCase().includes(q) || translated.toLowerCase().includes(q)
-                    })
-                  : group.services
+                const filtered = group.services
                 if (filtered.length === 0) return null
                 const atMax = servicesOffered.length >= 12
                 const groupLabel = translateProfessionalService(group.slug, locale) ?? group.name
+                const selectedInGroup = group.services.filter((s) => servicesOffered.includes(s.id)).length
+                const containsPrimary = group.services.some((s) => s.id === servicesOffered[0])
                 return (
-                  <div key={group.slug} className="sp-category-group">
-                    <span className="sp-category-label">{groupLabel}</span>
+                  <details key={group.slug} className="sp-category-group" open={containsPrimary}>
+                    <summary className="sp-category-label">
+                      <span>{groupLabel}</span>
+                      {selectedInGroup > 0 && <span className="filter-pill-badge">{selectedInGroup}</span>}
+                      <span className="sp-chevron" aria-hidden>
+                        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                      </span>
+                    </summary>
                     <div className="sp-available">
                       {filtered.map((s) => {
                         const isSelected = servicesOffered.includes(s.id)
@@ -2415,7 +2425,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                         )
                       })}
                     </div>
-                  </div>
+                  </details>
                 )
               })}
             </div>
@@ -2436,7 +2446,6 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                     }
                     await saveServices()
                     setServicePopupOpen(false)
-                    setServiceSearch("")
                     // Imported-project shortcut: user landed here from
                     // /businesses/architects with a specific project to
                     // publish — take them straight to project edit, skip
@@ -2457,7 +2466,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                   <button
                     type="button"
                     className="btn-tertiary"
-                    onClick={() => { setServicesOffered(servicesSnapshotRef.current); setServicePopupOpen(false); setServiceSearch("") }}
+                    onClick={() => { setServicesOffered(servicesSnapshotRef.current); setServicePopupOpen(false); }}
                     style={{ fontSize: 14, padding: "10px 20px" }}
                   >
                     {t("services_cancel")}
@@ -2472,7 +2481,6 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                       }
                       saveServices()
                       setServicePopupOpen(false)
-                      setServiceSearch("")
                     }}
                     style={{ fontSize: 14, padding: "10px 20px" }}
                   >

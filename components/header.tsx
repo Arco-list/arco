@@ -246,7 +246,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
   const userInitial = (derivedFirstName ?? user?.email ?? "U").charAt(0).toUpperCase();
 
   // Company data for menu
-  const [companies, setCompanies] = useState<Array<{ id: string; name: string; logo_url: string | null; role: "owner" | "member" }>>([]);
+  const [companies, setCompanies] = useState<Array<{ id: string; name: string; logo_url: string | null; serviceSlug?: string | null; role: "owner" | "member" }>>([]);
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   // Which admin groups are expanded in the account (avatar) menu.
@@ -760,11 +760,17 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                             >
                               {activeCompany.logo_url ? (
                                 <img src={activeCompany.logo_url} alt="" className="w-5 h-5 rounded-full object-cover" />
-                              ) : (
-                                <span className="w-5 h-5 rounded-full bg-[#f0f0ee] flex items-center justify-center text-[9px] font-medium text-[#6b6b68]">
-                                  {activeCompany.name.charAt(0)}
-                                </span>
-                              )}
+                              ) : (() => {
+                                // Geen logo → de hand-getekende dienstmark,
+                                // zoals overal op het platform; letter alleen
+                                // als ook de dienst ontbreekt.
+                                const Icon = resolveProfessionalServiceIcon(activeCompany.serviceSlug ?? null, null)
+                                return (
+                                  <span className="w-5 h-5 rounded-full bg-[#f0f0ee] flex items-center justify-center text-[9px] font-medium text-[#6b6b68]">
+                                    {Icon ? <Icon style={{ width: 12, height: 12 }} strokeWidth={1.3} /> : activeCompany.name.charAt(0)}
+                                  </span>
+                                )
+                              })()}
                               <span className="text-sm font-normal text-[#1c1c1a] truncate flex-1">{activeCompany.name}</span>
                               {companies.length > 1 && (
                                 <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#a1a1a0" strokeWidth="2" strokeLinecap="round" className="shrink-0 transition-transform" style={{ transform: showCompanySwitcher ? "rotate(180deg)" : "none" }}>
@@ -803,11 +809,14 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                                   >
                                     {c.logo_url ? (
                                       <img src={c.logo_url} alt="" className="w-4 h-4 rounded-full object-cover" />
-                                    ) : (
-                                      <span className="w-4 h-4 rounded-full bg-[#f0f0ee] flex items-center justify-center text-[8px] font-medium text-[#a1a1a0]">
-                                        {c.name.charAt(0)}
-                                      </span>
-                                    )}
+                                    ) : (() => {
+                                      const Icon = resolveProfessionalServiceIcon(c.serviceSlug ?? null, null)
+                                      return (
+                                        <span className="w-4 h-4 rounded-full bg-[#f0f0ee] flex items-center justify-center text-[8px] font-medium text-[#a1a1a0]">
+                                          {Icon ? <Icon style={{ width: 10, height: 10 }} strokeWidth={1.3} /> : c.name.charAt(0)}
+                                        </span>
+                                      )
+                                    })()}
                                     <span className="truncate">{c.name}</span>
                                   </button>
                                 ))}

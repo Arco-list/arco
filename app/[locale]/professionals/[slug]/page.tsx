@@ -163,6 +163,7 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
   // First try normal fetch (listed companies)
   let professional = await fetchProfessionalDetail(slug, { locale })
 
+
   // If not found, check if current user is an owner/member and allow preview
   if (!professional) {
     const { data: { user } } = await supabase.auth.getUser()
@@ -258,6 +259,7 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
       <CompanyStructuredData professional={professional} />
       <TrackProfessionalView companyId={professional.company.id} slug={slug} />
       <Header />
+
 
       <ProfessionalSubNav
         companyId={professional.company.id}

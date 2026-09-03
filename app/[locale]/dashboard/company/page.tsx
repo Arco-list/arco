@@ -205,7 +205,10 @@ export default async function CompanySettingsPage({
   ])
 
   // Build flat service list and grouped categories from DB hierarchy
-  const cats = allCategories ?? []
+  // Photographer is excluded from the pickable services: it is assigned
+  // by the photographer flow (details bar), fixes the page format, and
+  // is locked once set — see the isPhotographer badge lock below.
+  const cats = (allCategories ?? []).filter((c) => c.slug !== "photographer")
   const serviceOptions = cats
     .map((item) => ({ id: item.id, name: item.name, slug: item.slug }))
     .sort((a, b) => a.name.localeCompare(b.name))

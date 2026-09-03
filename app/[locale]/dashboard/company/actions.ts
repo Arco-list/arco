@@ -57,6 +57,14 @@ const contactSchema = z.object({
   address: z.string().trim().optional(),
   city: z.string().trim().optional(),
   country: z.string().trim().optional(),
+  // Full Places record, present when the address came from a lookup
+  // pick (lib/places/resolve-address). Keeps state_region, place_id and
+  // coordinates from being silently dropped on every owner edit — the
+  // bug that left every credited company with a place_id but no coords.
+  stateRegion: z.string().trim().optional(),
+  googlePlaceId: z.string().trim().optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
 })
 
 const socialSchema = z.object({
@@ -158,7 +166,7 @@ async function getCompanyContext(overrideCompanyId?: string) {
       if (!isOwned) {
         const { createServiceRoleSupabaseClient: createSR } = await import("@/lib/supabase/server")
         const sr = createSR()
-        const { data: adminCompany } = await sr.from("companies").select("id, name, logo_url").eq("id", activeCompanyId).maybeSingle()
+        const { data: adminCompany } = await sr.from("companies").select("id, name, logo_url, primary_service:categories!companies_primary_service_id_fkey(slug)").eq("id", activeCompanyId).maybeSingle()
         if (adminCompany) {
           return { supabase: sr, user, company: adminCompany, error: null as const }
         }
@@ -169,7 +177,7 @@ async function getCompanyContext(overrideCompanyId?: string) {
   // 1. Always prefer owned company (oldest first)
   const { data: ownedCompany, error: companyError } = await supabase
     .from("companies")
-    .select("id, name, logo_url")
+    .select("id, name, logo_url, primary_service:categories!companies_primary_service_id_fkey(slug)")
     .eq("owner_id", user.id)
     .order("created_at", { ascending: true })
     .limit(1)
@@ -194,7 +202,7 @@ async function getCompanyContext(overrideCompanyId?: string) {
   if (activeId) {
     const { data: activeCompany } = await supabase
       .from("companies")
-      .select("id, name, logo_url")
+      .select("id, name, logo_url, primary_service:categories!companies_primary_service_id_fkey(slug)")
       .eq("id", activeId)
       .maybeSingle()
 
@@ -229,7 +237,7 @@ async function getCompanyContext(overrideCompanyId?: string) {
   if (membership) {
     const { data: memberCompany } = await supabase
       .from("companies")
-      .select("id, name, logo_url")
+      .select("id, name, logo_url, primary_service:categories!companies_primary_service_id_fkey(slug)")
       .eq("id", membership.company_id)
       .single()
 
@@ -480,11 +488,13 @@ export async function updateCompanyContactAction(
   const payload = parsedContact.data
   const normalizedDomain = payload.domain ? payload.domain.replace(/^https?:\/\//i, "").toLowerCase() : ""
 
-  // Geocode address for map coordinates
-  let latitude: number | null = null
-  let longitude: number | null = null
+  // Geocode address for map coordinates. Skipped when the client's
+  // Places pick already delivered coordinates — a second geocode round
+  // trip would only re-derive what getDetails returned.
+  let latitude: number | null = payload.latitude ?? null
+  let longitude: number | null = payload.longitude ?? null
   const addressForGeocode = payload.address || payload.city
-  if (addressForGeocode) {
+  if (latitude == null && longitude == null && addressForGeocode) {
     try {
       const mapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
       if (mapsKey) {
@@ -510,6 +520,8 @@ export async function updateCompanyContactAction(
       address: payload.address ?? null,
       city: payload.city ?? null,
       country: payload.country ?? null,
+      ...(payload.stateRegion ? { state_region: payload.stateRegion } : {}),
+      ...(payload.googlePlaceId ? { google_place_id: payload.googlePlaceId } : {}),
       ...(latitude != null && longitude != null ? { latitude, longitude } : {}),
     })
     .eq("id", company!.id)
@@ -1316,7 +1328,7 @@ export async function saveCompanyTranslatedField(
 // ── Company Switcher ──
 
 export async function getUserCompaniesAction(): Promise<{
-  companies: Array<{ id: string; name: string; logo_url: string | null; role: "owner" | "member" }>
+  companies: Array<{ id: string; name: string; logo_url: string | null; serviceSlug: string | null; role: "owner" | "member" }>
   activeId: string | null
 }> {
   const authClient = await createServerActionSupabaseClient()
@@ -1328,27 +1340,36 @@ export async function getUserCompaniesAction(): Promise<{
 
   const { getActiveCompanyId, setActiveCompanyId } = await import("@/lib/active-company")
 
-  const companies: Array<{ id: string; name: string; logo_url: string | null; role: "owner" | "member" }> = []
+
+  // Embedded FK rows come back as object or single-element array
+  // depending on the relationship; normalise to one slug.
+  const slugOf = (c: any): string | null => {
+    const ps = c?.primary_service
+    if (!ps) return null
+    return Array.isArray(ps) ? (ps[0]?.slug ?? null) : (ps.slug ?? null)
+  }
+
+  const companies: Array<{ id: string; name: string; logo_url: string | null; serviceSlug: string | null; role: "owner" | "member" }> = []
   const seen = new Set<string>()
 
   // Owned companies first
   const { data: owned } = await supabase
     .from("companies")
-    .select("id, name, logo_url")
+    .select("id, name, logo_url, primary_service:categories!companies_primary_service_id_fkey(slug)")
     .eq("owner_id", user.id)
     .order("created_at", { ascending: true })
 
   for (const c of owned ?? []) {
     if (!seen.has(c.id)) {
       seen.add(c.id)
-      companies.push({ id: c.id, name: c.name ?? "Unnamed", logo_url: c.logo_url, role: "owner" })
+      companies.push({ id: c.id, name: c.name ?? "Unnamed", logo_url: c.logo_url, serviceSlug: slugOf(c), role: "owner" })
     }
   }
 
   // Member companies (via company_contacts, team roles only)
   const { data: memberships } = await supabase
     .from("company_contacts")
-    .select("company_id, person:persons!inner(auth_user_id), companies(id, name, logo_url)")
+    .select("company_id, person:persons!inner(auth_user_id), companies(id, name, logo_url, primary_service:categories!companies_primary_service_id_fkey(slug))")
     .eq("person.auth_user_id", user.id)
     .in("role", ["owner", "admin", "member"])
     .eq("status", "active")
@@ -1357,14 +1378,14 @@ export async function getUserCompaniesAction(): Promise<{
     const c = m.companies as unknown as { id: string; name: string; logo_url: string | null } | null
     if (c && !seen.has(c.id)) {
       seen.add(c.id)
-      companies.push({ id: c.id, name: c.name ?? "Unnamed", logo_url: c.logo_url, role: "member" })
+      companies.push({ id: c.id, name: c.name ?? "Unnamed", logo_url: c.logo_url, serviceSlug: slugOf(c), role: "member" })
     }
   }
 
   // Professional companies (via professionals table)
   const { data: proLinks } = await supabase
     .from("professionals")
-    .select("company_id, companies!professionals_company_id_fkey(id, name, logo_url)")
+    .select("company_id, companies!professionals_company_id_fkey(id, name, logo_url, primary_service:categories!companies_primary_service_id_fkey(slug))")
     .eq("user_id", user.id)
     .not("company_id", "is", null)
 
@@ -1372,7 +1393,7 @@ export async function getUserCompaniesAction(): Promise<{
     const c = p.companies as unknown as { id: string; name: string; logo_url: string | null } | null
     if (c && !seen.has(c.id)) {
       seen.add(c.id)
-      companies.push({ id: c.id, name: c.name ?? "Unnamed", logo_url: c.logo_url, role: "member" })
+      companies.push({ id: c.id, name: c.name ?? "Unnamed", logo_url: c.logo_url, serviceSlug: slugOf(c), role: "member" })
     }
   }
 
