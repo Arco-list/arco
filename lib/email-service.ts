@@ -1107,7 +1107,7 @@ function renderProspectIntro(vars: EmailVariables, locale: EmailLocale = 'nl'): 
         intro: `I'm Niek, founder of Arco — a new professional network where leading architects publish their best work and recommend the craftspeople they work with.`,
         livePreview: `We've put ${companyName} live on Arco with a company and project page to show what it looks like:`,
         claimCta: `Want to be on Arco? Claim your page and get full control over your profile, add projects, and become visible to clients looking for a professional to deliver their project.`,
-        button: `Claim ${companyName}`,
+        button: `Claim your page`,
         opt_out: `Prefer we remove the page? Let me know by replying to this email.`,
         signoffRole: 'Founder, Arco',
       }
@@ -1117,7 +1117,7 @@ function renderProspectIntro(vars: EmailVariables, locale: EmailLocale = 'nl'): 
         intro: `Ik ben Niek, oprichter van Arco — een nieuw professioneel netwerk waar toonaangevende architecten hun beste werk publiceren en de vakmensen waarmee ze samenwerken aanbevelen.`,
         livePreview: `We hebben ${companyName} live gezet op Arco met een bedrijfs- en projectpagina om te laten zien hoe het eruitziet:`,
         claimCta: `Wil je op Arco? Claim je pagina en krijg volledige controle over je profiel, voeg projecten toe en word zichtbaar voor opdrachtgevers die een professional zoeken om hun project te realiseren.`,
-        button: `Claim ${companyName}`,
+        button: `Claim je pagina`,
         opt_out: `Wil je liever dat we de pagina verwijderen? Laat het me weten door op deze email te reageren.`,
         signoffRole: 'Oprichter, Arco',
       }
@@ -1159,7 +1159,7 @@ function renderProspectFollowup(vars: EmailVariables, locale: EmailLocale = 'nl'
         intro: `A few days ago I created a company and project page for ${companyName} on Arco. Just checking in to see if you saw it.`,
         valueProp: `On your page, clients can view your work and reach out directly. All you need to do is claim it — takes less than two minutes, and listing is free.`,
         afterClaim: `Once claimed, you can edit your profile, add projects, and become visible to clients across the Netherlands.`,
-        button: `Claim ${companyName}`,
+        button: `Claim your page`,
         questions: `Questions? Just reply to this email, happy to help.`,
         signoffRole: 'Founder, Arco',
       }
@@ -1169,7 +1169,7 @@ function renderProspectFollowup(vars: EmailVariables, locale: EmailLocale = 'nl'
         intro: `Een paar dagen geleden heb ik een bedrijfs- en projectpagina voor ${companyName} aangemaakt op Arco. Ik wilde even checken of je het gezien hebt.`,
         valueProp: `Op je pagina kunnen opdrachtgevers je werk bekijken en direct contact opnemen. Het enige wat je hoeft te doen is je pagina claimen — het kost minder dan twee minuten en publiceren is gratis.`,
         afterClaim: `Na het claimen kun je je profiel aanpassen, projecten toevoegen en zichtbaar worden voor opdrachtgevers in heel Nederland.`,
-        button: `Claim ${companyName}`,
+        button: `Claim je pagina`,
         questions: `Vragen? Reageer op deze email, ik help je graag.`,
         signoffRole: 'Oprichter, Arco',
       }
@@ -1210,7 +1210,7 @@ function renderProspectFinal(vars: EmailVariables, locale: EmailLocale = 'nl'): 
         h1: `Claim ${companyName} on Arco`,
         intro: `This is my last message about your page on Arco. I understand you're busy — so I'll keep it brief.`,
         valueProp: `Your company page with projects is ready. One click to claim, two minutes to customise. After that you're discoverable by clients looking for a professional.`,
-        button: `Claim ${companyName}`,
+        button: `Claim your page`,
         opt_out: `Not interested? No problem — reply to this email and I'll remove your page. No further messages.`,
         signoffRole: 'Founder, Arco',
       }
@@ -1219,7 +1219,7 @@ function renderProspectFinal(vars: EmailVariables, locale: EmailLocale = 'nl'): 
         h1: `Claim ${companyName} op Arco`,
         intro: `Dit is mijn laatste bericht over je pagina op Arco. Ik begrijp dat je het druk hebt — daarom maak ik het kort.`,
         valueProp: `Je bedrijfspagina met projecten staat klaar. Eén klik om te claimen, twee minuten om aan te passen. Daarna ben je vindbaar voor opdrachtgevers die een professional zoeken.`,
-        button: `Claim ${companyName}`,
+        button: `Claim je pagina`,
         opt_out: `Geen interesse? Geen probleem — reageer op deze email en ik verwijder je pagina. Geen verdere berichten.`,
         signoffRole: 'Oprichter, Arco',
       }
@@ -1286,7 +1286,9 @@ function renderOutreachIntro(vars: EmailVariables, locale: EmailLocale = 'nl'): 
           `Get discovered by serious clients in your region`,
         ],
         howItStarts: `Setting up your company page and first project takes a few minutes — paste a link to a project on your website and we extract everything automatically.`,
-        button: `See how it works`,
+        button: `Claim your company page`,
+        secondaryLead: `Want to look around first?`,
+        secondary: `See how Arco works`,
         signoffRole: 'Founder, Arco',
       }
     : {
@@ -1300,7 +1302,9 @@ function renderOutreachIntro(vars: EmailVariables, locale: EmailLocale = 'nl'): 
           `Word gevonden door serieuze opdrachtgevers in jouw regio`,
         ],
         howItStarts: `Het aanmaken van jullie bedrijfspagina en eerste project kost een paar minuten — plak een link naar een project op jullie website en wij halen alles automatisch op.`,
-        button: `Bekijk hoe het werkt`,
+        button: `Claim je bedrijfspagina`,
+        secondaryLead: `Eerst even rondkijken?`,
+        secondary: `Bekijk hoe Arco werkt`,
         signoffRole: 'Oprichter, Arco',
       }
 
@@ -1317,6 +1321,9 @@ ${copy.bullets.map((b) => `<li style="margin:0 0 6px;">${b}</li>`).join('')}
       ${bulletList}
       ${body(copy.howItStarts)}
       ${button(copy.button, refUrl)}
+      <p style="margin:0 0 20px;font-size:14px;font-weight:300;line-height:1.6;color:#4a4a48;">
+        ${copy.secondaryLead} <a href="https://www.arcolist.com/businesses/architects" style="color:#016D75;text-decoration:underline;">${copy.secondary} &rarr;</a>
+      </p>
       <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
         Niek van Leeuwen<br/>
         <span style="color:#a1a1a0;">${copy.signoffRole}</span>
@@ -1341,7 +1348,9 @@ function renderOutreachFollowup(vars: EmailVariables, locale: EmailLocale = 'nl'
           `Our editorial team reviews it`,
           `Your company and project are visible — clients can reach out directly`,
         ],
-        button: `Create your company`,
+        button: `Claim your company page`,
+        secondaryLead: `Want to look around first?`,
+        secondary: `See how Arco works`,
         signoffRole: 'Founder, Arco',
       }
     : {
@@ -1355,7 +1364,9 @@ function renderOutreachFollowup(vars: EmailVariables, locale: EmailLocale = 'nl'
           `Ons redactieteam beoordeelt het`,
           `Jullie bedrijf en project zijn zichtbaar — opdrachtgevers kunnen direct contact opnemen`,
         ],
-        button: `Maak jullie bedrijf aan`,
+        button: `Claim je bedrijfspagina`,
+        secondaryLead: `Eerst even rondkijken?`,
+        secondary: `Bekijk hoe Arco werkt`,
         signoffRole: 'Oprichter, Arco',
       }
 
@@ -1371,6 +1382,9 @@ ${copy.steps.map((s) => `<li style="margin:0 0 6px;">${s}</li>`).join('')}
       ${body(copy.stepsIntro)}
       ${stepsList}
       ${button(copy.button, refUrl)}
+      <p style="margin:0 0 20px;font-size:14px;font-weight:300;line-height:1.6;color:#4a4a48;">
+        ${copy.secondaryLead} <a href="https://www.arcolist.com/businesses/architects" style="color:#016D75;text-decoration:underline;">${copy.secondary} &rarr;</a>
+      </p>
       <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
         Niek van Leeuwen<br/>
         <span style="color:#a1a1a0;">${copy.signoffRole}</span>
@@ -1389,8 +1403,10 @@ function renderOutreachFinal(vars: EmailVariables, locale: EmailLocale = 'nl'): 
         h1: `Create ${companyName} on Arco`,
         intro: `One last note — your invitation to publish on Arco is still open.`,
         howItStarts: `Paste a link to a project on your website, and we'll extract the photos, details, and description automatically. You review, adjust if needed, and publish. No commitment, no cost.`,
-        button: `Set up your company page`,
+        button: `Claim your company page`,
         opt_out: `If Arco isn't the right fit, no worries at all — reply to this email and I'll stop reaching out.`,
+        secondaryLead: `Want to look around first?`,
+        secondary: `See how Arco works`,
         signoffRole: 'Founder, Arco',
       }
     : {
@@ -1398,8 +1414,10 @@ function renderOutreachFinal(vars: EmailVariables, locale: EmailLocale = 'nl'): 
         h1: `Maak ${companyName} aan op Arco`,
         intro: `Nog een laatste bericht — jullie uitnodiging om op Arco te publiceren staat nog open.`,
         howItStarts: `Plak een link naar een project op jullie website, en wij halen de foto's, details en beschrijving automatisch op. Je bekijkt het, past aan waar nodig, en publiceert. Geen verplichting, geen kosten.`,
-        button: `Maak jullie bedrijfspagina aan`,
+        button: `Claim je bedrijfspagina`,
         opt_out: `Als Arco niet de juiste match is, helemaal geen probleem — reageer op deze email en ik stop met berichten sturen.`,
+        secondaryLead: `Eerst even rondkijken?`,
+        secondary: `Bekijk hoe Arco werkt`,
         signoffRole: 'Oprichter, Arco',
       }
 
@@ -1410,6 +1428,9 @@ function renderOutreachFinal(vars: EmailVariables, locale: EmailLocale = 'nl'): 
       ${body(copy.intro)}
       ${body(copy.howItStarts)}
       ${button(copy.button, refUrl)}
+      <p style="margin:0 0 20px;font-size:14px;font-weight:300;line-height:1.6;color:#4a4a48;">
+        ${copy.secondaryLead} <a href="https://www.arcolist.com/businesses/architects" style="color:#016D75;text-decoration:underline;">${copy.secondary} &rarr;</a>
+      </p>
       ${body(copy.opt_out)}
       <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
         Niek van Leeuwen<br/>
@@ -1451,14 +1472,14 @@ function renderNewProfessionalInvite(vars: EmailVariables, locale: EmailLocale =
         subject: `${inviterName} credited you on Arco`,
         h1: `${inviterName} credited you on Arco`,
         belowBadge: `${inviterName} added ${companyName} on Arco to ${projectName}. Arco is a curated platform where architects publish their work and credit the professionals they collaborate with.`,
-        button: `Claim ${companyName}`,
+        button: `Confirm your credit`,
         afterButton: `Claim your page on Arco to manage how ${companyName} appears, update your projects, and become discoverable to clients.`,
       }
     : {
         subject: `${inviterName} heeft je vermeld op Arco`,
         h1: `${inviterName} heeft je vermeld op Arco`,
         belowBadge: `${inviterName} heeft ${companyName} op Arco toegevoegd aan ${projectName}. Arco is een curated platform waar architecten hun werk publiceren en de professionals waarmee ze samenwerken crediteren.`,
-        button: `Claim ${companyName}`,
+        button: `Bevestig je vermelding`,
         afterButton: `Claim je pagina op Arco om te bepalen hoe ${companyName} wordt getoond, je projecten bij te werken en zichtbaar te worden voor opdrachtgevers.`,
       }
 
@@ -1493,14 +1514,14 @@ function renderNewProfessionalFollowup(vars: EmailVariables, locale: EmailLocale
         h1: `${inviterName} added you to a project on Arco`,
         belowBadge: `A few days ago we let you know that ${companyName} was credited by ${inviterName}.`,
         afterCard: `The project is live on Arco and your company page is ready to be claimed.`,
-        button: `Claim ${companyName}`,
+        button: `Confirm your credit`,
       }
     : {
         subject: `Claim ${companyName}`,
         h1: `${inviterName} heeft je toegevoegd aan een project op Arco`,
         belowBadge: `Een paar dagen geleden lieten we je weten dat ${companyName} is vermeld door ${inviterName}.`,
         afterCard: `Het project staat live op Arco en je bedrijfspagina is klaar om geclaimd te worden.`,
-        button: `Claim ${companyName}`,
+        button: `Bevestig je vermelding`,
       }
 
   return {
@@ -1534,14 +1555,14 @@ function renderNewProfessionalFinal(vars: EmailVariables, locale: EmailLocale = 
         h1: `Last reminder — ${inviterName} credited you on Arco`,
         belowBadge: `This is the last message about your page on Arco. ${companyName} has been credited on a project.`,
         valueProp: `Claim your page so it is visible under your control. One click, two minutes.`,
-        button: `Claim ${companyName}`,
+        button: `Confirm your credit`,
       }
     : {
         subject: `Laatste herinnering: claim ${companyName} op Arco`,
         h1: `Laatste herinnering — ${inviterName} heeft je vermeld op Arco`,
         belowBadge: `Dit is het laatste bericht over je pagina op Arco. ${companyName} is gecrediteerd op een project.`,
         valueProp: `Claim je pagina zodat het zichtbaar is onder jouw beheer. Eén klik, twee minuten.`,
-        button: `Claim ${companyName}`,
+        button: `Bevestig je vermelding`,
       }
 
   return {

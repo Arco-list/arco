@@ -17,8 +17,52 @@ import { issueClaimToken } from "@/lib/claim/claim-token"
  */
 
 const CLAIM_FIXTURE_ID = "c0c0c629-2983-4658-b834-c5dafe6bc7f3" // Olli — dummy test company
+const FIXTURE_PROJECT_ID = "f6cae5bc-cbc7-4c13-9ab2-48863a30d9d0" // Hedendaags (published)
+const FIXTURE_SERVICE_ID = "18b8eb0f-ba7d-4ad8-897f-642d7259d954" // interior-designer
 const OLLI_HERO =
   "https://ogvobdcrectqsegqrquz.supabase.co/storage/v1/object/public/project-photos/f6cae5bc-cbc7-4c13-9ab2-48863a30d9d0/d01a8c81-c16c-4ccb-a218-a52f4fa53f5d.webp"
+
+/** The fixture exists ON DEMAND: deleting Olli (row, credit, accounts)
+ *  is always safe cleanup — the next test send or preview recreates
+ *  exactly this state. Nothing here touches real companies. */
+async function ensureClaimFixture(svc: ReturnType<typeof createServiceRoleSupabaseClient>): Promise<void> {
+  await svc.from("companies").upsert(
+    {
+      id: CLAIM_FIXTURE_ID,
+      name: "Olli",
+      email: "hallo@askolli.com",
+      domain: "askolli.com",
+      website: "https://askolli.com",
+      city: "Amsterdam",
+      address: "Keizersgracht 123, Amsterdam",
+      country: "Netherlands",
+      status: "invited",
+      audience: "homeowner",
+      primary_service_id: FIXTURE_SERVICE_ID,
+      services_offered: [FIXTURE_SERVICE_ID],
+      hero_photo_url: OLLI_HERO,
+      is_verified: false,
+    } as never,
+    { onConflict: "id", ignoreDuplicates: true },
+  )
+  const { data: credit } = await svc
+    .from("project_professionals")
+    .select("id")
+    .eq("project_id", FIXTURE_PROJECT_ID)
+    .eq("company_id", CLAIM_FIXTURE_ID)
+    .limit(1)
+    .maybeSingle()
+  if (!credit) {
+    await svc.from("project_professionals").insert({
+      project_id: FIXTURE_PROJECT_ID,
+      company_id: CLAIM_FIXTURE_ID,
+      is_project_owner: false,
+      status: "invited",
+      invited_email: "niek@askolli.com",
+      invited_service_category_ids: [FIXTURE_SERVICE_ID],
+    } as never)
+  }
+}
 
 export async function buildClaimTestFunnelVars(
   template: string,
@@ -31,6 +75,9 @@ export async function buildClaimTestFunnelVars(
     : template.startsWith("outreach-")
       ? ("outreach" as const)
       : ("invite" as const)
+
+  const svcEnsure = createServiceRoleSupabaseClient()
+  await ensureClaimFixture(svcEnsure)
 
   let creditId: string | null = null
   let tokenEmail = "hallo@askolli.com"
