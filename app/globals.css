@@ -80,7 +80,10 @@
   --accent-foreground: #1c1c1a;
 
   /* Destructive colors */
-  --destructive: #FF333A;
+  /* Matcht .arco-alert--danger (#991b1b): één rood voor alerts,
+     error-inputs en destructieve knoppen. Was #FF333A — te fel naast
+     het ingetogen alert-rood. */
+  --destructive: #991b1b;
   --destructive-foreground: #FFFFFF;
 
   /* Success colors */
@@ -187,7 +190,7 @@
   --accent-foreground: #FAFAF9;
 
   /* Destructive colors */
-  --destructive: #FF333A;
+  --destructive: #b91c1c;
   --destructive-foreground: #FFFFFF;
 
   /* Success colors */
@@ -8032,3 +8035,4 @@ body.no-scroll {
   .arco-banner-title { font-size: 22px; }
   .arco-banner:has(.arco-banner-close) { padding-right: 48px; }
 }
+

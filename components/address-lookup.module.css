@@ -1,0 +1,33 @@
+.root { position: relative; }
+
+/* Fallback input, matching the platform's .form-input; callers usually
+   pass their own via inputClassName. */
+.input {
+  width: 100%; font-family: var(--font-sans); font-size: 15px;
+  color: var(--arco-black); background: var(--arco-white);
+  border: 1px solid var(--arco-rule); border-radius: 3px;
+  padding: 12px 16px; transition: border-color 0.15s;
+}
+.input:focus { outline: none; border-color: var(--arco-black); }
+
+/* Dropdown matches the company lookup (.ccm-dropdown / .ccm-row in the
+   create-company modal): white card, soft shadow, single-line rows with
+   the locality as a grey " · suffix" rather than stacked lines. */
+.dropdown {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 30;
+  background: var(--arco-white); border: 1px solid var(--arco-rule);
+  border-radius: 3px; margin-top: 8px; padding: 4px 0;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14);
+  max-height: 280px; overflow-y: auto;
+}
+.option {
+  display: flex; align-items: baseline; gap: 6px; width: 100%;
+  text-align: left; font: inherit; cursor: pointer;
+  background: none; border: 0; padding: 9px 14px;
+  transition: background 0.1s;
+}
+.option:hover { background: var(--arco-surface); }
+.main { font-size: 13px; font-weight: 300; color: var(--arco-black); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.secondary { font-size: 13px; font-weight: 300; color: var(--arco-light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.secondary::before { content: "· "; }
+.hint { padding: 9px 14px; font-size: 13px; color: var(--arco-light); }
