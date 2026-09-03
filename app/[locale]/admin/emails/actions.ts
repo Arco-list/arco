@@ -765,6 +765,23 @@ export async function sendTestEmail(template: string, toEmail: string): Promise<
     }
   }
 
+  // Claim-funnel CTA: the nine claim-family templates get a REAL
+  // single-use token on the Olli dummy fixture, so the button in the
+  // test email opens the actual /claim funnel. Shared with the admin
+  // preview popup — see lib/claim/test-funnel-vars.ts.
+  try {
+    const { buildClaimTestFunnelVars } = await import('@/lib/claim/test-funnel-vars')
+    const { headers } = await import('next/headers')
+    const h = await headers()
+    const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'www.arcolist.com'
+    const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https')
+    const claimVars = await buildClaimTestFunnelVars(template, `${proto}://${host}`)
+    if (claimVars) Object.assign(testVars, claimVars)
+  } catch (err) {
+    // Non-fatal: the static fallback URL still renders a working email.
+    console.error('[sendTestEmail] Failed to mint claim token:', err)
+  }
+
   const result = await sendTransactionalEmail(toEmail, template as any, testVars)
   return { success: result.success, error: result.message }
 }

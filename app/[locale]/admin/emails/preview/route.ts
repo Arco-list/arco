@@ -83,6 +83,20 @@ export async function GET(request: NextRequest) {
   // App transactional templates
   const vars: Record<string, any> = { ...TEST_VARS }
 
+  // Claim-family templates: mint a real single-use token on the Olli
+  // dummy fixture so the preview's CTA opens the actual /claim funnel
+  // (skipped for ?meta=1 — the subject needs no token). Tokens pile up
+  // one per preview render; the claim-test fixture reset clears them.
+  if (!wantsMeta) {
+    try {
+      const { buildClaimTestFunnelVars } = await import('@/lib/claim/test-funnel-vars')
+      const claimVars = await buildClaimTestFunnelVars(template, origin)
+      if (claimVars) Object.assign(vars, claimVars)
+    } catch (err) {
+      console.error('[emails/preview] Failed to mint claim token:', err)
+    }
+  }
+
   // For templates that render live featured projects/professionals, pull
   // the same data the cron uses for real sends so the preview matches
   // what a real recipient would see. Without this the renderer falls back
@@ -116,7 +130,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ subject: result.subject })
   }
 
-  return new NextResponse(result.html, {
+  // The preview renders inside the popup's iframe — without a base
+  // target a clicked CTA would navigate the iframe itself. Every link
+  // in a preview opens a fresh tab instead.
+  const html = result.html.replace(/<head([^>]*)>/i, '<head$1><base target="_blank">')
+
+  return new NextResponse(html, {
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
   })
 }
