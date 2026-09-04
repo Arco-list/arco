@@ -93,12 +93,27 @@ type CompanySource = Database["public"]["Enums"]["company_source"]
 // serves — Apollo cold-imports are scoped out at the page query and
 // live in /admin/sales instead. The `apollo` label is kept so historical
 // rows in other views still render.
-const SOURCE_VALUES: CompanySource[] = ["direct", "manual", "invited"]
 const SOURCE_LABEL: Record<CompanySource, string> = {
   apollo: "Apollo",
   direct: "Direct",
   manual: "Manual",
   invited: "Invited",
+}
+// One Channel dimension replaces the old Sources filter: acquisition
+// channel (token-truth for funnel claims) with the Direct bucket split
+// by first-touch. Some splits carry no pro traffic yet — the empty
+// buckets are deliberate, they fill as those channels start working.
+const CHANNEL_VALUES = ["invite", "showcase", "outreach", "direct", "seo", "social", "referral", "shares"] as const
+type CompanyChannel = (typeof CHANNEL_VALUES)[number]
+const CHANNEL_LABEL: Record<string, string> = {
+  invite: "Invite",
+  showcase: "Showcase",
+  outreach: "Outreach",
+  direct: "Direct",
+  seo: "SEO",
+  social: "Social",
+  referral: "Referral",
+  shares: "Shares",
 }
 
 function ServiceDropdown({ services, extraCount }: { services: string[]; extraCount: number }) {
@@ -229,6 +244,14 @@ export type AdminCompanyRow = {
   canPublishProjects: boolean
   autoApproveProjects: boolean
   source: CompanySource | null
+  /** Acquisition channel: consumed claim-token channel for funnel
+   *  claims, else the source mapping; 'direct' refined by first-touch
+   *  (seo/social/referral/shares). Invite pseudo-rows are 'invite'. */
+  channel: string
+  /** audience='pro' — photographers channel as invite by construction,
+   *  but they never sit in the Invited card and would flood the
+   *  Invited→Verified conversion's denominator. */
+  isPhotographer: boolean
   seoIndexed: boolean | null
   seoIndexationState: string | null
   seoImpressions28d: number | null
@@ -288,6 +311,8 @@ const STATUS_DOT: Record<string, string> = {
   added: "bg-[#dc2626]",
   unclaimed: "bg-[#dc2626]",
   created: "bg-[#2563eb]",
+  verified: "bg-[#2563eb]",
+  owned: "bg-[#2563eb]",
   listed: "bg-[#7c3aed]",
   unlisted: "bg-[#a1a1a0]",
   deactivated: "bg-[#dc2626]",
@@ -299,6 +324,8 @@ const STATUS_LABEL: Record<string, string> = {
   added: "Added",
   unclaimed: "Unclaimed",
   created: "Created",
+  verified: "Verified",
+  owned: "Owned",
   listed: "Listed",
   unlisted: "Unlisted",
   deactivated: "Deactivated",
@@ -309,7 +336,8 @@ const STATUS_LABEL: Record<string, string> = {
 const COMPANY_STATUS_OPTIONS: { value: CompanyStatus; label: string; description: string; dotColor: string }[] = [
   { value: "listed", label: "Listed", description: "Public and visible to homeowners", dotColor: "bg-[#7c3aed]" },
   { value: "unlisted", label: "Unlisted", description: "Hidden from public directories", dotColor: "bg-[#a1a1a0]" },
-  { value: "created", label: "Created", description: "Company claimed but never listed yet", dotColor: "bg-[#2563eb]" },
+  { value: "owned" as any, label: "Owned", description: "Owned by an Arco user, never listed yet", dotColor: "bg-[#2563eb]" },
+  { value: "verified" as any, label: "Verified", description: "Identity proven and company step confirmed — claim not yet completed", dotColor: "bg-[#2563eb]" },
   { value: "invited" as any, label: "Invited", description: "Credited by another professional on a project", dotColor: "bg-amber-500" },
   { value: "prospected" as any, label: "Showcased", description: "Live showcase page, waiting to be claimed", dotColor: "bg-[#f59e0b]" },
   { value: "added" as any, label: "Added", description: "Apollo import, manual add, or photographer", dotColor: "bg-[#dc2626]" },
@@ -723,9 +751,11 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   // Multi-select source filter. Same semantics as status: empty array =
   // no filter. Filters company-type rows by `source`; invite-type rows
   // (synthetic, no company) are excluded when any source is selected.
-  const [sourceFilter, setSourceFilter] = useState<CompanySource[]>([])
-  const toggleSource = useCallback((s: CompanySource) => {
-    setSourceFilter((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
+  const [channelFilter, setChannelFilter] = useState<CompanyChannel[]>([])
+  const toggleChannel = useCallback((c: CompanyChannel) => {
+    setChannelFilter((prev) =>
+      prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c],
+    )
   }, [])
 
   // Multi-select service filter — same shape as source. Matches on
@@ -779,8 +809,8 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
 
   const filteredData = useMemo(() => {
     let rows = data
-    if (sourceFilter.length > 0) {
-      rows = rows.filter((row) => row.source !== null && sourceFilter.includes(row.source))
+    if (channelFilter.length > 0) {
+      rows = rows.filter((row) => channelFilter.includes(row.channel as CompanyChannel))
     }
     if (serviceFilter.length > 0) {
       const selected = new Set(serviceFilter)
@@ -790,7 +820,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
       })
     }
     return rows
-  }, [data, sourceFilter, serviceFilter])
+  }, [data, channelFilter, serviceFilter])
 
   /** Pushes the array into TanStack Table's column filter. Empty = clear. */
   const applyStatusFilter = useCallback((next: CompanyStatusFilterValue[]) => {
@@ -1457,13 +1487,12 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         },
       },
       {
-        accessorKey: "source",
-        header: "Source",
+        accessorKey: "channel",
+        header: "Channel",
         enableSorting: true,
         cell: ({ row }) => {
-          const value = row.original.source
-          if (!value) return <span className="text-[#a1a1a0]">—</span>
-          return <span>{SOURCE_LABEL[value] ?? value}</span>
+          const value = row.original.channel
+          return <span>{CHANNEL_LABEL[value] ?? value}</span>
         },
       },
       {
@@ -1607,7 +1636,8 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
     { status: "added" as CompanyStatus,       dotColor: "#dc2626", driver: "prospect" },
     { status: "prospected" as CompanyStatus,  dotColor: "#f59e0b", driver: "prospect" },
     { status: "invited",                       dotColor: "#f59e0b", driver: "prospect" },
-    { status: "created",                       dotColor: "#2563eb", driver: "acquisition" },
+    { status: "verified" as CompanyStatus,     dotColor: "#2563eb", driver: "acquisition" },
+    { status: "owned" as CompanyStatus,        dotColor: "#2563eb", driver: "acquisition" },
     { status: "listed",                        dotColor: "#7c3aed", driver: "retention" },
     { status: "unlisted",                      dotColor: "#a1a1a0", driver: null },
     { status: "deactivated",                   dotColor: "#dc2626", driver: null },
@@ -1615,7 +1645,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   // Display label appears above the first card of each driver group.
   const DRIVER_LABEL_AT: Record<string, string> = {
     prospect: "added",
-    acquisition: "created",
+    acquisition: "verified",
     retention: "listed",
   }
   const DRIVER_COLORS: Record<string, string> = {
@@ -1628,15 +1658,18 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   // the linear flow". Deactivated is a terminal leak so it doesn't
   // accumulate forward.
   const companyCohortFor = (status: string): number => {
+    const owned = () => companyCountAt("owned") + companyCountAt("created")
     switch (status) {
       case "added":
-        return companyCountAt("added") + companyCountAt("prospected") + companyCountAt("invited") + companyCountAt("created") + companyCountAt("listed") + companyCountAt("unlisted")
+        return companyCountAt("added") + companyCountAt("prospected") + companyCountAt("invited") + companyCountAt("verified") + owned() + companyCountAt("listed") + companyCountAt("unlisted")
       case "prospected":
-        return companyCountAt("prospected") + companyCountAt("created") + companyCountAt("listed") + companyCountAt("unlisted")
+        return companyCountAt("prospected") + companyCountAt("verified") + owned() + companyCountAt("listed") + companyCountAt("unlisted")
       case "invited":
         return companyCountAt("invited") + companyCountAt("listed") + companyCountAt("unlisted")
-      case "created":
-        return companyCountAt("created") + companyCountAt("listed") + companyCountAt("unlisted")
+      case "verified":
+        return companyCountAt("verified") + owned() + companyCountAt("listed") + companyCountAt("unlisted")
+      case "owned":
+        return owned() + companyCountAt("listed") + companyCountAt("unlisted")
       case "listed":
         return companyCountAt("listed") + companyCountAt("unlisted")
       case "unlisted":
@@ -1706,7 +1739,8 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               {[
                 { dot: "bg-[#7c3aed]", label: "Listed", desc: "Claimed and visible to homeowners on the platform.", specs: "Owner assigned · Public profile · Discoverable" },
                 { dot: "bg-[#a1a1a0]", label: "Unlisted", desc: "Claimed but hidden from public directories. Only accessible via direct link.", specs: "Owner assigned · Hidden from search" },
-                { dot: "bg-[#2563eb]", label: "Created", desc: "Company has been claimed but never listed yet. Owner is setting up their profile.", specs: "Owner assigned · Not visible · Setup in progress" },
+                { dot: "bg-[#2563eb]", label: "Owned", desc: "Owned by an Arco user, never listed yet. Owner is setting up their profile.", specs: "Owner assigned · Not visible · Setup in progress" },
+                { dot: "bg-[#2563eb]", label: "Verified", desc: "Identity proven (invite delivery or domain code) and company details confirmed — the claim is not completed yet. Signup is a separate event.", specs: "No owner · Not visible · Claim in progress" },
                 { dot: "bg-amber-500", label: "Invited", desc: "Credited by another professional on a project. Auto-created, not yet claimed.", specs: "No owner · Created from project invite" },
                 { dot: "bg-[#f59e0b]", label: "Showcased", desc: "Live showcase page on the marketplace, awaiting claim by the pro. Public and in the sales funnel.", specs: "No owner · Visible · Sales emails sent · In sales funnel" },
                 { dot: "bg-[#dc2626]", label: "Added", desc: "Catalogued — Apollo bulk import, manual add, or photographer import. No outreach yet. Awaiting promotion to a showcase (→ Showcased) or claim (→ Created).", specs: "No owner · Not visible · Awaiting outreach or claim" },
@@ -1746,8 +1780,26 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           // path) rather than a sequential stop in the sales funnel.
           const prospectedToDraft = companyConversionRate(
             companyCohortFor("prospected"),
-            companyCohortFor("created"),
+            companyCohortFor("verified"),
           )
+
+          // Invited → Created: an honest rate needs PROVENANCE, not the
+          // stage cohorts (those counted listed/unlisted on both sides
+          // and rendered a fake 100% at zero conversions). Denominator:
+          // everything that ENTERED via a project credit — pending
+          // invite rows plus claimed companies whose source is
+          // 'invited'. Numerator: the claimed subset.
+          // Photographers are invite-channel by construction but follow
+          // their own assigned-role path (no claim funnel yet) and are
+          // largely parked at Added — counting them buried the real
+          // invited-professionals conversion under a photographer pile.
+          const inviteOrigin = funnelData.filter((r) => r.channel === "invite" && !r.isPhotographer)
+          const inviteOriginClaimed = inviteOrigin.filter(
+            (r) => ["verified", "owned", "created", "listed", "unlisted"].includes(r.status),
+          ).length
+          const invitedToCreated = inviteOrigin.length > 0
+            ? `${Math.round((inviteOriginClaimed / inviteOrigin.length) * 100)}%`
+            : ""
 
           // Grid columns (1-indexed, odd = card, even = connector):
           //   1 unclaimed · 3 prospected · 5 invited · 7 draft · 9 listed ·
@@ -1816,23 +1868,24 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 // Inline connector rate before this card. Sequential hops:
                 // Added→Prospected, Draft→Listed. Prospected→Invited is a
                 // parallel-entry hop (plain line, no rate); the bypass arc
-                // covers Prospected→Draft. Invited→Created carries NO rate:
-                // the cohort math counted listed/unlisted on both sides
-                // (as if every listed company had passed through Invited),
-                // which rendered a fake 100% when zero invites converted.
-                // The honest invite-acceptance rate ("% Accepted") lives on
-                // the growth dashboard, computed from invite provenance.
-                // Listed→Unlisted and Unlisted→Deactivated are leaks, not
-                // conversions.
+                // covers Prospected→Draft. Invited→Created carries the
+                // PROVENANCE rate (invite-origin claimed ÷ invite-origin
+                // total) — the stage cohorts lied here, see
+                // invitedToCreated above. Listed→Unlisted and
+                // Unlisted→Deactivated are leaks, not conversions.
                 let rate = ""
                 let suppressConnector = false
                 if (i > 0) {
                   const prev = COMPANY_FUNNEL[i - 1].status
                   const show =
                     (prev === "added" && stage.status === "prospected") ||
-                    (prev === "created" && stage.status === "listed")
+                    (prev === "verified" && stage.status === "owned") ||
+                    (prev === "owned" && stage.status === "listed")
                   if (show) {
                     rate = companyConversionRate(companyCohortFor(prev), companyCohortFor(stage.status))
+                  }
+                  if (prev === "invited" && stage.status === "verified") {
+                    rate = invitedToCreated
                   }
                   if (prev === "prospected" && stage.status === "invited") {
                     suppressConnector = true
@@ -1893,11 +1946,21 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 setSearchTerm(value)
                 table.getColumn("name")?.setFilterValue(value)
               }}
-              className="w-full h-9 pl-8 pr-3 text-xs border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors"
+              className="w-full h-9 pl-8 pr-8 text-xs border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors"
             />
             <svg className="absolute left-2.5 top-2.5 text-[#a1a1a0]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
+            {searchTerm && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => { setSearchTerm(""); table.getColumn("name")?.setFilterValue("") }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-[3px] text-[#a1a1a0] hover:text-[#1c1c1a] transition-colors"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+              </button>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1942,7 +2005,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 Clear selection
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {(["listed", "unlisted", "created", "invited", "prospected", "added", "deactivated"] as CompanyStatusFilterValue[]).map((s) => (
+              {(["listed", "unlisted", "owned", "verified", "invited", "prospected", "added", "deactivated"] as CompanyStatusFilterValue[]).map((s) => (
                 <DropdownMenuCheckboxItem
                   key={s}
                   checked={statusFilter.includes(s)}
@@ -1968,18 +2031,18 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               <button
                 type="button"
                 className={`w-[160px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 ${
-                  sourceFilter.length > 0
+                  channelFilter.length > 0
                     ? "border-[#1c1c1a] bg-[#fafaf9]"
                     : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
                 }`}
               >
                 <span className="flex items-center gap-1.5 truncate">
-                  {sourceFilter.length === 0 ? (
-                    <span className="text-[#6b6b68]">All sources</span>
-                  ) : sourceFilter.length === 1 ? (
-                    <span className="truncate">{SOURCE_LABEL[sourceFilter[0]]}</span>
+                  {channelFilter.length === 0 ? (
+                    <span className="text-[#6b6b68]">All channels</span>
+                  ) : channelFilter.length === 1 ? (
+                    <span className="truncate">{CHANNEL_LABEL[channelFilter[0]]}</span>
                   ) : (
-                    <span>{sourceFilter.length} sources</span>
+                    <span>{channelFilter.length} channels</span>
                   )}
                 </span>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
@@ -1991,22 +2054,22 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               <DropdownMenuItem
                 onClick={(e) => {
                   e.preventDefault()
-                  if (sourceFilter.length > 0) setSourceFilter([])
+                  if (channelFilter.length > 0) setChannelFilter([])
                 }}
                 className="text-xs"
               >
                 Clear selection
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {SOURCE_VALUES.map((s) => (
+              {CHANNEL_VALUES.map((c) => (
                 <DropdownMenuCheckboxItem
-                  key={s}
-                  checked={sourceFilter.includes(s)}
-                  onCheckedChange={() => toggleSource(s)}
+                  key={c}
+                  checked={channelFilter.includes(c)}
+                  onCheckedChange={() => toggleChannel(c)}
                   onSelect={(e) => e.preventDefault()}
                   className="text-xs"
                 >
-                  {SOURCE_LABEL[s]}
+                  {CHANNEL_LABEL[c]}
                 </DropdownMenuCheckboxItem>
               ))}
             </DropdownMenuContent>

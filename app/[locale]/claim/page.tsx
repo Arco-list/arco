@@ -92,6 +92,14 @@ export default async function ClaimPage({
     })
     if (!ctx) return invalid(t("invalid_title"), t("invalid_body"))
     if (ctx.company.ownerId) return invalid(t("claimed_title"), t("claimed_body"))
+
+    // Funnel stage: a valid token opened = the e-mail link was clicked.
+    // Advances the prospect to Visitor (forward-only, fire-and-forget —
+    // rendering never waits on CRM bookkeeping).
+    const prospectEmail = parsed.email
+    void import("@/lib/prospect-ref")
+      .then(({ trackProspectLandingVisit }) => trackProspectLandingVisit(prospectEmail))
+      .catch(() => {})
   } else {
     // A pick carried in the querystring (written by the client so a
     // locale switch survives) rehydrates SERVER-side for Arco rows —

@@ -208,7 +208,7 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
         if (finalStatus === "published") {
           const ownerCompany = statusDialogProject.companies.find(c => c.isOwner)
           const ownerStatus = ownerCompany?.companyStatus
-          if (ownerStatus === "created" || ownerStatus === "unclaimed") {
+          if (ownerStatus === "created" || ownerStatus === "owned" || ownerStatus === "verified" || ownerStatus === "unclaimed") {
             finalStatus = "archived"
             toast.info("Owner company is not listed — project set to Unlisted instead")
           }
@@ -960,17 +960,29 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
       {/* Filters */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-1 items-center">
-          <input
-            type="text"
-            placeholder="Search by title, location, or professional…"
-            className="w-full max-w-sm px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors placeholder:text-[#a1a1a0]"
-            value={searchTerm}
-            onChange={(event) => {
-              const value = event.target.value
-              setSearchTerm(value)
-              table.getColumn("project")?.setFilterValue(value)
-            }}
-          />
+          <div className="relative w-full max-w-sm">
+            <input
+              type="text"
+              placeholder="Search by title, location, or professional…"
+              className="w-full px-3 py-2 pr-8 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors placeholder:text-[#a1a1a0]"
+              value={searchTerm}
+              onChange={(event) => {
+                const value = event.target.value
+                setSearchTerm(value)
+                table.getColumn("project")?.setFilterValue(value)
+              }}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => { setSearchTerm(""); table.getColumn("project")?.setFilterValue("") }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-[3px] text-[#a1a1a0] hover:text-[#1c1c1a] transition-colors"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {reviewCount > 0 && firstReviewProjectId && (

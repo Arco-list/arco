@@ -4104,6 +4104,8 @@ export type Database = {
         | "added"
         | "invited"
         | "unclaimed"
+        | "verified"
+        | "owned"
       outbound_kind: "call" | "meeting" | "email" | "linkedin" | "note"
       outbound_outcome: "positive" | "neutral" | "negative" | "no_answer"
       person_source: "apollo" | "direct" | "manual" | "invited"
@@ -4144,6 +4146,8 @@ export type Database = {
         | "company"
         | "active"
         | "removed"
+        | "verified"
+        | "owned"
       review_moderation_status: "pending" | "approved" | "rejected"
     }
     CompositeTypes: {
@@ -4298,6 +4302,8 @@ export const Constants = {
         "added",
         "invited",
         "unclaimed",
+        "verified",
+        "owned",
       ],
       outbound_kind: ["call", "meeting", "email", "linkedin", "note"],
       outbound_outcome: ["positive", "neutral", "negative", "no_answer"],
@@ -4343,6 +4349,8 @@ export const Constants = {
         "company",
         "active",
         "removed",
+        "verified",
+        "owned",
       ],
       review_moderation_status: ["pending", "approved", "rejected"],
     },

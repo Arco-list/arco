@@ -6,12 +6,14 @@ import { logger } from "@/lib/logger";
 /**
  * Status progression order. A status should only advance forward.
  */
+// The claim funnel flipped the order: the company step (step 1,
+// "Created") completes BEFORE the account commit (step 2, "Signup").
 const STATUS_ORDER = [
   "prospect",
   "contacted",
   "visitor",
-  "signup",
-  "company",
+  "verified",
+  "owned",
   "active",
 ] as const;
 
@@ -64,8 +66,8 @@ const ARCO_TO_APOLLO_STAGE: Record<string, string> = {
   prospect: "Prospect",
   contacted: "Contacted",
   visitor: "Visitor",
-  signup: "Signup",
-  company: "Created",
+  verified: "Verified",
+  owned: "Owned",
   active: "Listed",
 };
 
@@ -174,10 +176,12 @@ export async function matchProspectOnSignup(
   // Don't set contact_name on signup — only set when company is actually claimed
   // (matchProspectOnCompanyCreated handles that)
 
-  if (canAdvanceTo(oldStatus, "signup")) {
-    updates.status = "signup";
-    updates.sequence_status = "finished";
-  }
+  // Signup is an EVENT under the remodeled ladder, not a stage: it
+  // stamps the account facts and retires the sequence (someone in the
+  // product should not keep receiving claim drips), while the stage
+  // itself only moves at claim time (matchProspectOnCompanyCreated /
+  // the funnel commit → 'owned').
+  updates.sequence_status = "finished";
 
   await (supabase.from("prospects") as any)
     .update(updates)
@@ -214,7 +218,6 @@ export async function matchProspectOnSignup(
     }
   }
 
-  await syncApolloStage(apolloContactId, "signup");
   await syncAccountStageForCompany((prospect as any).company_id);
 }
 
@@ -239,7 +242,7 @@ function urlDomain(url: string): string {
 
 /**
  * When a company is created, find the prospect by user_id and update status.
- * Only advances to "company" if the company domain matches the prospect's email domain.
+ * Only advances to "owned" if the company domain matches the prospect's email domain.
  */
 export async function matchProspectOnCompanyCreated(
   userId: string,
@@ -290,8 +293,8 @@ export async function matchProspectOnCompanyCreated(
     updates.contact_name = ownerName;
   }
 
-  if (canAdvanceTo(oldStatus, "company")) {
-    updates.status = "company";
+  if (canAdvanceTo(oldStatus, "owned")) {
+    updates.status = "owned";
   }
 
   await (supabase.from("prospects") as any)
@@ -308,8 +311,8 @@ export async function matchProspectOnCompanyCreated(
     { userId, companyId, ownerName }
   );
 
-  if (updates.status === "company") {
-    await syncApolloStage((prospect as any).apollo_contact_id, "company");
+  if (updates.status === "owned") {
+    await syncApolloStage((prospect as any).apollo_contact_id, "owned");
   }
   await syncAccountStageForCompany(companyId);
 }

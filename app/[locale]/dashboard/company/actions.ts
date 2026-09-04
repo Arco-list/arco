@@ -426,7 +426,7 @@ export async function updateCompanyProfileAction(input: { name: string; descript
     const status = (row as { status?: string } | null)?.status ?? null
     const desiredBase = slugifyCompanyName(normalizedName)
 
-    if (currentSlug && desiredBase && desiredBase !== currentSlug && status !== "created") {
+    if (currentSlug && desiredBase && desiredBase !== currentSlug && status !== "created" && status !== "owned") {
       try {
         const newSlug = await ensureUniqueCompanySlug(desiredBase, supabase, company!.id)
         const { error: redirectErr } = await supabase
@@ -1691,12 +1691,16 @@ export async function completeCompanySetupAction(input: {
       logger.error("Failed to un-archive owned projects on setup completion", { companyId }, err as Error)
     }
   } else {
-    // Even if not listing, mark setup as completed and move from draft to unlisted
+    // Setup done but nothing live yet: stamp completion, leave the
+    // status alone. The old draft→unlisted move predates the status
+    // remodel — "unlisted" now strictly means was-listed-then-hidden,
+    // and an Owned page is already reachable by direct link, so the
+    // move bought nothing and misfiled funnel completions (Olli).
     await supabase
       .from("companies")
-      .update({ setup_completed: true, status: "unlisted" })
+      .update({ setup_completed: true })
       .eq("id", companyId)
-      .in("status", ["created", "unlisted"])
+      .in("status", ["created", "owned", "unlisted"])
   }
 
   // Sync company status to Apollo account stage

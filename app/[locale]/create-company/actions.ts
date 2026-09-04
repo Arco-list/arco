@@ -146,7 +146,7 @@ export async function createCompanyAction(input: CreateCompanyInput): Promise<Cr
             email,
             phone,
             primary_service_id: primaryServiceId || null,
-            status: "created",
+            status: "owned",
           })
           .eq("id", unlistedMatch.id)
 
@@ -393,7 +393,7 @@ export async function claimCompanyAction(input: {
   // completion.
   const isPhotographer = (company as any).audience === "pro"
   const photographerReady = isPhotographer && Boolean(company.name?.trim()) && Boolean((company as any).city?.trim())
-  const initialStatus = photographerReady ? "listed" : "created"
+  const initialStatus = photographerReady ? "listed" : "owned"
 
   const { error: claimError } = await supabase
     .from("companies")
@@ -710,7 +710,7 @@ export async function createCompanyFromPlacesAction(
           state_region: input.stateRegion,
           google_place_id: input.placeId,
           is_verified: true,
-          status: "created",
+          status: "owned",
           ...(latitude != null && longitude != null ? { latitude, longitude } : {}),
         })
         .eq("id", unlistedMatch.id)
@@ -763,7 +763,7 @@ export async function createCompanyFromPlacesAction(
         state_region: input.stateRegion,
         google_place_id: input.placeId,
         is_verified: true,
-        status: "created",
+        status: "owned",
         latitude,
         longitude,
       })

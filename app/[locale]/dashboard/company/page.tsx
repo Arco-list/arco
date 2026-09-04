@@ -156,7 +156,7 @@ export default async function CompanySettingsPage({
   }
 
   // Setup mode: show complete button when setup not done OR company is still in draft
-  const isSetupMode = !company.setup_completed || company.status === "created"
+  const isSetupMode = !company.setup_completed || company.status === "created" || company.status === "owned"
 
   // Account-level tour flag (ui_tour_seen) — the key embeds the company
   // id plus the setup_reset_at fragment so an admin rollback re-arms it.

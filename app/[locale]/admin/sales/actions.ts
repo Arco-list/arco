@@ -8,8 +8,8 @@ export type ProspectStatus =
   | "prospect"
   | "contacted"
   | "visitor"
-  | "signup"
-  | "company"
+  | "verified"
+  | "owned"
   | "active"
   | "removed"
 
@@ -288,7 +288,7 @@ async function attachResolvedContacts(
       ownerEmail && r.email && ownerEmail.toLowerCase() === r.email.toLowerCase(),
     )
 
-    if ((r.status === "company" || r.status === "active") && ownerProfile && prospectIsOwner) {
+    if ((r.status === "owned" || r.status === "active") && ownerProfile && prospectIsOwner) {
       resolved = {
         source: "owner",
         name: nameFromProfile(ownerProfile),
@@ -296,7 +296,7 @@ async function attachResolvedContacts(
         avatarUrl: ownerProfile.avatar_url ?? null,
         userId: ownerId,
       }
-    } else if (r.status === "signup" && signupProfile) {
+    } else if (r.user_id && signupProfile) {
       resolved = {
         source: "signup",
         name: nameFromProfile(signupProfile),
@@ -498,8 +498,8 @@ export type SalesFunnel = {
   prospect: number
   contacted: number
   visitor: number
-  signup: number
-  company: number
+  verified: number
+  owned: number
   active: number
 }
 
@@ -508,8 +508,8 @@ const PROSPECT_STATUS_RANK: Record<ProspectStatus, number> = {
   prospect: 0,
   contacted: 1,
   visitor: 2,
-  signup: 3,
-  company: 4,
+  verified: 3,
+  owned: 4,
   active: 5,
 }
 
@@ -1173,8 +1173,8 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     if (r.nextOutboundAt && r.nextOutboundAt <= endOfTodayIso) return { tier: 1, reason: "Follow-up due" }
     if (r.nextOutboundAt && r.nextOutboundAt > endOfTodayIso) return null
     if (r.lastOutboundAt && nowMs - new Date(r.lastOutboundAt).getTime() < CALL_COOLDOWN_MS) return null
-    if (r.status === "company") return { tier: 2, reason: "Created — not listed" }
-    if (r.status === "signup") return { tier: 3, reason: "Signed up — no claim" }
+    if (r.status === "owned") return { tier: 2, reason: "Owned — not listed" }
+    if (r.status === "verified") return { tier: 3, reason: "Verified — claim unfinished" }
     // Row-level sequenceStatus aggregates to active/paused/finished/
     // not_started; contact-level cancelled collapses into that set, so
     // "finished" alone marks the emails-exhausted state here.
@@ -1298,7 +1298,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
 }
 
 const EMPTY_SALES_FUNNEL: SalesFunnel = {
-  total: 0, prospect: 0, contacted: 0, visitor: 0, signup: 0, company: 0, active: 0,
+  total: 0, prospect: 0, contacted: 0, visitor: 0, verified: 0, owned: 0, active: 0,
 }
 
 /**
@@ -2064,7 +2064,7 @@ export async function syncPlatformProspects() {
       // owner's. Domain-mates (colleagues at the same firm) keep their own
       // funnel stage; they get the company link, not the conversion.
       const STATUS_ORDER: Record<string, number> = {
-        prospect: 0, contacted: 1, visitor: 2, signup: 3, company: 4, active: 5,
+        prospect: 0, contacted: 1, visitor: 2, verified: 3, owned: 4, active: 5,
       }
 
       const ownerIdsNeeded = new Set(
@@ -2098,7 +2098,7 @@ export async function syncPlatformProspects() {
         const prospectIds = domainToProspects.get(dom)
         if (!prospectIds?.length) continue
 
-        const targetStatus = company.status === "listed" ? "active" : "company"
+        const targetStatus = company.status === "listed" ? "active" : "owned"
         const targetRank = STATUS_ORDER[targetStatus]
         const createdAt = company.created_at as string
         const ownerEmail = company.owner_id ? ownerEmailByUserId.get(company.owner_id) ?? null : null

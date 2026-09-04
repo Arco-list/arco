@@ -54,7 +54,7 @@ export async function syncCompanyListedStatus(companyId: string) {
   // ownerless companies entirely; this helper promotes them to showcase.
   const hasOwner = Boolean((company as { owner_id?: string | null }).owner_id)
   const targetStatus = hasOwner ? "listed" : "prospected"
-  const AUTO_LIST_ELIGIBLE = new Set(["created", "unlisted", "prospected", "invited", "unclaimed", "added"])
+  const AUTO_LIST_ELIGIBLE = new Set(["created", "owned", "verified", "unlisted", "prospected", "invited", "unclaimed", "added"])
   if (
     hasActiveProjects
     && AUTO_LIST_ELIGIBLE.has(company.status as string)
@@ -66,7 +66,7 @@ export async function syncCompanyListedStatus(companyId: string) {
     // through the manual chain, and leaving it false keeps the popup
     // + tour firing on subsequent loads.
     const update: Record<string, unknown> = { status: targetStatus }
-    if (company.status === "created" && hasOwner) update.setup_completed = true
+    if ((company.status === "created" || company.status === "owned") && hasOwner) update.setup_completed = true
     const { error: updateError } = await supabase.from("companies").update(update).eq("id", companyId)
     if (updateError) {
       // Was unchecked, so a refused update still logged as a success —

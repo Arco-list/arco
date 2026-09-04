@@ -33,9 +33,9 @@ async function loadAdminCompaniesData() {
       supabase
         .from("companies")
         .select(
-          "id, name, slug, status, city, country, is_verified, is_featured, domain, logo_url, website, email, services_offered, primary_service_id, owner_id, created_at, listed_at, auto_approve_projects, source, seo_indexed, seo_indexation_state, seo_impressions_28d, seo_clicks_28d, seo_ctr_28d, seo_position_28d"
+          "id, name, slug, status, city, country, is_verified, is_featured, domain, logo_url, website, email, services_offered, primary_service_id, owner_id, created_at, listed_at, auto_approve_projects, source, first_touch_source, audience, seo_indexed, seo_indexation_state, seo_impressions_28d, seo_clicks_28d, seo_ctr_28d, seo_position_28d"
         )
-        .or("source.in.(direct,manual,invited),status.in.(invited,created,listed,unlisted,deactivated)"),
+        .or("source.in.(direct,manual,invited),status.in.(invited,verified,created,owned,listed,unlisted,deactivated)"),
       supabase
         .from("company_metrics")
         .select("company_id, professional_count, projects_linked"),
@@ -252,6 +252,59 @@ async function loadAdminCompaniesData() {
       auth_user_id: string | null
     } | null
   }
+    // Channel per company: the CONSUMED claim token is the authority for
+  // funnel claims (what actually converted, upgrades included); rows
+  // without one fall back to the source mapping. 'direct' refines via
+  // first-touch attribution into seo/social/referral/shares.
+  const { data: consumedTokens } = await supabase
+    .from("claim_tokens" as never)
+    .select("company_id, channel, consumed_at")
+    .not("consumed_at", "is", null)
+  const consumedChannelByCompany = new Map<string, string>()
+  for (const t of (consumedTokens ?? []) as unknown as { company_id: string; channel: string | null; consumed_at: string }[]) {
+    if (t.channel && !consumedChannelByCompany.has(t.company_id)) consumedChannelByCompany.set(t.company_id, t.channel)
+  }
+  const CHANNEL_FROM_SOURCE: Record<string, string> = { invited: "invite", manual: "showcase", apollo: "outreach", direct: "direct" }
+  const DIRECT_REFINE: Record<string, string> = { google: "seo", social: "social", referral: "referral", shares: "shares" }
+  // Ranking mirrors resolveClaimChannel: a project credit beats the
+  // entry source — an Apollo import that later gets credited IS an
+  // invite-channel company (that credit is what the funnel will ride),
+  // regardless of how the row originally entered the database.
+  const deriveCompanyChannel = (
+    source: string | null,
+    firstTouch: string | null,
+    consumed: string | null,
+    hasInviteCredit: boolean,
+    hasAcceptedContributorCredit: boolean,
+    claimed: boolean,
+    status: string | null,
+    isPhotographer: boolean,
+  ): string => {
+    // Photographers exist on Arco ONLY by being assigned on a project —
+    // the invite channel by construction. Their rows often carry source
+    // 'manual' (created from the details-bar assignment) and a credit
+    // that is already live, so neither the source mapping nor the
+    // pending-credit rule catches them.
+    //
+    // Claimed vs unclaimed read credits differently. UNCLAIMED: a
+    // pending credit marks the pipeline the row sits in. CLAIMED: only
+    // an ACCEPTED contributor credit signals an invite conversion — a
+    // pending tag on an existing customer (Bongers, invited on a
+    // client's project long after their own signup) says nothing about
+    // how they were acquired. Owner rows never count: owning a project
+    // is publishing, not being invited.
+    let ch = consumed
+      ?? (isPhotographer ? "invite" : null)
+      ?? (claimed
+        ? (hasAcceptedContributorCredit ? "invite" : null)
+        : ((hasInviteCredit || status === "invited") ? "invite" : null))
+      ?? CHANNEL_FROM_SOURCE[source ?? ""]
+      ?? "direct"
+    if (ch === "platform") ch = "direct"
+    if (ch === "direct") ch = DIRECT_REFINE[firstTouch ?? ""] ?? "direct"
+    return ch
+  }
+
   const contactsByCompany = new Map<string, Array<{
     id: string
     personId: string
@@ -351,6 +404,13 @@ async function loadAdminCompaniesData() {
       ? [ownerProfile.first_name, ownerProfile.last_name].filter(Boolean).join(" ").trim() || null
       : null
 
+    // Status shown in the table: unclaimed unlisted/created rows read as
+    // "invited" (they were auto-created from project invites). Channel
+    // derivation MUST use this same derived value — deriving from the
+    // raw DB status let the Status column say Invited while the Channel
+    // column said Showcase for the same row.
+    const displayStatus = isUnclaimed ? ("invited" as const) : company.status
+
     // For unclaimed companies, get services from invite data instead of company.services_offered
     let serviceIds: string[]
     let resolvedServices: string[]
@@ -385,7 +445,7 @@ async function loadAdminCompaniesData() {
       slug: company.slug ?? null,
       services: resolvedServices,
       domain,
-      status: isUnclaimed ? ("invited" as const) : company.status,
+      status: displayStatus,
       ownerName: isUnclaimed ? null : ownerName,
       ownerEmail: isUnclaimed
         ? (invitedEmail ?? null)
@@ -413,6 +473,17 @@ async function loadAdminCompaniesData() {
       canPublishProjects: serviceIds.some((id) => publishableCategoryIds.has(id)),
       autoApproveProjects: Boolean((company as any).auto_approve_projects),
       source: company.source ?? null,
+      isPhotographer: (company as { audience?: string | null }).audience === "pro",
+      channel: deriveCompanyChannel(
+        company.source ?? null,
+        (company as { first_touch_source?: string | null }).first_touch_source ?? null,
+        consumedChannelByCompany.get(company.id) ?? null,
+        (companyProjectsList.get(company.id) ?? []).some((p) => !p.isProjectOwner && p.inviteStatus === "invited"),
+        (companyProjectsList.get(company.id) ?? []).some((p) => !p.isProjectOwner && (p.inviteStatus === "live_on_page" || p.inviteStatus === "listed")),
+        Boolean(company.owner_id),
+        String(displayStatus ?? ""),
+        (company as { audience?: string | null }).audience === "pro",
+      ),
       contacts: contactsByCompany.get(company.id) ?? [],
       seoIndexed: (company as any).seo_indexed ?? null,
       seoIndexationState: (company as any).seo_indexation_state ?? null,
@@ -466,6 +537,8 @@ async function loadAdminCompaniesData() {
         projectsPending: data.count,
         teamAccepted: 0,
         teamInvited: 0,
+        channel: "invite",
+        isPhotographer: false,
         projects: [],
         createdAt: data.latestInvitedAt,
         logoUrl: null,

@@ -49,7 +49,7 @@ async function assertAdmin() {
   return { supabase, user, error: null }
 }
 
-const companyStatusSchema = z.enum(["unlisted", "listed", "deactivated", "created", "prospected", "unclaimed", "added", "invited"])
+const companyStatusSchema = z.enum(["unlisted", "listed", "deactivated", "created", "prospected", "unclaimed", "added", "invited", "verified", "owned"])
 
 export async function resendProfessionalInviteAction({ inviteId }: { inviteId: string }) {
   const idResult = uuidSchema.safeParse(inviteId)
@@ -221,7 +221,7 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
   // and the ceremony re-runs for the owner. Companies transitioning to
   // any other status leave setup_reset_at alone.
   const update: Record<string, unknown> = { status: parsedStatus.data }
-  if (parsedStatus.data === "created") update.setup_reset_at = new Date().toISOString()
+  if (parsedStatus.data === "created" || parsedStatus.data === "owned") update.setup_reset_at = new Date().toISOString()
 
   // Mirror the dashboard flow: admin picking Unlisted is an explicit
   // choice — flag it so sync_company_listed_status doesn't auto-relist
@@ -354,7 +354,7 @@ export async function updateCompanyStatusAction(input: { companyId: string; stat
 
   // Sync owned project visibility based on company status
   const projectVisibleStatuses = ["listed", "unlisted", "prospected"]
-  const projectHiddenStatuses = ["unclaimed", "created", "deactivated"]
+  const projectHiddenStatuses = ["unclaimed", "created", "owned", "verified", "deactivated"]
   const companyId = parsedCompanyId.data
 
   if (projectHiddenStatuses.includes(parsedStatus.data)) {
@@ -984,7 +984,7 @@ export async function changeCompanyOwnerAction(input: {
       .in("status", ["listed", "live_on_page"])
       .eq("projects.status", "published")
       .limit(1)
-    const nextStatus = (activePP?.length ?? 0) > 0 ? "listed" : "created"
+    const nextStatus = (activePP?.length ?? 0) > 0 ? "listed" : "owned"
     await serviceClient
       .from("companies")
       .update({ status: nextStatus, setup_completed: true } as any)

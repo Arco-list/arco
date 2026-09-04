@@ -6,12 +6,14 @@ import { logger } from "@/lib/logger";
 /**
  * Status progression order for checking advancement.
  */
+// The claim funnel flipped the order: the company step (step 1,
+// "Created") completes BEFORE the account commit (step 2, "Signup").
 const STATUS_ORDER = [
   "prospect",
   "contacted",
   "visitor",
-  "signup",
-  "company",
+  "verified",
+  "owned",
   "active",
 ] as const;
 
@@ -139,6 +141,61 @@ export async function trackProspectLandingVisit(
       } catch (err) {
         logger.error("Failed to sync Apollo account stage on landing visit", { companyId }, err as Error);
       }
+    }
+  }
+}
+
+/**
+ * Advance a prospect to a funnel stage, stamped from the claim funnel:
+ * 'verified' when the company step completes (step 1 of 2), 'owned'
+ * when the commit lands (step 2 — account + claim). Forward-only via
+ * the ladder; silently a no-op when no prospect matches.
+ */
+const APOLLO_STAGE_FOR: Record<string, string> = {
+  visitor: "Visitor",
+  verified: "Verified",
+  owned: "Owned",
+  active: "Listed",
+};
+
+export async function advanceProspectStage(
+  identifier: { email?: string | null; companyId?: string | null },
+  stage: "verified" | "owned",
+): Promise<void> {
+  const supabase = createServiceRoleSupabaseClient();
+  const fields = "id, status, apollo_contact_id, company_id";
+  type ProspectRow = { id: string; status: string | null; apollo_contact_id: string | null; company_id: string | null };
+  let prospect: ProspectRow | null = null;
+  if (identifier.companyId) {
+    prospect = (await supabase.from("prospects").select(fields).eq("company_id", identifier.companyId).maybeSingle()).data as ProspectRow | null;
+  }
+  if (!prospect && identifier.email) {
+    prospect = (await supabase.from("prospects").select(fields).eq("email", identifier.email.toLowerCase()).maybeSingle()).data as ProspectRow | null;
+  }
+  if (!prospect) return;
+  if (!canAdvanceTo(prospect.status, stage)) return;
+
+  await (supabase.from("prospects") as any).update({ status: stage }).eq("id", prospect.id);
+  await supabase.from("prospect_events").insert({
+    prospect_id: prospect.id,
+    event_type: stage === "verified" ? "prospect.verified" : "prospect.owned",
+    event_source: "app",
+    old_status: prospect.status,
+    new_status: stage,
+  } as any);
+
+  if (prospect.apollo_contact_id) {
+    try {
+      await updateContactStage(prospect.apollo_contact_id, APOLLO_STAGE_FOR[stage]);
+    } catch (err) {
+      logger.error("Failed to sync Apollo contact stage", { stage }, err as Error);
+    }
+  }
+  if (prospect.company_id) {
+    try {
+      await syncCompanyToApollo(prospect.company_id);
+    } catch (err) {
+      logger.error("Failed to sync Apollo account stage", { stage }, err as Error);
     }
   }
 }

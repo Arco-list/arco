@@ -46,8 +46,8 @@ export const STATUS_CONFIG: Record<ProspectStatus, { label: string; cls: string;
   prospect: { label: "Prospect", cls: "bg-amber-50 text-amber-700", dot: "bg-[#f59e0b]" },
   contacted: { label: "Contacted", cls: "bg-amber-50 text-amber-700", dot: "bg-[#f59e0b]" },
   visitor: { label: "Visitor", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
-  signup: { label: "Signup", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
-  company: { label: "Created", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
+  verified: { label: "Verified", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
+  owned: { label: "Owned", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
   active: { label: "Listed", cls: "bg-purple-50 text-purple-800 font-semibold", dot: "bg-[#7c3aed]" },
   // Removed never renders in the funnel — the row hides any contact with this
   // status, and the company row drops entirely if every contact is removed.
@@ -58,7 +58,7 @@ export const STATUS_CONFIG: Record<ProspectStatus, { label: string; cls: string;
 // Statuses surfaced in the multi-select status filter. 'removed' is a soft-
 // delete marker — admin doesn't filter for it, the row is just hidden.
 const ALL_STATUSES: ProspectStatus[] = [
-  "prospect", "contacted", "visitor", "signup", "company", "active",
+  "prospect", "contacted", "visitor", "verified", "owned", "active",
 ]
 
 export const SEQUENCE_CONFIG: Record<SequenceStatus, { label: string; dot: string }> = {
@@ -127,8 +127,11 @@ const FUNNEL_STAGES: { status: ProspectStatus; label: string; driver: "prospect"
   { status: "prospect", label: "Prospect", driver: "prospect" },
   { status: "contacted", label: "Contacted", driver: "prospect" },
   { status: "visitor", label: "Visitor", driver: "acquisition" },
-  { status: "signup", label: "Signup", driver: "acquisition" },
-  { status: "company", label: "Created", driver: "acquisition" },
+  // The remodeled ladder: Verified (identity proven + company step
+  // confirmed) before Owned (account attached at the commit). Signup
+  // is an event (signed_up_at), not a stage.
+  { status: "verified", label: "Verified", driver: "acquisition" },
+  { status: "owned", label: "Owned", driver: "acquisition" },
   { status: "active", label: "Listed", driver: "retention" },
 ]
 
@@ -1131,11 +1134,21 @@ export function ProspectsClient({
               placeholder="Search company or contact..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full h-9 pl-8 pr-3 text-xs border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors"
+              className="w-full h-9 pl-8 pr-8 text-xs border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors"
             />
             <svg className="absolute left-2.5 top-2.5 text-[#a1a1a0]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
+            {search && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-[3px] text-[#a1a1a0] hover:text-[#1c1c1a] transition-colors"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+              </button>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1532,9 +1545,9 @@ export function ProspectsClient({
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               {[
                 { dot: "bg-[#7c3aed]", label: "Listed", desc: "Owns a Listed company — fully converted.", specs: "Live on platform · Conversion complete" },
-                { dot: "bg-[#2563eb]", label: "Created", desc: "Owns a company in Created status — claimed but never listed yet.", specs: "Company claimed · Profile setup" },
-                { dot: "bg-[#2563eb]", label: "Signup", desc: "Created an Arco account but has not claimed or created a company yet.", specs: "Account created · No company" },
-                { dot: "bg-[#2563eb]", label: "Visitor", desc: "Clicked a link in an outreach email and visited the site.", specs: "Email engagement · No account yet" },
+                { dot: "bg-[#2563eb]", label: "Owned", desc: "Company claimed by an Arco account (step 2 of the claim funnel) — not listed yet.", specs: "Owner attached · Profile setup" },
+                { dot: "bg-[#2563eb]", label: "Verified", desc: "Identity proven (invite delivery or domain code) and company details confirmed on step 1 — the claim is not completed yet.", specs: "Step 1 done · No owner yet" },
+                { dot: "bg-[#2563eb]", label: "Visitor", desc: "Clicked the link in a claim e-mail and opened the funnel.", specs: "Email engagement · No account yet" },
                 { dot: "bg-[#f59e0b]", label: "Contacted", desc: "At least one intro email has been sent. Advances automatically on send.", specs: "Intro sent · Drip sequence active" },
                 { dot: "bg-[#f59e0b]", label: "Prospect", desc: "In the sales funnel — Showcase, Invite, or Outreach contact with no email sent yet.", specs: "In sales funnel · Awaiting first email" },
               ].map((s) => (
@@ -1550,7 +1563,9 @@ export function ProspectsClient({
             </div>
 
             <div style={{ marginTop: 20, padding: "12px 16px", background: "#f5f5f4", borderRadius: 4, fontSize: 11, color: "#6b6b68", lineHeight: 1.5 }}>
-              <strong>Flow:</strong> Prospect → Contacted → Visitor → Signup → Created → Listed
+              <strong>Flow:</strong> Prospect → Contacted → Visitor → Verified → Owned → Listed
+              <br />
+              <strong>Signup</strong> is an event, not a stage: it stamps the account facts (signed_up_at) and can happen at any point — an existing Arco user claims without one.
               <br />
               <strong>Aggregation:</strong> Each row shows the highest stage any contact at the company has reached. Channel column shows every distinct entry point (Showcase, Invite, Outreach).
             </div>

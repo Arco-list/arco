@@ -92,6 +92,22 @@ export async function saveCompanyStepAction(
     logger.error("claim: company step save failed", { companyId: parsed.companyId }, error as unknown as Error)
     return { ok: false, error: "Could not save. Please try again." }
   }
+  // Verified: identity proven (token delivery or the platform domain
+  // code) AND the company step confirmed — status moves forward on the
+  // company row and the prospect in the same breath. Forward-only from
+  // the pre-claim statuses; an owner ends this state machine's say.
+  await svc
+    .from("companies")
+    // is_verified rides along: Verified IS the domain-proof moment
+    // (token delivery or the platform code) — the domain check mark in
+    // admin should light up here, not first at the claim.
+    .update({ status: "verified", is_verified: true })
+    .eq("id", parsed.companyId)
+    .is("owner_id", null)
+    .in("status", ["added", "prospected", "invited", "unclaimed"])
+  void import("@/lib/prospect-ref")
+    .then(({ advanceProspectStage }) => advanceProspectStage({ email: parsed.email, companyId: parsed.companyId }, "verified"))
+    .catch(() => {})
   return { ok: true }
 }
 
@@ -115,11 +131,17 @@ async function claimCompanyForUser(params: {
     return { ok: false, error: "This company has already been claimed by someone else." }
   }
 
-  // Owner — guarded so a concurrent claim cannot steal it.
+  // Owner — guarded so a concurrent claim cannot steal it. Status moves
+  // to 'created' in the same write: owner-only claims left channels
+  // without credits (outreach, platform) stranded on their pre-claim
+  // status — owned but invisible, a state the status funnel doesn't
+  // know. The Listed-at-Live sync below promotes past 'created' where
+  // a live credit allows. is_verified: every funnel channel carries
+  // proof (delivery, or the platform domain code).
   if (!company.owner_id) {
     const { data: claimed } = await svc
       .from("companies")
-      .update({ owner_id: params.userId })
+      .update({ owner_id: params.userId, status: "owned", is_verified: true })
       .eq("id", params.companyId)
       .is("owner_id", null)
       .select("id")
@@ -316,6 +338,10 @@ export async function completeClaimExistingAction(
       "redirect_to",
       `/dashboard/company?company_id=${parsed.companyId}&claimed=1`,
     )
+    // Funnel stage: existing account, no auth trigger — stamp Signup.
+    void import("@/lib/prospect-ref")
+      .then(({ advanceProspectStage }) => advanceProspectStage({ email: parsed.email, companyId: parsed.companyId }, "owned"))
+      .catch(() => {})
     return { status: "done", loginUrl: loginUrl.toString() }
   } catch (err) {
     logger.error("claim: existing-account complete failed", { companyId: parsed.companyId }, err as Error)
@@ -353,6 +379,11 @@ export async function finalizeClaimSignedInAction(
     await releaseClaimToken(parsed.id)
     return { status: "error", error: claimed.error }
   }
+  // Funnel stage: commit landed on an existing session — no fresh
+  // signup fires the auth trigger, so stamp Signup explicitly.
+  void import("@/lib/prospect-ref")
+    .then(({ advanceProspectStage }) => advanceProspectStage({ email: parsed.email, companyId: parsed.companyId }, "owned"))
+    .catch(() => {})
   return {
     status: "done",
     redirectTo: `/dashboard/company?company_id=${parsed.companyId}&claimed=1`,

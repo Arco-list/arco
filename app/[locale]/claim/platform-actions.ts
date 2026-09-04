@@ -232,6 +232,10 @@ export async function verifyPlatformDomainAndStartClaimAction(
         domain,
         website,
         status: "added",
+        // Column default is 'manual' — that would file self-serve
+        // platform entrants under the Showcase channel. They are the
+        // definition of direct.
+        source: "direct",
         audience: "homeowner",
         phone: input.place?.phone ?? null,
         address: input.place?.formattedAddress ?? null,

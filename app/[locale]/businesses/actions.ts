@@ -110,11 +110,23 @@ export async function autoCreateCompanyFromDomain(domain: string, claimableCompa
 
   // If there's a claimable company, take ownership of it
   if (claimableCompanyId) {
-    // Update company owner
+    // Owner AND status: mirroring claimCompanyAction. Owner-only left
+    // claimed companies stranded on their pre-claim status ('added' for
+    // Apollo imports) — owned but invisible, a state the status funnel
+    // doesn't know (CUBE architecten, van Houtum: both hand-corrected).
     await supabase
       .from("companies")
-      .update({ owner_id: user.id })
+      .update({ owner_id: user.id, status: "owned", is_verified: true })
       .eq("id", claimableCompanyId)
+
+    // Listed at Live: a claimed company with a live credit on a
+    // published project lists itself, same as every other claim path.
+    try {
+      const { syncCompanyListedStatus } = await import("@/lib/companies/sync-listed-status")
+      await syncCompanyListedStatus(claimableCompanyId)
+    } catch (err) {
+      console.error("[import claim] listed sync failed", err)
+    }
 
     // Remove old professional links to this company (except the current user's)
     await supabase
@@ -285,7 +297,11 @@ export async function autoCreateCompanyFromDomain(domain: string, claimableCompa
       phone: companyPhone,
       google_place_id: googlePlaceId,
       is_verified: false,
-      status: "unlisted" as const,
+      // Owned, not unlisted: this row is born claimed (the importing
+      // user becomes owner in the same flow). "Unlisted" implies a page
+      // that WAS public and was hidden — companies that never listed
+      // wore it as a birth status (Studio 22, van Houtum: corrected).
+      status: "owned" as const,
       slug,
     })
     .select("id")
