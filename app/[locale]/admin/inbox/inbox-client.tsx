@@ -338,8 +338,18 @@ export function InboxClient({
           onKeyDown={(e) => {
             if (e.key === "Enter") reload()
           }}
-          className="w-full h-9 pl-8 pr-3 text-xs border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors"
+          className="w-full h-9 pl-8 pr-8 text-xs border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors"
         />
+            {search && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => { setSearch(""); void reload({ search: "" }) }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-[3px] text-[#a1a1a0] hover:text-[#1c1c1a] transition-colors"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+              </button>
+            )}
         <svg
           className="absolute left-2.5 top-2.5 text-[#a1a1a0]"
           width="14"
