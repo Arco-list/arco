@@ -687,7 +687,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
   // address there is nothing to preview but an empty wash. The card
   // appears on the token company step, where the form brings it alive.
   const proCardPreview = (channel === "showcase" || channel === "outreach" || (channel === "platform" && !isPlatform)) && (
-    <article style={{ marginBottom: 28 }}>
+    <article className={styles.previewCard}>
       <div className="discover-card-image-wrap" style={{ aspectRatio: "3/2" }}>
         <div className="discover-card-image-layer" style={!heroSrc ? { display: "grid", placeItems: "center", background: "var(--arco-wash)" } : undefined}>
           {heroSrc
@@ -740,7 +740,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
   const photos = ctx.project?.photoUrls ?? []
   const photo = photos[photoIdx % Math.max(photos.length, 1)]
   const projectCard = ctx.project && (
-    <article className="discover-card" style={{ marginBottom: 28 }}>
+    <article className={`discover-card ${styles.previewCard}`}>
       <div className="discover-card-image-wrap">
         <div className="discover-card-image-layer">
           {photo && <img key={photo} src={photo} alt="" />}

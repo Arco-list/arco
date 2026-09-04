@@ -25,6 +25,18 @@
 @media (max-width: 980px) { .body { padding-bottom: 150px; } }
 .wrap { max-width: 1140px; margin: 0 auto; padding: 0 32px; }
 .intro { max-width: 900px; margin-bottom: 52px; }
+/* Mobile margins follow the site's own .wrap convention (20px at
+   ≤768px, vs 32px here on desktop) and trade the roomy desktop
+   top-rhythm for something tighter. Top padding stays ≥48px: the
+   step-2 back-link hangs absolutely at -40px inside the intro and
+   must keep clearing the header. */
+@media (max-width: 768px) {
+  .wrap { padding: 0 20px; }
+  .headerInner { padding: 14px 20px; }
+  .body { padding-top: 48px; }
+  .intro { margin-bottom: 36px; }
+  .grid { row-gap: 32px; }
+}
 /* Title and copy defer to the project-detail sizes: the global
    .arco-page-title (48px serif, with its own responsive overrides) and
    .arco-body-text (15px/300/1.7). These only add the local spacing. */
@@ -45,6 +57,10 @@
    velden; stap 2 zet inline een eigen, nog smallere 460px. */
 .mainArea { grid-area: form; max-width: 560px; }
 .side { grid-area: side; position: sticky; top: 28px; }
+/* Sidebar preview cards (project card + pro card): breathing room
+   below on desktop; the stacked-layout media block below zeroes it,
+   so this base MUST precede that block in source order. */
+.previewCard { margin-bottom: 28px; }
 @media (max-width: 980px) {
   .grid {
     grid-template-columns: minmax(0, 1fr);
@@ -52,6 +68,11 @@
     row-gap: 40px;
   }
   .side { position: static; }
+  /* In the stacked layout the row-gap IS the spacing: the intro's own
+     bottom margin and the card's desktop under-margin would otherwise
+     stack on top of it and open big holes around the preview card. */
+  .introArea { margin-bottom: 0; }
+  .previewCard { margin-bottom: 0; }
 }
 
 /* sidebar cards */
@@ -232,7 +253,16 @@
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; margin: 0;
     background: var(--arco-white); border-top: 1px solid var(--arco-rule);
   }
-  .ctaBarInner { min-height: 73px; padding: 12px 20px; border-top: none; }
+  .ctaBarInner {
+    min-height: 73px; border-top: none;
+    padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
+    /* Step 2's mobile pattern: full-width button, note centred under
+       it — a half-width button with wrapping text beside it read as
+       unfinished. */
+    flex-direction: column; align-items: stretch; gap: 8px;
+  }
+  .ctaBarInner button { width: 100%; }
+  .ctaBarInner .ctaNote { text-align: center; }
 }
 .ctaNote { font-size: 13px; color: var(--arco-mid); }
 .finePrint { font-size: 13px; color: var(--arco-mid); margin-top: 18px; max-width: 52ch; }
