@@ -53,10 +53,36 @@ export async function dispatchOutreachIntro(
 ): Promise<DispatchOutreachIntroResult> {
   const { email, firstName, companyName, companyId, refUrl } = args
 
+  // The CTA is the claim funnel: mint a token when the prospect has a
+  // companies row (channel resolved from live data), else land on the
+  // tokenless platform funnel. An explicitly passed refUrl still wins.
+  let claimRef = refUrl ?? null
+  if (!claimRef) {
+    try {
+      if (companyId) {
+        const { resolveClaimChannel } = await import("@/lib/claim/resolve-channel")
+        const { issueClaimToken } = await import("@/lib/claim/claim-token")
+        const resolved = await resolveClaimChannel(companyId)
+        const issued = await issueClaimToken({
+          companyId,
+          creditId: resolved.channel === "invite" ? resolved.creditId : null,
+          email: email.toLowerCase(),
+          channel: resolved.channel,
+        })
+        claimRef = issued.url
+      } else {
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.arcolist.com"
+        claimRef = `${siteUrl}/claim`
+      }
+    } catch (err) {
+      console.error("[dispatch-outreach-intro] claim token mint failed, using template fallback", err)
+    }
+  }
+
   const variables = {
     firstname: firstName,
     company_name: companyName,
-    ...(refUrl ? { ref_url: refUrl } : {}),
+    ...(claimRef ? { ref_url: claimRef } : {}),
     email,
   }
 

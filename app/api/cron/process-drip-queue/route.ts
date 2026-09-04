@@ -256,6 +256,36 @@ async function sendOne(
     if (prospect?.email) recipient = prospect.email
   }
 
+  // Claim-family templates get their funnel link minted AT SEND TIME,
+  // not at enqueue: queue rows can be days old (or predate the funnel
+  // entirely) and a stored URL would be stale or legacy. Fresh mint =
+  // always-valid single-use token, channel resolved from live data.
+  // On failure the stored variables stand — a legacy link still works.
+  if (/^(prospect|new-professional|outreach)-/.test(row.template)) {
+    try {
+      if (row.company_id) {
+        const { resolveClaimChannel } = await import("@/lib/claim/resolve-channel")
+        const { issueClaimToken } = await import("@/lib/claim/claim-token")
+        const resolved = await resolveClaimChannel(row.company_id)
+        const issued = await issueClaimToken({
+          companyId: row.company_id,
+          creditId: resolved.channel === "invite" ? resolved.creditId : null,
+          email: recipient.toLowerCase(),
+          channel: resolved.channel,
+        })
+        variables.claim_url = issued.url
+        variables.ref_url = issued.url
+      } else {
+        // Apollo prospects without a companies row: the tokenless
+        // platform funnel (search → verify → claim) is the landing.
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.arcolist.com"
+        variables.ref_url = `${siteUrl}/claim`
+      }
+    } catch (err) {
+      console.error("[process-drip-queue] claim token mint failed, using stored link", err)
+    }
+  }
+
   let result: { success: boolean; messageId?: string; message?: string }
   try {
     result = await sendTransactionalEmail(

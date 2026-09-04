@@ -26,6 +26,18 @@ const OLLI_HERO =
  *  is always safe cleanup — the next test send or preview recreates
  *  exactly this state. Nothing here touches real companies. */
 async function ensureClaimFixture(svc: ReturnType<typeof createServiceRoleSupabaseClient>): Promise<void> {
+  // Someone actively testing may have their OWN askolli.com row mid-
+  // funnel (e.g. a platform walkthrough created one while the fixture
+  // was deleted). Recreating the fixture next to it makes a confusing
+  // duplicate — skip creation while any row on the domain exists.
+  const { data: existing } = await svc
+    .from("companies")
+    .select("id")
+    .eq("domain", "askolli.com")
+    .limit(1)
+    .maybeSingle()
+  if (existing && existing.id !== CLAIM_FIXTURE_ID) return
+
   await svc.from("companies").upsert(
     {
       id: CLAIM_FIXTURE_ID,
