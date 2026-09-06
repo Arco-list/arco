@@ -4,6 +4,7 @@ import { useState, useEffect, useTransition } from "react"
 import type { GrowthMetrics, Timeframe } from "./actions"
 import { fetchGrowthMetrics } from "./actions"
 import { GrowthSyncBadge } from "@/components/admin/growth-sync-badge"
+import { AdminTabs, useAdminTab } from "@/components/admin/admin-tabs"
 import { MetricDetailModal } from "./metric-detail-modal"
 import { GrowthTableView } from "./table/table-view"
 import { fetchMetricTable, type MetricRow } from "./table/table-actions"
@@ -200,13 +201,10 @@ export function GrowthClient({ initialMetrics, initialLastSynced = null }: Props
     return "months"
   })
   const [isPending, startTransition] = useTransition()
-  const [view, setView] = useState<"lifecycle" | "table">(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("arco_growth_view")
-      if (saved === "lifecycle" || saved === "table") return saved
-    }
-    return "lifecycle"
-  })
+  // View lives in the URL (?tab=lifecycle) via the sticky tab bar —
+  // table is the first tab and the clean-URL default. Replaces the old
+  // localStorage persistence: a URL survives refresh AND is shareable.
+  const view = useAdminTab(["table", "lifecycle"] as const)
   const [tableRows, setTableRows] = useState<MetricRow[]>([])
   const [tableLabels, setTableLabels] = useState<string[]>([])
   const [posthogData, setPosthogData] = useState<{
@@ -517,18 +515,6 @@ export function GrowthClient({ initialMetrics, initialLastSynced = null }: Props
     })
   }
 
-  const handleViewChange = (v: "lifecycle" | "table") => {
-    setView(v)
-    if (typeof window !== "undefined") localStorage.setItem("arco_growth_view", v)
-    if (v === "table" && tableRows.length === 0) {
-      startTransition(async () => {
-        const data = await fetchMetricTable(timeframe)
-        setTableRows(data.rows)
-        setTableLabels(data.labels)
-      })
-    }
-  }
-
   // Helper to get sparkline datapoints from table rows. Searches
   // top-level rows first, then falls back to subs — Lifecycle cards
   // like Drafts / Publishers / Inviters live under parent rows
@@ -579,6 +565,58 @@ export function GrowthClient({ initialMetrics, initialLastSynced = null }: Props
 
   return (
     <>
+      {/* Sticky tab bar flush under the site header (company-edit
+          pattern). Table first = the clean-URL default; timeframe
+          selector + sync status ride in the actions slot. */}
+      <AdminTabs
+        title="Growth"
+        tabs={[
+          { key: "table", label: "Table" },
+          { key: "lifecycle", label: "Lifecycle" },
+        ]}
+        active={view}
+        actions={
+          <>
+            {/* One sync gesture: the pill also refreshes the PostHog
+                cache (all timeframes), replacing the old separate
+                refresh icon. The debounce keeps a quick double-click
+                from re-querying PostHog when every timeframe is fresh
+                — the metrics sync itself always runs. */}
+            <GrowthSyncBadge
+              initialLastSynced={initialLastSynced}
+              onSync={async () => {
+                const ages = (["days", "weeks", "months", "years"] as Timeframe[])
+                  .map((tf) => cacheAgeByTimeframe[tf])
+                  .filter((a): a is number => typeof a === "number")
+                const allKnownAndFresh =
+                  ages.length > 0 && ages.every((a) => a < REFRESH_DEBOUNCE_MINUTES)
+                if (allKnownAndFresh || isRefreshingAll) return
+                await refreshAllTimeframes()
+              }}
+            />
+            {/* Timeframe toggle */}
+            <div className="flex items-center gap-1 border border-[#e5e5e4] rounded-[3px] overflow-hidden">
+            {TIMEFRAMES.map((tf) => (
+              <button
+                key={tf.value}
+                onClick={() => handleTimeframeChange(tf.value)}
+                className={`px-2 sm:px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider transition-colors ${
+                  timeframe === tf.value
+                    ? "bg-[#1c1c1a] text-white"
+                    : "text-[#6b6b68] hover:bg-[#fafaf9]"
+                } ${isPending ? "opacity-50" : ""}`}
+              >
+                <span className="sm:hidden">{tf.shortLabel}</span>
+                <span className="hidden sm:inline">{tf.label}</span>
+              </button>
+            ))}
+            </div>
+          </>
+        }
+      />
+
+      <div className="wrap" style={{ paddingTop: 32, paddingBottom: 48 }}>
+
       {posthogError && (
         <div
           role="alert"
@@ -588,88 +626,12 @@ export function GrowthClient({ initialMetrics, initialLastSynced = null }: Props
           <p className="mt-1 text-xs text-[#991b1b]/80">{posthogError}</p>
         </div>
       )}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-        <div>
-          <h3 className="arco-section-title">Growth dashboard</h3>
-          <p className="text-xs text-[#a1a1a0] mt-0.5">
-            Lifecycle model and key metrics · {" "}
-            <a href="/admin/dashboard/table" className="text-[#6b6b68] hover:text-[#1c1c1a] underline transition-colors">Table view</a>
-            {" · "}
-            <a href="/admin/model" className="text-[#6b6b68] hover:text-[#1c1c1a] underline transition-colors">Model</a>
-            {" · "}
-            <a href="/admin/dashboard/events" className="text-[#6b6b68] hover:text-[#1c1c1a] underline transition-colors">Tracking events</a>
-          </p>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <GrowthSyncBadge initialLastSynced={initialLastSynced} />
-          {/* View toggle */}
-          <div className="flex items-center gap-1 border border-[#e5e5e4] rounded-[3px] overflow-hidden">
-            <button
-              onClick={() => handleViewChange("lifecycle")}
-              className={`px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider transition-colors ${view === "lifecycle" ? "bg-[#1c1c1a] text-white" : "text-[#6b6b68] hover:bg-[#fafaf9]"}`}
-            >
-              Lifecycle
-            </button>
-            <button
-              onClick={() => handleViewChange("table")}
-              className={`px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider transition-colors ${view === "table" ? "bg-[#1c1c1a] text-white" : "text-[#6b6b68] hover:bg-[#fafaf9]"}`}
-            >
-              Table
-            </button>
-          </div>
-          {/* Timeframe toggle */}
-          <div className="flex items-center gap-1 border border-[#e5e5e4] rounded-[3px] overflow-hidden">
-          {TIMEFRAMES.map((tf) => (
-            <button
-              key={tf.value}
-              onClick={() => handleTimeframeChange(tf.value)}
-              className={`px-2 sm:px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider transition-colors ${
-                timeframe === tf.value
-                  ? "bg-[#1c1c1a] text-white"
-                  : "text-[#6b6b68] hover:bg-[#fafaf9]"
-              } ${isPending ? "opacity-50" : ""}`}
-            >
-              <span className="sm:hidden">{tf.shortLabel}</span>
-              <span className="hidden sm:inline">{tf.label}</span>
-            </button>
-          ))}
-          </div>
-          {/* Refresh PostHog data — busts the posthog_cache row for every
-              timeframe (days/weeks/months/years) sequentially. Disabled
-              while a refresh is in flight and when every known timeframe
-              is < REFRESH_DEBOUNCE_MINUTES old. */}
-          {(() => {
-            const ages = (["days", "weeks", "months", "years"] as Timeframe[])
-              .map((tf) => cacheAgeByTimeframe[tf])
-              .filter((a): a is number => typeof a === "number")
-            const allKnownAndFresh =
-              ages.length > 0 && ages.every((a) => a < REFRESH_DEBOUNCE_MINUTES)
-            const maxKnownAge = ages.length > 0 ? Math.max(...ages) : null
-            const disabled = isRefreshingAll || !posthogData.loaded || allKnownAndFresh
-            const title = isRefreshingAll
-              ? "Refreshing all timeframes…"
-              : allKnownAndFresh
-                ? `All timeframes refreshed in the last ${REFRESH_DEBOUNCE_MINUTES} minutes`
-                : maxKnownAge !== null
-                  ? `Refresh all timeframes (oldest cache: ${maxKnownAge} min)`
-                  : "Refresh all timeframes"
-            const spinning = isRefreshingAll || !posthogData.loaded
-            return (
-              <button
-                onClick={() => void refreshAllTimeframes()}
-                disabled={disabled}
-                title={title}
-                aria-label={title}
-                className="flex items-center justify-center h-[26px] w-[26px] border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className={spinning ? "animate-spin" : ""}>
-                  <path d="M10.5 2v3h-3" />
-                  <path d="M10.5 5A4.5 4.5 0 1 0 9 9.5" />
-                </svg>
-              </button>
-            )
-          })()}
-        </div>
+      {/* Page meta — the title lives in the sticky bar */}
+      <div className="mb-8">
+        <p className="text-xs text-[#a1a1a0]">
+          Lifecycle model and key metrics · {" "}
+          <a href="/admin/dashboard/events" className="text-[#016D75] hover:underline cursor-pointer">Tracking events</a>
+        </p>
       </div>
 
       {view === "table" ? (
@@ -820,6 +782,8 @@ export function GrowthClient({ initialMetrics, initialLastSynced = null }: Props
         onTimeframeChange={handleTimeframeChange}
         onClose={() => setDetailMetric(null)}
       />
+
+      </div>
     </>
   )
 }

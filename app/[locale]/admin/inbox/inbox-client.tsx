@@ -1,9 +1,10 @@
 "use client"
 
-import { useCallback, useEffect, useState, useTransition } from "react"
+import { useCallback, useEffect, useRef, useState, useTransition } from "react"
 import { ArrowUpRight } from "lucide-react"
 import { toast } from "sonner"
 import { refreshAdminBadges } from "@/components/header"
+import { AdminTabs, useAdminTab } from "@/components/admin/admin-tabs"
 
 // Sender domains that are personal inboxes, not company websites — no
 // external-site arrow for these.
@@ -25,6 +26,7 @@ import {
   fetchInboundEmails,
   generateReplyDraft,
   sendReply,
+  syncInboxNow,
   unarchiveInboundEmail,
   type FetchInboundResult,
   type InboundEmailRow,
@@ -115,14 +117,27 @@ function formatAbsolute(ts: string): string {
 export function InboxClient({
   initial,
   initialTab,
+  header,
+  connCount,
+  connError,
+  connLastSyncAt,
 }: {
   initial: FetchInboundResult
   initialTab: InboundTab
+  /** Page title + connection banners from the server page — rendered
+   *  under the sticky tab bar, inside the content wrap. */
+  header?: React.ReactNode
+  connCount: number
+  connError: boolean
+  connLastSyncAt: string | null
 }) {
   const [emails, setEmails] = useState<InboundEmailRow[]>(initial.emails)
   const [total, setTotal] = useState(initial.total)
   const [unreadCount, setUnreadCount] = useState(initial.unreadCount)
-  const [tab, setTab] = useState<InboundTab>(initialTab)
+  // Tab lives in the URL (?tab=…) — the server page already reads it for
+  // the initial fetch; useAdminTab keeps the client on the same value and
+  // makes back/forward and shared links land on the right view.
+  const tab = useAdminTab<InboundTab>(["active", "replied", "archived", "all"], initialTab)
   const [search, setSearch] = useState("")
   // Respond popup state. Holds the row being replied to + the editable
   // draft text. Loading flag covers both AI generation and the send
@@ -155,10 +170,42 @@ export function InboxClient({
     [tab, search],
   )
 
-  const handleTab = (next: InboundTab) => {
-    setTab(next)
-    reload({ tab: next })
+  // Status pill state — sync on demand from the tab bar. lastSyncAt
+  // starts from the server's gmail_connections read and jumps to "now"
+  // after a manual sync.
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(connLastSyncAt)
+  const [syncError, setSyncError] = useState(connError)
+  const [isSyncing, setIsSyncing] = useState(false)
+
+  const handleSyncNow = async () => {
+    if (isSyncing) return
+    setIsSyncing(true)
+    const result = await syncInboxNow()
+    setIsSyncing(false)
+    setLastSyncAt(new Date().toISOString())
+    if (result.success) {
+      setSyncError(false)
+      toast.success(result.fetched > 0 ? `Synced — ${result.fetched} new` : "Synced — no new mail")
+      reload()
+      refreshAdminBadges()
+    } else {
+      setSyncError(true)
+      toast.error(result.error ?? "Sync failed")
+    }
   }
+
+  // Refetch when the URL-tab changes (tab click, back/forward). The first
+  // render already has server-fetched data for the initial tab, so skip it.
+  const firstTabRender = useRef(true)
+  useEffect(() => {
+    if (firstTabRender.current) {
+      firstTabRender.current = false
+      return
+    }
+    reload({ tab })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload also
+    // changes with `search`; keying on it would refetch on every keystroke.
+  }, [tab])
 
   const handleArchive = async (id: string) => {
     const result = await archiveInboundEmail(id)
@@ -287,59 +334,34 @@ export function InboxClient({
 
   return (
     <>
-      {/* Tabs */}
-      <div className="flex items-center gap-1 mb-3">
-        {(
-          [
-            { key: "active", label: "Inbox", showBadge: true },
-            { key: "replied", label: "Replied", showBadge: false },
-            { key: "archived", label: "Archived", showBadge: false },
-            { key: "all", label: "All", showBadge: false },
-          ] as Array<{ key: InboundTab; label: string; showBadge: boolean }>
-        ).map((t) => {
-          const active = tab === t.key
-          return (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => handleTab(t.key)}
-              className={`h-8 px-3 text-xs font-medium rounded-[3px] border transition-colors ${
-                active
-                  ? "border-[#1c1c1a] bg-[#fafaf9] text-[#1c1c1a]"
-                  : "border-[#e5e5e4] text-[#6b6b68] hover:border-[#a1a1a0]"
-              }`}
-            >
-              {t.label}
-              {t.showBadge && unreadCount > 0 && (
-                <span
-                  className="ml-1.5 inline-flex items-center justify-center text-[10px] font-medium px-1.5 rounded-full"
-                  style={{
-                    background: active ? "#1c1c1a" : "#016D75",
-                    color: "#fff",
-                    minWidth: 16,
-                    height: 16,
-                  }}
-                >
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Search */}
-      <div className="mb-4 relative max-w-xs">
-        <input
-          type="text"
-          placeholder="Search from, subject, snippet…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") reload()
-          }}
-          className="w-full h-9 pl-8 pr-8 text-xs border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors"
-        />
+      {/* Tabs — URL-backed second nav in the sticky bar, shared with
+          /admin/emails. Rendered outside the page wrap (full-bleed);
+          the content below brings its own. */}
+      <AdminTabs
+        title="Inbox"
+        tabs={[
+          { key: "active", label: "Inbox", badge: unreadCount },
+          { key: "replied", label: "Replied" },
+          { key: "archived", label: "Archived" },
+          { key: "all", label: "All" },
+        ]}
+        active={tab}
+        left={
+          <div className="relative shrink-0" style={{ width: 240 }}>
+            <input
+              type="text"
+              placeholder="Search from, subject, snippet…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") reload()
+              }}
+              className="w-full h-9 pl-8 pr-8 text-xs border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors"
+            />
+            <svg className="absolute left-2.5 top-2.5 text-[#a1a1a0]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
             {search && (
               <button
                 type="button"
@@ -350,21 +372,41 @@ export function InboxClient({
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
               </button>
             )}
-        <svg
-          className="absolute left-2.5 top-2.5 text-[#a1a1a0]"
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="11" cy="11" r="8" />
-          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
-      </div>
+          </div>
+        }
+        actions={
+          <>
+            {/* Sync pill: dot + relative time; click runs the cron's sync
+                on demand. Red = a connection carries a sync error. Same
+                status-pill design as the Growth sync badge. */}
+            <button
+              type="button"
+              className="status-pill"
+              onClick={() => void handleSyncNow()}
+              disabled={isSyncing}
+              title={isSyncing ? "Syncing…" : "Sync now"}
+              style={{
+                background: "none",
+                cursor: isSyncing ? "default" : "pointer",
+                borderColor: syncError ? "#fecaca" : "#bbf7d0",
+                color: syncError ? "#b91c1c" : "#166534",
+                opacity: isSyncing ? 0.6 : 1,
+              }}
+            >
+              <span className={`status-pill-dot ${syncError ? "bg-red-500" : "bg-emerald-500"}`} />
+              {isSyncing ? "syncing…" : lastSyncAt ? formatRelative(lastSyncAt) : "never synced"}
+            </button>
+            {/* Mailbox-count pill: grey inline pill; click adds another
+                mailbox via OAuth. */}
+            <a href="/api/auth/gmail" className="status-pill" title="Add mailbox" style={{ textDecoration: "none", cursor: "pointer" }}>
+              {connCount} mailbox{connCount === 1 ? "" : "es"}
+            </a>
+          </>
+        }
+      />
+
+      <div className="wrap" style={{ paddingTop: 32, paddingBottom: 48 }}>
+        {header}
 
       {/* List */}
       <div className="arco-table-wrap">
@@ -794,6 +836,7 @@ export function InboxClient({
         </div>
       )}
 
+      </div>
     </>
   )
 }

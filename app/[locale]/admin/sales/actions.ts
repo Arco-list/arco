@@ -3622,3 +3622,57 @@ export async function promoteCompanyToShowcase(companyId: string): Promise<{ suc
   logger.info("admin-sales", "Company promoted to showcase", { companyId })
   return { success: true, slug: company.slug }
 }
+
+/**
+ * Manual Apollo sync — the status pill in the Sales header triggers the
+ * same composition the sync-apollo-activity cron runs: per-prospect
+ * activity aggregates, then (best-effort) per-message email events and
+ * the last_email_sent_at recompute. Logged into apollo_sync_runs with
+ * triggered_by 'manual' so the popup history shows it like a cron run.
+ */
+export async function syncApolloNow(): Promise<{ success: boolean; error?: string; updated: number }> {
+  const supabase = createServiceRoleSupabaseClient()
+  const { data: runRow } = await supabase
+    .from("apollo_sync_runs")
+    .insert({
+      kind: "activity",
+      triggered_by: "manual",
+      started_at: new Date().toISOString(),
+    } as any)
+    .select("id")
+    .single()
+  const runId = (runRow as any)?.id as string | undefined
+
+  try {
+    const { syncApolloActivity, syncApolloEmailEvents, recomputeProspectLastEmailSentAt } = await import("@/lib/apollo-sync")
+    const result = await syncApolloActivity()
+    try { await syncApolloEmailEvents() } catch { /* best-effort, like the cron */ }
+    try { await recomputeProspectLastEmailSentAt() } catch { /* best-effort */ }
+
+    if (runId) {
+      await supabase
+        .from("apollo_sync_runs")
+        .update({
+          finished_at: new Date().toISOString(),
+          synced_count: result.updated,
+          total_count: result.total,
+          error_count: result.errorCount,
+          last_error: result.lastError,
+        } as any)
+        .eq("id", runId)
+    }
+    if (result.lastError && result.updated === 0) {
+      return { success: false, error: result.lastError, updated: 0 }
+    }
+    return { success: true, updated: result.updated }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Sync failed"
+    if (runId) {
+      await supabase
+        .from("apollo_sync_runs")
+        .update({ finished_at: new Date().toISOString(), error_count: 1, last_error: message } as any)
+        .eq("id", runId)
+    }
+    return { success: false, error: message, updated: 0 }
+  }
+}

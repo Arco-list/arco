@@ -43,20 +43,10 @@ export default async function AdminInboxPage(props: {
 
   const initial = await fetchInboundEmails({ tab: initialTab })
 
-  return (
-    <div className="min-h-screen bg-white">
-      <div className="discover-page-title">
-        <div className="wrap">
-          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h3 className="arco-section-title">Inbox</h3>
-              <p className="text-xs text-[#a1a1a0] mt-0.5">
-                Inbound replies to outbound sales mail. Replies auto-cancel pending drip sequences.
-              </p>
-            </div>
-            <ConnectionBadge conns={conns} />
-          </div>
-
+  // Title + connection banners — rendered by the client under the sticky
+  // tab bar (company-edit pattern: bar flush against the site header).
+  const header = (
+    <>
           {params.connected === "1" && (
             <div className="mb-4 rounded-[3px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
               Gmail connected. The inbox sync runs every 5 minutes.
@@ -68,7 +58,18 @@ export default async function AdminInboxPage(props: {
             </div>
           )}
 
-          {conns.length === 0 ? (
+    </>
+  )
+
+  if (conns.length === 0) {
+    return (
+      <div className="min-h-screen bg-white">
+        <div className="discover-page-title">
+          <div className="wrap">
+            {/* No tab bar in the connect state, so the title renders
+                here instead of in the sticky bar. */}
+            <h3 className="arco-section-title mb-1">Inbox</h3>
+            {header}
             <div className="rounded-[3px] border border-[#e5e5e4] bg-white p-5 max-w-md">
               <p className="text-sm font-medium text-[#1c1c1a]">Connect a mailbox</p>
               <p className="mt-1 text-xs text-[#6b6b68] leading-relaxed">
@@ -83,73 +84,32 @@ export default async function AdminInboxPage(props: {
                 Connect Gmail
               </Link>
             </div>
-          ) : (
-            <InboxClient initial={initial} initialTab={initialTab} />
-          )}
-
+          </div>
         </div>
       </div>
-    </div>
-  )
-}
+    )
+  }
 
-function ConnectionBadge({
-  conns,
-}: {
-  conns: Array<{ gmail_address: string; last_sync_at: string | null; last_sync_error: string | null }>
-}) {
-  if (conns.length === 0) return null
-  const anyError = conns.some((c) => c.last_sync_error)
+  // Connection summary for the status pills in the tab bar: dot+time
+  // pill (click = sync now) and mailbox-count pill (click = add).
   const lastSyncAt = conns
     .map((c) => c.last_sync_at)
     .filter((s): s is string => Boolean(s))
     .sort()
-    .at(-1)
-  const lastSyncLabel = lastSyncAt
-    ? formatRelative(lastSyncAt)
-    : "awaiting first sync"
+    .at(-1) ?? null
+
   return (
-    <div className="flex items-center gap-2">
-      <span
-        className="status-pill"
-        style={{
-          borderColor: anyError ? "#fecaca" : "#bbf7d0",
-          color: anyError ? "#b91c1c" : "#166534",
-        }}
-      >
-        <span className={`status-pill-dot ${anyError ? "bg-red-500" : "bg-emerald-500"}`} />
-        {anyError ? "Sync error" : "Connected"}
-      </span>
-      <span className="text-[11px] text-[#a1a1a0]">
-        {conns.length === 1 ? conns[0].gmail_address : `${conns.length} mailboxes`}
-        {" · "}last sync {lastSyncLabel}
-      </span>
-      {/* The connections table and sync cron are per-address already —
-          this link is all it takes to bring a second mailbox (e.g. the
-          niek@ sender that showcase/outreach replies land in) into the
-          same inbox. */}
-      <Link
-        href="/api/auth/gmail"
-        className="text-[11px] text-[#016D75] hover:underline"
-      >
-        + Add mailbox
-      </Link>
+    <div className="min-h-screen bg-white">
+      <InboxClient
+        initial={initial}
+        initialTab={initialTab}
+        header={header}
+        connCount={conns.length}
+        connError={conns.some((c) => c.last_sync_error)}
+        connLastSyncAt={lastSyncAt}
+      />
     </div>
   )
 }
 
-function formatRelative(ts: string): string {
-  try {
-    const ms = Date.now() - new Date(ts).getTime()
-    if (ms < 60_000) return "just now"
-    const m = Math.floor(ms / 60_000)
-    if (m < 60) return `${m}m ago`
-    const h = Math.floor(m / 60)
-    if (h < 24) return `${h}h ago`
-    const d = Math.floor(h / 24)
-    if (d < 7) return `${d}d ago`
-    return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-  } catch {
-    return ts
-  }
-}
+

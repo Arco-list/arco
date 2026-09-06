@@ -3,12 +3,14 @@
 import { Fragment, useEffect, useRef, useState, useTransition, useCallback } from "react"
 import { ArrowUpRight } from "lucide-react"
 import { toast } from "sonner"
+import { AdminTabs, useAdminTab } from "@/components/admin/admin-tabs"
 import {
   fetchSalesCompanies,
   skipCallListProspect,
   startProspectSequence,
   pauseProspectSequence,
   removeProspectFromFunnel,
+  syncApolloNow,
   syncResendEmailStats,
   type ProspectEvent,
   type ProspectStatus,
@@ -727,6 +729,10 @@ export function ProspectsClient({
   // Toggle for the Call list button: when true, the table only renders
   // today's ranked call queue (max 10, tier order).
   const [callListOnly, setCallListOnly] = useState(false)
+  // All / Call list as URL-backed tabs (?tab=calls) — the bar tab is the
+  // source of truth; the effect below keeps callListOnly in step so tab
+  // clicks, back/forward and deep links all apply the filter.
+  const barTab = useAdminTab(["all", "calls"] as const)
   // Log outbound modal target — opened from the black "Log" pill on a
   // contact row. The panel has its own instance; this one serves the
   // table without opening the panel first.
@@ -746,6 +752,26 @@ export function ProspectsClient({
   const [search, setSearch] = useState("")
   const [showStatusGuide, setShowStatusGuide] = useState(false)
   const [showApolloSync, setShowApolloSync] = useState(false)
+  // Apollo status pill — compact dot+time design shared with the Inbox
+  // and Growth pills; click runs the activity sync on demand.
+  const [apolloIsSyncing, setApolloIsSyncing] = useState(false)
+  const [apolloLastSyncAt, setApolloLastSyncAt] = useState<string | null>(apolloSyncStatus?.lastSyncAt ?? null)
+  const [apolloSyncErrored, setApolloSyncErrored] = useState(Boolean(apolloSyncStatus?.hadError))
+
+  const handleApolloSyncNow = async () => {
+    if (apolloIsSyncing) return
+    setApolloIsSyncing(true)
+    const result = await syncApolloNow()
+    setApolloIsSyncing(false)
+    setApolloLastSyncAt(new Date().toISOString())
+    if (result.success) {
+      setApolloSyncErrored(false)
+      toast.success(result.updated > 0 ? `Apollo synced — ${result.updated} prospects updated` : "Apollo synced — no changes")
+    } else {
+      setApolloSyncErrored(true)
+      toast.error(result.error ?? "Apollo sync failed")
+    }
+  }
   const [syncListId, setSyncListId] = useState("")
   const [editingListId, setEditingListId] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
@@ -832,6 +858,13 @@ export function ProspectsClient({
       setSelectedRowIds(new Set())
     })
   }, [statusFilter, sourceFilter, sequenceFilter, search, callListOnly, sortBy, sortDir])
+
+  useEffect(() => {
+    const wantCalls = barTab === "calls"
+    if (wantCalls !== callListOnly) handleFilterChange({ callListOnly: wantCalls })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only the tab
+    // drives this; the other deps would re-fire it on unrelated fetches.
+  }, [barTab])
 
   const toggleStatus = useCallback((status: ProspectStatus) => {
     const next = statusFilter.includes(status)
@@ -994,59 +1027,266 @@ export function ProspectsClient({
 
   return (
     <>
-      {/* Page header */}
-      <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h3 className="arco-section-title">Sales</h3>
-          <p className="text-xs text-[#a1a1a0] mt-0.5">
-            {companies.length} of {totalCompanies} companies
-            {" · "}
-            <button type="button" className="text-[#016D75] hover:underline cursor-pointer" onClick={() => setShowStatusGuide(true)}>
-              Status guide
-            </button>
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Apollo connection badge — same pattern as the Inbox mailbox
-              badge. Clicking it opens the Import contacts popup, so the
-              import flow stays one click away without a dedicated button. */}
-          <button
-            type="button"
-            onClick={() => {
-              setSyncListId(currentApolloListId ?? "")
-              setShowApolloSync(true)
-            }}
-            className="flex items-center gap-2 cursor-pointer"
-            title="Import contacts from Apollo"
-          >
-            {apolloSyncStatus?.connected ? (
-              <>
-                <span
-                  className="status-pill"
-                  style={{
-                    borderColor: apolloSyncStatus.hadError ? "#fecaca" : "#bbf7d0",
-                    color: apolloSyncStatus.hadError ? "#b91c1c" : "#166534",
-                  }}
-                >
-                  <span className={`status-pill-dot ${apolloSyncStatus.hadError ? "bg-red-500" : "bg-emerald-500"}`} />
-                  {apolloSyncStatus.hadError ? "Sync error" : "Connected"}
-                </span>
-                <span className="text-[11px] text-[#a1a1a0]">
-                  Apollo · {apolloProspectsCount} contacts
-                  {" · "}last sync {apolloSyncStatus.lastSyncAt ? formatRelativeSync(apolloSyncStatus.lastSyncAt) : "never"}
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="status-pill" style={{ borderColor: "#e5e5e4", color: "#6b6b68" }}>
-                  <span className="status-pill-dot bg-[#a1a1a0]" />
-                  Not connected
-                </span>
-                <span className="text-[11px] text-[#a1a1a0]">Apollo</span>
-              </>
+      {/* Sticky toolbar — no tabs on Sales; search left, filters +
+          Apollo status pills right. Scrolls horizontally on mobile. */}
+      <AdminTabs
+        title="Sales"
+        tabs={[
+          { key: "all", label: "All" },
+          { key: "calls", label: "Call list" },
+        ]}
+        active={barTab}
+        left={
+          <div className="relative shrink-0" style={{ width: 240 }}>
+            <input
+              type="text"
+              placeholder="Search company or contact..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full h-9 pl-8 pr-8 text-xs border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors"
+            />
+            <svg className="absolute left-2.5 top-2.5 text-[#a1a1a0]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            {search && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-[3px] text-[#a1a1a0] hover:text-[#1c1c1a] transition-colors"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+              </button>
             )}
+          </div>
+        }
+        actions={
+          <>
+          {/* Apollo pills — compact status-pill duo shared with Inbox and
+              Growth: dot + relative time (click = sync activity now) and
+              a grey contacts pill (click = Import contacts popup). */}
+          {apolloSyncStatus?.connected ? (
+            <>
+              <button
+                type="button"
+                onClick={() => void handleApolloSyncNow()}
+                disabled={apolloIsSyncing}
+                className="status-pill"
+                title={apolloIsSyncing ? "Syncing…" : "Sync Apollo activity now"}
+                style={{
+                  background: "none",
+                  cursor: apolloIsSyncing ? "default" : "pointer",
+                  borderColor: apolloSyncErrored ? "#fecaca" : "#bbf7d0",
+                  color: apolloSyncErrored ? "#b91c1c" : "#166534",
+                  opacity: apolloIsSyncing ? 0.6 : 1,
+                }}
+              >
+                <span className={`status-pill-dot ${apolloSyncErrored ? "bg-red-500" : "bg-emerald-500"}`} />
+                {apolloIsSyncing ? "syncing…" : apolloLastSyncAt ? formatRelativeSync(apolloLastSyncAt) : "never synced"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSyncListId(currentApolloListId ?? "")
+                  setShowApolloSync(true)
+                }}
+                className="status-pill"
+                title="Import contacts from Apollo"
+                style={{ background: "none", cursor: "pointer" }}
+              >
+                {apolloProspectsCount} contacts
+              </button>
+          {/* Multi-select status filter — empty selection = all statuses. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={`w-[140px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 shrink-0 ${
+                  statusFilter.length > 0
+                    ? "border-[#1c1c1a] bg-[#fafaf9]"
+                    : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
+                }`}
+              >
+                <span className="flex items-center gap-1.5 truncate">
+                  {statusFilter.length === 0 ? (
+                    <span className="text-[#6b6b68]">All statuses</span>
+                  ) : statusFilter.length === 1 ? (
+                    <>
+                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[statusFilter[0]].dot}`} />
+                      <span className="truncate">{STATUS_CONFIG[statusFilter[0]].label}</span>
+                    </>
+                  ) : (
+                    <span>{statusFilter.length} statuses</span>
+                  )}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[180px] z-[120]">
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.preventDefault()
+                  if (statusFilter.length > 0) handleFilterChange({ statuses: [] })
+                }}
+                className="text-xs"
+              >
+                Clear selection
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {ALL_STATUSES.map((s) => (
+                <DropdownMenuCheckboxItem
+                  key={s}
+                  checked={statusFilter.includes(s)}
+                  onCheckedChange={() => toggleStatus(s)}
+                  onSelect={(e) => e.preventDefault()}
+                  className="text-xs"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[s].dot}`} />
+                    {STATUS_CONFIG[s].label}
+                  </span>
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {/* Multi-select sequence filter — empty selection = all sequences. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={`w-[140px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 shrink-0 ${
+                  sequenceFilter.length > 0
+                    ? "border-[#1c1c1a] bg-[#fafaf9]"
+                    : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
+                }`}
+              >
+                <span className="flex items-center gap-1.5 truncate">
+                  {sequenceFilter.length === 0 ? (
+                    <span className="text-[#6b6b68]">All sequences</span>
+                  ) : sequenceFilter.length === 1 ? (
+                    <>
+                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${SEQUENCE_FILTER_LABEL[sequenceFilter[0]].dot}`} />
+                      <span className="truncate">{SEQUENCE_FILTER_LABEL[sequenceFilter[0]].label}</span>
+                    </>
+                  ) : (
+                    <span>{sequenceFilter.length} sequences</span>
+                  )}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[200px]">
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.preventDefault()
+                  if (sequenceFilter.length > 0) handleFilterChange({ sequences: [] })
+                }}
+                className="text-xs"
+              >
+                Clear selection
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {SEQUENCE_FILTER_OPTIONS.map((o) => (
+                <DropdownMenuCheckboxItem
+                  key={o.value}
+                  checked={sequenceFilter.includes(o.value)}
+                  onCheckedChange={() => toggleSequence(o.value)}
+                  onSelect={(e) => e.preventDefault()}
+                  className="text-xs"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${o.dot}`} />
+                    {o.label}
+                  </span>
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Multi-select channel filter — empty selection = all channels. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={`w-[140px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 shrink-0 ${
+                  sourceFilter.length > 0
+                    ? "border-[#1c1c1a] bg-[#fafaf9]"
+                    : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
+                }`}
+              >
+                <span className="flex items-center gap-1.5 truncate">
+                  {sourceFilter.length === 0 ? (
+                    <span className="text-[#6b6b68]">All channels</span>
+                  ) : sourceFilter.length === 1 ? (
+                    <span className="truncate">{sourceLabel(sourceFilter[0])}</span>
+                  ) : (
+                    <span>{sourceFilter.length} channels</span>
+                  )}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[180px] z-[120]">
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.preventDefault()
+                  if (sourceFilter.length > 0) handleFilterChange({ sources: [] })
+                }}
+                className="text-xs"
+              >
+                Clear selection
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {CHANNEL_OPTIONS.map((o) => (
+                <DropdownMenuCheckboxItem
+                  key={o.value}
+                  checked={sourceFilter.includes(o.value)}
+                  onCheckedChange={() => toggleSource(o.value)}
+                  onSelect={(e) => e.preventDefault()}
+                  className="text-xs"
+                >
+                  {o.label}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setSyncListId(currentApolloListId ?? "")
+                setShowApolloSync(true)
+              }}
+              className="status-pill"
+              title="Import contacts from Apollo"
+              style={{ background: "none", cursor: "pointer", borderColor: "#e5e5e4", color: "#6b6b68" }}
+            >
+              <span className="status-pill-dot bg-[#a1a1a0]" />
+              Not connected
+            </button>
+          )}
+          </>
+        }
+      />
+
+      <div className="wrap" style={{ paddingTop: 32, paddingBottom: 48 }}>
+
+      {/* Page meta — the title lives in the sticky bar */}
+      <div className="mb-6">
+        <p className="text-xs text-[#a1a1a0]">
+          {companies.length} of {totalCompanies} companies
+          {" · "}
+          <button type="button" className="text-[#016D75] hover:underline cursor-pointer" onClick={() => setShowStatusGuide(true)}>
+            Status guide
           </button>
-        </div>
+        </p>
       </div>
 
       {/* Conversion funnel — counts unique companies per stage. */}
@@ -1123,211 +1363,6 @@ export function ProspectsClient({
             </div>
           )
         })()}
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-4">
-        <div className="flex-1">
-          <div className="relative max-w-xs">
-            <input
-              type="text"
-              placeholder="Search company or contact..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full h-9 pl-8 pr-8 text-xs border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors"
-            />
-            <svg className="absolute left-2.5 top-2.5 text-[#a1a1a0]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            {search && (
-              <button
-                type="button"
-                aria-label="Clear search"
-                onClick={() => setSearch("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-[3px] text-[#a1a1a0] hover:text-[#1c1c1a] transition-colors"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
-              </button>
-            )}
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Call list toggle — today's ranked action queue (max 10).
-              Same design language as the filter buttons: black outline
-              when active, label in the primary color. */}
-          <button
-            type="button"
-            onClick={() => handleFilterChange({ callListOnly: !callListOnly })}
-            className={`h-9 px-3 text-xs border rounded-[3px] transition-colors font-medium text-[#016D75] ${
-              callListOnly
-                ? "border-[#1c1c1a] bg-[#fafaf9]"
-                : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
-            }`}
-            aria-pressed={callListOnly}
-          >
-            Call list
-          </button>
-          {/* Multi-select status filter — empty selection = all statuses. */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className={`w-[170px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 ${
-                  statusFilter.length > 0
-                    ? "border-[#1c1c1a] bg-[#fafaf9]"
-                    : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
-                }`}
-              >
-                <span className="flex items-center gap-1.5 truncate">
-                  {statusFilter.length === 0 ? (
-                    <span className="text-[#6b6b68]">All statuses</span>
-                  ) : statusFilter.length === 1 ? (
-                    <>
-                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[statusFilter[0]].dot}`} />
-                      <span className="truncate">{STATUS_CONFIG[statusFilter[0]].label}</span>
-                    </>
-                  ) : (
-                    <span>{statusFilter.length} statuses</span>
-                  )}
-                </span>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
-                  <path d="M6 9l6 6 6-6" />
-                </svg>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[180px]">
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.preventDefault()
-                  if (statusFilter.length > 0) handleFilterChange({ statuses: [] })
-                }}
-                className="text-xs"
-              >
-                Clear selection
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {ALL_STATUSES.map((s) => (
-                <DropdownMenuCheckboxItem
-                  key={s}
-                  checked={statusFilter.includes(s)}
-                  onCheckedChange={() => toggleStatus(s)}
-                  onSelect={(e) => e.preventDefault()}
-                  className="text-xs"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[s].dot}`} />
-                    {STATUS_CONFIG[s].label}
-                  </span>
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          {/* Multi-select sequence filter — empty selection = all sequences. */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className={`w-[170px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 ${
-                  sequenceFilter.length > 0
-                    ? "border-[#1c1c1a] bg-[#fafaf9]"
-                    : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
-                }`}
-              >
-                <span className="flex items-center gap-1.5 truncate">
-                  {sequenceFilter.length === 0 ? (
-                    <span className="text-[#6b6b68]">All sequences</span>
-                  ) : sequenceFilter.length === 1 ? (
-                    <>
-                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${SEQUENCE_FILTER_LABEL[sequenceFilter[0]].dot}`} />
-                      <span className="truncate">{SEQUENCE_FILTER_LABEL[sequenceFilter[0]].label}</span>
-                    </>
-                  ) : (
-                    <span>{sequenceFilter.length} sequences</span>
-                  )}
-                </span>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
-                  <path d="M6 9l6 6 6-6" />
-                </svg>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[200px]">
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.preventDefault()
-                  if (sequenceFilter.length > 0) handleFilterChange({ sequences: [] })
-                }}
-                className="text-xs"
-              >
-                Clear selection
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {SEQUENCE_FILTER_OPTIONS.map((o) => (
-                <DropdownMenuCheckboxItem
-                  key={o.value}
-                  checked={sequenceFilter.includes(o.value)}
-                  onCheckedChange={() => toggleSequence(o.value)}
-                  onSelect={(e) => e.preventDefault()}
-                  className="text-xs"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${o.dot}`} />
-                    {o.label}
-                  </span>
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Multi-select channel filter — empty selection = all channels. */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className={`w-[150px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 ${
-                  sourceFilter.length > 0
-                    ? "border-[#1c1c1a] bg-[#fafaf9]"
-                    : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
-                }`}
-              >
-                <span className="flex items-center gap-1.5 truncate">
-                  {sourceFilter.length === 0 ? (
-                    <span className="text-[#6b6b68]">All channels</span>
-                  ) : sourceFilter.length === 1 ? (
-                    <span className="truncate">{sourceLabel(sourceFilter[0])}</span>
-                  ) : (
-                    <span>{sourceFilter.length} channels</span>
-                  )}
-                </span>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
-                  <path d="M6 9l6 6 6-6" />
-                </svg>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[180px]">
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.preventDefault()
-                  if (sourceFilter.length > 0) handleFilterChange({ sources: [] })
-                }}
-                className="text-xs"
-              >
-                Clear selection
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {CHANNEL_OPTIONS.map((o) => (
-                <DropdownMenuCheckboxItem
-                  key={o.value}
-                  checked={sourceFilter.includes(o.value)}
-                  onCheckedChange={() => toggleSource(o.value)}
-                  onSelect={(e) => e.preventDefault()}
-                  className="text-xs"
-                >
-                  {o.label}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
       </div>
 
       {/* Bulk actions bar — mirrors /admin/companies. Appears when any
@@ -1686,6 +1721,8 @@ export function ProspectsClient({
         onChanged={() => reload({ offset })}
         onClose={contactParam.close}
       />
+
+      </div>
     </>
   )
 }

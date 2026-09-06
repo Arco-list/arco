@@ -49,19 +49,17 @@ export default async function ProspectsPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="discover-page-title">
-        <div className="wrap">
-          <ProspectsClient
-            initialCompanies={companies}
-            initialTotalCompanies={totalCompanies}
-            initialFunnel={funnel}
-            initialEmailsSent={totalEmailsSent}
-            currentApolloListId={currentApolloListId}
-            apolloProspectsCount={apolloProspectsCount ?? 0}
-            apolloSyncStatus={apolloSyncStatus}
-          />
-        </div>
-      </div>
+      {/* The client renders the sticky full-bleed toolbar (search +
+          filters + Apollo pills) and wraps its own content. */}
+      <ProspectsClient
+        initialCompanies={companies}
+        initialTotalCompanies={totalCompanies}
+        initialFunnel={funnel}
+        initialEmailsSent={totalEmailsSent}
+        currentApolloListId={currentApolloListId}
+        apolloProspectsCount={apolloProspectsCount ?? 0}
+        apolloSyncStatus={apolloSyncStatus}
+      />
     </div>
   )
 }

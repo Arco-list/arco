@@ -9,11 +9,9 @@ export default async function GrowthPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="discover-page-title">
-        <div className="wrap">
-          <GrowthClient initialMetrics={metrics} initialLastSynced={lastSynced} />
-        </div>
-      </div>
+      {/* The client renders the sticky full-bleed tab bar and wraps its
+          own content — company-edit pattern, bar flush under the header. */}
+      <GrowthClient initialMetrics={metrics} initialLastSynced={lastSynced} />
     </div>
   )
 }

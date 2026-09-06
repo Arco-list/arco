@@ -6,22 +6,34 @@ import { toast } from "sonner"
 import { syncGrowthMetricsAction } from "@/app/admin/model/actions"
 
 /**
- * Growth-metrics sync badge — same visual pattern as the Inbox mailbox
- * badge and the Sales Apollo badge: status-pill + grey detail text.
- * Clicking it runs the sync (replaces the old "Sync" button).
+ * Growth-metrics sync pill — the compact status-pill design shared with
+ * the Inbox sync pill: colored dot + relative time, click = sync now.
  *
  * Staleness: the sync-growth-metrics cron runs daily at 03:00, so a
  * last-sync older than ~26h means the cron missed a beat — the pill
  * flips amber to say so.
+ *
+ * `onSync` lets a page piggyback its own refresh on the same gesture —
+ * the Growth dashboard passes its PostHog cache refresh, so one click
+ * syncs both sources and the separate refresh icon could go.
  */
-export function GrowthSyncBadge({ initialLastSynced }: { initialLastSynced: string | null }) {
+export function GrowthSyncBadge({
+  initialLastSynced,
+  onSync,
+}: {
+  initialLastSynced: string | null
+  onSync?: () => void | Promise<void>
+}) {
   const router = useRouter()
   const [isSyncing, startSync] = useTransition()
   const [lastSynced, setLastSynced] = useState(initialLastSynced)
 
   const handleSync = () => {
     startSync(async () => {
-      const result = await syncGrowthMetricsAction()
+      const [result] = await Promise.all([
+        syncGrowthMetricsAction(),
+        Promise.resolve(onSync?.()).catch(() => {}),
+      ])
       if (result.success) {
         const seconds = (result.durationMs / 1000).toFixed(1)
         toast.success(`Synced ${result.upserted} daily rows in ${seconds}s`)
@@ -41,22 +53,18 @@ export function GrowthSyncBadge({ initialLastSynced }: { initialLastSynced: stri
       type="button"
       onClick={handleSync}
       disabled={isSyncing}
-      className="flex items-center gap-2 cursor-pointer disabled:opacity-60"
-      title="Refresh growth metrics now"
+      className="status-pill"
+      title="Sync now"
+      style={{
+        background: "none",
+        cursor: isSyncing ? "default" : "pointer",
+        borderColor: stale ? "#fde68a" : "#bbf7d0",
+        color: stale ? "#92400e" : "#166534",
+        opacity: isSyncing ? 0.6 : 1,
+      }}
     >
-      <span
-        className="status-pill"
-        style={{
-          borderColor: stale ? "#fde68a" : "#bbf7d0",
-          color: stale ? "#92400e" : "#166534",
-        }}
-      >
-        <span className={`status-pill-dot ${stale ? "bg-amber-400" : "bg-emerald-500"}`} />
-        {isSyncing ? "Syncing…" : stale ? "Stale" : "Synced"}
-      </span>
-      <span className="text-[11px] text-[#a1a1a0]">
-        {lastSynced ? `last sync ${formatRelative(lastSynced)}` : "never synced"}
-      </span>
+      <span className={`status-pill-dot ${stale ? "bg-amber-400" : "bg-emerald-500"}`} />
+      {isSyncing ? "syncing…" : lastSynced ? formatRelative(lastSynced) : "never synced"}
     </button>
   )
 }

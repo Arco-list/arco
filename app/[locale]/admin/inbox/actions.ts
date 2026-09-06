@@ -1246,3 +1246,22 @@ export async function generateComposeDraft(input: {
     return { success: false, error: err instanceof Error ? err.message : "Draft generation failed" }
   }
 }
+
+/**
+ * Manual inbox sync — the status pill in the tab bar triggers the same
+ * per-connection sync the 5-minute cron runs, so a reply can be pulled
+ * in on demand instead of waiting out the cron interval.
+ */
+export async function syncInboxNow(): Promise<{ success: boolean; error?: string; fetched: number }> {
+  try {
+    const supabase = createServiceRoleSupabaseClient()
+    const { syncAllGmailConnections } = await import("@/lib/gmail/sync")
+    const results = await syncAllGmailConnections(supabase)
+    const fetched = results.reduce((n, r) => n + r.fetched, 0)
+    const firstError = results.find((r) => r.lastError)?.lastError ?? null
+    if (firstError) return { success: false, error: firstError, fetched }
+    return { success: true, fetched }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Sync failed", fetched: 0 }
+  }
+}
