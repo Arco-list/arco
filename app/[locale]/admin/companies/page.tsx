@@ -579,11 +579,9 @@ export default async function AdminProfessionalsPage() {
     // Horizontal-overflow clip lives on the admin layout wrapper so
     // every admin page inherits the same guard against mobile pan.
     <div className="min-h-screen bg-white">
-      <div className="discover-page-title">
-        <div className="wrap">
-          <AdminCompaniesDataTable data={mergedRows} serviceOptions={servicesOptions} />
-        </div>
-      </div>
+      {/* The table renders the sticky full-bleed workbench bar and
+          wraps its own content. */}
+      <AdminCompaniesDataTable data={mergedRows} serviceOptions={servicesOptions} />
     </div>
   )
 }

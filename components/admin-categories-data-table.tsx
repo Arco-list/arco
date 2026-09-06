@@ -1,7 +1,8 @@
 "use client"
 
-import { Fragment, useMemo, useRef, useState, useTransition } from "react"
+import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import { AdminTabs, useAdminTab } from "@/components/admin/admin-tabs"
 import { format } from "date-fns"
 import {
   type ColumnDef,
@@ -119,7 +120,9 @@ interface Props {
 export function AdminCategoriesDataTable({ categories, spaces = [], productCategories = [] }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [activeTab, setActiveTab] = useState<TabKey>("project")
+  // Tab lives in the URL (?tab=…) via the sticky bar; per-tab view state
+  // resets on change (the old handleTabChange behaviour), skipping mount.
+  const activeTab = useAdminTab(["project", "professional", "spaces", "products"] as const)
 
   // Split categories by type, pre-sorted: parents first, then children grouped under each parent
   const buildSortedItems = (type: string) => {
@@ -198,14 +201,15 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
   const [createName, setCreateName] = useState("")
   const [createParentId, setCreateParentId] = useState<string | null>(null)
 
-  const handleTabChange = (tab: TabKey) => {
-    setActiveTab(tab)
+  const firstTabRender = useRef(true)
+  useEffect(() => {
+    if (firstTabRender.current) { firstTabRender.current = false; return }
     setSearchTerm("")
     setGroupFilter("all")
     setSorting([])
     setColumnFilters([])
     setPagination({ pageIndex: 0, pageSize: 50 })
-  }
+  }, [activeTab])
 
   // Action handlers
   const handleToggleStatus = (category: AdminCategoryRow, isActive: boolean) => {
@@ -668,58 +672,89 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
     // min-w-0 + max-w-full + overflow-hidden matches the wrapper on
     // /admin/projects and /admin/users so no wide descendant expands
     // the page beyond the viewport on mobile.
+    <>
+      <AdminTabs
+        title="Categories"
+        tabs={[
+          { key: "project", label: "Project Types" },
+          { key: "professional", label: "Professional Services" },
+          { key: "spaces", label: "Spaces" },
+          { key: "products", label: "Product Categories" },
+        ]}
+        active={activeTab}
+        actions={activeTab === "project" || activeTab === "professional" ? (
+          <>
+          <div className="relative shrink-0" style={{ width: 220 }}>
+          <input
+            type="text"
+            placeholder={activeTab === "project" ? "Search types\u2026" : "Search services\u2026"}
+            className="w-full h-9 pl-8 pr-3 text-xs border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors placeholder:text-[#a1a1a0]"
+            value={searchTerm}
+            onChange={(e) => {
+              const value = e.target.value
+              setSearchTerm(value)
+              table.getColumn("name")?.setFilterValue(value || undefined)
+            }}
+          />
+            <svg className="absolute left-2.5 top-2.5 text-[#a1a1a0]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </div>
+          <Select
+            value={groupFilter}
+            onValueChange={(value) => {
+              setGroupFilter(value)
+              table.getColumn("group")?.setFilterValue(value === "all" ? undefined : value)
+            }}
+          >
+            <SelectTrigger className="w-[160px] h-9 text-xs shrink-0 border-[#e5e5e4] rounded-[3px]">
+              <SelectValue placeholder="All groups" />
+            </SelectTrigger>
+            <SelectContent className="z-[120]">
+              <SelectItem value="all">All groups</SelectItem>
+              {currentGroups.map((g) => (
+                <SelectItem key={g.id} value={g.id}>
+                  {g.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <button
+            className="btn-tertiary shrink-0"
+            style={{ fontSize: 13, padding: "6px 16px", borderRadius: 3 }}
+            onClick={() => {
+              setCreateMode("group")
+              setCreateName("")
+              setCreateParentId(null)
+            }}
+          >
+            Add group
+          </button>
+          <button
+            className="btn-primary shrink-0"
+            style={{ fontSize: 13, padding: "6px 16px", borderRadius: 3 }}
+            onClick={() => {
+              setCreateMode(activeTab === "project" ? "type" : "service")
+              setCreateName("")
+              setCreateParentId(null)
+            }}
+          >
+            {activeTab === "project" ? "Add type" : "Add service"}
+          </button>
+          </>
+        ) : undefined}
+      />
+
+      <div className="wrap" style={{ paddingTop: 32, paddingBottom: 48 }}>
+
     <div className="flex flex-col gap-6 min-w-0 max-w-full overflow-hidden">
-      {/* Header */}
-      <div className="flex flex-col gap-1">
-        <h3 className="arco-section-title">Categories</h3>
-        <p className="text-xs text-[#a1a1a0] mt-0.5">
-          {currentItems.length} total &middot; {activeCount} active
+      {/* Page meta — count in the discover style */}
+      <div className="discover-results-meta" style={{ marginBottom: 0 }}>
+        <p className="discover-results-count">
+          <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{currentItems.length}</strong> total &middot; {activeCount} active
         </p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-0 border-b border-[#e5e5e4]">
-        <button
-          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-            activeTab === "project"
-              ? "border-[#1c1c1a] text-[#1c1c1a]"
-              : "border-transparent text-[#a1a1a0] hover:text-[#6b6b68]"
-          }`}
-          onClick={() => handleTabChange("project")}
-        >
-          Project Types
-        </button>
-        <button
-          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-            activeTab === "professional"
-              ? "border-[#1c1c1a] text-[#1c1c1a]"
-              : "border-transparent text-[#a1a1a0] hover:text-[#6b6b68]"
-          }`}
-          onClick={() => handleTabChange("professional")}
-        >
-          Professional Services
-        </button>
-        <button
-          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-            activeTab === "spaces"
-              ? "border-[#1c1c1a] text-[#1c1c1a]"
-              : "border-transparent text-[#a1a1a0] hover:text-[#6b6b68]"
-          }`}
-          onClick={() => handleTabChange("spaces")}
-        >
-          Spaces
-        </button>
-        <button
-          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-            activeTab === "products"
-              ? "border-[#1c1c1a] text-[#1c1c1a]"
-              : "border-transparent text-[#a1a1a0] hover:text-[#6b6b68]"
-          }`}
-          onClick={() => handleTabChange("products")}
-        >
-          Product Categories
-        </button>
-      </div>
 
       {/* Spaces tab — matches Types/Services table styling */}
       {activeTab === "spaces" && (
@@ -850,64 +885,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
         <ProductCategoriesTab productCategories={productCategories} />
       )}
 
-      {activeTab !== "spaces" && activeTab !== "products" && <><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-1 items-center">
-          <input
-            type="text"
-            placeholder={activeTab === "project" ? "Search types\u2026" : "Search services\u2026"}
-            className="w-full max-w-sm px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors placeholder:text-[#a1a1a0]"
-            value={searchTerm}
-            onChange={(e) => {
-              const value = e.target.value
-              setSearchTerm(value)
-              table.getColumn("name")?.setFilterValue(value || undefined)
-            }}
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
-            value={groupFilter}
-            onValueChange={(value) => {
-              setGroupFilter(value)
-              table.getColumn("group")?.setFilterValue(value === "all" ? undefined : value)
-            }}
-          >
-            <SelectTrigger className="w-[180px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
-              <SelectValue placeholder="All groups" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All groups</SelectItem>
-              {currentGroups.map((g) => (
-                <SelectItem key={g.id} value={g.id}>
-                  {g.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <button
-            className="arco-nav-text h-9 px-3 rounded-[3px] border border-[#e5e5e4] hover:bg-[#f5f5f4] transition-colors inline-flex items-center gap-1.5"
-            onClick={() => {
-              setCreateMode("group")
-              setCreateName("")
-              setCreateParentId(null)
-            }}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add group
-          </button>
-          <button
-            className="arco-nav-text h-9 px-3 rounded-[3px] btn-scrolled inline-flex items-center gap-1.5"
-            onClick={() => {
-              setCreateMode(activeTab === "project" ? "type" : "service")
-              setCreateName("")
-              setCreateParentId(null)
-            }}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {activeTab === "project" ? "Add type" : "Add service"}
-          </button>
-        </div>
-      </div>
+      {activeTab !== "spaces" && activeTab !== "products" && <>
 
       {/* Table */}
       <div key={activeTab} className="arco-table-wrap max-w-full min-w-0">
@@ -1312,6 +1290,9 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
         </div>
       )}
     </div>
+
+      </div>
+    </>
   )
 }
 

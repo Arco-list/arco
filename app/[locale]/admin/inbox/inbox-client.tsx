@@ -346,7 +346,8 @@ export function InboxClient({
           { key: "all", label: "All" },
         ]}
         active={tab}
-        left={
+        actions={
+          <>
           <div className="relative shrink-0" style={{ width: 240 }}>
             <input
               type="text"
@@ -373,9 +374,6 @@ export function InboxClient({
               </button>
             )}
           </div>
-        }
-        actions={
-          <>
             {/* Sync pill: dot + relative time; click runs the cron's sync
                 on demand. Red = a connection carries a sync error. Same
                 status-pill design as the Growth sync badge. */}

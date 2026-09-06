@@ -280,11 +280,9 @@ export default async function UsersPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="discover-page-title">
-        <div className="wrap">
-          <UsersDataTable data={hydratedRows} singleActiveSuperAdmin={singleActiveSuperAdmin} />
-        </div>
-      </div>
+      {/* The table renders the sticky full-bleed workbench bar and
+          wraps its own content. */}
+      <UsersDataTable data={hydratedRows} singleActiveSuperAdmin={singleActiveSuperAdmin} />
     </div>
   )
 }

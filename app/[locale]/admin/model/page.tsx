@@ -16,15 +16,11 @@ export default async function GrowthModelPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="discover-page-title">
-        <div className="wrap">
-          <GrowthModelClient
-            initialRows={data.rows}
-            initialLabels={data.labels}
-            initialLastSynced={lastSynced}
-          />
-        </div>
-      </div>
+      <GrowthModelClient
+        initialRows={data.rows}
+        initialLabels={data.labels}
+        initialLastSynced={lastSynced}
+      />
     </div>
   )
 }

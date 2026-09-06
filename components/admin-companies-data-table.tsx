@@ -30,6 +30,7 @@ import {
   Star,
 } from "lucide-react"
 import { toast } from "sonner"
+import { AdminTabs } from "@/components/admin/admin-tabs"
 import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security"
 
 import {
@@ -1696,36 +1697,268 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
     // the viewport instead of scrolling within its container.
     // admin/layout's `overflow-x-clip` on <main> still catches any
     // rogue overflow at the page level.
-    <div className="space-y-6 w-full">
-      {/* Header — stacks vertically on mobile so a wide right-side CTA
-           doesn't push the row beyond the viewport. */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex flex-col gap-1">
-          <h3 className="arco-section-title">Companies</h3>
-        <p className="text-xs text-[#a1a1a0] mt-0.5">
-          {isFiltered ? (
-            <>
-              {filteredCompanies} of {totalCompanies} {totalCompanies === 1 ? "company" : "companies"}
-            </>
-          ) : (
-            <>
-              {totalCompanies} {totalCompanies === 1 ? "company" : "companies"}
-            </>
-          )}
-          {" · "}
-          <button type="button" className="text-[#016D75] hover:underline cursor-pointer" onClick={() => setShowStatusGuide(true)}>
-            Status guide
+    <>
+      {/* Sticky workbench bar — title, search, filters, primary CTA;
+          the component wraps its own content (page renders it full-bleed). */}
+      <AdminTabs
+        title="Companies"
+        actions={
+          <>
+          <div className="relative shrink-0" style={{ width: 260 }}>
+            <input
+              type="text"
+              placeholder="Search by company, domain, or owner…"
+              value={searchTerm}
+              onChange={(event) => {
+                const value = event.target.value
+                setSearchTerm(value)
+                table.getColumn("name")?.setFilterValue(value)
+              }}
+              className="w-full h-9 pl-8 pr-8 text-xs border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors"
+            />
+            <svg className="absolute left-2.5 top-2.5 text-[#a1a1a0]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            {searchTerm && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => { setSearchTerm(""); table.getColumn("name")?.setFilterValue("") }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-[3px] text-[#a1a1a0] hover:text-[#1c1c1a] transition-colors"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+              </button>
+            )}
+          </div>
+          {/* Multi-select status filter — checkbox items in a dropdown menu.
+              Empty selection = all statuses (no filter). Synced with the
+              funnel cards above. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={`w-[140px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 shrink-0 ${
+                  statusFilter.length > 0
+                    ? "border-[#1c1c1a] bg-[#fafaf9]"
+                    : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
+                }`}
+              >
+                <span className="flex items-center gap-1.5 truncate">
+                  {statusFilter.length === 0 ? (
+                    <span className="text-[#6b6b68]">All statuses</span>
+                  ) : statusFilter.length === 1 ? (
+                    <>
+                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT[statusFilter[0]]}`} />
+                      <span className="truncate">{STATUS_LABEL[statusFilter[0]]}</span>
+                    </>
+                  ) : (
+                    <span>{statusFilter.length} statuses</span>
+                  )}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[180px] z-[120]">
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.preventDefault()
+                  if (statusFilter.length > 0) applyStatusFilter([])
+                }}
+                className="text-xs"
+              >
+                Clear selection
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {(["listed", "unlisted", "owned", "verified", "invited", "prospected", "added", "deactivated"] as CompanyStatusFilterValue[]).map((s) => (
+                <DropdownMenuCheckboxItem
+                  key={s}
+                  checked={statusFilter.includes(s)}
+                  onCheckedChange={() => toggleStatus(s)}
+                  onSelect={(e) => e.preventDefault()}
+                  className="text-xs"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT[s]}`} />
+                    {STATUS_LABEL[s]}
+                  </span>
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Multi-select source filter. Same shape as the status dropdown.
+              Empty selection = all sources (no filter). Excludes synthetic
+              invite-type rows when any source is selected (those have no
+              company.source). */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={`w-[140px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 shrink-0 ${
+                  channelFilter.length > 0
+                    ? "border-[#1c1c1a] bg-[#fafaf9]"
+                    : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
+                }`}
+              >
+                <span className="flex items-center gap-1.5 truncate">
+                  {channelFilter.length === 0 ? (
+                    <span className="text-[#6b6b68]">All channels</span>
+                  ) : channelFilter.length === 1 ? (
+                    <span className="truncate">{CHANNEL_LABEL[channelFilter[0]]}</span>
+                  ) : (
+                    <span>{channelFilter.length} channels</span>
+                  )}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[180px] z-[120]">
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.preventDefault()
+                  if (channelFilter.length > 0) setChannelFilter([])
+                }}
+                className="text-xs"
+              >
+                Clear selection
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {CHANNEL_VALUES.map((c) => (
+                <DropdownMenuCheckboxItem
+                  key={c}
+                  checked={channelFilter.includes(c)}
+                  onCheckedChange={() => toggleChannel(c)}
+                  onSelect={(e) => e.preventDefault()}
+                  className="text-xs"
+                >
+                  {CHANNEL_LABEL[c]}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Multi-select service filter. Category list comes from
+              the categories table (only is_active=true is loaded on
+              the server). Matches on primary or any offered service. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={`w-[140px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 shrink-0 ${
+                  serviceFilter.length > 0
+                    ? "border-[#1c1c1a] bg-[#fafaf9]"
+                    : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
+                }`}
+              >
+                <span className="flex items-center gap-1.5 truncate">
+                  {serviceFilter.length === 0 ? (
+                    <span className="text-[#6b6b68]">All services</span>
+                  ) : serviceFilter.length === 1 ? (
+                    <span className="truncate">
+                      {serviceOptions.find((s) => s.id === serviceFilter[0])?.name ?? "1 service"}
+                    </span>
+                  ) : (
+                    <span>{serviceFilter.length} services</span>
+                  )}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[240px] max-h-[420px] overflow-y-auto">
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.preventDefault()
+                  if (serviceFilter.length > 0) setServiceFilter([])
+                }}
+                className="text-xs"
+              >
+                Clear selection
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {serviceGroups.parents.map((group) => {
+                const children = serviceGroups.childrenByParent.get(group.id) ?? []
+                if (children.length === 0) return null
+                const childIds = children.map((c) => c.id)
+                const selectedCount = childIds.filter((id) => serviceFilter.includes(id)).length
+                const groupChecked: boolean | "indeterminate" =
+                  selectedCount === 0 ? false : selectedCount === childIds.length ? true : "indeterminate"
+                return (
+                  <div key={group.id} className="py-0.5">
+                    <DropdownMenuCheckboxItem
+                      checked={groupChecked}
+                      onCheckedChange={(next) => setServicesForGroup(childIds, next === true)}
+                      onSelect={(e) => e.preventDefault()}
+                      className="text-xs font-medium"
+                    >
+                      {group.name}
+                    </DropdownMenuCheckboxItem>
+                    {children.map((s) => (
+                      <DropdownMenuCheckboxItem
+                        key={s.id}
+                        checked={serviceFilter.includes(s.id)}
+                        onCheckedChange={() => toggleService(s.id)}
+                        onSelect={(e) => e.preventDefault()}
+                        className="text-xs pl-8"
+                      >
+                        {s.name}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </div>
+                )
+              })}
+              {serviceGroups.orphans.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  {serviceGroups.orphans.map((s) => (
+                    <DropdownMenuCheckboxItem
+                      key={s.id}
+                      checked={serviceFilter.includes(s.id)}
+                      onCheckedChange={() => toggleService(s.id)}
+                      onSelect={(e) => e.preventDefault()}
+                      className="text-xs"
+                    >
+                      {s.name}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <button
+            type="button"
+            className="btn-primary shrink-0"
+            style={{ fontSize: 13, padding: "6px 16px", borderRadius: 3 }}
+            onClick={() => setShowAddModal(true)}
+          >
+            Add company
           </button>
-        </p>
-        </div>
+          </>
+        }
+      />
+
+      {/* Status guide — floats in the gap under the sticky bar, same
+          treatment as the tour-replay link on company edit. */}
+      <div className="wrap" style={{ position: "relative", height: 0 }}>
         <button
           type="button"
-          className="btn-primary"
-          onClick={() => setShowAddModal(true)}
+          onClick={() => setShowStatusGuide(true)}
+          className="arco-text-link arco-text-link--primary absolute right-5 md:right-[60px]"
+          style={{ top: 12, fontSize: 12 }}
         >
-          Add company
+          Status guide
         </button>
       </div>
+
+      <div className="wrap" style={{ paddingTop: 52, paddingBottom: 48 }}>
+
+    <div className="space-y-6 w-full">
+
 
       {/* Status Guide Popup */}
       {showStatusGuide && (
@@ -1933,240 +2166,6 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         })()}
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex-1">
-          <div className="relative max-w-xs">
-            <input
-              type="text"
-              placeholder="Search by company, domain, or owner…"
-              value={searchTerm}
-              onChange={(event) => {
-                const value = event.target.value
-                setSearchTerm(value)
-                table.getColumn("name")?.setFilterValue(value)
-              }}
-              className="w-full h-9 pl-8 pr-8 text-xs border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors"
-            />
-            <svg className="absolute left-2.5 top-2.5 text-[#a1a1a0]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            {searchTerm && (
-              <button
-                type="button"
-                aria-label="Clear search"
-                onClick={() => { setSearchTerm(""); table.getColumn("name")?.setFilterValue("") }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-[3px] text-[#a1a1a0] hover:text-[#1c1c1a] transition-colors"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
-              </button>
-            )}
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Multi-select status filter — checkbox items in a dropdown menu.
-              Empty selection = all statuses (no filter). Synced with the
-              funnel cards above. */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className={`w-[160px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 ${
-                  statusFilter.length > 0
-                    ? "border-[#1c1c1a] bg-[#fafaf9]"
-                    : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
-                }`}
-              >
-                <span className="flex items-center gap-1.5 truncate">
-                  {statusFilter.length === 0 ? (
-                    <span className="text-[#6b6b68]">All statuses</span>
-                  ) : statusFilter.length === 1 ? (
-                    <>
-                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT[statusFilter[0]]}`} />
-                      <span className="truncate">{STATUS_LABEL[statusFilter[0]]}</span>
-                    </>
-                  ) : (
-                    <span>{statusFilter.length} statuses</span>
-                  )}
-                </span>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
-                  <path d="M6 9l6 6 6-6" />
-                </svg>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[180px]">
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.preventDefault()
-                  if (statusFilter.length > 0) applyStatusFilter([])
-                }}
-                className="text-xs"
-              >
-                Clear selection
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {(["listed", "unlisted", "owned", "verified", "invited", "prospected", "added", "deactivated"] as CompanyStatusFilterValue[]).map((s) => (
-                <DropdownMenuCheckboxItem
-                  key={s}
-                  checked={statusFilter.includes(s)}
-                  onCheckedChange={() => toggleStatus(s)}
-                  onSelect={(e) => e.preventDefault()}
-                  className="text-xs"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT[s]}`} />
-                    {STATUS_LABEL[s]}
-                  </span>
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Multi-select source filter. Same shape as the status dropdown.
-              Empty selection = all sources (no filter). Excludes synthetic
-              invite-type rows when any source is selected (those have no
-              company.source). */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className={`w-[160px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 ${
-                  channelFilter.length > 0
-                    ? "border-[#1c1c1a] bg-[#fafaf9]"
-                    : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
-                }`}
-              >
-                <span className="flex items-center gap-1.5 truncate">
-                  {channelFilter.length === 0 ? (
-                    <span className="text-[#6b6b68]">All channels</span>
-                  ) : channelFilter.length === 1 ? (
-                    <span className="truncate">{CHANNEL_LABEL[channelFilter[0]]}</span>
-                  ) : (
-                    <span>{channelFilter.length} channels</span>
-                  )}
-                </span>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
-                  <path d="M6 9l6 6 6-6" />
-                </svg>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[180px]">
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.preventDefault()
-                  if (channelFilter.length > 0) setChannelFilter([])
-                }}
-                className="text-xs"
-              >
-                Clear selection
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {CHANNEL_VALUES.map((c) => (
-                <DropdownMenuCheckboxItem
-                  key={c}
-                  checked={channelFilter.includes(c)}
-                  onCheckedChange={() => toggleChannel(c)}
-                  onSelect={(e) => e.preventDefault()}
-                  className="text-xs"
-                >
-                  {CHANNEL_LABEL[c]}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Multi-select service filter. Category list comes from
-              the categories table (only is_active=true is loaded on
-              the server). Matches on primary or any offered service. */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className={`w-[160px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 ${
-                  serviceFilter.length > 0
-                    ? "border-[#1c1c1a] bg-[#fafaf9]"
-                    : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
-                }`}
-              >
-                <span className="flex items-center gap-1.5 truncate">
-                  {serviceFilter.length === 0 ? (
-                    <span className="text-[#6b6b68]">All services</span>
-                  ) : serviceFilter.length === 1 ? (
-                    <span className="truncate">
-                      {serviceOptions.find((s) => s.id === serviceFilter[0])?.name ?? "1 service"}
-                    </span>
-                  ) : (
-                    <span>{serviceFilter.length} services</span>
-                  )}
-                </span>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
-                  <path d="M6 9l6 6 6-6" />
-                </svg>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[240px] max-h-[420px] overflow-y-auto">
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.preventDefault()
-                  if (serviceFilter.length > 0) setServiceFilter([])
-                }}
-                className="text-xs"
-              >
-                Clear selection
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {serviceGroups.parents.map((group) => {
-                const children = serviceGroups.childrenByParent.get(group.id) ?? []
-                if (children.length === 0) return null
-                const childIds = children.map((c) => c.id)
-                const selectedCount = childIds.filter((id) => serviceFilter.includes(id)).length
-                const groupChecked: boolean | "indeterminate" =
-                  selectedCount === 0 ? false : selectedCount === childIds.length ? true : "indeterminate"
-                return (
-                  <div key={group.id} className="py-0.5">
-                    <DropdownMenuCheckboxItem
-                      checked={groupChecked}
-                      onCheckedChange={(next) => setServicesForGroup(childIds, next === true)}
-                      onSelect={(e) => e.preventDefault()}
-                      className="text-xs font-medium"
-                    >
-                      {group.name}
-                    </DropdownMenuCheckboxItem>
-                    {children.map((s) => (
-                      <DropdownMenuCheckboxItem
-                        key={s.id}
-                        checked={serviceFilter.includes(s.id)}
-                        onCheckedChange={() => toggleService(s.id)}
-                        onSelect={(e) => e.preventDefault()}
-                        className="text-xs pl-8"
-                      >
-                        {s.name}
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                  </div>
-                )
-              })}
-              {serviceGroups.orphans.length > 0 && (
-                <>
-                  <DropdownMenuSeparator />
-                  {serviceGroups.orphans.map((s) => (
-                    <DropdownMenuCheckboxItem
-                      key={s.id}
-                      checked={serviceFilter.includes(s.id)}
-                      onCheckedChange={() => toggleService(s.id)}
-                      onSelect={(e) => e.preventDefault()}
-                      className="text-xs"
-                    >
-                      {s.name}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-
       {/* Bulk actions */}
       {Object.keys(rowSelection).length > 0 && (() => {
         const selectedCount = Object.keys(rowSelection).length
@@ -2276,8 +2275,23 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         )
       })()}
 
+      {/* Count — directly above the table, margins as on Users */}
+      <div className="discover-results-meta" style={{ marginBottom: 0 }}>
+        <p className="discover-results-count">
+          {isFiltered ? (
+            <>
+              <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{filteredCompanies}</strong> of {totalCompanies} {totalCompanies === 1 ? "company" : "companies"}
+            </>
+          ) : (
+            <>
+              <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{totalCompanies}</strong> {totalCompanies === 1 ? "company" : "companies"}
+            </>
+          )}
+        </p>
+      </div>
+
       {/* Table */}
-      <div className="arco-table-wrap">
+      <div className="arco-table-wrap" style={{ marginTop: 16 }}>
         <table className="arco-table" style={{ minWidth: 1100 }}>
           <thead>
             <tr>
@@ -2804,5 +2818,8 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
 
       <ContactCard email={contactParam.email} onClose={contactParam.close} />
     </div>
+
+      </div>
+    </>
   )
 }

@@ -140,11 +140,9 @@ export default async function CategoriesPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="discover-page-title">
-        <div className="wrap">
-          <AdminCategoriesDataTable categories={categories} spaces={spaces} productCategories={productCategories} />
-        </div>
-      </div>
+      {/* The table renders the sticky full-bleed workbench bar and
+          wraps its own content. */}
+      <AdminCategoriesDataTable categories={categories} spaces={spaces} productCategories={productCategories} />
     </div>
   )
 }

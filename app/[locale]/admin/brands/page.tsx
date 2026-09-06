@@ -47,11 +47,7 @@ export default async function AdminBrandsPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="discover-page-title">
-        <div className="wrap">
-          <BrandsClient initialBrands={rows} />
-        </div>
-      </div>
+      <BrandsClient initialBrands={rows} />
     </div>
   )
 }

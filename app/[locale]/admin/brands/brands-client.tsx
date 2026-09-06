@@ -1,5 +1,7 @@
 "use client"
 
+import { AdminTabs } from "@/components/admin/admin-tabs"
+
 import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -150,11 +152,16 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
   }
 
   return (
+    <>
+      <AdminTabs title="Brands" />
+
+      <div className="wrap" style={{ paddingTop: 32, paddingBottom: 48 }}>
+
     <div style={{ paddingBottom: 80 }}>
-      <div className="flex flex-col gap-1 mb-6">
-        <h3 className="arco-section-title">Brands</h3>
-        <p className="text-xs text-[#a1a1a0] mt-0.5">
-          {brands.length} {brands.length === 1 ? "brand" : "brands"}
+      {/* Page meta — count in the discover style */}
+      <div className="discover-results-meta" style={{ marginBottom: 16 }}>
+        <p className="discover-results-count">
+          <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{brands.length}</strong> {brands.length === 1 ? "brand" : "brands"}
         </p>
       </div>
 
@@ -399,5 +406,8 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
         </div>
       )}
     </div>
+
+      </div>
+    </>
   )
 }

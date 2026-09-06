@@ -1,4 +1,5 @@
 import { FAQPreview } from "./faq-preview"
+import { AdminTabs } from "@/components/admin/admin-tabs"
 import { DiscoverCardPreview } from "./discover-card-preview"
 import { ServiceMarksPreview } from "./service-marks-preview"
 import { CreditPreviews } from "./credit-previews"
@@ -165,14 +166,32 @@ export default function DesignPage() {
   ]
 
   return (
-    <div className="discover-page-title">
-      <div className="wrap">
+    <div className="min-h-screen bg-white">
+      {/* Anchor links scroll to the page's sections; the bar scrolls
+          horizontally itself, so all of them stay reachable. */}
+      <AdminTabs
+        title="Design"
+        left={
+          <>
+            <a key="g-foundations" href="#g-foundations" className="sub-nav-link arco-eyebrow" style={{ whiteSpace: "nowrap" }}>Foundations</a>
+            <a key="g-controls" href="#g-controls" className="sub-nav-link arco-eyebrow" style={{ whiteSpace: "nowrap" }}>Controls</a>
+            <a key="g-components" href="#g-components" className="sub-nav-link arco-eyebrow" style={{ whiteSpace: "nowrap" }}>Components</a>
+            <a key="g-tables" href="#g-tables" className="sub-nav-link arco-eyebrow" style={{ whiteSpace: "nowrap" }}>Tables</a>
+            <a key="g-media" href="#g-media" className="sub-nav-link arco-eyebrow" style={{ whiteSpace: "nowrap" }}>Media</a>
+            <a key="g-responsive" href="#g-responsive" className="sub-nav-link arco-eyebrow" style={{ whiteSpace: "nowrap" }}>Responsive</a>
+          </>
+        }
+      />
+      <div className="wrap" style={{ paddingTop: 32, paddingBottom: 48 }}>
         <div style={{ maxWidth: 1200 }}>
-          <h2 className="arco-page-title" style={{ marginBottom: 40 }}>Design system</h2>
 
+          {/* ═══ Foundations ═══ */}
+          <div id="g-foundations" style={{ scrollMarginTop: 140, borderTop: "none", paddingTop: 0, marginBottom: 32 }}>
+            <p className="arco-eyebrow" style={{ color: "var(--primary, #016D75)" }}>Foundations</p>
+          </div>
           {/* COLORS */}
           <div style={{ marginBottom: 80 }}>
-            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Color Palette</h2>
+            <h2 id="color-palette" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Color Palette</h2>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 20 }}>
               {colors.map((c) => (
                 <div key={c.hex}>
@@ -187,7 +206,7 @@ export default function DesignPage() {
 
           {/* TYPOGRAPHY */}
           <div style={{ marginBottom: 80 }}>
-            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Typography</h2>
+            <h2 id="typography" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Typography</h2>
             <div>
               {typography.map((t, i) => (
                 <div
@@ -206,9 +225,13 @@ export default function DesignPage() {
             </div>
           </div>
 
+          {/* ═══ Controls ═══ */}
+          <div id="g-controls" style={{ scrollMarginTop: 140, borderTop: "1px solid var(--arco-rule, #e5e5e4)", paddingTop: 32, marginBottom: 32 }}>
+            <p className="arco-eyebrow" style={{ color: "var(--primary, #016D75)" }}>Controls</p>
+          </div>
           {/* BUTTONS & LINKS */}
           <div style={{ marginBottom: 80 }}>
-            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Buttons &amp; Links</h2>
+            <h2 id="buttons-links" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Buttons &amp; Links</h2>
 
             <div style={{ marginBottom: 48 }}>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Buttons</h4>
@@ -403,7 +426,7 @@ export default function DesignPage() {
 
           {/* FORM ELEMENTS */}
           <div style={{ marginBottom: 80 }}>
-            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Form Elements</h2>
+            <h2 id="form-elements" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Form Elements</h2>
             <div>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Inputs</h4>
               <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40 }}>
@@ -450,7 +473,7 @@ export default function DesignPage() {
 
           {/* PILLS & TAGS */}
           <div style={{ marginBottom: 80 }}>
-            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Pills &amp; Tags</h2>
+            <h2 id="pills-tags" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Pills &amp; Tags</h2>
 
             <div style={{ marginBottom: 48 }}>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Status Pills</h4>
@@ -543,7 +566,7 @@ export default function DesignPage() {
 
           {/* FILTERS */}
           <div style={{ marginBottom: 80 }}>
-            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Filters</h2>
+            <h2 id="filters" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Filters</h2>
 
             <div style={{ marginBottom: 48 }}>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Filter Pills</h4>
@@ -591,9 +614,13 @@ export default function DesignPage() {
             </div>
           </div>
 
+          {/* ═══ Components ═══ */}
+          <div id="g-components" style={{ scrollMarginTop: 140, borderTop: "1px solid var(--arco-rule, #e5e5e4)", paddingTop: 32, marginBottom: 32 }}>
+            <p className="arco-eyebrow" style={{ color: "var(--primary, #016D75)" }}>Components</p>
+          </div>
           {/* DISCOVER CARDS */}
           <div style={{ marginBottom: 80 }}>
-            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Discover Cards</h2>
+            <h2 id="discover-cards" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Discover Cards</h2>
 
             <div>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Discover Grid</h4>
@@ -611,7 +638,7 @@ export default function DesignPage() {
 
           {/* SECTION HEADERS */}
           <div style={{ marginBottom: 80 }}>
-            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Section Headers</h2>
+            <h2 id="section-headers" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Section Headers</h2>
             <div>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Header with View All</h4>
               <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
@@ -628,7 +655,7 @@ export default function DesignPage() {
 
           {/* LAYOUT COMPONENTS */}
           <div style={{ marginBottom: 80 }}>
-            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Layout Components</h2>
+            <h2 id="layout-components" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Layout Components</h2>
 
             <div style={{ marginBottom: 48 }}>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>How It Works Grid</h4>
@@ -661,7 +688,7 @@ export default function DesignPage() {
 
           {/* FAQ */}
           <div style={{ marginBottom: 80 }}>
-            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>FAQ</h2>
+            <h2 id="faq" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>FAQ</h2>
             <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
               <FAQPreview />
             </div>
@@ -674,7 +701,7 @@ export default function DesignPage() {
 
           {/* POPUPS */}
           <div style={{ marginBottom: 80 }}>
-            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Popups</h2>
+            <h2 id="popups" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Popups</h2>
 
             <div style={{ marginBottom: 48 }}>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Popup Card</h4>
@@ -736,7 +763,7 @@ export default function DesignPage() {
 
           {/* ALERTS */}
           <div style={{ marginBottom: 80 }}>
-            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Alerts</h2>
+            <h2 id="alerts" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Alerts</h2>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
               <div className="arco-alert arco-alert--info">
@@ -776,9 +803,13 @@ export default function DesignPage() {
             </div>
           </div>
 
+          {/* ═══ Tables ═══ */}
+          <div id="g-tables" style={{ scrollMarginTop: 140, borderTop: "1px solid var(--arco-rule, #e5e5e4)", paddingTop: 32, marginBottom: 32 }}>
+            <p className="arco-eyebrow" style={{ color: "var(--primary, #016D75)" }}>Tables</p>
+          </div>
           {/* DATA TABLE */}
           <div style={{ marginBottom: 80 }}>
-            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Data Table</h2>
+            <h2 id="data-table" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Data Table</h2>
 
             <div style={{ marginBottom: 48 }}>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Table</h4>
@@ -970,7 +1001,7 @@ export default function DesignPage() {
 
           {/* INLINE EDIT — `.spec-item-edit` */}
           <div style={{ marginBottom: 80 }}>
-            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Inline edit cells</h2>
+            <h2 id="inline-edit-cells" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Inline edit cells</h2>
             <p className="arco-body-text" style={{ marginBottom: 24, maxWidth: 720 }}>
               Used inside <code>.specifications-bar</code> on detail bars (project edit, account, company settings).
               Hover and editing render identically — a charcoal outline that punches through the bar&rsquo;s top/bottom
@@ -1026,9 +1057,13 @@ export default function DesignPage() {
             </div>
           </div>
 
+          {/* ═══ Media ═══ */}
+          <div id="g-media" style={{ scrollMarginTop: 140, borderTop: "1px solid var(--arco-rule, #e5e5e4)", paddingTop: 32, marginBottom: 32 }}>
+            <p className="arco-eyebrow" style={{ color: "var(--primary, #016D75)" }}>Media</p>
+          </div>
           {/* BRANDED IMAGES */}
           <div style={{ marginBottom: 80 }}>
-            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Branded images</h2>
+            <h2 id="branded-images" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Branded images</h2>
             <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
               Composite images produced once on project publish and reused across channels.
               The compositor branches on source photo orientation: portrait → 2:3 Pinterest pin,
@@ -1139,7 +1174,7 @@ export default function DesignPage() {
 
           {/* SERVICE MARKS */}
           <div style={{ marginBottom: 80 }}>
-            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Service marks</h2>
+            <h2 id="service-marks" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Service marks</h2>
             <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
               One hand-drawn mark per service, drawn as a single family rather than picked
               from a stock icon set: 24 × 24, stroke only, four to eight strokes, curves
@@ -1160,7 +1195,7 @@ export default function DesignPage() {
 
           {/* CREDITED PROFESSIONALS */}
           <div style={{ marginBottom: 80 }}>
-            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Credited professionals</h2>
+            <h2 id="credited-professionals" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Credited professionals</h2>
             <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
               The same credit renders twice: as an editable row while the owner is building
               the project, and as a public card once it is published. Both lead with the
@@ -1173,7 +1208,7 @@ export default function DesignPage() {
 
           {/* PHOTO GALLERY LAYOUTS */}
           <div style={{ marginBottom: 80 }}>
-            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Photo gallery layouts</h2>
+            <h2 id="photo-gallery-layouts" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Photo gallery layouts</h2>
             <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
               The project photo tour assigns grid spans based on photo orientation —
               <strong> L</strong> = landscape (aspect 0.9–2.2), <strong> P</strong> = portrait (aspect &lt; 0.9),
@@ -1207,9 +1242,13 @@ export default function DesignPage() {
             </div>
           </div>
 
+          {/* ═══ Responsive ═══ */}
+          <div id="g-responsive" style={{ scrollMarginTop: 140, borderTop: "1px solid var(--arco-rule, #e5e5e4)", paddingTop: 32, marginBottom: 32 }}>
+            <p className="arco-eyebrow" style={{ color: "var(--primary, #016D75)" }}>Responsive</p>
+          </div>
           {/* BREAKPOINTS */}
           <div style={{ marginBottom: 80 }}>
-            <h2 className="arco-section-title" style={{ marginBottom: 24 }}>Responsive Breakpoints</h2>
+            <h2 id="responsive-breakpoints" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Responsive Breakpoints</h2>
             <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40 }}>
               <div style={{ display: "grid", gap: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 16 }}>

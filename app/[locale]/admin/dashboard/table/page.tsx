@@ -9,11 +9,7 @@ export default async function GrowthTablePage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="discover-page-title">
-        <div className="wrap">
-          <GrowthTableClient initialMetrics={metrics} initialLastSynced={lastSynced} />
-        </div>
-      </div>
+      <GrowthTableClient initialMetrics={metrics} initialLastSynced={lastSynced} />
     </div>
   )
 }

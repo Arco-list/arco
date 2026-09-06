@@ -203,15 +203,13 @@ export default async function ProjectsPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="discover-page-title">
-        <div className="wrap">
-          <AdminProjectsDataTable
-            projects={projects}
-            reviewCount={reviewProjects.length}
-            firstReviewProjectId={firstReviewProjectId}
-          />
-        </div>
-      </div>
+      {/* The table renders the sticky full-bleed workbench bar and
+          wraps its own content. */}
+      <AdminProjectsDataTable
+        projects={projects}
+        reviewCount={reviewProjects.length}
+        firstReviewProjectId={firstReviewProjectId}
+      />
     </div>
   )
 }

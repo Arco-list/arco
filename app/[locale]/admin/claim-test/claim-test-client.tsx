@@ -1,5 +1,7 @@
 "use client"
 
+import { AdminTabs } from "@/components/admin/admin-tabs"
+
 import { useMemo, useState } from "react"
 
 import type { ClaimChannel } from "@/lib/claim/claim-token"
@@ -58,8 +60,12 @@ export function ClaimTestClient({ companies }: { companies: Row[] }) {
   }
 
   return (
+    <>
+      <AdminTabs title="Claim test" />
+
+      <div className="wrap" style={{ paddingTop: 32, paddingBottom: 48 }}>
+
     <div style={{ maxWidth: 980 }}>
-      <h1 className="arco-section-title" style={{ marginBottom: 6 }}>Claim-funnel testen</h1>
       <p className="arco-body-text" style={{ maxWidth: "62ch", marginBottom: 8 }}>
         Tokens zijn single-use: elke doorloop begint met een verse link. Kies een bedrijf en een
         kanaal — de link komt op je klembord. Invite vereist een openstaande credit op een
@@ -143,5 +149,8 @@ export function ClaimTestClient({ companies }: { companies: Row[] }) {
         </table>
       </div>
     </div>
+
+      </div>
+    </>
   )
 }

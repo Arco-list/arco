@@ -569,6 +569,19 @@ export function GrowthTableView({
   apolloVisitorsSeries, inviteVisitorsSeries,
   clientSourceSeries, proSourceSeries,
 }: Props) {
+  // Clients / Professionals as collapsible sections — same gesture as
+  // the lifecycle view and the Emails swimlanes. Declared before the
+  // empty-state early return so the hook order never changes.
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
+  const toggleSection = (key: string) => {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
   // Align to 8 buckets where index 7 is the rolling/most-recent period.
   // PostHog returns chronologically ordered data, so we keep the LAST 8 values
   // (or pad zeros to the LEFT for sparse series) — never drop the rolling bucket.
@@ -683,6 +696,26 @@ export function GrowthTableView({
     return <p className="text-[12px] text-[#a1a1a0] py-8 text-center">{isPending ? "Loading..." : "Loading table data..."}</p>
   }
 
+  // Clients / Professionals as collapsible section ROWS inside one
+  // table, like the Model grid — chevron toggles the rows beneath.
+  const sectionHeaderRow = (key: string, label: string) => (
+    <tr>
+      <td colSpan={2} style={{ background: "white" }}>
+        <button
+          type="button"
+          onClick={() => toggleSection(key)}
+          className="flex items-center gap-2"
+          style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" className={`shrink-0 transition-transform ${collapsedSections.has(key) ? "" : "rotate-90"}`}>
+            <path d="M3 2L7 5L3 8" stroke="#a1a1a0" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+          </svg>
+          <span className="arco-eyebrow text-[#a1a1a0]">{label}</span>
+        </button>
+      </td>
+    </tr>
+  )
+
   return (
     <div className="arco-table-wrap rounded-[3px]">
       {/* Date labels — full width on mobile, positioned to match SVG dot coordinates */}
@@ -692,7 +725,7 @@ export function GrowthTableView({
             const n = arr.length
             const leftPct = (6 + (i / (n - 1)) * (100 - 12))
             return (
-              <span key={i} className="absolute text-[9px] font-medium uppercase tracking-wider whitespace-nowrap" style={{ left: `${leftPct}%`, transform: "translateX(-50%)", color: i === arr.length - 1 ? "#c4c4c2" : "#a1a1a0" }}>{l}</span>
+              <span key={i} className="absolute text-xs font-medium whitespace-nowrap" style={{ left: `${leftPct}%`, transform: "translateX(-50%)", color: i === arr.length - 1 ? "#c4c4c2" : "#6b6b68" }}>{l}</span>
             )
           })}
         </div>
@@ -704,14 +737,14 @@ export function GrowthTableView({
         </colgroup>
         <thead className="hidden md:table-header-group">
           <tr>
-            <th style={{ textAlign: "left" }}><span className="arco-eyebrow text-[#a1a1a0]">Metric</span></th>
+            <th style={{ textAlign: "left" }}>Metric</th>
             <th>
               <div className="relative" style={{ height: 16 }}>
                 {(labels.length > 0 ? labels : ["—", "—", "—", "—", "—", "—", "—", "—"]).map((l, i, arr) => {
                   const n = arr.length
                   const leftPct = (6 + (i / (n - 1)) * (100 - 12))
                   return (
-                    <span key={i} className="absolute arco-eyebrow whitespace-nowrap" style={{ left: `${leftPct}%`, transform: "translateX(-50%)", color: i === arr.length - 1 ? "#c4c4c2" : "#a1a1a0" }}>{l}</span>
+                    <span key={i} className="absolute whitespace-nowrap" style={{ left: `${leftPct}%`, transform: "translateX(-50%)", color: i === arr.length - 1 ? "#c4c4c2" : undefined }}>{l}</span>
                   )
                 })}
               </div>
@@ -719,21 +752,11 @@ export function GrowthTableView({
           </tr>
         </thead>
         <tbody>
-          {/* Clients */}
-          <tr>
-            <td colSpan={2} style={{ background: "white" }}>
-              <p className="arco-eyebrow text-[#a1a1a0]">Clients</p>
-            </td>
-          </tr>
-          {clientRows.map((row) => <MetricRowComponent key={row.key} row={row} labels={labels} />)}
+          {sectionHeaderRow("clients", "Clients")}
+          {!collapsedSections.has("clients") && clientRows.map((row) => <MetricRowComponent key={row.key} row={row} labels={labels} />)}
 
-          {/* Professionals */}
-          <tr>
-            <td colSpan={2} style={{ background: "white" }}>
-              <p className="arco-eyebrow text-[#a1a1a0]">Professionals</p>
-            </td>
-          </tr>
-          {proRows.map((row) => <MetricRowComponent key={row.key} row={row} labels={labels} />)}
+          {sectionHeaderRow("pros", "Professionals")}
+          {!collapsedSections.has("pros") && proRows.map((row) => <MetricRowComponent key={row.key} row={row} labels={labels} />)}
         </tbody>
       </table>
     </div>

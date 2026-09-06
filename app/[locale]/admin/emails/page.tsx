@@ -401,26 +401,36 @@ function AdminEmailsPage() {
         }
       />
 
-      <div className="wrap" style={{ paddingTop: 32, paddingBottom: 48 }}>
+      {/* Status guide — floats in the gap under the sticky bar, same
+          treatment as the tour-replay link on company edit. */}
+      <div className="wrap" style={{ position: "relative", height: 0 }}>
+      {activeTab === "funnel" && (
+          <button
+          type="button"
+          onClick={() => setShowStageGuide(true)}
+          className="arco-text-link arco-text-link--primary absolute right-5 md:right-[60px]"
+          style={{ top: 12, fontSize: 12 }}
+          >
+            Status guide
+          </button>
+      )}
+      </div>
 
-        {/* Page meta — the title lives in the sticky bar */}
-        <div className="flex flex-col gap-1 mb-6">
-          <p className="text-xs text-[#a1a1a0]">
-            {activeTab === "sent"
-              ? `${emails.length} emails`
-              : activeTab === "funnel"
-              ? (
-                <>
-                  {FUNNEL_LANES.reduce((n, l) => n + laneSends(l), 0).toLocaleString()} verstuurd
-                  {" · "}
-                  <button type="button" className="text-[#016D75] hover:underline cursor-pointer" onClick={() => setShowStageGuide(true)}>
-                    Status guide
-                  </button>
-                </>
-              )
-              : `${totalCount} total · ${activeCount} active`}
-          </p>
-        </div>
+      <div className="wrap" style={{ paddingTop: 52, paddingBottom: 48 }}>
+
+        {/* Page meta — the funnel tab carries no counter (the rail's
+            per-stage sends tell the story); the list tabs keep theirs. */}
+        {activeTab !== "funnel" && (
+          <div className="discover-results-meta" style={{ marginBottom: 16 }}>
+            <p className="discover-results-count">
+              {activeTab === "sent" ? (
+                <><strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{emails.length}</strong> emails</>
+              ) : (
+                <><strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{totalCount}</strong> total · {activeCount} active</>
+              )}
+            </p>
+          </div>
+        )}
 
           {/* Funnel — stage rail + swimlanes */}
           {activeTab === "funnel" && (() => {
@@ -456,7 +466,7 @@ function AdminEmailsPage() {
               )
             }
             return (
-              <div className="mt-6">
+              <div>
                 {/* Rail — colors and driver eyebrows mirror the Sales funnel */}
                 <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:overflow-visible md:px-0">
                   <div style={{ display: "grid", gridTemplateColumns: FUNNEL_LANES.map((_, i) => i === 0 ? "auto" : "1fr auto").join(" "), gap: 0, alignItems: "start" }}>
@@ -516,7 +526,7 @@ function AdminEmailsPage() {
                   const isCollapsed = collapsedLanes.has(lane.key)
                   const mailCount = lane.transactional.length + lane.sequences.reduce((n, s) => n + s.templateIds.length, 0)
                   return (
-                  <div key={lane.key} id={`funnel-lane-${lane.key}`} className="mt-10" style={{ scrollMarginTop: 140 }}>
+                  <div key={lane.key} id={`funnel-lane-${lane.key}`} className="mt-8" style={{ scrollMarginTop: 140 }}>
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                       <button
                         type="button"

@@ -569,7 +569,7 @@ export function GrowthClient({ initialMetrics, initialLastSynced = null }: Props
           pattern). Table first = the clean-URL default; timeframe
           selector + sync status ride in the actions slot. */}
       <AdminTabs
-        title="Growth"
+        title="Dashboard"
         tabs={[
           { key: "table", label: "Table" },
           { key: "lifecycle", label: "Lifecycle" },
@@ -615,7 +615,19 @@ export function GrowthClient({ initialMetrics, initialLastSynced = null }: Props
         }
       />
 
-      <div className="wrap" style={{ paddingTop: 32, paddingBottom: 48 }}>
+      {/* Tracking events — floats in the gap under the sticky bar, same
+          treatment as the tour-replay link on company edit. */}
+      <div className="wrap" style={{ position: "relative", height: 0 }}>
+        <a
+          href="/admin/dashboard/events"
+          className="arco-text-link arco-text-link--primary absolute right-5 md:right-[60px]"
+          style={{ top: 12, fontSize: 12 }}
+        >
+          Tracking events
+        </a>
+      </div>
+
+      <div className="wrap" style={{ paddingTop: 52, paddingBottom: 48 }}>
 
       {posthogError && (
         <div
@@ -626,13 +638,6 @@ export function GrowthClient({ initialMetrics, initialLastSynced = null }: Props
           <p className="mt-1 text-xs text-[#991b1b]/80">{posthogError}</p>
         </div>
       )}
-      {/* Page meta — the title lives in the sticky bar */}
-      <div className="mb-8">
-        <p className="text-xs text-[#a1a1a0]">
-          Lifecycle model and key metrics · {" "}
-          <a href="/admin/dashboard/events" className="text-[#016D75] hover:underline cursor-pointer">Tracking events</a>
-        </p>
-      </div>
 
       {view === "table" ? (
         <GrowthTableView

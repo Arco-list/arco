@@ -61,11 +61,9 @@ export default async function AdminProductsPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="discover-page-title">
-        <div className="wrap">
-          <ProductsClient initialProducts={rows} brandOptions={brandOptions} categoryOptions={categoryOptions} />
-        </div>
-      </div>
+      {/* The client renders the sticky full-bleed workbench bar and
+          wraps its own content. */}
+      <ProductsClient initialProducts={rows} brandOptions={brandOptions} categoryOptions={categoryOptions} />
     </div>
   )
 }

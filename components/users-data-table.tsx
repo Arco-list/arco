@@ -1,5 +1,7 @@
 "use client"
 
+import { AdminTabs } from "@/components/admin/admin-tabs"
+
 import { useCallback, useMemo, useState, useTransition } from "react"
 import { format, formatDistanceToNow } from "date-fns"
 import {
@@ -688,31 +690,16 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
     // path; block-flow with mb-* on each section gives the same
     // visual spacing.
     <>
-      {/* Warning banner */}
-      {singleActiveSuperAdmin && (
-        <div className="arco-alert arco-alert--warn mb-6">
-          <Shield className="arco-alert-icon" />
-          <p>
-            There is only one active super admin. Invite or promote another before demoting or deactivating the current one.
-          </p>
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="flex flex-col gap-1 mb-6">
-        <h3 className="arco-section-title">Users</h3>
-        <p className="text-xs text-[#a1a1a0] mt-0.5">
-          {totalAdmins} total &middot; {totalSuperAdmins} super admin{totalSuperAdmins === 1 ? "" : "s"}
-        </p>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-6">
-        <div className="flex flex-1 items-center">
+      {/* Sticky workbench bar — title, search, filters. */}
+      <AdminTabs
+        title="Users"
+        actions={
+          <>
+          <div className="relative shrink-0" style={{ width: 240 }}>
           <input
             type="text"
             placeholder="Search by name or email…"
-            className="w-full max-w-sm px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors placeholder:text-[#a1a1a0]"
+            className="w-full h-9 pl-8 pr-3 text-xs border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors placeholder:text-[#a1a1a0]"
             value={searchTerm}
             onChange={(event) => {
               const value = event.target.value
@@ -720,8 +707,10 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
               table.getColumn("displayName")?.setFilterValue(value)
             }}
           />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+            <svg className="absolute left-2.5 top-2.5 text-[#a1a1a0]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </div>
           <Select
             value={roleFilter}
             onValueChange={(value) => {
@@ -730,10 +719,10 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
               table.getColumn("role")?.setFilterValue(next === "all" ? undefined : next)
             }}
           >
-            <SelectTrigger className="w-[140px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
+            <SelectTrigger className="w-[140px] h-9 text-xs shrink-0 border-[#e5e5e4] rounded-[3px]">
               <SelectValue placeholder="All roles" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="z-[120]">
               <SelectItem value="all">All roles</SelectItem>
               <SelectItem value="super_admin">Super admins</SelectItem>
               <SelectItem value="admin">Admins</SelectItem>
@@ -748,17 +737,38 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
               table.getColumn("status")?.setFilterValue(next === "all" ? undefined : next)
             }}
           >
-            <SelectTrigger className="w-[140px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
+            <SelectTrigger className="w-[140px] h-9 text-xs shrink-0 border-[#e5e5e4] rounded-[3px]">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="z-[120]">
               <SelectItem value="all">All statuses</SelectItem>
               <SelectItem value="active">Active</SelectItem>
               <SelectItem value="invited">Invited</SelectItem>
               <SelectItem value="inactive">Inactive</SelectItem>
             </SelectContent>
           </Select>
+          </>
+        }
+      />
+
+      <div className="wrap" style={{ paddingTop: 32, paddingBottom: 48 }}>
+
+      {/* Warning banner */}
+      {singleActiveSuperAdmin && (
+        <div className="arco-alert arco-alert--warn mb-6">
+          <Shield className="arco-alert-icon" />
+          <p>
+            There is only one active super admin. Invite or promote another before demoting or deactivating the current one.
+          </p>
         </div>
+      )}
+
+
+      {/* Page meta — count in the discover style, margins as on Projects */}
+      <div className="discover-results-meta" style={{ marginBottom: 0 }}>
+        <p className="discover-results-count">
+          <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{totalAdmins}</strong> users &middot; {totalSuperAdmins} super admin{totalSuperAdmins === 1 ? "" : "s"}
+        </p>
       </div>
 
       {/* Bulk actions */}
@@ -826,7 +836,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
       })()}
 
       {/* Table */}
-      <div className="arco-table-wrap">
+      <div className="arco-table-wrap" style={{ marginTop: 16 }}>
         <table className="arco-table" style={{ minWidth: 800 }}>
           <thead>
             <tr>
@@ -1143,7 +1153,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                       value={deleteConfirmText}
                       onChange={(e) => setDeleteConfirmText(e.target.value)}
                       placeholder="DELETE"
-                      className="w-full px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors placeholder:text-[#a1a1a0]"
+                      className="w-full h-9 px-3 text-xs border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors placeholder:text-[#a1a1a0]"
                       autoComplete="off"
                     />
                   </div>
@@ -1244,6 +1254,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
         }}
         onClose={contactParam.close}
       />
+      </div>
     </>
   )
 }

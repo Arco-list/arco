@@ -88,7 +88,9 @@ export function AdminTabs({
                   fontWeight: 500,
                   color: "var(--arco-black)",
                   paddingRight: 24,
-                  borderRight: "1px solid var(--arco-rule)",
+                  // Divider only when something follows the title —
+                  // a title-only bar (e.g. Brands) needs no rule.
+                  borderRight: (tabs?.length || left) ? "1px solid var(--arco-rule)" : "none",
                   // Full-height divider, like .sub-nav-back on the
                   // project sub-nav: stretch to the bar's height and
                   // center the text inside. The links row's own gap
@@ -121,7 +123,7 @@ export function AdminTabs({
                     {typeof t.badge === "number" && t.badge > 0 && (
                       <span
                         className="inline-flex items-center justify-center text-[10px] font-medium px-1.5 rounded-full"
-                        style={{ background: isActive ? "#1c1c1a" : "#016D75", color: "#fff", minWidth: 16, height: 16, letterSpacing: 0 }}
+                        style={{ background: "#016D75", color: "#fff", minWidth: 16, height: 16, letterSpacing: 0 }}
                       >
                         {t.badge}
                       </span>

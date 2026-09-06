@@ -1036,7 +1036,8 @@ export function ProspectsClient({
           { key: "calls", label: "Call list" },
         ]}
         active={barTab}
-        left={
+        actions={
+          <>
           <div className="relative shrink-0" style={{ width: 240 }}>
             <input
               type="text"
@@ -1059,9 +1060,6 @@ export function ProspectsClient({
               </button>
             )}
           </div>
-        }
-        actions={
-          <>
           {/* Apollo pills — compact status-pill duo shared with Inbox and
               Growth: dot + relative time (click = sync activity now) and
               a grey contacts pill (click = Import contacts popup). */}
@@ -1276,18 +1274,20 @@ export function ProspectsClient({
         }
       />
 
-      <div className="wrap" style={{ paddingTop: 32, paddingBottom: 48 }}>
-
-      {/* Page meta — the title lives in the sticky bar */}
-      <div className="mb-6">
-        <p className="text-xs text-[#a1a1a0]">
-          {companies.length} of {totalCompanies} companies
-          {" · "}
-          <button type="button" className="text-[#016D75] hover:underline cursor-pointer" onClick={() => setShowStatusGuide(true)}>
-            Status guide
-          </button>
-        </p>
+      {/* Status guide — floats in the gap under the sticky bar, same
+          treatment as the tour-replay link on company edit. */}
+      <div className="wrap" style={{ position: "relative", height: 0 }}>
+        <button
+          type="button"
+          onClick={() => setShowStatusGuide(true)}
+          className="arco-text-link arco-text-link--primary absolute right-5 md:right-[60px]"
+          style={{ top: 12, fontSize: 12 }}
+        >
+          Status guide
+        </button>
       </div>
+
+      <div className="wrap" style={{ paddingTop: 52, paddingBottom: 48 }}>
 
       {/* Conversion funnel — counts unique companies per stage. */}
       <div className="mb-8 -mx-4 overflow-x-auto px-4 md:mx-0 md:overflow-visible md:px-0">
@@ -1442,7 +1442,14 @@ export function ProspectsClient({
       })()}
 
       {/* Companies table — one row per company, contacts column expands inline. */}
-      <div className="arco-table-wrap">
+      {/* Count — directly above the table, margins as on Users */}
+      <div className="discover-results-meta" style={{ marginBottom: 0 }}>
+        <p className="discover-results-count">
+          <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{companies.length}</strong> of {totalCompanies} companies
+        </p>
+      </div>
+
+      <div className="arco-table-wrap" style={{ marginTop: 16 }}>
         <table className="arco-table" style={{ minWidth: 1200 }}>
           <thead>
             <tr>

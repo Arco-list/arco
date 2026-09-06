@@ -1,5 +1,7 @@
 "use client"
 
+import { AdminTabs } from "@/components/admin/admin-tabs"
+
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
@@ -117,11 +119,8 @@ export default function AdminMessagesPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="discover-page-title">
-        <div className="wrap">
-          <h2 className="arco-section-title">{t("title")}</h2>
-        </div>
-      </div>
+      {/* Sticky workbench bar — title only. */}
+      <AdminTabs title={t("title")} />
 
       <div className="discover-results">
         <div className="wrap">

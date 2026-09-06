@@ -4,6 +4,7 @@ import { Fragment, useState } from "react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import type { MetricRow } from "../dashboard/table/table-actions"
 import { GrowthSyncBadge } from "@/components/admin/growth-sync-badge"
+import { AdminTabs } from "@/components/admin/admin-tabs"
 
 // Lifecycle phase → dot color. Matches the Table view so the same
 // visual key applies across both pages.
@@ -672,39 +673,27 @@ export function GrowthModelClient({ initialRows, initialLabels, initialLastSynce
 
   return (
     <>
-      {/* Header mirrors the layout used on /admin/dashboard so the three
-          views (Lifecycle / Table / Model) share the same chrome. */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-        <div>
-          <h3 className="arco-section-title">Growth model</h3>
-          <p className="text-xs text-[#a1a1a0] mt-0.5">
-            Month-by-month planning grid · {" "}
-            <a href="/admin/dashboard" className="text-[#6b6b68] hover:text-[#1c1c1a] underline transition-colors">
-              Lifecycle view
-            </a>
-            {" · "}
-            <a href="/admin/dashboard/table" className="text-[#6b6b68] hover:text-[#1c1c1a] underline transition-colors">
-              Table view
-            </a>
-          </p>
+      {/* Sticky workbench bar — sync pill on the right, like Growth. */}
+      <AdminTabs
+        title="Model"
+        actions={<GrowthSyncBadge initialLastSynced={initialLastSynced} />}
+      />
+
+      {/* Phase legend — floats in the gap under the sticky bar, same
+          position as the Status guide links elsewhere. */}
+      <div className="wrap" style={{ position: "relative", height: 0 }}>
+        <div className="absolute right-5 md:right-[60px] flex flex-wrap items-center gap-3" style={{ top: 12 }}>
+          {(["acquisition", "retention", "monetization", "churn"] as const).map((d) => (
+            <span key={d} className="flex items-center gap-1.5 text-[11px] text-[#6b6b68]">
+              <span className="status-pill-dot shrink-0" style={{ background: DRIVER_COLORS[d] }} />
+              {DRIVER_LABEL[d]}
+            </span>
+          ))}
         </div>
-        {/* Inbox/Sales-style sync badge — click to refresh. The old
-            Backfill button (one-shot first_touch_source stamper) is
-            retired from the header; the server action remains for rare
-            manual re-runs. */}
-        <GrowthSyncBadge initialLastSynced={initialLastSynced} />
       </div>
 
-      {/* Phase legend — explains the dots without a dedicated grouping
-          column. Section headings stay user-type (Pros/Clients) only. */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        {(["acquisition", "retention", "monetization", "churn"] as const).map((d) => (
-          <span key={d} className="flex items-center gap-1.5 text-[11px] text-[#6b6b68]">
-            <span className="status-pill-dot shrink-0" style={{ background: DRIVER_COLORS[d] }} />
-            {DRIVER_LABEL[d]}
-          </span>
-        ))}
-      </div>
+      <div className="wrap" style={{ paddingTop: 52, paddingBottom: 48 }}>
+
 
       {/* .model-table-wrap keeps the desktop behaviour (overflow visible,
           so the zero-width growth indicators spill into the right padding
@@ -776,6 +765,7 @@ export function GrowthModelClient({ initialRows, initialLabels, initialLastSynce
             })}
           </tbody>
         </table>
+      </div>
       </div>
     </>
   )

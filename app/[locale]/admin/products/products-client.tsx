@@ -1,5 +1,7 @@
 "use client"
 
+import { AdminTabs } from "@/components/admin/admin-tabs"
+
 import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -118,27 +120,22 @@ export function ProductsClient({ initialProducts, brandOptions, categoryOptions 
   }
 
   return (
-    <div style={{ paddingBottom: 80 }}>
-      <div className="flex flex-col gap-1 mb-6">
-        <h3 className="arco-section-title">Products</h3>
-        <p className="text-xs text-[#a1a1a0] mt-0.5">
-          {isFiltered
-            ? `${filtered.length} of ${initialProducts.length} products`
-            : `${initialProducts.length} ${initialProducts.length === 1 ? "product" : "products"}`}
-        </p>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-6">
-        <div className="flex flex-1 items-center">
-          <div className="relative w-full max-w-sm">
+    <>
+      <AdminTabs
+        title="Products"
+        actions={
+          <>
+          <div className="relative shrink-0" style={{ width: 260 }}>
             <input
               type="text"
               placeholder="Search by product, brand, or category…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full px-3 py-2 pr-8 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors placeholder:text-[#a1a1a0]"
+              className="w-full h-9 pl-8 pr-8 text-xs border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors placeholder:text-[#a1a1a0]"
             />
+            <svg className="absolute left-2.5 top-2.5 text-[#a1a1a0]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
             {search && (
               <button
                 type="button"
@@ -150,13 +147,11 @@ export function ProductsClient({ initialProducts, brandOptions, categoryOptions 
               </button>
             )}
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
           <Select value={brandFilter} onValueChange={setBrandFilter}>
-            <SelectTrigger className="w-[160px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
+            <SelectTrigger className="w-[140px] h-9 text-xs shrink-0 border-[#e5e5e4] rounded-[3px]">
               <SelectValue>{brandFilter === "all" ? "All brands" : brandOptions.find((b) => b.id === brandFilter)?.name ?? brandFilter}</SelectValue>
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="z-[120]">
               <SelectItem value="all">All brands</SelectItem>
               {brandOptions.map((b) => (
                 <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
@@ -165,10 +160,10 @@ export function ProductsClient({ initialProducts, brandOptions, categoryOptions 
           </Select>
 
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-[160px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
+            <SelectTrigger className="w-[140px] h-9 text-xs shrink-0 border-[#e5e5e4] rounded-[3px]">
               <SelectValue>{categoryFilter === "all" ? "All categories" : categoryFilter}</SelectValue>
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="z-[120]">
               <SelectItem value="all">All categories</SelectItem>
               {categoryOptions.map((c) => (
                 <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>
@@ -177,10 +172,10 @@ export function ProductsClient({ initialProducts, brandOptions, categoryOptions 
           </Select>
 
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[140px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
+            <SelectTrigger className="w-[140px] h-9 text-xs shrink-0 border-[#e5e5e4] rounded-[3px]">
               <SelectValue>{statusFilter === "all" ? "All statuses" : STATUS_LABEL[statusFilter] ?? statusFilter}</SelectValue>
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="z-[120]">
               <SelectItem value="all">All statuses</SelectItem>
               <SelectItem value="listed">
                 <span className="flex items-center gap-1.5">
@@ -196,8 +191,21 @@ export function ProductsClient({ initialProducts, brandOptions, categoryOptions 
               </SelectItem>
             </SelectContent>
           </Select>
-        </div>
+          </>
+        }
+      />
+
+      <div className="wrap" style={{ paddingTop: 32, paddingBottom: 48 }}>
+
+    <div style={{ paddingBottom: 80 }}>
+      {/* Page meta — count in the discover style */}
+      <div className="discover-results-meta" style={{ marginBottom: 16 }}>
+        <p className="discover-results-count">
+          <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{isFiltered ? filtered.length : initialProducts.length}</strong>
+          {isFiltered ? ` of ${initialProducts.length} products` : ` ${initialProducts.length === 1 ? "product" : "products"}`}
+        </p>
       </div>
+
 
       {/* Selection bar */}
       {someSelected && (
@@ -345,5 +353,8 @@ export function ProductsClient({ initialProducts, brandOptions, categoryOptions 
         </table>
       </div>
     </div>
+
+      </div>
+    </>
   )
 }

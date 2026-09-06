@@ -4,6 +4,7 @@ import { useState, useTransition } from "react"
 import type { GrowthMetrics, Timeframe } from "../actions"
 import { fetchMetricTable, type MetricRow } from "./table-actions"
 import { GrowthSyncBadge } from "@/components/admin/growth-sync-badge"
+import { AdminTabs } from "@/components/admin/admin-tabs"
 
 const TIMEFRAMES: { value: Timeframe; label: string }[] = [
   { value: "days", label: "Days" },
@@ -165,19 +166,12 @@ export function GrowthTableClient({ initialMetrics, initialLastSynced = null }: 
 
   return (
     <>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h3 className="arco-section-title">Growth — Table View</h3>
-          <p className="text-xs text-[#a1a1a0] mt-0.5">
-            All lifecycle metrics over time · {" "}
-            <a href="/admin/dashboard" className="text-[#6b6b68] hover:text-[#1c1c1a] underline transition-colors">Lifecycle view</a>
-            {" · "}
-            <a href="/admin/model" className="text-[#6b6b68] hover:text-[#1c1c1a] underline transition-colors">Model</a>
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <GrowthSyncBadge initialLastSynced={initialLastSynced} />
-          <div className="flex items-center gap-1 border border-[#e5e5e4] rounded-[3px] overflow-hidden">
+      <AdminTabs
+        title="Growth table"
+        actions={
+          <>
+            <GrowthSyncBadge initialLastSynced={initialLastSynced} />
+            <div className="flex items-center gap-1 border border-[#e5e5e4] rounded-[3px] overflow-hidden">
           {TIMEFRAMES.map((tf) => (
             <button
               key={tf.value}
@@ -190,7 +184,20 @@ export function GrowthTableClient({ initialMetrics, initialLastSynced = null }: 
             </button>
           ))}
           </div>
-        </div>
+          </>
+        }
+      />
+
+      <div className="wrap" style={{ paddingTop: 32, paddingBottom: 48 }}>
+
+      {/* Page meta — the title lives in the sticky bar */}
+      <div className="mb-6">
+        <p className="text-xs text-[#a1a1a0]">
+          All lifecycle metrics over time · {" "}
+          <a href="/admin/dashboard?tab=lifecycle" className="text-[#016D75] hover:underline">Lifecycle view</a>
+          {" · "}
+          <a href="/admin/model" className="text-[#016D75] hover:underline">Model</a>
+        </p>
       </div>
 
       <div className="arco-table-wrap rounded-[3px]">
@@ -233,6 +240,7 @@ export function GrowthTableClient({ initialMetrics, initialLastSynced = null }: 
             ))}
           </tbody>
         </table>
+      </div>
       </div>
     </>
   )
