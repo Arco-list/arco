@@ -824,11 +824,18 @@ export default function DashboardListingsPage() {
   const handleCardClick = (project: ListingProject) => {
     if (project.role === "owner") {
       router.push(`/dashboard/edit/${project.id}`)
-    } else {
+    } else if (project.status === "invited") {
+      // Pre-accept the card's advertised action is Accept; a click on
+      // the text still opens the project for context.
       const url = getProjectUrl(project)
       if (url) {
         window.open(url, "_blank", "noopener,noreferrer")
       }
+    } else {
+      // Accepted contributors: the cover choice is the one thing on
+      // this card that is theirs to manage — viewing stays in the
+      // dropdown.
+      handleEditCoverImage(project)
     }
   }
 
@@ -1334,7 +1341,7 @@ export default function DashboardListingsPage() {
                           </button>
                         )}
 
-                        {/* Hover action pill — Edit project (owner) / View project (contributor) */}
+                        {/* Hover action pill — Edit project (owner) / Update cover (contributor) */}
                         {!(project.role === "contributor" && project.status === "invited") && (
                           <div
                             style={{
@@ -1357,7 +1364,7 @@ export default function DashboardListingsPage() {
                               }}
                               className="listing-card-hover-pill"
                             >
-                              {project.role === "owner" ? t("edit_project") : t("view_project")}
+                              {project.role === "owner" ? t("edit_project") : t("update_cover")}
                             </span>
                           </div>
                         )}

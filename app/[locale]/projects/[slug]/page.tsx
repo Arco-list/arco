@@ -270,7 +270,15 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     isAdmin = profile?.user_types?.includes("admin") || false
   }
 
-  const canPreview = previewRequested && (isOwner || isAdmin)
+  // For an unpublished row, visibility IS the authorisation: this page
+  // reads through the session-scoped client, and RLS only returns an
+  // unpublished project to its client, an admin, or a team editor of
+  // the owning company — exactly the set allowed to preview. The
+  // client_id check alone rejected team members and company owners the
+  // permissions model already trusts to edit the project. Published
+  // pages keep the stricter rule: their preview mode also shows
+  // pending credits, which is not for arbitrary visitors.
+  const canPreview = previewRequested && (isOwner || isAdmin || !isPublished)
   if (!isPublished && !canPreview) {
     notFound()
   }

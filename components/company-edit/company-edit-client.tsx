@@ -508,13 +508,30 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     }
   }, [selectedCardProject, selectedCoverPhoto, router])
 
+  // A draft or in-review project 404s on its public URL; the preview
+  // param routes whoever may see it (client, admin, team editor) past
+  // that gate. Same rule as the Listings page and the edit sub-nav.
+  const projectViewUrl = useCallback((project: CompanyProject) => {
+    if (!project.slug) return null
+    const needsPreview = project.rawProjectStatus === "draft" || project.rawProjectStatus === "in_progress"
+    return `/projects/${project.slug}${needsPreview ? "?preview=1" : ""}`
+  }, [])
+
   const handleProjectCardClick = useCallback((project: CompanyProject) => {
     if (project.isOwner) {
       router.push(`/dashboard/edit/${project.id}`)
-    } else if (project.slug) {
-      window.open(`/projects/${project.slug}`, "_blank", "noopener,noreferrer")
+    } else if (project.projectProfessionalStatus === "invited") {
+      // Pre-accept the card's advertised action is Accept; a click on
+      // the text still opens the project for context.
+      const url = projectViewUrl(project)
+      if (url) window.open(url, "_blank", "noopener,noreferrer")
+    } else {
+      // Accepted contributors: the cover choice is the one thing on
+      // this card that is theirs to manage — viewing stays in the
+      // dropdown.
+      handleProjectChangeCover(project)
     }
-  }, [router])
+  }, [router, handleProjectChangeCover, projectViewUrl])
 
   // ── Transitions ──
   const [, startTransition] = useTransition()
@@ -1839,7 +1856,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                               opacity: 0, transition: "opacity .2s",
                             }}
                           >
-                            {project.isOwner ? t("edit_project") : t("view_project")}
+                            {project.isOwner ? t("edit_project") : t("update_cover")}
                           </span>
                         </div>
                       )}
@@ -1905,7 +1922,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                           <span className="filter-dropdown-label">{t("change_cover")}</span>
                         </div>
                         {project.slug && (
-                          <div className="filter-dropdown-option" onClick={() => { setProjectDropdown(null); window.open(`/projects/${project.slug}`, "_blank", "noopener,noreferrer") }} role="menuitem">
+                          <div className="filter-dropdown-option" onClick={() => { setProjectDropdown(null); const url = projectViewUrl(project); if (url) window.open(url, "_blank", "noopener,noreferrer") }} role="menuitem">
                             <span className="filter-dropdown-label">{t("view_project")}</span>
                           </div>
                         )}
