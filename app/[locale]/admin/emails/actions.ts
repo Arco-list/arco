@@ -488,6 +488,7 @@ export type TemplateStats = {
   opened: number
   clicked: number
   bounced: number
+  unsubscribed: number
 }
 
 export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: Record<string, TemplateStats>; error?: string }> {
@@ -524,6 +525,29 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
       const rows = (page ?? []) as any[]
       events.push(...rows)
       if (rows.length < 1000) break
+    }
+
+    // Unsubscribes live OUTSIDE the provider='resend' filter above: our
+    // own unsubscribe endpoint logs them with provider='arco' (we own
+    // the action, not Resend). Attributed to a template through the
+    // message they came in on (metadata.resend_message_id); an unsub
+    // without that pointer can't be bucketed and is skipped. Not ranked
+    // into the state machine — someone can open, click AND unsubscribe,
+    // and folding it in would eat the engagement counts.
+    const unsubMsgIds = new Set<string>()
+    {
+      let query = supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .from("email_events" as any)
+        .select("metadata")
+        .eq("event_type", "unsubscribed")
+      if (sinceDate) query = query.gte("occurred_at", sinceDate)
+      const { data: unsubRows } = await query
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const row of (unsubRows ?? []) as any[]) {
+        const msgId = row.metadata?.resend_message_id as string | undefined
+        if (msgId) unsubMsgIds.add(msgId)
+      }
     }
 
     // Group by Resend message id, find highest-state event per message.
@@ -585,7 +609,7 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
     }
 
     const stats: Record<string, TemplateStats> = {}
-    for (const m of byMsg.values()) {
+    for (const [msgId, m] of byMsg.entries()) {
       // Our own test traffic isn't reach. See isInternalRecipient.
       if (isInternalRecipient(m.recipient)) continue
       // Backfilled rows from Resend's list endpoint don't have a template
@@ -596,7 +620,7 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
         : resolveTemplate(m.subject ?? "", null)?.id ?? null
       if (!templateId) continue
       if (!stats[templateId]) {
-        stats[templateId] = { sends: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0 }
+        stats[templateId] = { sends: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0, unsubscribed: 0 }
       }
       stats[templateId].sends++
       if (m.state === "delivered" || m.state === "opened" || m.state === "clicked") {
@@ -605,6 +629,7 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
       if (m.state === "opened" || m.state === "clicked") stats[templateId].opened++
       if (m.state === "clicked") stats[templateId].clicked++
       if (m.state === "bounced") stats[templateId].bounced++
+      if (unsubMsgIds.has(msgId)) stats[templateId].unsubscribed++
     }
 
     // Persist to cache so next page load is instant.
@@ -626,7 +651,7 @@ export async function fetchCachedStats(): Promise<{ stats: Record<string, Templa
     const supabase = createServiceRoleSupabaseClient()
     const { data, error } = await supabase
       .from('email_stats_cache' as any)
-      .select('template_id, sends, delivered, opened, clicked, bounced, cached_at')
+      .select('template_id, sends, delivered, opened, clicked, bounced, unsubscribed, cached_at')
 
     if (error || !data) return { stats: {}, cachedAt: null }
 
@@ -640,6 +665,7 @@ export async function fetchCachedStats(): Promise<{ stats: Record<string, Templa
         opened: row.opened,
         clicked: row.clicked,
         bounced: row.bounced,
+        unsubscribed: row.unsubscribed ?? 0,
       }
       if (!latestCachedAt || row.cached_at > latestCachedAt) {
         latestCachedAt = row.cached_at
@@ -668,6 +694,7 @@ async function persistStatsCache(stats: Record<string, TemplateStats>): Promise<
       opened: s.opened,
       clicked: s.clicked,
       bounced: s.bounced,
+      unsubscribed: s.unsubscribed,
       cached_at: now,
     }))
 
@@ -784,4 +811,37 @@ export async function sendTestEmail(template: string, toEmail: string): Promise<
 
   const result = await sendTransactionalEmail(toEmail, template as any, testVars)
   return { success: result.success, error: result.message }
+}
+
+export type ProspectFunnelCounts = {
+  contacted: number
+  visitor: number
+  verified: number
+  owned: number
+  active: number
+}
+
+/**
+ * Stage inventory for the Funnel tab: how many prospects sit in each
+ * stage RIGHT NOW. In-stage counts (not cohorts) — the tab pairs each
+ * stage's current inventory with the mails that work on it; the rail's
+ * conversion rates are cohorted client-side the same way the Sales
+ * funnel does it. 'prospect' (never contacted) and 'removed' are not
+ * mail stages and stay out.
+ */
+export async function fetchProspectFunnelCounts(): Promise<{ counts: ProspectFunnelCounts; error?: string }> {
+  const empty: ProspectFunnelCounts = { contacted: 0, visitor: 0, verified: 0, owned: 0, active: 0 }
+  try {
+    const supabase = createServiceRoleSupabaseClient()
+    const { data, error } = await supabase.from('prospects').select('status')
+    if (error) return { counts: empty, error: error.message }
+    const counts = { ...empty }
+    for (const row of (data ?? []) as Array<{ status: string | null }>) {
+      const s = row.status as keyof ProspectFunnelCounts | null
+      if (s && s in counts) counts[s] += 1
+    }
+    return { counts }
+  } catch (e) {
+    return { counts: empty, error: e instanceof Error ? e.message : 'Failed to load funnel counts' }
+  }
 }

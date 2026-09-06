@@ -1,9 +1,10 @@
 "use client"
 
-import { Fragment, useEffect, useState, useTransition } from "react"
+import { Fragment, Suspense, useEffect, useState, useTransition } from "react"
 import { toast } from "sonner"
-import { fetchRecentEmails, fetchTemplateStats, fetchCachedStats, sendTestEmail, type ResendEmail, type TemplateStats } from "./actions"
+import { fetchRecentEmails, fetchTemplateStats, fetchCachedStats, fetchProspectFunnelCounts, sendTestEmail, type ProspectFunnelCounts, type ResendEmail, type TemplateStats } from "./actions"
 import { useAuth } from "@/contexts/auth-context"
+import { AdminTabs, useAdminTab } from "@/components/admin/admin-tabs"
 import { clickedRateColor, deliveredRateColor, openedRateColor } from "@/lib/email-rate-colors"
 import {
   Select,
@@ -78,15 +79,152 @@ const INITIAL_TEMPLATES: EmailTemplate[] = [
   { id: "outreach-final", name: "Outreach Final", type: "marketing", audience: "professional", description: "Last reminder before Outreach sequence ends", trigger: "Drip queue · 10 days after intro", subject: "Maak [Company] aan op Arco", sends: 0, deliveryRate: 100, active: true, drip: "outreach", dripDay: 10, from: SENDERS.niek },
 ]
 
-type TabKey = "transactional" | "marketing" | "sent"
+const TAB_KEYS = ["funnel", "transactional", "marketing", "sent"] as const
+type TabKey = (typeof TAB_KEYS)[number]
 // All templates are now previewable
 
-export default function AdminEmailsPage() {
+// ——— Funnel tab configuration ————————————————————————————————————
+// The lifecycle view: each prospect-funnel stage owns the mails that
+// work on it. Three row kinds per lane:
+//   - transactional markers: they own the transition moment (day 0 is
+//     theirs — funnel mails schedule after them), locked, no toggle;
+//   - live sequences: the existing drip templates, channel-chipped;
+//   - ghost rows: planned but unbuilt, so the tab doubles as roadmap.
+type LaneGhost = { name: string; timing: string; condition?: string; audience?: string }
+type FunnelLane = {
+  key: keyof ProspectFunnelCounts
+  label: string
+  dot: string
+  driver: "prospect" | "acquisition" | "retention"
+  meaning: string
+  stop: string
+  transactional: Array<{ templateId: string; note: string }>
+  sequences: Array<{ channel: string; templateIds: string[] }>
+  ghosts: LaneGhost[]
+}
+
+const FUNNEL_LANES: FunnelLane[] = [
+  {
+    key: "contacted",
+    label: "Contacted",
+    dot: "#f59e0b",
+    driver: "prospect",
+    meaning: "Intro ontvangen — max 3 mails per kanaal",
+    stop: "Stopt bij: promotie, reply, bounce, complaint, unsubscribe",
+    transactional: [],
+    sequences: [
+      { channel: "Invite", templateIds: ["new-professional-invite", "new-professional-followup", "new-professional-final"] },
+      { channel: "Showcase", templateIds: ["prospect-intro", "prospect-followup", "prospect-final"] },
+      { channel: "Outreach", templateIds: ["outreach-intro", "outreach-followup", "outreach-final"] },
+    ],
+    ghosts: [],
+  },
+  {
+    key: "visitor",
+    label: "Visitor",
+    dot: "#2563eb",
+    driver: "acquisition",
+    meaning: "Funnel geopend, niet geclaimd",
+    stop: "Stopt bij: promotie naar Verified",
+    transactional: [],
+    sequences: [],
+    ghosts: [
+      { name: "Visitor-nudge", timing: "+3 dagen na bezoek", condition: "Copy als gewone follow-up — de Visitor-stempel kan ook een mailscanner zijn", audience: "All" },
+    ],
+  },
+  {
+    key: "verified",
+    label: "Verified",
+    dot: "#2563eb",
+    driver: "acquisition",
+    meaning: "Stap 1 bevestigd — nog geen account",
+    stop: "Stopt bij: promotie naar Owned",
+    transactional: [
+      { templateId: "domain-verification", note: "Zit ín stap 1 (platformkanaal) — code vóórdat het bedrijf bevestigd wordt" },
+    ],
+    sequences: [],
+    ghosts: [
+      { name: "Verified-reminder", timing: "+1 dag", condition: "Winkelwagen-verlating: token nog 14 dagen geldig, funnel onthoudt de stap", audience: "All" },
+    ],
+  },
+  {
+    key: "owned",
+    label: "Owned",
+    dot: "#2563eb",
+    driver: "acquisition",
+    meaning: "Account gekoppeld — pagina nog niet live",
+    stop: "Stopt bij: promotie naar Listed",
+    transactional: [
+      { templateId: "magic-link", note: "Alleen bij een afwijkend e-mailadres in stap 2" },
+    ],
+    sequences: [],
+    ghosts: [
+      { name: "Publiceer je eerste project", timing: "+2 dagen", audience: "Publisher" },
+      { name: "Zo kom je op projecten te staan", timing: "+2 dagen", audience: "Contributor" },
+    ],
+  },
+  {
+    key: "active",
+    label: "Listed",
+    dot: "#7c3aed",
+    driver: "retention",
+    meaning: "Live met project of credit",
+    stop: "Einde ladder — daarna alleen transactioneel",
+    transactional: [
+      { templateId: "project-live", note: "Bezit het moment — krijgt het 'voeg professionals toe'-blok" },
+    ],
+    sequences: [],
+    ghosts: [
+      { name: "Credit je team", timing: "+7 dagen", condition: "Alleen als het project dan nog < 3 credits heeft", audience: "Publisher" },
+      { name: "Nodig je opdrachtgevers uit", timing: "+7 dagen", audience: "Contributor" },
+    ],
+  },
+]
+
+// useAdminTab reads useSearchParams, which requires a Suspense boundary
+// above it for prerender — hence the thin default-export wrapper.
+export default function AdminEmailsPageWrapper() {
+  return (
+    <Suspense fallback={null}>
+      <AdminEmailsPage />
+    </Suspense>
+  )
+}
+
+function AdminEmailsPage() {
   const { user } = useAuth()
   const [emails, setEmails] = useState<ResendEmail[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<TabKey>("transactional")
+  // Tab lives in the URL (?tab=…) so refresh, back and shared links keep
+  // the view; "funnel" is the clean-URL default.
+  const activeTab = useAdminTab(TAB_KEYS, "funnel")
+  const [funnelCounts, setFunnelCounts] = useState<ProspectFunnelCounts | null>(null)
+  const [collapsedLanes, setCollapsedLanes] = useState<Set<string>>(new Set())
+  const [showStageGuide, setShowStageGuide] = useState(false)
+
+  const toggleLane = (key: string) => {
+    setCollapsedLanes((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  // Sends across everything a lane owns (transactional markers included),
+  // within the active time window. The rail shows MAIL activity per stage
+  // — prospect inventory already lives on the Sales page — so a lane
+  // without mails reads as "0 verstuurd": the coverage gap is the story.
+  const laneSends = (lane: FunnelLane) =>
+    [...lane.transactional.map((x) => x.templateId), ...lane.sequences.flatMap((s) => s.templateIds)]
+      .reduce((n, id) => n + (templateStats[id]?.sends ?? 0), 0)
+
+  useEffect(() => {
+    fetchProspectFunnelCounts().then(({ counts, error }) => {
+      if (!error) setFunnelCounts(counts)
+    })
+  }, [])
   const [templates, setTemplates] = useState(INITIAL_TEMPLATES)
   const [templateStats, setTemplateStats] = useState<Record<string, TemplateStats>>({})
   const [previewTemplate, setPreviewTemplate] = useState<string | null>(null)
@@ -152,10 +290,6 @@ export default function AdminEmailsPage() {
     })
   }, [timeFilter])
 
-  const handleTabChange = (tab: TabKey) => {
-    setActiveTab(tab)
-  }
-
   const handleSendTest = (templateId: string, e: React.MouseEvent) => {
     e.stopPropagation()
     if (!user?.email) { toast.error("No email address found"); return }
@@ -216,82 +350,33 @@ export default function AdminEmailsPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="discover-page-title">
-        <div className="wrap">
 
-          {/* Header */}
-          <div className="flex flex-col gap-1 mb-6">
-            <h3 className="arco-section-title">Emails</h3>
-            <p className="text-xs text-[#a1a1a0] mt-0.5">
-              {activeTab === "sent"
-                ? `${emails.length} emails`
-                : `${totalCount} total \u00b7 ${activeCount} active`}
-            </p>
-          </div>
-
-          {/* Tabs — underline style like categories */}
-          <div className="flex gap-0 border-b border-[#e5e5e4]">
-            <button
-              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                activeTab === "transactional"
-                  ? "border-[#1c1c1a] text-[#1c1c1a]"
-                  : "border-transparent text-[#a1a1a0] hover:text-[#6b6b68]"
-              }`}
-              onClick={() => handleTabChange("transactional")}
-            >
-              Transactional
-            </button>
-            <button
-              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                activeTab === "marketing"
-                  ? "border-[#1c1c1a] text-[#1c1c1a]"
-                  : "border-transparent text-[#a1a1a0] hover:text-[#6b6b68]"
-              }`}
-              onClick={() => handleTabChange("marketing")}
-            >
-              Marketing
-            </button>
-            <button
-              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                activeTab === "sent"
-                  ? "border-[#1c1c1a] text-[#1c1c1a]"
-                  : "border-transparent text-[#a1a1a0] hover:text-[#6b6b68]"
-              }`}
-              onClick={() => handleTabChange("sent")}
-            >
-              Sent
-            </button>
-          </div>
-
-          {/* Transactional / Marketing table */}
-          {(activeTab === "transactional" || activeTab === "marketing") && (
+      {/* Tabs — URL-backed second nav in a sticky bar (project sub-nav
+          pattern); the page-level filters ride in the actions slot so
+          they stay reachable while the bar is pinned. */}
+      <AdminTabs
+        title="Emails"
+        tabs={[
+          { key: "funnel", label: "Funnel" },
+          { key: "transactional", label: "Transactional" },
+          { key: "marketing", label: "Marketing" },
+          { key: "sent", label: "Sent" },
+        ]}
+        active={activeTab}
+        actions={
+          activeTab !== "sent" ? (
             <>
-            {/* Filters — same layout as categories page */}
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mt-4 mb-4">
-              <div className="flex flex-1 items-center" />
-              <div className="flex flex-wrap items-center gap-2">
-                <Select
-                  value={timeFilter}
-                  onValueChange={setTimeFilter}
-                >
-                  <SelectTrigger className="w-[140px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
-                    <SelectValue placeholder="All time" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All time</SelectItem>
-                    <SelectItem value="7d">Last 7 days</SelectItem>
-                    <SelectItem value="30d">Last 30 days</SelectItem>
-                    <SelectItem value="90d">Last 90 days</SelectItem>
-                  </SelectContent>
-                </Select>
+              {(activeTab === "transactional" || activeTab === "marketing") && (
                 <Select
                   value={audienceFilter}
                   onValueChange={(value) => setAudienceFilter(value as UserAudience | "all-filter")}
                 >
-                  <SelectTrigger className="w-[180px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
+                  <SelectTrigger className="w-[170px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
                     <SelectValue placeholder="All audiences" />
                   </SelectTrigger>
-                  <SelectContent>
+                  {/* Above the sticky bar's z-100, or the menu's top edge
+                      slides underneath it and looks detached. */}
+                  <SelectContent className="z-[120]">
                     <SelectItem value="all-filter">All audiences</SelectItem>
                     <SelectItem value="all">All users</SelectItem>
                     <SelectItem value="professional">Professional</SelectItem>
@@ -299,8 +384,288 @@ export default function AdminEmailsPage() {
                     <SelectItem value="admin">Admin</SelectItem>
                   </SelectContent>
                 </Select>
+              )}
+              <Select value={timeFilter} onValueChange={setTimeFilter}>
+                <SelectTrigger className="w-[140px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
+                  <SelectValue placeholder="All time" />
+                </SelectTrigger>
+                <SelectContent className="z-[120]">
+                  <SelectItem value="all">All time</SelectItem>
+                  <SelectItem value="7d">Last 7 days</SelectItem>
+                  <SelectItem value="30d">Last 30 days</SelectItem>
+                  <SelectItem value="90d">Last 90 days</SelectItem>
+                </SelectContent>
+              </Select>
+            </>
+          ) : undefined
+        }
+      />
+
+      <div className="wrap" style={{ paddingTop: 32, paddingBottom: 48 }}>
+
+        {/* Page meta — the title lives in the sticky bar */}
+        <div className="flex flex-col gap-1 mb-6">
+          <p className="text-xs text-[#a1a1a0]">
+            {activeTab === "sent"
+              ? `${emails.length} emails`
+              : activeTab === "funnel"
+              ? (
+                <>
+                  {FUNNEL_LANES.reduce((n, l) => n + laneSends(l), 0).toLocaleString()} verstuurd
+                  {" · "}
+                  <button type="button" className="text-[#016D75] hover:underline cursor-pointer" onClick={() => setShowStageGuide(true)}>
+                    Status guide
+                  </button>
+                </>
+              )
+              : `${totalCount} total · ${activeCount} active`}
+          </p>
+        </div>
+
+          {/* Funnel — stage rail + swimlanes */}
+          {activeTab === "funnel" && (() => {
+            const byId = new Map(templates.map(t => [t.id, t]))
+            const stageKeys = FUNNEL_LANES.map(l => l.key)
+            // Cohort math mirrors the Sales funnel: "reached this stage
+            // or beyond", so the connector rates survive people moving
+            // through quickly.
+            const cohorted = stageKeys.map((_, i) =>
+              stageKeys.slice(i).reduce((sum, k) => sum + (funnelCounts?.[k] ?? 0), 0)
+            )
+            const statCells = (id: string) => {
+              const s = templateStats[id]
+              const sends = s?.sends ?? 0
+              const deliveryRate = sends > 0 ? Math.round((s.delivered / sends) * 100) : 0
+              const openRate = sends > 0 ? Math.round((s.opened / sends) * 100) : 0
+              const clickRate = sends > 0 ? Math.round((s.clicked / sends) * 100) : 0
+              const unsubs = s?.unsubscribed ?? 0
+              return (
+                <>
+                  <td style={{ textAlign: "right" }} className="text-xs text-[#6b6b68] font-medium">{sends > 0 ? sends.toLocaleString() : "—"}</td>
+                  <td style={{ textAlign: "right" }} className="text-xs font-medium"><span className={deliveredRateColor(deliveryRate, sends)}>{sends > 0 ? `${deliveryRate}%` : "—"}</span></td>
+                  <td style={{ textAlign: "right" }} className="text-xs font-medium"><span className={openedRateColor(openRate, sends)}>{sends > 0 ? `${openRate}%` : "—"}</span></td>
+                  <td style={{ textAlign: "right" }} className="text-xs font-medium"><span className={clickedRateColor(clickRate, sends)}>{sends > 0 ? `${clickRate}%` : "—"}</span></td>
+                  {/* One decimal below 1% — 1 unsub of 300 would otherwise
+                      round to 0% and vanish, and that one is the signal. */}
+                  <td style={{ textAlign: "right" }} className={`text-xs font-medium ${unsubs > 0 ? "text-red-600" : "text-[#c4c4c2]"}`}>
+                    {sends > 0
+                      ? `${(unsubs / sends) * 100 < 1 && unsubs > 0 ? (((unsubs / sends) * 100).toFixed(1)) : Math.round((unsubs / sends) * 100)}%`
+                      : "—"}
+                  </td>
+                </>
+              )
+            }
+            return (
+              <div className="mt-6">
+                {/* Rail — colors and driver eyebrows mirror the Sales funnel */}
+                <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:overflow-visible md:px-0">
+                  <div style={{ display: "grid", gridTemplateColumns: FUNNEL_LANES.map((_, i) => i === 0 ? "auto" : "1fr auto").join(" "), gap: 0, alignItems: "start" }}>
+                    {FUNNEL_LANES.map((lane, i) => {
+                      const sends = laneSends(lane)
+                      const rate = i > 0 && cohorted[i - 1] > 0 ? `${Math.round((cohorted[i] / cohorted[i - 1]) * 100)}%` : ""
+                      const DRIVER_COLORS: Record<string, string> = { prospect: "#f59e0b", acquisition: "#2563eb", retention: "#7c3aed" }
+                      const isDriverStart = i === 0 || FUNNEL_LANES[i - 1].driver !== lane.driver
+                      return (
+                        <Fragment key={lane.key}>
+                          {i > 0 && (
+                            <div className="relative px-1 self-center" style={{ minWidth: 32 }}>
+                              <div className="w-full border-t border-[#d4d4d3]" />
+                              {rate && (
+                                <span className="absolute text-[10px] font-medium text-[#6b6b68]" style={{ top: -16, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap" }}>{rate}</span>
+                              )}
+                            </div>
+                          )}
+                          <div className="flex flex-col">
+                          {isDriverStart ? (
+                            <p className="arco-eyebrow mb-2" style={{ color: DRIVER_COLORS[lane.driver] }}>{lane.driver.charAt(0).toUpperCase() + lane.driver.slice(1)}</p>
+                          ) : (
+                            <div style={{ height: 24 }} />
+                          )}
+                          <button
+                            onClick={() => {
+                              // A collapsed lane unfolds before the rail scrolls to it.
+                              setCollapsedLanes((prev) => {
+                                if (!prev.has(lane.key)) return prev
+                                const next = new Set(prev)
+                                next.delete(lane.key)
+                                return next
+                              })
+                              requestAnimationFrame(() => {
+                                document.getElementById(`funnel-lane-${lane.key}`)?.scrollIntoView({ behavior: "smooth", block: "start" })
+                              })
+                            }}
+                            className="rounded-[3px] border border-[#e5e5e4] bg-white px-3 py-3 text-left transition-colors hover:border-[#c4c4c2]"
+                            style={{ width: 132 }}
+                          >
+                            <div className="flex items-center gap-[6px] mb-1.5">
+                              <span className="status-pill-dot shrink-0" style={{ background: lane.dot }} />
+                              <span style={{ fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 400, color: "var(--text-primary)" }}>{lane.label}</span>
+                            </div>
+                            <p className="arco-card-title text-left">{statsLoaded ? sends.toLocaleString() : "…"}</p>
+                            <p className="text-[10px] text-[#a1a1a0] text-left" style={{ marginTop: 2 }}>verstuurd</p>
+                          </button>
+                          </div>
+                        </Fragment>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Swimlanes */}
+                {FUNNEL_LANES.map((lane) => {
+                  const isCollapsed = collapsedLanes.has(lane.key)
+                  const mailCount = lane.transactional.length + lane.sequences.reduce((n, s) => n + s.templateIds.length, 0)
+                  return (
+                  <div key={lane.key} id={`funnel-lane-${lane.key}`} className="mt-10" style={{ scrollMarginTop: 140 }}>
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleLane(lane.key)}
+                        className="flex items-center gap-2 min-w-0"
+                        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
+                      >
+                        <svg width="10" height="10" viewBox="0 0 10 10" className={`shrink-0 transition-transform ${isCollapsed ? "" : "rotate-90"}`}>
+                          <path d="M3 2L7 5L3 8" stroke="#a1a1a0" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+                        </svg>
+                        <span className="status-pill-dot shrink-0" style={{ background: lane.dot }} />
+                        <span className="text-sm font-medium text-[#1c1c1a]">{lane.label}</span>
+                        <span className="text-xs text-[#a1a1a0]">{laneSends(lane).toLocaleString()} verstuurd</span>
+                        {isCollapsed && (
+                          <span className="text-xs text-[#a1a1a0] shrink-0">
+                            · {mailCount} mails{lane.ghosts.length > 0 ? ` · ${lane.ghosts.length} nog te bouwen` : ""}
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                    {!isCollapsed && (
+                    <div className="arco-table-wrap" style={{ maxWidth: "100%", marginTop: 10 }}>
+                      {/* table-layout: fixed + one shared colgroup — every
+                          lane is its own <table>, and auto layout would size
+                          columns per lane's content, so Audience/Subject
+                          would sit at a different x in each lane. Fixed
+                          geometry lines all five lanes up. */}
+                      <table className="arco-table" style={{ minWidth: 850, width: "100%", tableLayout: "fixed" }}>
+                        <colgroup>
+                          <col />
+                          <col style={{ width: 110 }} />
+                          <col style={{ width: 270 }} />
+                          <col style={{ width: 80 }} />
+                          <col style={{ width: 90 }} />
+                          <col style={{ width: 80 }} />
+                          <col style={{ width: 80 }} />
+                          <col style={{ width: 80 }} />
+                          <col style={{ width: 70 }} />
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <th>Email</th>
+                            <th>Audience</th>
+                            <th>Subject</th>
+                            <th style={{ textAlign: "right" }}>Sends</th>
+                            <th style={{ textAlign: "right" }}>Delivered</th>
+                            <th style={{ textAlign: "right" }}>Opened</th>
+                            <th style={{ textAlign: "right" }}>Clicked</th>
+                            <th style={{ textAlign: "right" }}>Unsubs</th>
+                            <th style={{ textAlign: "center" }}>Active</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {lane.transactional.map(({ templateId, note }) => {
+                            const t = byId.get(templateId)
+                            if (!t) return null
+                            return (
+                              <tr key={templateId} style={{ cursor: "pointer" }} onClick={() => setPreviewTemplate(templateId)}>
+                                <td>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="arco-table-primary">{t.name}</span>
+                                      <span className="status-pill">Transactioneel</span>
+                                    </div>
+                                    <div className="arco-table-secondary" style={{ marginTop: 2 }}>{note}</div>
+                                  </div>
+                                </td>
+                                <td className="text-xs text-[#c4c4c2]">—</td>
+                                <td style={{ maxWidth: 250 }} className="text-xs text-[#6b6b68] truncate">{t.subject}</td>
+                                {statCells(templateId)}
+                                {/* Transactional stays locked: a receipt-class mail
+                                    can't be switched off from the funnel view. */}
+                                <td style={{ textAlign: "center" }} className="text-xs text-[#c4c4c2]">—</td>
+                              </tr>
+                            )
+                          })}
+                          {lane.sequences.map((seq) =>
+                            seq.templateIds.map((id, idx) => {
+                              const t = byId.get(id)
+                              if (!t) return null
+                              return (
+                                <tr key={id} style={{ cursor: "pointer" }} onClick={() => setPreviewTemplate(id)}>
+                                  <td>
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <span className="arco-table-primary">{t.name}</span>
+                                        {t.dripDay !== undefined && (
+                                          <span className="status-pill" style={{ borderColor: "#bfdbfe", color: "#2563eb" }}>Day {t.dripDay}</span>
+                                        )}
+                                      </div>
+                                      <div className="arco-table-secondary" style={{ marginTop: 2 }}>{t.trigger}</div>
+                                    </div>
+                                  </td>
+                                  <td className="text-xs text-[#6b6b68]">{seq.channel}</td>
+                                  <td style={{ maxWidth: 250 }} className="text-xs text-[#6b6b68] truncate">{t.subject}</td>
+                                  {statCells(id)}
+                                  <td style={{ textAlign: "center" }} onClick={e => e.stopPropagation()}>
+                                    <button
+                                      onClick={(e) => toggleActive(id, e)}
+                                      className="relative inline-block"
+                                      style={{ width: 34, height: 18, borderRadius: 9, border: "none", cursor: "pointer", background: t.active ? "#016D75" : "#d4d4d4", transition: "background .2s" }}
+                                    >
+                                      <span style={{
+                                        position: "absolute", top: 2, left: t.active ? 18 : 2,
+                                        width: 14, height: 14, borderRadius: 7, background: "#fff",
+                                        transition: "left .2s", boxShadow: "0 1px 2px rgba(0,0,0,.15)",
+                                      }} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              )
+                            })
+                          )}
+                          {lane.ghosts.map((g) => (
+                            <tr key={g.name} style={{ background: "var(--arco-white)" }}>
+                              <td>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="arco-table-primary" style={{ color: "#a1a1a0" }}>{g.name}</span>
+                                    <span className="status-pill" style={{ borderColor: "#e5e5e4", color: "#a1a1a0" }}>{g.timing}</span>
+                                    <span className="status-pill" style={{ borderStyle: "dashed", color: "#a1a1a0" }}>Nog te bouwen</span>
+                                  </div>
+                                  {g.condition && <div className="arco-table-secondary" style={{ marginTop: 2 }}>{g.condition}</div>}
+                                </div>
+                              </td>
+                              <td className="text-xs text-[#a1a1a0]">{g.audience ?? "—"}</td>
+                              <td className="text-xs text-[#c4c4c2]">—</td>
+                              <td style={{ textAlign: "right" }} className="text-xs text-[#c4c4c2]">—</td>
+                              <td style={{ textAlign: "right" }} className="text-xs text-[#c4c4c2]">—</td>
+                              <td style={{ textAlign: "right" }} className="text-xs text-[#c4c4c2]">—</td>
+                              <td style={{ textAlign: "right" }} className="text-xs text-[#c4c4c2]">—</td>
+                              <td style={{ textAlign: "right" }} className="text-xs text-[#c4c4c2]">—</td>
+                              <td style={{ textAlign: "center" }} className="text-xs text-[#c4c4c2]">—</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    )}
+                  </div>
+                  )
+                })}
               </div>
-            </div>
+            )
+          })()}
+
+          {/* Transactional / Marketing table */}
+          {(activeTab === "transactional" || activeTab === "marketing") && (
+            <>
             <div className="arco-table-wrap" style={{ maxWidth: "100%", marginTop: 16 }}>
               <table className="arco-table" style={{ minWidth: 600 }}>
                 <thead>
@@ -573,6 +938,48 @@ export default function AdminEmailsPage() {
             </div>
           )}
 
+          {/* Stage guide popup — same pattern as the Companies/Sales status guides */}
+          {showStageGuide && (
+            <div className="popup-overlay" onClick={() => setShowStageGuide(false)}>
+              <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560, maxHeight: "85vh", overflowY: "auto" }}>
+                <div className="popup-header">
+                  <h3 className="arco-section-title">Funnel stages</h3>
+                  <button type="button" className="popup-close" onClick={() => setShowStageGuide(false)} aria-label="Close">✕</button>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  {FUNNEL_LANES.map((lane) => (
+                    <div key={lane.key} style={{ display: "flex", gap: 12 }}>
+                      <span className="shrink-0" style={{ width: 8, height: 8, borderRadius: "50%", marginTop: 5, background: lane.dot }} />
+                      <div>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: "#1c1c1a" }}>{lane.label}</p>
+                        <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b6b68", lineHeight: 1.4 }}>{lane.meaning}</p>
+                        <p style={{ margin: "4px 0 0", fontSize: 11, color: "#a1a1a0", lineHeight: 1.3 }}>{lane.stop}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ marginTop: 20, padding: "12px 16px", background: "#f5f5f4", borderRadius: 4, fontSize: 11, color: "#6b6b68", lineHeight: 1.5 }}>
+                  <strong>Flow:</strong> Contacted → Visitor → Verified → Owned → Listed — elke stage bezit de mails die eraan werken.
+                  <br />
+                  <strong>Transactioneel bezit dag 0:</strong> bij een stage-overgang verstuurt alleen de transactionele bevestiging; funnel-mails plannen op +N dagen en zijn conditioneel (ze slaan over wie de actie al deed).
+                  <br />
+                  <strong>Stop-bij-promotie:</strong> elke stage-overgang stopt de sequence van de vorige stage, gecheckt op verzendmoment.
+                </div>
+
+                <div className="flex justify-end mt-6">
+                  <button
+                    onClick={() => setShowStageGuide(false)}
+                    className="h-9 px-4 text-xs font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Preview popup */}
           {previewTemplate && (
             <div className="popup-overlay" onClick={() => setPreviewTemplate(null)}>
@@ -643,7 +1050,6 @@ export default function AdminEmailsPage() {
             </div>
           )}
 
-        </div>
       </div>
     </div>
   )
