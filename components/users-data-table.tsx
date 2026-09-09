@@ -2,7 +2,7 @@
 
 import { AdminTabs } from "@/components/admin/admin-tabs"
 
-import { useCallback, useMemo, useState, useTransition } from "react"
+import { Fragment, useCallback, useMemo, useState, useTransition } from "react"
 import { format, formatDistanceToNow } from "date-fns"
 import {
   ColumnDef,
@@ -25,7 +25,6 @@ import {
   ArrowUpDown,
   Loader2,
   MoreHorizontal,
-  Shield,
 } from "lucide-react"
 import { toast } from "sonner"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -41,18 +40,12 @@ import {
 import { generateCompanyLoginLinkAction } from "@/app/admin/companies/actions"
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { ContactCard } from "@/components/contact-card/contact-card"
@@ -79,7 +72,11 @@ export type AdminUserRow = {
   avatarUrl: string | null
   companies: AdminUserCompany[]
   role: "super_admin" | "admin" | "client"
-  status: "active" | "inactive" | "invited"
+  /** Funnel ladder (started → signup → saved) plus the two off-path
+   *  account states (invited = pending admin invite, inactive = locked
+   *  out). Derived server-side; not directly settable. */
+  status: "started" | "signup" | "saved" | "invited" | "inactive"
+  savedCount: number
   createdAt: string | null
   lastSignInAt: string | null
   invitedAt: string | null
@@ -92,7 +89,6 @@ export type AdminUserRow = {
 
 type AdminUsersTableProps = {
   data: AdminUserRow[]
-  singleActiveSuperAdmin: boolean
 }
 
 function getUserRoleLabel(user: AdminUserRow): string {
@@ -109,16 +105,61 @@ const ROLE_LABELS: Record<AdminUserRow["role"], string> = {
 }
 
 const STATUS_DOT: Record<AdminUserRow["status"], string> = {
-  active: "bg-emerald-500",
+  started: "bg-amber-500",
+  signup: "bg-blue-600",
+  saved: "bg-violet-600",
   invited: "bg-amber-500",
   inactive: "bg-rose-500",
 }
 
 const STATUS_LABEL: Record<AdminUserRow["status"], string> = {
-  active: "Active",
+  started: "Signup Started",
+  signup: "Signup",
+  saved: "Saved",
   invited: "Invited",
-  inactive: "Inactive",
+  // "Deactivated", not "Inactive" — Inactive is an ACTIVITY level
+  // (30–90 days quiet); this is the locked-out account state.
+  inactive: "Deactivated",
 }
+
+/** Activity levels — recency of the last sign-in. Active = the MAU
+ *  window. NB: last_sign_in_at is a proxy: it stamps sign-IN events,
+ *  not visits on a long-lived session, so it undercounts real activity
+ *  (PostHog stays the truth for MAU); levels here are deliberately
+ *  coarse for that reason. */
+type ActivityLevel = "active" | "inactive" | "dormant" | "never"
+
+const activityFor = (lastSignInAt: string | null): ActivityLevel => {
+  const date = parseDate(lastSignInAt)
+  if (!date) return "never"
+  const days = (Date.now() - date.getTime()) / 86_400_000
+  if (days <= 30) return "active"
+  if (days <= 90) return "inactive"
+  return "dormant"
+}
+
+const ACTIVITY_DOT: Record<ActivityLevel, string> = {
+  active: "bg-emerald-500",
+  inactive: "bg-amber-500",
+  dormant: "bg-rose-500",
+  never: "bg-[#a1a1a0]",
+}
+
+const ACTIVITY_LABEL: Record<ActivityLevel, string> = {
+  active: "Active",
+  inactive: "Inactive",
+  dormant: "Dormant",
+  never: "Never",
+}
+
+/** Ladder order — used for sorting and the funnel cards. Hex colors
+ *  mirror the company funnel's driver palette (amber = still converting,
+ *  blue = acquired, purple = engaged/retention). */
+const USER_FUNNEL: { status: "started" | "signup" | "saved"; dotColor: string }[] = [
+  { status: "started", dotColor: "#f59e0b" },
+  { status: "signup", dotColor: "#2563eb" },
+  { status: "saved", dotColor: "#7c3aed" },
+]
 
 const ROLE_OPTIONS: { value: AdminUserRow["role"]; label: string; description: string; dotColor: string }[] = [
   { value: "client", label: "Client", description: "Standard user account, no admin access", dotColor: "bg-[#a1a1a0]" },
@@ -130,6 +171,98 @@ const USER_STATUS_OPTIONS: { value: "active" | "inactive"; label: string; descri
   { value: "active", label: "Active", description: "User can log in and access the platform", dotColor: "bg-emerald-500" },
   { value: "inactive", label: "Deactivated", description: "User is blocked from logging in", dotColor: "bg-rose-500" },
 ]
+
+/** Bar filter — multi-select DropdownMenu in the /admin/companies
+ *  grammar: "Clear selection" header, checkbox items (menu stays open),
+ *  optional status dot per option, trigger darkens while a selection is
+ *  active and summarizes it ("2 statuses"). Radix Select is deliberately
+ *  avoided here: its item-aligned popover centers the selected item over
+ *  the trigger, so longer lists extend upward and slide under the site
+ *  header. Empty selection = no filter. */
+function BarMultiFilter<T extends string>({
+  values,
+  options,
+  allLabel,
+  countNoun,
+  onChange,
+}: {
+  values: T[]
+  options: readonly { value: T; label: string; dotClass?: string }[]
+  allLabel: string
+  /** Plural noun for the "N selected" trigger label, e.g. "statuses". */
+  countNoun: string
+  onChange: (values: T[]) => void
+}) {
+  const toggle = (value: T) =>
+    onChange(values.includes(value) ? values.filter((v) => v !== value) : [...values, value])
+  const singleLabel = values.length === 1 ? options.find((o) => o.value === values[0])?.label : undefined
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={`w-[140px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 shrink-0 ${
+            values.length > 0
+              ? "border-[#1c1c1a] bg-[#fafaf9]"
+              : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
+          }`}
+        >
+          <span className="flex items-center gap-1.5 truncate">
+            {values.length === 0 ? (
+              <span className="text-[#6b6b68]">{allLabel}</span>
+            ) : values.length === 1 ? (
+              <span className="truncate">{singleLabel}</span>
+            ) : (
+              <span>{values.length} {countNoun}</span>
+            )}
+          </span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-[180px] z-[120]">
+        <DropdownMenuItem
+          onClick={(e) => {
+            e.preventDefault()
+            if (values.length > 0) onChange([])
+          }}
+          className="text-xs"
+        >
+          Clear selection
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {options.map((option) => (
+          <DropdownMenuCheckboxItem
+            key={option.value}
+            checked={values.includes(option.value)}
+            onCheckedChange={() => toggle(option.value)}
+            onSelect={(e) => e.preventDefault()}
+            className="text-xs"
+          >
+            {option.dotClass ? (
+              <span className="flex items-center gap-1.5">
+                <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${option.dotClass}`} />
+                {option.label}
+              </span>
+            ) : (
+              option.label
+            )}
+          </DropdownMenuCheckboxItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/** Admins sit OUTSIDE the signup funnel (the funnel cards count clients
+ *  only), so their rows carry no funnel stage — showing one would make
+ *  the Saved card say 3 while the Saved filter finds 4. Only the
+ *  account states (Invited/Deactivated) still apply to admins. */
+const displayStatus = (user: AdminUserRow): AdminUserRow["status"] | null => {
+  if (user.role !== "client" && user.status !== "invited" && user.status !== "inactive") return null
+  return user.status
+}
 
 const parseDate = (value: string | null) => {
   if (!value) return null
@@ -143,13 +276,7 @@ const formatRelative = (value: string | null) => {
   return formatDistanceToNow(date, { addSuffix: true })
 }
 
-const formatAbsolute = (value: string | null) => {
-  const date = parseDate(value)
-  if (!date) return null
-  return format(date, "MMM d, yyyy")
-}
-
-export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTableProps) {
+export function UsersDataTable({ data }: AdminUsersTableProps) {
   const router = useRouter()
   // Contact Card slide-over — email-keyed URL param, same instance /admin/sales uses.
   const contactParam = useContactParam()
@@ -176,8 +303,15 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
 
   const [searchTerm, setSearchTerm] = useState("")
-  const [roleFilter, setRoleFilter] = useState<"all" | AdminUserRow["role"]>("all")
-  const [statusFilter, setStatusFilter] = useState<"all" | AdminUserRow["status"]>("all")
+  // Multi-select filters, /admin/companies-style: empty array = no filter.
+  const [roleFilter, setRoleFilter] = useState<(AdminUserRow["role"] | "professional")[]>([])
+  const [statusFilter, setStatusFilter] = useState<AdminUserRow["status"][]>([])
+  const [activityFilter, setActivityFilter] = useState<ActivityLevel[]>([])
+
+  const applyStatusFilter = (next: AdminUserRow["status"][]) => {
+    setStatusFilter(next)
+    table.getColumn("status")?.setFilterValue(next.length > 0 ? next : undefined)
+  }
 
   const [isUpdatingRole, startRoleTransition] = useTransition()
   const [isUpdatingStatus, startStatusTransition] = useTransition()
@@ -441,6 +575,40 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
         },
       },
       {
+        accessorKey: "status",
+        header: "Status",
+        size: 160,
+        sortingFn: (rowA, rowB) => {
+          const order = { started: 0, signup: 1, saved: 2, invited: 3, inactive: 4 }
+          const statusA = displayStatus(rowA.original)
+          const statusB = displayStatus(rowB.original)
+          const statusDiff = (statusA ? order[statusA] : 5) - (statusB ? order[statusB] : 5)
+          if (statusDiff !== 0) return statusDiff
+          const a = rowA.original.lastSignInAt ? new Date(rowA.original.lastSignInAt).getTime() : 0
+          const b = rowB.original.lastSignInAt ? new Date(rowB.original.lastSignInAt).getTime() : 0
+          return b - a
+        },
+        cell: ({ row }) => {
+          const status = displayStatus(row.original)
+          if (!status) return <span className="text-xs text-[#a1a1a0]">—</span>
+          return (
+            <div className="flex items-center gap-1.5">
+              <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[status])} />
+              <span className="text-xs font-medium text-[#1c1c1a]">{STATUS_LABEL[status]}</span>
+              {status === "saved" && (
+                <span className="text-[11px] text-[#a1a1a0]">· {row.original.savedCount}</span>
+              )}
+            </div>
+          )
+        },
+        filterFn: (row, columnId, filterValue) => {
+          const values = filterValue as string[] | undefined
+          if (!values || values.length === 0) return true
+          const status = displayStatus(row.original)
+          return status ? values.includes(status) : false
+        },
+      },
+      {
         accessorKey: "role",
         header: "Role",
         cell: ({ row }) => {
@@ -454,9 +622,15 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
             </span>
           )
         },
+        // Matches the DERIVED role the cell displays: a client with a
+        // company reads (and filters) as Professional, not Client.
         filterFn: (row, columnId, filterValue) => {
-          if (!filterValue || filterValue === "all") return true
-          return row.getValue(columnId) === filterValue
+          const values = filterValue as string[] | undefined
+          if (!values || values.length === 0) return true
+          const user = row.original
+          const derived =
+            user.role === "client" ? (user.companies.length > 0 ? "professional" : "client") : user.role
+          return values.includes(derived)
         },
       },
       {
@@ -537,45 +711,37 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
         },
       },
       {
-        accessorKey: "status",
-        header: "Status",
-        size: 160,
+        id: "activity",
+        header: "Activity",
+        size: 140,
+        accessorFn: (row) => activityFor(row.lastSignInAt),
         sortingFn: (rowA, rowB) => {
-          const order = { active: 0, invited: 1, inactive: 2 }
-          const statusDiff = order[rowA.original.status] - order[rowB.original.status]
-          if (statusDiff !== 0) return statusDiff
+          const order: Record<ActivityLevel, number> = { active: 0, inactive: 1, dormant: 2, never: 3 }
+          const diff = order[activityFor(rowA.original.lastSignInAt)] - order[activityFor(rowB.original.lastSignInAt)]
+          if (diff !== 0) return diff
           const a = rowA.original.lastSignInAt ? new Date(rowA.original.lastSignInAt).getTime() : 0
           const b = rowB.original.lastSignInAt ? new Date(rowB.original.lastSignInAt).getTime() : 0
           return b - a
         },
         cell: ({ row }) => {
-          const statusDetail = (() => {
-            if (row.original.status === "invited") {
-              const invitedRelative = formatRelative(row.original.invitedAt)
-              return invitedRelative ? `Invited ${invitedRelative}` : "Awaiting acceptance"
-            }
-            if (row.original.status === "inactive") {
-              return row.original.bannedUntil
-                ? `Suspended until ${formatAbsolute(row.original.bannedUntil)}`
-                : "Access suspended"
-            }
-            const lastActive = formatRelative(row.original.lastSignInAt)
-            return lastActive ? `Last active ${lastActive}` : "Never signed in"
-          })()
-
+          const level = activityFor(row.original.lastSignInAt)
+          const lastActive = formatRelative(row.original.lastSignInAt)
           return (
             <div className="flex flex-col gap-0.5">
               <div className="flex items-center gap-1.5">
-                <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[row.original.status])} />
-                <span className="text-xs font-medium text-[#1c1c1a]">{STATUS_LABEL[row.original.status]}</span>
+                <span className={cn("h-1.5 w-1.5 rounded-full", ACTIVITY_DOT[level])} />
+                <span className="text-xs font-medium text-[#1c1c1a]">{ACTIVITY_LABEL[level]}</span>
               </div>
-              <span className="text-[11px] text-[#a1a1a0] pl-3">{statusDetail}</span>
+              <span className="text-[11px] text-[#a1a1a0] pl-3">
+                {lastActive ? `Last active ${lastActive}` : "No sign-ins yet"}
+              </span>
             </div>
           )
         },
         filterFn: (row, columnId, filterValue) => {
-          if (!filterValue || filterValue === "all") return true
-          return row.getValue(columnId) === filterValue
+          const values = filterValue as string[] | undefined
+          if (!values || values.length === 0) return true
+          return values.includes(row.getValue(columnId))
         },
       },
       {
@@ -628,7 +794,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                   disabled={disableStatusChange}
                   onClick={() => {
                     setStatusDialogUser(user)
-                    setStatusSelection(isInactive ? "active" : user.status === "active" ? "active" : "active")
+                    setStatusSelection("active")
                   }}
                 >
                   Update status
@@ -679,8 +845,11 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
     onRowSelectionChange: setRowSelection,
   })
 
-  const totalAdmins = data.length
-  const totalSuperAdmins = data.filter((row) => row.role === "super_admin").length
+  // Counter follows the filtered result set (search + filters), like the
+  // companies table; unfiltered it equals the full population.
+  const visibleRows = table.getFilteredRowModel().rows
+  const visibleUsers = visibleRows.length
+  const visibleSuperAdmins = visibleRows.filter((row) => row.original.role === "super_admin").length
 
   return (
     // Fragment — mirrors ProspectsClient on /admin/sales. Any wrapper
@@ -711,63 +880,146 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
               <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
           </div>
-          <Select
-            value={roleFilter}
-            onValueChange={(value) => {
-              const next = value as typeof roleFilter
+          <BarMultiFilter
+            values={roleFilter}
+            allLabel="All roles"
+            countNoun="roles"
+            options={[
+              { value: "super_admin", label: "Super admins" },
+              { value: "admin", label: "Admins" },
+              { value: "professional", label: "Professionals" },
+              { value: "client", label: "Clients" },
+            ] as const}
+            onChange={(next) => {
               setRoleFilter(next)
-              table.getColumn("role")?.setFilterValue(next === "all" ? undefined : next)
+              table.getColumn("role")?.setFilterValue(next.length > 0 ? next : undefined)
             }}
-          >
-            <SelectTrigger className="w-[140px] h-9 text-xs shrink-0 border-[#e5e5e4] rounded-[3px]">
-              <SelectValue placeholder="All roles" />
-            </SelectTrigger>
-            <SelectContent className="z-[120]">
-              <SelectItem value="all">All roles</SelectItem>
-              <SelectItem value="super_admin">Super admins</SelectItem>
-              <SelectItem value="admin">Admins</SelectItem>
-              <SelectItem value="client">Clients</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={statusFilter}
-            onValueChange={(value) => {
-              const next = value as typeof statusFilter
-              setStatusFilter(next)
-              table.getColumn("status")?.setFilterValue(next === "all" ? undefined : next)
+          />
+          {/* Ladder in reverse order (furthest first), terminal states at
+              the bottom — matches the /admin/companies status dropdown. */}
+          <BarMultiFilter
+            values={statusFilter}
+            allLabel="All statuses"
+            countNoun="statuses"
+            options={[
+              // No "Invited" here: nothing calls inviteAdminUserAction
+              // anymore and every live signup path auto-confirms, so the
+              // state is unreachable. The column still renders it
+              // defensively should a row ever carry it.
+              { value: "saved", label: "Saved", dotClass: STATUS_DOT.saved },
+              { value: "signup", label: "Signup", dotClass: STATUS_DOT.signup },
+              { value: "started", label: "Signup Started", dotClass: STATUS_DOT.started },
+              { value: "inactive", label: "Deactivated", dotClass: STATUS_DOT.inactive },
+            ] as const}
+            onChange={applyStatusFilter}
+          />
+          <BarMultiFilter
+            values={activityFilter}
+            allLabel="All activity"
+            countNoun="levels"
+            options={[
+              { value: "active", label: "Active", dotClass: ACTIVITY_DOT.active },
+              { value: "inactive", label: "Inactive", dotClass: ACTIVITY_DOT.inactive },
+              { value: "dormant", label: "Dormant", dotClass: ACTIVITY_DOT.dormant },
+              { value: "never", label: "Never", dotClass: ACTIVITY_DOT.never },
+            ] as const}
+            onChange={(next) => {
+              setActivityFilter(next)
+              table.getColumn("activity")?.setFilterValue(next.length > 0 ? next : undefined)
             }}
-          >
-            <SelectTrigger className="w-[140px] h-9 text-xs shrink-0 border-[#e5e5e4] rounded-[3px]">
-              <SelectValue placeholder="All statuses" />
-            </SelectTrigger>
-            <SelectContent className="z-[120]">
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="invited">Invited</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-            </SelectContent>
-          </Select>
+          />
           </>
         }
       />
 
       <div className="wrap" style={{ paddingTop: 32, paddingBottom: 48 }}>
 
-      {/* Warning banner */}
-      {singleActiveSuperAdmin && (
-        <div className="arco-alert arco-alert--warn mb-6">
-          <Shield className="arco-alert-icon" />
-          <p>
-            There is only one active super admin. Invite or promote another before demoting or deactivating the current one.
-          </p>
-        </div>
-      )}
-
+      {/* User funnel — Started → Signup → Saved, in the /admin/companies
+          card grammar. Clients only: admins never enter the signup
+          funnel. Narrowed by search but NOT by the status filter — the
+          cards themselves are the status filter (counting only the
+          active stage would zero the other cards). Connector rates are
+          cohort-based: everyone at-or-past the stage; Invited and
+          Inactive are off-path and don't accumulate. */}
+      <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:overflow-visible md:px-0" style={{ marginBottom: 28 }}>
+        {(() => {
+          const CARD_WIDTH = 132
+          const funnelData = data.filter((r) => {
+            if (r.role !== "client") return false
+            if (!searchTerm) return true
+            const lowered = searchTerm.toLowerCase()
+            const haystack = `${r.displayName} ${r.email} ${r.companies.map((c) => c.name).join(" ")}`.toLowerCase()
+            return haystack.includes(lowered)
+          })
+          const countAt = (s: AdminUserRow["status"]) => funnelData.filter((r) => r.status === s).length
+          const cohortFor = (s: "started" | "signup" | "saved"): number => {
+            switch (s) {
+              case "started":
+                return countAt("started") + countAt("signup") + countAt("saved")
+              case "signup":
+                return countAt("signup") + countAt("saved")
+              case "saved":
+                return countAt("saved")
+            }
+          }
+          const rateFor = (from: "started" | "signup" | "saved", to: "started" | "signup" | "saved"): string => {
+            const denom = cohortFor(from)
+            if (denom === 0) return "0%"
+            return `${Math.round((cohortFor(to) / denom) * 100)}%`
+          }
+          const toggleFunnelStatus = (status: "started" | "signup" | "saved") => {
+            applyStatusFilter(
+              statusFilter.includes(status)
+                ? statusFilter.filter((s) => s !== status)
+                : [...statusFilter, status],
+            )
+          }
+          return (
+            <div style={{ display: "grid", gridTemplateColumns: "auto 64px auto 64px auto", alignItems: "start", width: "fit-content" }}>
+              {USER_FUNNEL.map((stage, i) => {
+                const isActive = statusFilter.includes(stage.status)
+                return (
+                  <Fragment key={stage.status}>
+                    {i > 0 && (
+                      <div className="relative px-1 self-center" style={{ minWidth: 32 }}>
+                        <div className="w-full border-t border-[#d4d4d3]" />
+                        <span
+                          className="absolute text-[10px] font-medium text-[#6b6b68]"
+                          style={{ top: -16, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap" }}
+                        >
+                          {rateFor(USER_FUNNEL[i - 1].status, stage.status)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex flex-col">
+                      <button
+                        type="button"
+                        onClick={() => toggleFunnelStatus(stage.status)}
+                        className={`rounded-[3px] border bg-white px-3 py-3 transition-colors hover:border-[#c4c4c2] ${isActive ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4]"}`}
+                        style={{ width: CARD_WIDTH }}
+                      >
+                        <div className="flex items-center gap-[6px] mb-1.5">
+                          <span className="status-pill-dot shrink-0" style={{ background: stage.dotColor }} />
+                          <span style={{ fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 400, color: "var(--text-primary)", whiteSpace: "nowrap" }}>
+                            {STATUS_LABEL[stage.status]}
+                          </span>
+                        </div>
+                        <p className="arco-card-title text-left">{countAt(stage.status)}</p>
+                      </button>
+                    </div>
+                  </Fragment>
+                )
+              })}
+            </div>
+          )
+        })()}
+      </div>
 
       {/* Page meta — count in the discover style, margins as on Projects */}
       <div className="discover-results-meta" style={{ marginBottom: 0 }}>
         <p className="discover-results-count">
-          <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{totalAdmins}</strong> users &middot; {totalSuperAdmins} super admin{totalSuperAdmins === 1 ? "" : "s"}
+          <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{visibleUsers}</strong> user{visibleUsers === 1 ? "" : "s"}
+          {visibleSuperAdmins > 0 && <> &middot; {visibleSuperAdmins} super admin{visibleSuperAdmins === 1 ? "" : "s"}</>}
         </p>
       </div>
 
@@ -786,7 +1038,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                   setIsBulkProcessing(true)
                   let success = 0
                   for (const user of selectedRows) {
-                    if (user.status === "active") continue
+                    if (user.status !== "inactive") continue
                     const result = await toggleAdminStatusAction({ userId: user.id, active: true })
                     if (result.success) success++
                   }
@@ -1042,7 +1294,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
                 onClick={handleConfirmStatus}
                 disabled={
                   isUpdatingStatus ||
-                  (statusSelection === "active" && statusDialogUser.status === "active") ||
+                  (statusSelection === "active" && statusDialogUser.status !== "inactive") ||
                   (statusSelection === "inactive" && statusDialogUser.status === "inactive") ||
                   (statusSelection === "inactive" && statusDialogUser.isLastSuperAdmin)
                 }
@@ -1203,7 +1455,7 @@ export function UsersDataTable({ data, singleActiveSuperAdmin }: AdminUsersTable
               <div style={{ maxHeight: 160, overflowY: "auto", margin: "12px 0" }}>
                 {selectedRows.map((u) => (
                   <div key={u.id} className="flex items-center gap-2 py-1 text-xs text-[#6b6b68]">
-                    <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${u.status === "active" ? "bg-emerald-500" : "bg-[#a1a1a0]"}`} />
+                    <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT[u.status] ?? "bg-[#a1a1a0]"}`} />
                     <span>{u.displayName}</span>
                     <span className="text-[#a1a1a0]">{u.email}</span>
                   </div>

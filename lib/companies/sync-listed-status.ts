@@ -29,11 +29,21 @@ export async function syncCompanyListedStatus(companyId: string) {
 
   const { data: company } = await supabase
     .from("companies")
-    .select("status, manually_unlisted, owner_id")
+    .select("status, manually_unlisted, owner_id, audience")
     .eq("id", companyId)
     .maybeSingle()
 
   if (!company) return
+
+  // Photographers (audience='pro') are credited FOR their photography,
+  // not showcased AS anchor supply: an ownerless photographer whose
+  // photo credit goes live must not be promoted to 'prospected' — that
+  // status makes their page public, sweeps them into the showcase
+  // prospect sync, and reads as "Showcased" in the admin. They stay
+  // 'added'; their credit renders on the project regardless (credit
+  // visibility doesn't require a public company page). A photographer
+  // who CLAIMS their page has an owner and lists normally.
+  if (!company.owner_id && (company as { audience?: string | null }).audience === "pro") return
 
   let statusChanged = false
   // Auto-list from both `unlisted` (previously listed, then hidden) and

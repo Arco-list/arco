@@ -222,7 +222,7 @@ function ActivitySection({
   onSequenceActionComplete?: () => void
 }) {
   const p = bundle.prospect
-  const statusCfg = p ? STATUS_CONFIG[p.status as ProspectStatus] : null
+  const statusCfg = p ? STATUS_CONFIG[p.status as ProspectStatus] ?? null : null
 
   // Distinct campaign channels the sequence steps belong to. A contact
   // can accumulate more than one channel over their lifetime (e.g.
@@ -241,14 +241,23 @@ function ActivitySection({
     channels.push("Showcase")
   }
 
-  // Which track the ACTIVE sequence belongs to — from the next queued
-  // step's template (falls back to the last sent step). Rendered next to
-  // "Active" so the admin knows which pitch the pending emails carry.
-  const activeSequenceChannel = (() => {
-    const queued = bundle.sequence.find((st) => st.status === "queued")
-    const anchor = queued ?? [...bundle.sequence].reverse().find((st) => st.status === "sent")
-    return anchor ? channelForTemplate(anchor.template) : null
-  })()
+  // The sequence line reads "[status] · [funnel stage] · [audience]" —
+  // derived from the step that matters: a queued step wins (that's what
+  // fires next), else the last sent one. Stage comes from which lane
+  // the template belongs to in the email funnel; audience is the
+  // channel variant (stage mails that don't split say "All").
+  const sourceChannel = p?.source === "invites" ? "Invite" : p?.source === "arco" ? "Showcase" : p?.source === "apollo" ? "Outreach" : null
+  const stepMeta = (template: string): { stage: string; audience: string | null } => {
+    if (template === "verified-reminder") return { stage: "Verified", audience: "All" }
+    if (template.startsWith("visitor-nudge")) return { stage: "Visitor", audience: sourceChannel }
+    return { stage: "Contacted", audience: channelForTemplate(template) ?? sourceChannel }
+  }
+  const queuedStep = bundle.sequence.find((st) => st.status === "queued")
+  const anchorStep = queuedStep ?? [...bundle.sequence].reverse().find((st) => st.status === "sent") ?? null
+  const seqMeta = anchorStep ? stepMeta(anchorStep.template) : null
+  // A queued stage mail means the machine is still working this contact,
+  // whatever the contacted-drip's own flag says.
+  const displaySeqStatus = p?.sequence_status === "paused" ? "paused" : queuedStep ? "active" : p?.sequence_status
 
   // Suppression state — rendered as an inline suffix on Status so a
   // bounced/unsubscribed/complained prospect reads as red at a glance.
@@ -326,7 +335,7 @@ function ActivitySection({
           // the sequence, so that's what this row reports. The action
           // pill hides while suppressed — for a bounce, the path back is
           // correcting the email (which clears the stamp) and Restart.
-          const seqCfg = SEQUENCE_CONFIG[p.sequence_status]
+          const seqCfg = SEQUENCE_CONFIG[displaySeqStatus ?? p.sequence_status]
           return (
             <Row label="Sequence">
               <span style={{ display: "inline-flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
@@ -341,8 +350,11 @@ function ActivitySection({
                       <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${seqCfg?.dot ?? "bg-[#a1a1a0]"}`} />
                       <span>
                         {seqCfg?.label ?? p.sequence_status}
-                        {activeSequenceChannel && p.sequence_status === "active" && (
-                          <span style={{ color: "#6b6b68" }}> · {activeSequenceChannel}</span>
+                        {seqMeta && (
+                          <span style={{ color: "#6b6b68" }}>
+                            {" · "}{seqMeta.stage}
+                            {seqMeta.audience ? ` · ${seqMeta.audience}` : ""}
+                          </span>
                         )}
                       </span>
                     </span>
@@ -418,20 +430,26 @@ function TimelineStream({
     .filter((s) => s.status === "sent" && s.timestamp)
     .map((s) => s.timestamp as string)
     .sort()[0] ?? null
+  // Verified/Owned have no prospect-row timestamp — their transitions
+  // live in prospect_events (stamped by the claim funnel).
+  const eventTs = (type: string) => bundle.events.find((ev) => ev.event_type === type)?.created_at ?? null
   const stageDefs: Array<{ label: string; ts: string | null; status: ProspectStatus }> = prospect
     ? [
         { label: "prospect", ts: prospect.created_at, status: initialStatus },
         { label: "contacted", ts: firstSentAt ?? prospect.last_email_sent_at, status: "contacted" },
         { label: "visitor", ts: prospect.landing_visited_at, status: "visitor" },
-        { label: "signup", ts: prospect.signed_up_at, status: "signup" },
-        { label: "created", ts: prospect.company_created_at, status: "company" },
+        { label: "verified", ts: eventTs("prospect.verified"), status: "verified" },
+        // Post-remodel ladder: signup is an EVENT (it keeps a divider,
+        // dotted like the acquisition stages), 'created' became Owned.
+        { label: "signed up", ts: prospect.signed_up_at, status: "owned" },
+        { label: "owned", ts: eventTs("prospect.owned") ?? prospect.company_created_at, status: "owned" },
         { label: "listed", ts: (prospect as any).converted_at, status: "active" },
       ]
     : []
   if (isInvite && stageDefs.length > 0) stageDefs[0].label = "invited"
   const stageRows: StreamRow[] = stageDefs
     .filter((s): s is { label: string; ts: string; status: ProspectStatus } => Boolean(s.ts))
-    .map((s) => ({ kind: "stage", ts: s.ts, label: s.label, dot: STATUS_CONFIG[s.status].dot, key: `stage-${s.status}` }))
+    .map((s) => ({ kind: "stage", ts: s.ts, label: s.label, dot: STATUS_CONFIG[s.status]?.dot ?? "bg-[#a1a1a0]", key: `stage-${s.label}` }))
 
   // Sequence sends folded in as their own row type so we can render a
   // clickable template link + language pill + engagement pill instead
@@ -531,6 +549,8 @@ function TimelineStream({
     "prospect.signed_up",
     "prospect.company_created",
     "prospect.listed",
+    "prospect.verified",
+    "prospect.owned",
     "user.signed_up",
     "company_invited",
     "status_changed",

@@ -7,7 +7,7 @@ import type { Tables } from "@/lib/supabase/types"
 import { applyProjectSort, DEFAULT_PROJECT_SORT, type ProjectSort } from "./sort"
 import { orderFeaturedFeed } from "./featured-shuffle"
 
-const INITIAL_PAGE_SIZE = 15
+const INITIAL_PAGE_SIZE = 30
 
 // ─── Base row from the view ────────────────────────────────────────────────────
 

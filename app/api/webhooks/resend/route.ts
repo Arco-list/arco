@@ -82,6 +82,9 @@ export async function POST(request: NextRequest) {
       try {
         const occurredAt = event.created_at ?? now
         const subject = data?.subject ?? null
+        // Resend's email.clicked payload carries the clicked URL under
+        // data.click.link (not in our typed shape — hence the cast).
+        const clickLink = (data as unknown as { click?: { link?: string } } | null)?.click?.link ?? null
         // Machine-open detection: gateways/Apple-MPP prefetch the open
         // pixel while scanning — those "opens" land within seconds of
         // the send. Flag them so read-side stats can exclude them; the
@@ -108,7 +111,15 @@ export async function POST(request: NextRequest) {
             recipient_email: recipientEmail ?? "",
             subject,
             occurred_at: occurredAt,
-            metadata: { resend_message_id: messageId, raw_type: type, ...(machineOpen ? { machine: true } : {}) },
+            metadata: {
+              resend_message_id: messageId,
+              raw_type: type,
+              ...(machineOpen ? { machine: true } : {}),
+              // The clicked URL — lets read-side stats tell a real CTA
+              // click from a click on the unsubscribe link (Resend
+              // counts both as email.clicked).
+              ...(type === "email.clicked" && clickLink ? { link: clickLink } : {}),
+            },
           },
           { onConflict: "provider,provider_event_id" },
         )

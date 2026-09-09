@@ -46,14 +46,14 @@ export async function trackProspectLandingVisit(
   // Try email first (from Apollo {{email}} variable), then ref_code, then apollo_contact_id
   let { data: prospect, error } = await supabase
     .from("prospects")
-    .select("id, status, landing_visited_at, apollo_contact_id, company_id")
+    .select("id, email, company_name, status, landing_visited_at, apollo_contact_id, company_id")
     .eq("email", refCode.toLowerCase())
     .maybeSingle();
 
   if (!prospect) {
     const result = await supabase
       .from("prospects")
-      .select("id, status, landing_visited_at, apollo_contact_id, company_id")
+      .select("id, email, company_name, status, landing_visited_at, apollo_contact_id, company_id")
       .eq("ref_code", refCode)
       .maybeSingle();
     prospect = result.data;
@@ -63,7 +63,7 @@ export async function trackProspectLandingVisit(
   if (!prospect) {
     const result = await supabase
       .from("prospects")
-      .select("id, status, landing_visited_at, apollo_contact_id, company_id")
+      .select("id, email, company_name, status, landing_visited_at, apollo_contact_id, company_id")
       .eq("apollo_contact_id", refCode)
       .maybeSingle();
     prospect = result.data;
@@ -123,6 +123,42 @@ export async function trackProspectLandingVisit(
     statusAdvanced: !!updates.status,
   });
 
+  // Visitor-nudge: one drip step, +1 business day after the funnel was
+  // opened without a claim. Enqueued ONCE, on the transition into
+  // Visitor (the ladder is forward-only, so this fires at most once per
+  // prospect); the dedupe check guards the edge where an admin reset
+  // the status. The queue row carries the abstract 'visitor-nudge' —
+  // the copy variant and the funnel link are resolved at send time by
+  // the drip cron, and the stage gate there cancels it if the prospect
+  // reaches Verified before it fires.
+  if (updates.status === "visitor") {
+    try {
+      const prospectEmail = (prospect as any).email as string | null
+      if (prospectEmail) {
+        const { data: existing } = await supabase
+          .from("email_drip_queue")
+          .select("id")
+          .ilike("email", prospectEmail)
+          .eq("template", "visitor-nudge")
+          .limit(1)
+          .maybeSingle()
+        if (!existing) {
+          const { nextBusinessSlot } = await import("@/lib/date-utils")
+          await (supabase.from("email_drip_queue") as any).insert({
+            email: prospectEmail,
+            template: "visitor-nudge",
+            sequence: "visitor-nudge",
+            company_id: (prospect as any).company_id ?? null,
+            send_at: nextBusinessSlot(1).toISOString(),
+            variables: { company_name: (prospect as any).company_name ?? undefined },
+          })
+        }
+      }
+    } catch (err) {
+      logger.error("Failed to enqueue visitor nudge", { prospectId: (prospect as any).id }, err as Error)
+    }
+  }
+
   // Sync Apollo stages if status advanced — contact stage directly,
   // account stage via the resolver (single owner of that field).
   if (updates.status) {
@@ -163,7 +199,7 @@ export async function advanceProspectStage(
   stage: "verified" | "owned",
 ): Promise<void> {
   const supabase = createServiceRoleSupabaseClient();
-  const fields = "id, status, apollo_contact_id, company_id";
+  const fields = "id, email, company_name, status, apollo_contact_id, company_id";
   type ProspectRow = { id: string; status: string | null; apollo_contact_id: string | null; company_id: string | null };
   let prospect: ProspectRow | null = null;
   if (identifier.companyId) {
@@ -183,6 +219,38 @@ export async function advanceProspectStage(
     old_status: prospect.status,
     new_status: stage,
   } as any);
+
+  // Verified-reminder: cart-abandonment mail, +1 business day after the
+  // company step was confirmed without a commit. One per address, ever;
+  // the drip cron's stage gate cancels it if they reach Owned first,
+  // and mint-at-send gives it a fresh funnel token.
+  if (stage === "verified") {
+    try {
+      const email = ((prospect as any).email as string | null) ?? identifier.email ?? null;
+      if (email) {
+        const { data: existing } = await supabase
+          .from("email_drip_queue")
+          .select("id")
+          .ilike("email", email)
+          .eq("template", "verified-reminder")
+          .limit(1)
+          .maybeSingle();
+        if (!existing) {
+          const { nextBusinessSlot } = await import("@/lib/date-utils");
+          await (supabase.from("email_drip_queue") as any).insert({
+            email,
+            template: "verified-reminder",
+            sequence: "verified-reminder",
+            company_id: (prospect as any).company_id ?? identifier.companyId ?? null,
+            send_at: nextBusinessSlot(1).toISOString(),
+            variables: { company_name: (prospect as any).company_name ?? undefined },
+          });
+        }
+      }
+    } catch (err) {
+      logger.error("Failed to enqueue verified reminder", { prospectId: prospect.id }, err as Error);
+    }
+  }
 
   if (prospect.apollo_contact_id) {
     try {

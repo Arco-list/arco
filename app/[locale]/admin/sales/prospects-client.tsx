@@ -203,6 +203,20 @@ const TEMPLATE_NAMES: Record<string, string> = {
   "outreach-intro": "Outreach Intro",
   "outreach-followup": "Outreach Follow-up",
   "outreach-final": "Outreach Final",
+  // Visitor-nudge — one drip step; the queue row is abstract, the sent
+  // variant ids carry the channel.
+  "visitor-nudge": "Visitor Nudge",
+  "visitor-nudge-invite": "Invite Visitor Nudge",
+  "visitor-nudge-showcase": "Showcase Visitor Nudge",
+  "visitor-nudge-platform": "Platform Visitor Nudge",
+  "verified-reminder": "Verified Reminder",
+  // Auth-hook templates — the timeline receives the raw render ids;
+  // shown under the same names as the /emails Transactional tab.
+  "auth-magic-link": "Sign-in Code",
+  "auth-confirm-signup": "Signup Confirmation",
+  "auth-recovery": "Password Reset",
+  "auth-email-change": "Email Change",
+  "auth-invite": "Team Invite",
 }
 export function templateDisplayName(template: string): string {
   if (TEMPLATE_NAMES[template]) return TEMPLATE_NAMES[template]

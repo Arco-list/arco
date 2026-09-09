@@ -218,6 +218,10 @@ async function sendOne(
     "outreach-intro",
     "outreach-followup",
     "outreach-final",
+    // Queue rows carry the abstract 'visitor-nudge'; the concrete
+    // variant (invite/showcase/platform) is resolved at send below.
+    "visitor-nudge",
+    "verified-reminder",
   ])
   // Subset that triggers a status='prospect' → 'contacted' flip.
   // Currently only the Outreach intro fires through this cron (the
@@ -239,6 +243,24 @@ async function sendOne(
     "new-professional-final",
     "outreach-final",
   ])
+  // Stop-at-promotion: each claim-family sequence belongs to a funnel
+  // stage, and a prospect who advanced past that stage must not keep
+  // receiving it — the next stage's sequence takes over. Checked at
+  // send time (like the token mint), so rows enqueued days ago respect
+  // today's stage. Intros are not gated: they CREATE the contacted
+  // stage. Values are the highest ladder index the template may send at.
+  const STAGE_LADDER = ["prospect", "contacted", "visitor", "verified", "owned", "active"]
+  const STAGE_CEILING: Record<string, number> = {
+    "prospect-followup": 1,
+    "prospect-final": 1,
+    "new-professional-followup": 1,
+    "new-professional-final": 1,
+    "outreach-followup": 1,
+    "outreach-final": 1,
+    "visitor-nudge": 2,
+    "verified-reminder": 3,
+  }
+
   let recipient = row.email
   if (COMPANY_SEQUENCE_TEMPLATES.has(row.template)) {
     // Re-lookup current email on the prospect row in case the admin
@@ -247,13 +269,48 @@ async function sendOne(
     // so we fall back to email match for those.
     let lookup = supabase
       .from("prospects")
-      .select("email")
+      .select("email, status")
       .limit(1)
     lookup = row.company_id
       ? lookup.eq("company_id", row.company_id)
       : lookup.ilike("email", row.email)
     const { data: prospect } = await lookup.maybeSingle()
     if (prospect?.email) recipient = prospect.email
+
+    const ceiling = STAGE_CEILING[row.template]
+    const stageIdx = prospect?.status ? STAGE_LADDER.indexOf(prospect.status) : -1
+    if (ceiling !== undefined && stageIdx > ceiling) {
+      const { error } = await supabase
+        .from("email_drip_queue")
+        .update({
+          cancelled_at: new Date().toISOString(),
+          cancelled_reason: "status_change",
+        } as never)
+        .eq("id", row.id)
+      if (error) {
+        logger.error("cron-drip-queue: Failed to cancel stage-advanced row", { rowId: row.id, supabaseError: error })
+      }
+      return "cancelled"
+    }
+  }
+
+  // Visitor-nudge: the variant (invite / showcase / platform copy) and
+  // the funnel link are resolved NOW, not at enqueue — a credit that
+  // appeared overnight upgrades the mail to the invite experience.
+  let sendTemplate = row.template
+  let resolutionError: string | null = null
+  if (row.template === "visitor-nudge") {
+    try {
+      const { buildVisitorNudge } = await import("@/lib/visitor-nudge")
+      const nudge = await buildVisitorNudge(row.company_id, recipient)
+      sendTemplate = nudge.template
+      Object.assign(variables, nudge.variables)
+    } catch (err) {
+      // Falls through to the shared failure path below: counted as a
+      // transient failure (attempt_count++) and retried next tick.
+      resolutionError = err instanceof Error ? err.message : "visitor-nudge resolution failed"
+      logger.error("cron-drip-queue: visitor-nudge resolution failed", { rowId: row.id, error: resolutionError })
+    }
   }
 
   // Claim-family templates get their funnel link minted AT SEND TIME,
@@ -261,7 +318,7 @@ async function sendOne(
   // entirely) and a stored URL would be stale or legacy. Fresh mint =
   // always-valid single-use token, channel resolved from live data.
   // On failure the stored variables stand — a legacy link still works.
-  if (/^(prospect|new-professional|outreach)-/.test(row.template)) {
+  if (/^(prospect|new-professional|outreach|verified)-/.test(row.template)) {
     try {
       if (row.company_id) {
         const { resolveClaimChannel } = await import("@/lib/claim/resolve-channel")
@@ -287,10 +344,12 @@ async function sendOne(
   }
 
   let result: { success: boolean; messageId?: string; message?: string }
-  try {
+  if (resolutionError) {
+    result = { success: false, message: resolutionError }
+  } else try {
     result = await sendTransactionalEmail(
       recipient,
-      row.template as EmailTemplate,
+      sendTemplate as EmailTemplate,
       variables,
       // Resolver reads whichever identifier the drip row carries.
       // Homeowner-series has user_id; prospect-series has company_id.

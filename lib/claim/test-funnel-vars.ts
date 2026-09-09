@@ -80,11 +80,13 @@ export async function buildClaimTestFunnelVars(
   template: string,
   origin: string,
 ): Promise<Record<string, unknown> | null> {
-  if (!/^(prospect|new-professional|outreach)-/.test(template)) return null
+  if (!/^(prospect|new-professional|outreach|visitor-nudge|verified)-/.test(template)) return null
 
-  const channel = template.startsWith("prospect-")
+  // Visitor-nudge variants map to their parent channel's funnel; the
+  // platform variant rides the outreach token (same landing family).
+  const channel = template.startsWith("prospect-") || template === "visitor-nudge-showcase" || template === "verified-reminder"
     ? ("showcase" as const)
-    : template.startsWith("outreach-")
+    : template.startsWith("outreach-") || template === "visitor-nudge-platform"
       ? ("outreach" as const)
       : ("invite" as const)
 

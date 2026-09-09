@@ -189,9 +189,24 @@ const TEMPLATE_ID_TO_NAME: Record<string, string> = {
   "new-professional-invite": "New Professional Invite",
   "new-professional-followup": "New Professional Follow-up",
   "new-professional-final": "New Professional Final",
+  // Visitor-nudge — one drip step, channel variant resolved at send.
+  "visitor-nudge-invite": "Invite Visitor Nudge",
+  "visitor-nudge-showcase": "Showcase Visitor Nudge",
+  "visitor-nudge-platform": "Platform Visitor Nudge",
+  "verified-reminder": "Verified Reminder",
 }
 
 const SUBJECT_TO_TEMPLATE: [RegExp, string, string][] = [
+  // Visitor-nudge — BEFORE the claim-family catch-alls: "op Arco staat
+  // voor je klaar" would otherwise be swallowed by /op Arco$/ patterns.
+  [/staat voor je klaar$/i, "visitor-nudge-showcase", "Showcase Visitor Nudge"],
+  [/is ready for you$/i, "visitor-nudge-showcase", "Showcase Visitor Nudge"],
+  [/^Je vermelding op .* staat klaar$/i, "visitor-nudge-invite", "Invite Visitor Nudge"],
+  [/^Your credit on .* is ready$/i, "visitor-nudge-invite", "Invite Visitor Nudge"],
+  [/^Maak .* af op Arco$/i, "visitor-nudge-platform", "Platform Visitor Nudge"],
+  [/^Finish .* on Arco$/i, "visitor-nudge-platform", "Platform Visitor Nudge"],
+  [/^Nog één stap: je account/i, "verified-reminder", "Verified Reminder"],
+  [/^One step left: your account/i, "verified-reminder", "Verified Reminder"],
   // Auth templates — EN + NL
   [/is your Arco sign-in code/i, "magic-link", "Sign-in Code"],
   [/is je Arco-inlogcode/i, "magic-link", "Sign-in Code"],
@@ -491,7 +506,7 @@ export type TemplateStats = {
   unsubscribed: number
 }
 
-export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: Record<string, TemplateStats>; error?: string }> {
+export async function fetchTemplateStats(sinceDate?: string, persistCache = true): Promise<{ stats: Record<string, TemplateStats>; error?: string }> {
   // Reads from the unified email_events table. Replaces the previous flow
   // (Resend pagination + per-row resend.emails.get() fallback for prospect-
   // intro) which was a mash of workarounds for the Resend API's pagination
@@ -570,6 +585,18 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
       if (e.event_type === "sent") sentAtByMsg.set(e.provider_event_id as string, e.occurred_at as string)
     }
     const byMsg = new Map<string, MsgState>()
+    // Messages with at least one REAL CTA click. Resend logs a click on
+    // the unsubscribe link as email.clicked too, which inflated CTR:
+    // one unsub could show as "4% clicked · 4% unsubs" while nobody
+    // touched the CTA. Rules:
+    //   - click with a stored link that isn't /api/unsubscribe → real
+    //   - click without link data (pre-webhook-change history): real
+    //     only when the message was never unsubscribed — a click on an
+    //     unsubscribed message with unknown link is assumed to BE the
+    //     unsubscribe click (occasionally undercounts a genuine
+    //     click-then-unsubscribe; better than counting exits as
+    //     engagement).
+    const realClickMsgIds = new Set<string>()
     for (const e of events) {
       const msgId = e.event_type === "sent"
         ? (e.provider_event_id as string)
@@ -578,6 +605,11 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
 
       const candidateState = e.event_type as string
       if (candidateState === "opened" && isMachineOpen(e.metadata, e.occurred_at, sentAtByMsg.get(msgId))) continue
+      if (candidateState === "clicked") {
+        const link = e.metadata?.link as string | undefined
+        const isUnsubLink = typeof link === "string" && link.includes("/api/unsubscribe")
+        if (!isUnsubLink && (link || !unsubMsgIds.has(msgId))) realClickMsgIds.add(msgId)
+      }
       const candidateTemplate = (e.template as string | null) ?? null
       const candidateSubject = (e.subject as string | null) ?? null
       const candidateRecipient = (e.recipient_email as string | null) ?? null
@@ -610,6 +642,16 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
 
     const stats: Record<string, TemplateStats> = {}
     for (const [msgId, m] of byMsg.entries()) {
+      // A message belongs to a WINDOW only if it was SENT inside it.
+      // Without this, an old send whose open/click lands in the window
+      // enters as an engagement-only message: it inflated the window's
+      // send count AND — lacking its sent event's template tag — fell
+      // back to subject-regex attribution, which cannot tell Outreach
+      // from Showcase (both series share subjects like "Een podium
+      // voor …"). That is how "Last 7 days" showed MORE Showcase
+      // intros than "Last 30 days". All-time keeps engagement-only
+      // legacy messages: there is no window to violate.
+      if (sinceDate && !sentAtByMsg.has(msgId)) continue
       // Our own test traffic isn't reach. See isInternalRecipient.
       if (isInternalRecipient(m.recipient)) continue
       // Backfilled rows from Resend's list endpoint don't have a template
@@ -627,13 +669,16 @@ export async function fetchTemplateStats(sinceDate?: string): Promise<{ stats: R
         stats[templateId].delivered++
       }
       if (m.state === "opened" || m.state === "clicked") stats[templateId].opened++
-      if (m.state === "clicked") stats[templateId].clicked++
+      if (realClickMsgIds.has(msgId)) stats[templateId].clicked++
       if (m.state === "bounced") stats[templateId].bounced++
       if (unsubMsgIds.has(msgId)) stats[templateId].unsubscribed++
     }
 
-    // Persist to cache so next page load is instant.
-    persistStatsCache(stats).catch(() => {})
+    // Persist to cache so next page load is instant — but only for the
+    // default window (30d): the cache serves the initial paint, which
+    // always starts at 30d, and a 7d/all-time fetch writing here would
+    // poison the next load with the wrong window.
+    if (persistCache) persistStatsCache(stats).catch(() => {})
 
     return { stats }
   } catch (err) {
@@ -829,6 +874,46 @@ export type ProspectFunnelCounts = {
  * funnel does it. 'prospect' (never contacted) and 'removed' are not
  * mail stages and stay out.
  */
+/** Client-side user ladder for the Client Funnel tab (mirrors
+ *  /admin/users): Signup Started = account pre-created at code-send but
+ *  never verified (last_sign_in_at is the truth — every live signup path
+ *  auto-confirms the email), Signup = first real session. Clients only;
+ *  admins never enter this funnel. */
+export type ClientFunnelCounts = {
+  started: number
+  signup: number
+}
+
+export async function fetchClientFunnelCounts(): Promise<{ counts: ClientFunnelCounts; error?: string }> {
+  const empty: ClientFunnelCounts = { started: 0, signup: 0 }
+  try {
+    const supabase = createServiceRoleSupabaseClient()
+    const [{ data: profiles, error: profilesError }, usersRes] = await Promise.all([
+      supabase.from('profiles').select('id, user_types'),
+      supabase.auth.admin.listUsers({ perPage: 1000 }),
+    ])
+    if (profilesError) return { counts: empty, error: profilesError.message }
+    if (usersRes.error) return { counts: empty, error: usersRes.error.message }
+    const clientIds = new Set(
+      (profiles ?? [])
+        .filter((p) => {
+          const types = (p.user_types ?? []) as string[]
+          return types.includes('client') && !types.includes('admin')
+        })
+        .map((p) => p.id),
+    )
+    const counts = { ...empty }
+    for (const u of usersRes.data?.users ?? []) {
+      if (!clientIds.has(u.id)) continue
+      if (u.last_sign_in_at) counts.signup += 1
+      else counts.started += 1
+    }
+    return { counts }
+  } catch (e) {
+    return { counts: empty, error: e instanceof Error ? e.message : 'Failed to load client funnel counts' }
+  }
+}
+
 export async function fetchProspectFunnelCounts(): Promise<{ counts: ProspectFunnelCounts; error?: string }> {
   const empty: ProspectFunnelCounts = { contacted: 0, visitor: 0, verified: 0, owned: 0, active: 0 }
   try {

@@ -2,17 +2,16 @@
 
 import { Fragment, Suspense, useEffect, useState, useTransition } from "react"
 import { toast } from "sonner"
-import { fetchRecentEmails, fetchTemplateStats, fetchCachedStats, fetchProspectFunnelCounts, sendTestEmail, type ProspectFunnelCounts, type ResendEmail, type TemplateStats } from "./actions"
+import { fetchRecentEmails, fetchTemplateStats, fetchCachedStats, fetchProspectFunnelCounts, fetchClientFunnelCounts, sendTestEmail, type ProspectFunnelCounts, type ClientFunnelCounts, type ResendEmail, type TemplateStats } from "./actions"
 import { useAuth } from "@/contexts/auth-context"
 import { AdminTabs, useAdminTab } from "@/components/admin/admin-tabs"
-import { clickedRateColor, deliveredRateColor, openedRateColor } from "@/lib/email-rate-colors"
+import { clickedRateColor, deliveredRateColor, openedRateColor, unsubscribedRateColor, RATE_BENCHMARKS } from "@/lib/email-rate-colors"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 type UserAudience = "all" | "professional" | "client" | "admin"
 
@@ -60,11 +59,9 @@ const INITIAL_TEMPLATES: EmailTemplate[] = [
   { id: "project-live", name: "Project Live", type: "transactional", audience: "professional", description: "Project published on Arco", trigger: "Admin publishes project (status → published)", subject: "[Project] is now live on Arco", sends: 0, deliveryRate: 100, active: true, from: SENDERS.arco },
   { id: "project-rejected", name: "Project Rejected", type: "transactional", audience: "professional", description: "Project not approved", trigger: "Admin rejects project (status → rejected)", subject: "Update on [Project]", sends: 0, deliveryRate: 100, active: true, from: SENDERS.arco },
   { id: "password-reset", name: "Password Reset", type: "transactional", audience: "all", description: "Reset password link", trigger: "User requests password reset", subject: "Reset your Arco password", sends: 0, deliveryRate: 100, active: true, from: SENDERS.arco },
-  { id: "welcome-homeowner", name: "Welcome", type: "marketing", audience: "client", description: "Sent immediately after homeowner signup", trigger: "Profile created with client user type", subject: "Welcome to Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 0, from: SENDERS.arco },
+  { id: "welcome-homeowner", name: "Welcome", type: "marketing", audience: "client", description: "Sent immediately after homeowner signup", trigger: "First verified session (Signup) with client user type", subject: "Welcome to Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 0, from: SENDERS.arco },
   { id: "discover-projects", name: "Discover Projects", type: "marketing", audience: "client", description: "Highlights project browsing and filtering", trigger: "Drip queue · 3 days after signup", subject: "Discover projects on Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 3, from: SENDERS.arco },
   { id: "find-professionals", name: "Find Professionals", type: "marketing", audience: "client", description: "Introduces professional discovery", trigger: "Drip queue · 10 days after signup", subject: "Find the right professional on Arco", sends: 0, deliveryRate: 100, active: true, drip: "homeowner-onboarding", dripDay: 10, from: SENDERS.arco },
-  { id: "project-digest", name: "Project Digest", type: "marketing", audience: "client", description: "Weekly digest of new projects", trigger: "Not built", subject: "New projects on Arco this week", sends: 0, deliveryRate: 0, active: false, from: SENDERS.arco },
-  { id: "inactive-reminder", name: "Inactive Reminder", type: "marketing", audience: "professional", description: "Re-engagement for inactive users", trigger: "Not built", subject: "Your company page on Arco", sends: 0, deliveryRate: 0, active: false, from: SENDERS.arco },
   // Showcase — we built a company + project page, recipient claims.
   { id: "prospect-intro", name: "Showcase Intro", type: "marketing", audience: "professional", description: "Outreach to companies we created a page + project for", trigger: "Admin sends from Companies table (status: Prospected)", subject: "Een podium voor [Company]", sends: 0, deliveryRate: 100, active: true, drip: "showcase", dripDay: 0, from: SENDERS.niek },
   { id: "prospect-followup", name: "Showcase Follow-up", type: "marketing", audience: "professional", description: "Follow-up if no response to Showcase intro", trigger: "Drip queue · 3 days after intro", subject: "[Company] op Arco", sends: 0, deliveryRate: 100, active: true, drip: "showcase", dripDay: 3, from: SENDERS.niek },
@@ -77,9 +74,35 @@ const INITIAL_TEMPLATES: EmailTemplate[] = [
   { id: "outreach-intro", name: "Outreach Intro", type: "marketing", audience: "professional", description: "Cold outreach to companies with no Arco page yet", trigger: "Admin enrols Outreach contacts from /admin/sales", subject: "Een podium voor [Company]", sends: 0, deliveryRate: 100, active: true, drip: "outreach", dripDay: 0, from: SENDERS.niek },
   { id: "outreach-followup", name: "Outreach Follow-up", type: "marketing", audience: "professional", description: "Follow-up if no response to Outreach intro", trigger: "Drip queue · 3 days after intro", subject: "[Company] op Arco", sends: 0, deliveryRate: 100, active: true, drip: "outreach", dripDay: 3, from: SENDERS.niek },
   { id: "outreach-final", name: "Outreach Final", type: "marketing", audience: "professional", description: "Last reminder before Outreach sequence ends", trigger: "Drip queue · 10 days after intro", subject: "Maak [Company] aan op Arco", sends: 0, deliveryRate: 100, active: true, drip: "outreach", dripDay: 10, from: SENDERS.niek },
+  // Visitor-nudge — ONE drip step (+1 business day after the claim
+  // funnel was opened without a claim); the variant below is resolved
+  // at send time by lib/visitor-nudge.ts from the live channel.
+  { id: "visitor-nudge-invite", name: "Invite Visitor Nudge", type: "marketing", audience: "professional", description: "Funnel opened, not claimed — invite variant leads with the credited project", trigger: "Drip queue · 1 day after funnel visit · variant resolved at send", subject: "Je vermelding op [Project] staat klaar", sends: 0, deliveryRate: 100, active: true, drip: "visitor-nudge", dripDay: 1, from: SENDERS.arco },
+  { id: "visitor-nudge-showcase", name: "Showcase Visitor Nudge", type: "marketing", audience: "professional", description: "Funnel opened, not claimed — showcase variant leads with the built page", trigger: "Drip queue · 1 day after funnel visit · variant resolved at send", subject: "[Company] op Arco staat voor je klaar", sends: 0, deliveryRate: 100, active: true, drip: "visitor-nudge", dripDay: 1, from: SENDERS.niek },
+  { id: "visitor-nudge-platform", name: "Platform Visitor Nudge", type: "marketing", audience: "professional", description: "Funnel opened, not claimed — platform variant leads with the company name", trigger: "Drip queue · 1 day after funnel visit · variant resolved at send", subject: "Maak [Company] af op Arco", sends: 0, deliveryRate: 100, active: true, drip: "visitor-nudge", dripDay: 1, from: SENDERS.niek },
+  // Verified-reminder — cart abandonment: step 1 confirmed, no commit.
+  { id: "verified-reminder", name: "Verified Reminder", type: "marketing", audience: "professional", description: "Step 1 confirmed without the account commit — details are saved, one step left", trigger: "Drip queue · 1 day after Verified · stops at Owned", subject: "Nog één stap: je account voor [Company]", sends: 0, deliveryRate: 100, active: true, drip: "verified-reminder", dripDay: 1, from: SENDERS.arco },
 ]
 
-const TAB_KEYS = ["funnel", "transactional", "marketing", "sent"] as const
+// Small ⓘ with a native-title hover explaining the benchmark behind a
+// metric column's color coding.
+function InfoTip({ text }: { text: string }) {
+  return (
+    <span
+      title={text}
+      className="inline-flex items-center align-middle text-[#c4c4c2] hover:text-[#6b6b68] cursor-help"
+      style={{ marginLeft: 4 }}
+    >
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+        <circle cx="8" cy="8" r="6.4" />
+        <path d="M8 7.2v3.4" strokeLinecap="round" />
+        <circle cx="8" cy="4.9" r="0.7" fill="currentColor" stroke="none" />
+      </svg>
+    </span>
+  )
+}
+
+const TAB_KEYS = ["funnel", "client-funnel", "transactional", "sent"] as const
 type TabKey = (typeof TAB_KEYS)[number]
 // All templates are now previewable
 
@@ -92,7 +115,7 @@ type TabKey = (typeof TAB_KEYS)[number]
 //   - ghost rows: planned but unbuilt, so the tab doubles as roadmap.
 type LaneGhost = { name: string; timing: string; condition?: string; audience?: string }
 type FunnelLane = {
-  key: keyof ProspectFunnelCounts
+  key: string
   label: string
   dot: string
   driver: "prospect" | "acquisition" | "retention"
@@ -127,10 +150,12 @@ const FUNNEL_LANES: FunnelLane[] = [
     meaning: "Funnel geopend, niet geclaimd",
     stop: "Stopt bij: promotie naar Verified",
     transactional: [],
-    sequences: [],
-    ghosts: [
-      { name: "Visitor-nudge", timing: "+3 dagen na bezoek", condition: "Copy als gewone follow-up — de Visitor-stempel kan ook een mailscanner zijn", audience: "All" },
+    sequences: [
+      { channel: "Invite", templateIds: ["visitor-nudge-invite"] },
+      { channel: "Showcase", templateIds: ["visitor-nudge-showcase"] },
+      { channel: "Platform", templateIds: ["visitor-nudge-platform"] },
     ],
+    ghosts: [],
   },
   {
     key: "verified",
@@ -142,10 +167,10 @@ const FUNNEL_LANES: FunnelLane[] = [
     transactional: [
       { templateId: "domain-verification", note: "Zit ín stap 1 (platformkanaal) — code vóórdat het bedrijf bevestigd wordt" },
     ],
-    sequences: [],
-    ghosts: [
-      { name: "Verified-reminder", timing: "+1 dag", condition: "Winkelwagen-verlating: token nog 14 dagen geldig, funnel onthoudt de stap", audience: "All" },
+    sequences: [
+      { channel: "All", templateIds: ["verified-reminder"] },
     ],
+    ghosts: [],
   },
   {
     key: "owned",
@@ -181,6 +206,42 @@ const FUNNEL_LANES: FunnelLane[] = [
   },
 ]
 
+// ——— Client funnel ————————————————————————————————————————————————
+// The user-side ladder (mirrors /admin/users): Signup Started → Signup.
+// Deliberately short for now — Visitor/Saved get lanes the moment a
+// mail works on them (Project Digest and the re-engagement reminder
+// return here as those stage mails).
+const CLIENT_FUNNEL_LANES: FunnelLane[] = [
+  {
+    key: "started",
+    label: "Signup Started",
+    dot: "#f59e0b",
+    driver: "acquisition",
+    meaning: "Code verzonden — account aangemaakt, nooit geverifieerd",
+    stop: "Stopt bij: code geverifieerd (Signup)",
+    transactional: [
+      { templateId: "magic-link", note: "Bezit het moment — de signup-code zelf" },
+    ],
+    sequences: [],
+    ghosts: [
+      { name: "Signup Reminder", timing: "+1 dag", condition: "Alleen zolang de code niet geverifieerd is — je account staat klaar", audience: "All" },
+    ],
+  },
+  {
+    key: "signup",
+    label: "Signup",
+    dot: "#2563eb",
+    driver: "acquisition",
+    meaning: "Code geverifieerd — account actief",
+    stop: "Stopt bij: einde ladder — Visitor/Saved-stappen volgen later",
+    transactional: [],
+    sequences: [
+      { channel: "All", templateIds: ["welcome-homeowner", "discover-projects", "find-professionals"] },
+    ],
+    ghosts: [],
+  },
+]
+
 // useAdminTab reads useSearchParams, which requires a Suspense boundary
 // above it for prerender — hence the thin default-export wrapper.
 export default function AdminEmailsPageWrapper() {
@@ -200,6 +261,7 @@ function AdminEmailsPage() {
   // the view; "funnel" is the clean-URL default.
   const activeTab = useAdminTab(TAB_KEYS, "funnel")
   const [funnelCounts, setFunnelCounts] = useState<ProspectFunnelCounts | null>(null)
+  const [clientCounts, setClientCounts] = useState<ClientFunnelCounts | null>(null)
   const [collapsedLanes, setCollapsedLanes] = useState<Set<string>>(new Set())
   const [showStageGuide, setShowStageGuide] = useState(false)
 
@@ -223,6 +285,9 @@ function AdminEmailsPage() {
   useEffect(() => {
     fetchProspectFunnelCounts().then(({ counts, error }) => {
       if (!error) setFunnelCounts(counts)
+    })
+    fetchClientFunnelCounts().then(({ counts, error }) => {
+      if (!error) setClientCounts(counts)
     })
   }, [])
   const [templates, setTemplates] = useState(INITIAL_TEMPLATES)
@@ -276,14 +341,18 @@ function AdminEmailsPage() {
       : timeFilter === "90d" ? new Date(Date.now() - 90 * 86400000).toISOString()
       : undefined
     if (!statsLoaded) setIsLoading(true)
-    Promise.all([fetchRecentEmails(), fetchTemplateStats(sinceDate)]).then(([emailResult, statsResult]) => {
+    Promise.all([fetchRecentEmails(), fetchTemplateStats(sinceDate, timeFilter === "30d")]).then(([emailResult, statsResult]) => {
       if (emailResult.error) setError(emailResult.error)
       else setEmails(emailResult.emails)
-      // Merge fresh stats on top of cached — keeps cached values for
-      // templates the fresh fetch didn't return (e.g. no sends in the
-      // selected time window).
-      if (statsResult.stats && Object.keys(statsResult.stats).length > 0) {
-        setTemplateStats(prev => ({ ...prev, ...statsResult.stats }))
+      // A windowed result REPLACES the stats wholesale. The old merge
+      // (fresh over cached) kept stale numbers for every template with
+      // ZERO sends in the selected window — switching to "Last 7 days"
+      // showed a chimera of 7-day and 30-day/cached values. A template
+      // absent from the fresh result genuinely has no sends in the
+      // window and must render as "—". Only a fetch ERROR keeps the
+      // previous stats on screen.
+      if (!statsResult.error) {
+        setTemplateStats(statsResult.stats)
       }
       setIsLoading(false)
       setStatsLoaded(true)
@@ -357,45 +426,72 @@ function AdminEmailsPage() {
       <AdminTabs
         title="Emails"
         tabs={[
-          { key: "funnel", label: "Funnel" },
+          { key: "funnel", label: "Pro Funnel" },
+          { key: "client-funnel", label: "Client Funnel" },
           { key: "transactional", label: "Transactional" },
-          { key: "marketing", label: "Marketing" },
           { key: "sent", label: "Sent" },
         ]}
         active={activeTab}
         actions={
           activeTab !== "sent" ? (
             <>
-              {(activeTab === "transactional" || activeTab === "marketing") && (
-                <Select
-                  value={audienceFilter}
-                  onValueChange={(value) => setAudienceFilter(value as UserAudience | "all-filter")}
-                >
-                  <SelectTrigger className="w-[170px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
-                    <SelectValue placeholder="All audiences" />
-                  </SelectTrigger>
-                  {/* Above the sticky bar's z-100, or the menu's top edge
-                      slides underneath it and looks detached. */}
-                  <SelectContent className="z-[120]">
-                    <SelectItem value="all-filter">All audiences</SelectItem>
-                    <SelectItem value="all">All users</SelectItem>
-                    <SelectItem value="professional">Professional</SelectItem>
-                    <SelectItem value="client">Client</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
+              {/* Audience filter — DropdownMenu, the pattern the Sales bar
+                  already runs without issues. Radix Select's scroll-lock +
+                  focus restore misbehaved inside this sticky bar. */}
+              {activeTab === "transactional" && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="w-[150px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 shrink-0 border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
+                    >
+                      <span className="truncate text-[#6b6b68]">
+                        {audienceFilter === "all-filter" ? "All audiences" : AUDIENCE_CONFIG[audienceFilter].label}
+                      </span>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
+                        <path d="M6 9l6 6 6-6" />
+                      </svg>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="min-w-[160px] z-[120]">
+                    {([
+                      ["all-filter", "All audiences"],
+                      ["all", "All users"],
+                      ["professional", "Professional"],
+                      ["client", "Client"],
+                      ["admin", "Admin"],
+                    ] as const).map(([value, label]) => (
+                      <DropdownMenuItem
+                        key={value}
+                        className="text-xs"
+                        onClick={() => setAudienceFilter(value as UserAudience | "all-filter")}
+                      >
+                        {label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
-              <Select value={timeFilter} onValueChange={setTimeFilter}>
-                <SelectTrigger className="w-[140px] h-9 text-xs border-[#e5e5e4] rounded-[3px]">
-                  <SelectValue placeholder="All time" />
-                </SelectTrigger>
-                <SelectContent className="z-[120]">
-                  <SelectItem value="all">All time</SelectItem>
-                  <SelectItem value="7d">Last 7 days</SelectItem>
-                  <SelectItem value="30d">Last 30 days</SelectItem>
-                  <SelectItem value="90d">Last 90 days</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* Time window — segmented buttons, the Growth-bar pattern. */}
+              <div className="flex items-center gap-1 border border-[#e5e5e4] rounded-[3px] overflow-hidden shrink-0">
+                {([
+                  ["7d", "7d"],
+                  ["30d", "30d"],
+                  ["90d", "90d"],
+                  ["all", "All"],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setTimeFilter(value)}
+                    className={`px-2 sm:px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider transition-colors ${
+                      timeFilter === value ? "bg-[#1c1c1a] text-white" : "text-[#6b6b68] hover:bg-[#fafaf9]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </>
           ) : undefined
         }
@@ -404,7 +500,7 @@ function AdminEmailsPage() {
       {/* Status guide — floats in the gap under the sticky bar, same
           treatment as the tour-replay link on company edit. */}
       <div className="wrap" style={{ position: "relative", height: 0 }}>
-      {activeTab === "funnel" && (
+      {(activeTab === "funnel" || activeTab === "client-funnel") && (
           <button
           type="button"
           onClick={() => setShowStageGuide(true)}
@@ -420,7 +516,7 @@ function AdminEmailsPage() {
 
         {/* Page meta — the funnel tab carries no counter (the rail's
             per-stage sends tell the story); the list tabs keep theirs. */}
-        {activeTab !== "funnel" && (
+        {activeTab !== "funnel" && activeTab !== "client-funnel" && (
           <div className="discover-results-meta" style={{ marginBottom: 16 }}>
             <p className="discover-results-count">
               {activeTab === "sent" ? (
@@ -433,14 +529,18 @@ function AdminEmailsPage() {
         )}
 
           {/* Funnel — stage rail + swimlanes */}
-          {activeTab === "funnel" && (() => {
+          {(activeTab === "funnel" || activeTab === "client-funnel") && (() => {
             const byId = new Map(templates.map(t => [t.id, t]))
-            const stageKeys = FUNNEL_LANES.map(l => l.key)
+            const lanes = activeTab === "funnel" ? FUNNEL_LANES : CLIENT_FUNNEL_LANES
+            const counts = activeTab === "funnel"
+              ? (funnelCounts as Record<string, number> | null)
+              : (clientCounts as Record<string, number> | null)
+            const stageKeys = lanes.map(l => l.key)
             // Cohort math mirrors the Sales funnel: "reached this stage
             // or beyond", so the connector rates survive people moving
             // through quickly.
             const cohorted = stageKeys.map((_, i) =>
-              stageKeys.slice(i).reduce((sum, k) => sum + (funnelCounts?.[k] ?? 0), 0)
+              stageKeys.slice(i).reduce((sum, k) => sum + (counts?.[k] ?? 0), 0)
             )
             const statCells = (id: string) => {
               const s = templateStats[id]
@@ -456,11 +556,16 @@ function AdminEmailsPage() {
                   <td style={{ textAlign: "right" }} className="text-xs font-medium"><span className={openedRateColor(openRate, sends)}>{sends > 0 ? `${openRate}%` : "—"}</span></td>
                   <td style={{ textAlign: "right" }} className="text-xs font-medium"><span className={clickedRateColor(clickRate, sends)}>{sends > 0 ? `${clickRate}%` : "—"}</span></td>
                   {/* One decimal below 1% — 1 unsub of 300 would otherwise
-                      round to 0% and vanish, and that one is the signal. */}
-                  <td style={{ textAlign: "right" }} className={`text-xs font-medium ${unsubs > 0 ? "text-red-600" : "text-[#c4c4c2]"}`}>
-                    {sends > 0
-                      ? `${(unsubs / sends) * 100 < 1 && unsubs > 0 ? (((unsubs / sends) * 100).toFixed(1)) : Math.round((unsubs / sends) * 100)}%`
-                      : "—"}
+                      round to 0% and vanish, and that one is the signal.
+                      Color rides an inner span: .arco-table td outranks a
+                      utility class on the td itself (why the other cells
+                      wrap their color in a span too). */}
+                  <td style={{ textAlign: "right" }} className="text-xs font-medium">
+                    <span className={unsubscribedRateColor((unsubs / Math.max(sends, 1)) * 100, sends)}>
+                      {sends > 0
+                        ? `${(unsubs / sends) * 100 < 1 && unsubs > 0 ? (((unsubs / sends) * 100).toFixed(1)) : Math.round((unsubs / sends) * 100)}%`
+                        : "—"}
+                    </span>
                   </td>
                 </>
               )
@@ -469,12 +574,12 @@ function AdminEmailsPage() {
               <div>
                 {/* Rail — colors and driver eyebrows mirror the Sales funnel */}
                 <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:overflow-visible md:px-0">
-                  <div style={{ display: "grid", gridTemplateColumns: FUNNEL_LANES.map((_, i) => i === 0 ? "auto" : "1fr auto").join(" "), gap: 0, alignItems: "start" }}>
-                    {FUNNEL_LANES.map((lane, i) => {
+                  <div style={{ display: "grid", gridTemplateColumns: lanes.map((_, i) => i === 0 ? "auto" : "1fr auto").join(" "), gap: 0, alignItems: "start" }}>
+                    {lanes.map((lane, i) => {
                       const sends = laneSends(lane)
                       const rate = i > 0 && cohorted[i - 1] > 0 ? `${Math.round((cohorted[i] / cohorted[i - 1]) * 100)}%` : ""
                       const DRIVER_COLORS: Record<string, string> = { prospect: "#f59e0b", acquisition: "#2563eb", retention: "#7c3aed" }
-                      const isDriverStart = i === 0 || FUNNEL_LANES[i - 1].driver !== lane.driver
+                      const isDriverStart = i === 0 || lanes[i - 1].driver !== lane.driver
                       return (
                         <Fragment key={lane.key}>
                           {i > 0 && (
@@ -522,7 +627,7 @@ function AdminEmailsPage() {
                 </div>
 
                 {/* Swimlanes */}
-                {FUNNEL_LANES.map((lane) => {
+                {lanes.map((lane) => {
                   const isCollapsed = collapsedLanes.has(lane.key)
                   const mailCount = lane.transactional.length + lane.sequences.reduce((n, s) => n + s.templateIds.length, 0)
                   return (
@@ -572,10 +677,10 @@ function AdminEmailsPage() {
                             <th>Audience</th>
                             <th>Subject</th>
                             <th style={{ textAlign: "right" }}>Sends</th>
-                            <th style={{ textAlign: "right" }}>Delivered</th>
-                            <th style={{ textAlign: "right" }}>Opened</th>
-                            <th style={{ textAlign: "right" }}>Clicked</th>
-                            <th style={{ textAlign: "right" }}>Unsubs</th>
+                            <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Delivered<InfoTip text={RATE_BENCHMARKS.delivered} /></th>
+                            <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Opened<InfoTip text={RATE_BENCHMARKS.opened} /></th>
+                            <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Clicked<InfoTip text={RATE_BENCHMARKS.clicked} /></th>
+                            <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Unsubs<InfoTip text={RATE_BENCHMARKS.unsubscribed} /></th>
                             <th style={{ textAlign: "center" }}>Active</th>
                           </tr>
                         </thead>
@@ -674,7 +779,7 @@ function AdminEmailsPage() {
           })()}
 
           {/* Transactional / Marketing table */}
-          {(activeTab === "transactional" || activeTab === "marketing") && (
+          {activeTab === "transactional" && (
             <>
             <div className="arco-table-wrap" style={{ maxWidth: "100%", marginTop: 16 }}>
               <table className="arco-table" style={{ minWidth: 600 }}>
@@ -685,9 +790,9 @@ function AdminEmailsPage() {
                     <th>User</th>
                     <th>Subject</th>
                     <th style={{ textAlign: "right" }}>Sends</th>
-                    <th style={{ textAlign: "right" }}>Delivered</th>
-                    <th style={{ textAlign: "right" }} title="Enable tracking in Resend dashboard">Opened</th>
-                    <th style={{ textAlign: "right" }} title="Enable tracking in Resend dashboard">Clicked</th>
+                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Delivered<InfoTip text={RATE_BENCHMARKS.delivered} /></th>
+                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Opened<InfoTip text={RATE_BENCHMARKS.opened} /></th>
+                    <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Clicked<InfoTip text={RATE_BENCHMARKS.clicked} /></th>
                     <th style={{ textAlign: "center" }}>Active</th>
                   </tr>
                 </thead>
@@ -958,7 +1063,7 @@ function AdminEmailsPage() {
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  {FUNNEL_LANES.map((lane) => (
+                  {(activeTab === "funnel" ? FUNNEL_LANES : CLIENT_FUNNEL_LANES).map((lane) => (
                     <div key={lane.key} style={{ display: "flex", gap: 12 }}>
                       <span className="shrink-0" style={{ width: 8, height: 8, borderRadius: "50%", marginTop: 5, background: lane.dot }} />
                       <div>
@@ -971,7 +1076,9 @@ function AdminEmailsPage() {
                 </div>
 
                 <div style={{ marginTop: 20, padding: "12px 16px", background: "#f5f5f4", borderRadius: 4, fontSize: 11, color: "#6b6b68", lineHeight: 1.5 }}>
-                  <strong>Flow:</strong> Contacted → Visitor → Verified → Owned → Listed — elke stage bezit de mails die eraan werken.
+                  <strong>Flow:</strong> {activeTab === "funnel"
+                    ? "Contacted → Visitor → Verified → Owned → Listed"
+                    : "Signup Started → Signup — Visitor en Saved volgen later"} — elke stage bezit de mails die eraan werken.
                   <br />
                   <strong>Transactioneel bezit dag 0:</strong> bij een stage-overgang verstuurt alleen de transactionele bevestiging; funnel-mails plannen op +N dagen en zijn conditioneel (ze slaan over wie de actie al deed).
                   <br />

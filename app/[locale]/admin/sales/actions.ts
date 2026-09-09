@@ -2915,7 +2915,7 @@ export async function getProspectSequence(prospectId: string): Promise<{
       .ilike("email", prospect.email)
       // prospect-* included: a showcase promotion mid-track swaps the
       // remaining steps to the showcase drip — those rows must show.
-      .in("template", ["outreach-intro", "outreach-followup", "outreach-final", "prospect-intro", "prospect-followup", "prospect-final"])
+      .in("template", ["outreach-intro", "outreach-followup", "outreach-final", "prospect-intro", "prospect-followup", "prospect-final", "visitor-nudge", "verified-reminder"])
       .order("created_at", { ascending: false })
 
     const hasOutreachRows = (outreachQueueRows ?? []).some((r: { template: string }) => r.template.startsWith("outreach-"))
@@ -2970,6 +2970,13 @@ export async function getProspectSequence(prospectId: string): Promise<{
       if (row) outreachSteps.push(queueRowToProspectStep(tpl, label, row))
     }
 
+    // Visitor-nudge: one abstract queue row (copy variant resolves at
+    // send) — rendered only when it exists, queued or sent.
+    const nudgeRow = outreachByTemplate.get("visitor-nudge")
+    if (nudgeRow) outreachSteps.push(queueRowToProspectStep("visitor-nudge", "Visitor Nudge", nudgeRow))
+    const verifiedRow = outreachByTemplate.get("verified-reminder")
+    if (verifiedRow) outreachSteps.push(queueRowToProspectStep("verified-reminder", "Verified Reminder", verifiedRow))
+
     return { success: true, steps: outreachSteps, locale: outreachLocale }
   }
 
@@ -3006,7 +3013,7 @@ export async function getProspectSequence(prospectId: string): Promise<{
     .from("email_drip_queue")
     .select("template, send_at, sent_at, cancelled_at, cancelled_reason, attempt_count, last_error, opened_at, clicked_at, last_event_cached")
     .eq("company_id", prospect.company_id)
-    .in("template", [followupTemplate, finalTemplate])
+    .in("template", [followupTemplate, finalTemplate, "visitor-nudge", "verified-reminder"])
     .order("created_at", { ascending: false })
 
   // Build a map: template → most recent row (we sorted desc above)
@@ -3042,6 +3049,12 @@ export async function getProspectSequence(prospectId: string): Promise<{
     queueRowToProspectStep(followupTemplate, "Follow-up", followupRow),
     queueRowToProspectStep(finalTemplate, "Final", finalRow),
   ]
+
+  // Visitor-nudge: only when a row exists — no phantom "missing" step.
+  const nudgeRow = queueByTemplate.get("visitor-nudge")
+  if (nudgeRow) steps.push(queueRowToProspectStep("visitor-nudge", "Visitor Nudge", nudgeRow))
+  const verifiedRow = queueByTemplate.get("verified-reminder")
+  if (verifiedRow) steps.push(queueRowToProspectStep("verified-reminder", "Verified Reminder", verifiedRow))
 
   return { success: true, steps, locale }
 }

@@ -193,6 +193,20 @@ export default async function UsersPage() {
     }
   }
 
+  // Saved engagement — the third funnel step. One bookmark on either
+  // table (projects or companies) counts as "Saved".
+  const savedCountMap = new Map<string, number>()
+  if (allUserIds.length > 0) {
+    const [{ data: savedProjects }, { data: savedCompanies }] = await Promise.all([
+      serviceClient.from("saved_projects").select("user_id").in("user_id", allUserIds),
+      serviceClient.from("saved_companies").select("user_id").in("user_id", allUserIds),
+    ])
+    for (const row of [...(savedProjects ?? []), ...(savedCompanies ?? [])]) {
+      if (!row.user_id) continue
+      savedCountMap.set(row.user_id, (savedCountMap.get(row.user_id) ?? 0) + 1)
+    }
+  }
+
   // Fetch project counts per company
   const allCompanyIds = Array.from(new Set(Array.from(userCompanyMap.values()).flat().map((c) => c.id)))
   if (allCompanyIds.length > 0) {
@@ -230,12 +244,26 @@ export default async function UsersPage() {
     const isActive = profile.is_active !== false
     const bannedUntil = authRecord?.banned_until ?? null
     const emailConfirmedAt = authRecord?.email_confirmed_at ?? null
+    const lastSignInAt = authRecord?.last_sign_in_at ?? null
+    const savedCount = savedCountMap.get(profile.id) ?? 0
 
-    let status: AdminUserRow["status"] = "active"
+    // Funnel ladder: Started (account pre-created at code-send, never
+    // verified — signUpWithOtpAction auto-confirms, so email_confirmed_at
+    // says nothing; last_sign_in_at is the truth) → Signup (first real
+    // session) → Saved (ever bookmarked). Invited stays reserved for
+    // admin invites (the one flow that leaves the email unconfirmed);
+    // Inactive is the off-path terminal state.
+    let status: AdminUserRow["status"]
     if (!isActive || bannedUntil) {
       status = "inactive"
     } else if (!emailConfirmedAt) {
       status = "invited"
+    } else if (!lastSignInAt) {
+      status = "started"
+    } else if (savedCount > 0) {
+      status = "saved"
+    } else {
+      status = "signup"
     }
 
     const invitedAt = profile.invited_at ?? authRecord?.created_at ?? null
@@ -256,8 +284,9 @@ export default async function UsersPage() {
       companies: userCompanyMap.get(profile.id) ?? [],
       role: adminRole,
       status,
+      savedCount,
       createdAt: profile.created_at,
-      lastSignInAt: authRecord?.last_sign_in_at ?? null,
+      lastSignInAt,
       invitedAt,
       invitedByName,
       invitedByEmail,
@@ -267,22 +296,24 @@ export default async function UsersPage() {
     }
   })
 
+  // "Active" super admin = anyone not locked out (the funnel stages
+  // started/signup/saved are all live accounts).
+  const superAdminIsLive = (row: AdminUserRow) => row.status !== "inactive" && row.status !== "invited"
   const activeSuperAdminsCount = adminRows.filter(
-    (row) => row.role === "super_admin" && row.status === "active",
+    (row) => row.role === "super_admin" && superAdminIsLive(row),
   ).length
 
   const hydratedRows: AdminUserRow[] = adminRows.map((row) => ({
     ...row,
-    isLastSuperAdmin: row.role === "super_admin" && row.status === "active" && activeSuperAdminsCount <= 1,
+    isLastSuperAdmin: row.role === "super_admin" && superAdminIsLive(row) && activeSuperAdminsCount <= 1,
   }))
 
-  const singleActiveSuperAdmin = activeSuperAdminsCount <= 1
 
   return (
     <div className="min-h-screen bg-white">
       {/* The table renders the sticky full-bleed workbench bar and
           wraps its own content. */}
-      <UsersDataTable data={hydratedRows} singleActiveSuperAdmin={singleActiveSuperAdmin} />
+      <UsersDataTable data={hydratedRows} />
     </div>
   )
 }

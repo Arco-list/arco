@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Link } from "@/i18n/navigation"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useLocale, useTranslations } from "next-intl"
@@ -30,10 +30,46 @@ export function ProjectsGrid({ initialProjects = [], sortBy, onSortChange }: Pro
   const { selectedSpace, taxonomyLabelMap, clearAllFilters } = useFilters()
   const { savedProjectIds, saveProject, removeProject, mutatingProjectIds } = useSavedProjects()
   const { projects, total, isLoading, error, hasMore, loadMore, spacePhotoOverrides } = useProjectsQuery({
-    pageSize: 15,
+    // Must equal the SSR page size (30) — a smaller value here made
+    // page 1 refetch rows the SSR page already showed.
+    pageSize: 30,
     initialProjects,
     sort: sortBy,
   })
+
+  // Auto-load: the load-more button doubles as an IntersectionObserver
+  // sentinel. Scrolling near it fetches the next page automatically for
+  // the first AUTO_LOAD_PAGES pages; after that it becomes a deliberate
+  // click again, so the SEO link block and the footer below the grid
+  // stay reachable instead of receding forever (the infinite-scroll
+  // trap). Manual clicks are never budget-limited.
+  const AUTO_LOAD_PAGES = 3
+  const autoLoadsRef = useRef(0)
+  const loadMoreBtnRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    // A full reload (filter/sort change empties the grid) resets the budget.
+    if (isLoading && projects.length === 0) autoLoadsRef.current = 0
+  }, [isLoading, projects.length])
+
+  useEffect(() => {
+    const el = loadMoreBtnRef.current
+    if (!el || !hasMore) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return
+        if (isLoading) return
+        if (autoLoadsRef.current >= AUTO_LOAD_PAGES) return
+        autoLoadsRef.current += 1
+        void loadMore()
+      },
+      // Start fetching well before the button scrolls into view.
+      { rootMargin: "600px 0px" },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [hasMore, isLoading, loadMore])
+
 
   const [currentPhotoIndexes, setCurrentPhotoIndexes] = useState<Record<string, number>>({})
 
@@ -150,6 +186,7 @@ export function ProjectsGrid({ initialProjects = [], sortBy, onSortChange }: Pro
         {hasMore && (
           <div className="discover-load-more">
             <button
+              ref={loadMoreBtnRef}
               className="discover-load-more-btn"
               onClick={loadMore}
               disabled={isLoading}

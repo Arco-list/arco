@@ -32,7 +32,10 @@ const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
 // exactly 5 full rows on desktop (14 pros + 1 map card = 15 = 5×3).
 // Subsequent pages add full rows (multiples of 3) so the alignment is
 // preserved as the user loads more.
-const FIRST_PAGE_SIZE = 14
+// 29 (not 30): the first grid page reserves one slot, mirroring the
+// old 14-vs-15 split. MUST match INITIAL_PAGE_SIZE in
+// lib/professionals/queries.ts (the SSR fetch).
+const FIRST_PAGE_SIZE = 29
 const PAGE_SIZE = 15
 // Hard cap on markers pulled for the full-screen map. At current scale
 // (tens of pros) this is never hit; kept as a guardrail so a runaway

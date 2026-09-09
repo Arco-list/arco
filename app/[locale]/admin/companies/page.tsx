@@ -53,7 +53,7 @@ async function loadAdminCompaniesData() {
       // All project_professionals with a company_id — get status + invited services + project details
       supabase
         .from("project_professionals")
-        .select("id, company_id, status, invited_email, invited_service_category_ids, is_project_owner, project:projects(id, title, slug, status)")
+        .select("id, company_id, status, invited_email, invited_service_category_ids, is_project_owner, invite_dispatched_at, project:projects(id, title, slug, status)")
         .not("company_id", "is", null),
       // Unclaimed invites: no professional_id AND no company_id
       supabase
@@ -178,6 +178,10 @@ async function loadAdminCompaniesData() {
   type LinkedProject = { id: string; ppId: string; title: string; slug: string | null; projectStatus: string; inviteStatus: string; isProjectOwner: boolean }
   const companyProjectsAccepted = new Map<string, number>()
   const companyProjectsPending = new Map<string, number>()
+  // Companies where at least one credit's invite actually WENT OUT —
+  // the dispatcher refuses unpublished projects, so a credit on a
+  // draft/rejected project sits with invite_dispatched_at null.
+  const companyInviteDispatched = new Set<string>()
   const companyProjectsList = new Map<string, LinkedProject[]>()
   const companyInviteServices = new Map<string, string[]>()
   const companyInviteEmail = new Map<string, string>()
@@ -188,6 +192,9 @@ async function loadAdminCompaniesData() {
       companyProjectsAccepted.set(companyId, (companyProjectsAccepted.get(companyId) ?? 0) + 1)
     } else if (row.status === "invited") {
       companyProjectsPending.set(companyId, (companyProjectsPending.get(companyId) ?? 0) + 1)
+    }
+    if ((row as { invite_dispatched_at?: string | null }).invite_dispatched_at) {
+      companyInviteDispatched.add(companyId)
     }
     // Collect project details
     const project = row.project as unknown as { id: string; title: string; slug: string | null; status: string } | null
@@ -405,11 +412,15 @@ async function loadAdminCompaniesData() {
       : null
 
     // Status shown in the table: unclaimed unlisted/created rows read as
-    // "invited" (they were auto-created from project invites). Channel
-    // derivation MUST use this same derived value — deriving from the
-    // raw DB status let the Status column say Invited while the Channel
-    // column said Showcase for the same row.
-    const displayStatus = isUnclaimed ? ("invited" as const) : company.status
+    // "invited" (they were auto-created from project invites) — but only
+    // once an invite actually WENT OUT. A credit on a draft/rejected
+    // project is deliberately undispatched (the dispatcher refuses
+    // unpublished projects), and labeling that row Invited suggested a
+    // sequence that never started. Channel derivation MUST use this
+    // same derived value.
+    const displayStatus = isUnclaimed
+      ? (companyInviteDispatched.has(company.id) ? ("invited" as const) : ("added" as const))
+      : company.status
 
     // For unclaimed companies, get services from invite data instead of company.services_offered
     let serviceIds: string[]

@@ -180,6 +180,10 @@ export type EmailTemplate =
   | 'outreach-intro'
   | 'outreach-followup'
   | 'outreach-final'
+  | 'visitor-nudge-invite'
+  | 'visitor-nudge-showcase'
+  | 'visitor-nudge-platform'
+  | 'verified-reminder'
   | 'auth-confirm-signup'
   | 'auth-magic-link'
   | 'auth-recovery'
@@ -217,6 +221,16 @@ const TEMPLATE_AUDIENCE: Record<EmailTemplate, EmailAudience> = {
   'outreach-intro': 'neutral',
   'outreach-followup': 'neutral',
   'outreach-final': 'neutral',
+  // Visitor-nudge — one drip step, three channel variants resolved at
+  // send (lib/visitor-nudge.ts). Path-based attribution like the rest
+  // of the claim family.
+  'visitor-nudge-invite': 'neutral',
+  'visitor-nudge-showcase': 'neutral',
+  'visitor-nudge-platform': 'neutral',
+  // Verified-reminder — cart-abandonment mail, +1 day after step 1
+  // without a commit. One template for every channel: the argument is
+  // "one step left", not the channel's asset.
+  'verified-reminder': 'neutral',
   // Invites — path-based attribution via invite_visitors
   'new-professional-invite': 'neutral',
   'new-professional-followup': 'neutral',
@@ -1756,6 +1770,172 @@ type TemplateRenderer = (
   locale?: EmailLocale,
 ) => { subject: string; html: string }
 
+
+// ─── Visitor-nudge (one drip step, three channel variants) ──────────────────
+// Sent +1 day after a prospect opens the claim funnel without finishing.
+// Variant + link are resolved at SEND time by lib/visitor-nudge.ts. The
+// copy never references the visit itself — the Visitor stamp can be a
+// mail scanner's prefetch, so each variant reads as a normal follow-up
+// leading with the strongest asset.
+
+function renderVisitorNudgeInvite(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'je bedrijf' : 'your company')
+  const projectName = vars.project_title || (locale === 'nl' ? 'een project' : 'a project')
+  const inviterName = vars.inviter_company_name || (locale === 'nl' ? 'Een architect' : 'An architect')
+  const claimUrl = vars.claim_url || 'https://www.arcolist.com/claim'
+
+  const copy = locale === 'en'
+    ? {
+        subject: `Your credit on ${projectName} is ready`,
+        h1: `Your credit on ${projectName} is ready`,
+        intro: `${inviterName} credited ${companyName} on ${projectName}. Confirming takes less than two minutes — the project then appears on your own free Arco page.`,
+        button: `Confirm your credit`,
+        questions: `Questions? Just reply to this email.`,
+      }
+    : {
+        subject: `Je vermelding op ${projectName} staat klaar`,
+        h1: `Je vermelding op ${projectName} staat klaar`,
+        intro: `${inviterName} heeft ${companyName} vermeld op ${projectName}. Bevestigen kost minder dan twee minuten — het project verschijnt daarna op je eigen gratis Arco-pagina.`,
+        button: `Bevestig je vermelding`,
+        questions: `Vragen? Reageer gewoon op deze email.`,
+      }
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
+      ${vars.project_link ? linkedProjectCard(vars, vars.project_link) : projectCard(vars)}
+      ${button(copy.button, claimUrl)}
+      ${body(copy.questions)}
+    `, locale),
+  }
+}
+
+function renderVisitorNudgeShowcase(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'Je bedrijf' : 'Your company')
+  const companyPageUrl = vars.company_page_url || 'https://www.arcolist.com/professionals'
+  const claimUrl = vars.claim_url || 'https://www.arcolist.com/claim'
+  const card = companyCard({
+    name: companyName,
+    href: companyPageUrl,
+    logoUrl: vars.logo_url,
+    heroUrl: vars.hero_image_url,
+    subtitle: vars.company_subtitle ?? null,
+  })
+
+  const copy = locale === 'en'
+    ? {
+        subject: `${companyName} on Arco is ready for you`,
+        h1: `${companyName} is ready for you`,
+        intro: `Your page for ${companyName} is standing ready on Arco. Claiming takes less than two minutes — after that you can edit your profile, add projects and be found by clients.`,
+        button: `Claim your page`,
+        questions: `Questions? Just reply to this email, happy to help.`,
+        signoffRole: 'Founder, Arco',
+      }
+    : {
+        subject: `${companyName} op Arco staat voor je klaar`,
+        h1: `${companyName} staat voor je klaar`,
+        intro: `Je pagina voor ${companyName} staat klaar op Arco. Claimen kost minder dan twee minuten — daarna kun je je profiel aanpassen, projecten toevoegen en gevonden worden door opdrachtgevers.`,
+        button: `Claim je pagina`,
+        questions: `Vragen? Reageer op deze email, ik help je graag.`,
+        signoffRole: 'Oprichter, Arco',
+      }
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
+      ${card}
+      ${button(copy.button, claimUrl)}
+      ${body(copy.questions)}
+      <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
+        Niek van Leeuwen<br/>
+        <span style="color:#a1a1a0;">${copy.signoffRole}</span>
+      </p>
+    `, locale),
+  }
+}
+
+function renderVisitorNudgePlatform(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'je bedrijf' : 'your company')
+  const refUrl = vars.ref_url || vars.claim_url || 'https://www.arcolist.com/claim'
+
+  const copy = locale === 'en'
+    ? {
+        subject: `Finish ${companyName} on Arco`,
+        h1: `Finish ${companyName} on Arco`,
+        intro: `Your free page for ${companyName} is one step away — finishing takes less than two minutes. Clients can then view your work and reach out directly.`,
+        button: `Continue claiming`,
+        questions: `Questions? Just reply to this email, happy to help.`,
+        signoffRole: 'Founder, Arco',
+      }
+    : {
+        subject: `Maak ${companyName} af op Arco`,
+        h1: `Maak ${companyName} af op Arco`,
+        intro: `Je gratis pagina voor ${companyName} is nog één stap verwijderd — afronden kost minder dan twee minuten. Opdrachtgevers kunnen daarna je werk bekijken en direct contact opnemen.`,
+        button: `Ga verder met claimen`,
+        questions: `Vragen? Reageer op deze email, ik help je graag.`,
+        signoffRole: 'Oprichter, Arco',
+      }
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
+      ${button(copy.button, refUrl)}
+      ${body(copy.questions)}
+      <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
+        Niek van Leeuwen<br/>
+        <span style="color:#a1a1a0;">${copy.signoffRole}</span>
+      </p>
+    `, locale),
+  }
+}
+
+
+// ─── Verified-reminder (cart abandonment for the claim funnel) ──────────────
+// Sent +1 business day after the company step was confirmed (Verified)
+// without the account commit. Their details are ratcheted server-side,
+// so the honest promise is "your work is saved — one step left". Brand
+// voice: the remaining step is product-mechanical, not a pitch.
+
+function renderVerifiedReminder(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'je bedrijf' : 'your company')
+  const claimUrl = vars.claim_url || vars.ref_url || 'https://www.arcolist.com/claim'
+
+  const copy = locale === 'en'
+    ? {
+        subject: `One step left: your account for ${companyName}`,
+        h1: `One step left`,
+        intro: `You confirmed ${companyName} on Arco — only your account is missing. Everything you filled in is saved, so finishing takes less than a minute.`,
+        after: `Once done, your free page is yours: edit your profile, add projects, and be found by clients.`,
+        button: `Finish your account`,
+        questions: `Questions? Just reply to this email.`,
+      }
+    : {
+        subject: `Nog één stap: je account voor ${companyName}`,
+        h1: `Nog één stap`,
+        intro: `Je hebt ${companyName} bevestigd op Arco — alleen je account ontbreekt nog. Alles wat je invulde is bewaard, dus afronden kost minder dan een minuut.`,
+        after: `Daarna is je gratis pagina van jou: profiel aanpassen, projecten toevoegen en gevonden worden door opdrachtgevers.`,
+        button: `Maak je account af`,
+        questions: `Vragen? Reageer gewoon op deze email.`,
+      }
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
+      ${body(copy.after)}
+      ${button(copy.button, claimUrl)}
+      ${body(copy.questions)}
+    `, locale),
+  }
+}
+
 const TEMPLATE_RENDERERS: Record<EmailTemplate, TemplateRenderer> = {
   'project-live': renderProjectLive,
   'project-rejected': renderProjectRejected,
@@ -1775,6 +1955,10 @@ const TEMPLATE_RENDERERS: Record<EmailTemplate, TemplateRenderer> = {
   'new-professional-invite': renderNewProfessionalInvite,
   'new-professional-followup': renderNewProfessionalFollowup,
   'new-professional-final': renderNewProfessionalFinal,
+  'visitor-nudge-invite': renderVisitorNudgeInvite,
+  'visitor-nudge-showcase': renderVisitorNudgeShowcase,
+  'visitor-nudge-platform': renderVisitorNudgePlatform,
+  'verified-reminder': renderVerifiedReminder,
   'auth-confirm-signup': renderAuthConfirmSignup,
   'auth-magic-link': renderAuthMagicLink,
   'auth-recovery': renderAuthRecovery,
@@ -1860,6 +2044,8 @@ export async function sendTransactionalEmail(
     || template.startsWith('outreach-')
     || template === 'professional-invite'
     || template.startsWith('new-professional-')
+    || template.startsWith('visitor-nudge-')
+    || template === 'verified-reminder'
     || template === 'welcome-homeowner'
     || template === 'discover-projects'
     || template === 'find-professionals'
@@ -1899,6 +2085,7 @@ export async function sendTransactionalEmail(
   // personally. The Invite series (new-professional-*) is automated and
   // brand-voiced, so it goes from the generic Arco address.
   const isPersonalSeries = template.startsWith('prospect-') || template.startsWith('outreach-')
+    || template === 'visitor-nudge-showcase' || template === 'visitor-nudge-platform'
 
   try {
     const { data, error } = await getResend().emails.send({

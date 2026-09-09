@@ -51,7 +51,11 @@ interface UseProjectsQueryOptions {
   sort?: ProjectSort
 }
 
-const DEFAULT_PAGE_SIZE = 15
+// 30 on the first load — 15 read as five thin rows you scrolled past
+// in two swipes. MUST match INITIAL_PAGE_SIZE in lib/projects/queries.ts
+// (the SSR fetch): the hasMore init and the SSR total-correction both
+// key on this equality.
+const DEFAULT_PAGE_SIZE = 30
 const MAX_PAGE_SIZE = 100
 type ProjectBudgetLevel = Enums<"project_budget_level">
 const ALLOWED_BUDGET_LEVELS = new Set<ProjectBudgetLevel>([
@@ -784,6 +788,11 @@ export function useProjectsQuery({
         typeFilterValues.length > 0 ||
         selectedStyles.length > 0 ||
         selectedLocations.length > 0 ||
+        // Provinces live in selectedRegions, NOT selectedLocations —
+        // without this line a province-only filter counted as "no
+        // filters", so the SSR skip-path kept the unfiltered grid and
+        // the global total (picking any other filter first masked it).
+        selectedRegions.length > 0 ||
         selectedFeatures.length > 0 ||
         selectedBuildingTypes.length > 0 ||
         selectedScopes.length > 0 ||

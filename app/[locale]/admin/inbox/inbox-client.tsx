@@ -47,8 +47,8 @@ const PROSPECT_STATUS_DOT: Record<string, string> = {
   prospect: "bg-[#f59e0b]",
   contacted: "bg-[#f59e0b]",
   visitor: "bg-[#2563eb]",
-  signup: "bg-[#2563eb]",
-  company: "bg-[#2563eb]",
+  verified: "bg-[#2563eb]",
+  owned: "bg-[#2563eb]",
   active: "bg-[#7c3aed]",
   removed: "bg-[#a1a1a0]",
 }
@@ -56,8 +56,8 @@ const PROSPECT_STATUS_LABEL: Record<string, string> = {
   prospect: "Prospect",
   contacted: "Contacted",
   visitor: "Visitor",
-  signup: "Signup",
-  company: "Draft",
+  verified: "Verified",
+  owned: "Owned",
   active: "Listed",
   removed: "Removed",
 }

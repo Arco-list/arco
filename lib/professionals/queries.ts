@@ -24,7 +24,7 @@ import { DEFAULT_PROFESSIONAL_SORT, orderCardsForFeaturedFeed, type Professional
 const PLACEHOLDER_IMAGE = "/placeholder.svg?height=300&width=300"
 // First-page fetch for the discover grid leaves a slot for the inline map
 // card: 14 pros + 1 map card = 15 = 5 full rows on desktop (3 cols).
-const INITIAL_PAGE_SIZE = 14
+const INITIAL_PAGE_SIZE = 29
 
 type NullableString = string | null
 

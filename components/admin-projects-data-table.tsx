@@ -821,15 +821,6 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
               </button>
             )}
           </div>
-          {reviewCount > 0 && firstReviewProjectId && (
-            <Link
-              href={`/dashboard/edit/${firstReviewProjectId}?review=1`}
-              className="btn-primary"
-              style={{ fontSize: 13, padding: "6px 16px", borderRadius: 3 }}
-            >
-              Review ({reviewCount})
-            </Link>
-          )}
           {/* Multi-select status filter — synced with the funnel cards above. */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -885,6 +876,16 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+          {/* Review CTA — rightmost, like Add company on Companies. */}
+          {reviewCount > 0 && firstReviewProjectId && (
+            <Link
+              href={`/dashboard/edit/${firstReviewProjectId}?review=1`}
+              className="btn-primary shrink-0"
+              style={{ fontSize: 13, padding: "6px 16px", borderRadius: 3 }}
+            >
+              Review ({reviewCount})
+            </Link>
+          )}
           </>
         }
       />

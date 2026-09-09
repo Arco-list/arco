@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useMemo, useState } from "react"
+import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 import { Link } from "@/i18n/navigation"
 import { ChevronRight } from "lucide-react"
 import { useLocale, useTranslations } from "next-intl"
@@ -66,6 +66,39 @@ export function ProfessionalsGrid({
     hasMore,
     loadMore,
   } = useProfessionalsQuery(professionals, initialTotal)
+
+  // Auto-load: the load-more button doubles as an IntersectionObserver
+  // sentinel. Scrolling near it fetches the next page automatically for
+  // the first AUTO_LOAD_PAGES pages; after that it becomes a deliberate
+  // click again, so the SEO link block and the footer below the grid
+  // stay reachable instead of receding forever (the infinite-scroll
+  // trap). Manual clicks are never budget-limited.
+  const AUTO_LOAD_PAGES = 3
+  const autoLoadsRef = useRef(0)
+  const loadMoreBtnRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    // A full reload (filter/sort change empties the grid) resets the budget.
+    if (isLoading && queryProfessionals.length === 0) autoLoadsRef.current = 0
+  }, [isLoading, queryProfessionals.length])
+
+  useEffect(() => {
+    const el = loadMoreBtnRef.current
+    if (!el || !hasMore) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return
+        if (isLoadingMore) return
+        if (autoLoadsRef.current >= AUTO_LOAD_PAGES) return
+        autoLoadsRef.current += 1
+        void loadMore()
+      },
+      // Start fetching well before the button scrolls into view.
+      { rootMargin: "600px 0px" },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [hasMore, isLoadingMore, loadMore])
 
   // Sort is applied server-side in the search_professionals RPC so it stays
   // stable across "Load more". The grid just consumes the ordered list.
@@ -353,6 +386,7 @@ export function ProfessionalsGrid({
           {hasMore && (
             <div className="discover-load-more">
               <button
+                ref={loadMoreBtnRef}
                 className="discover-load-more-btn"
                 onClick={loadMore}
                 disabled={isLoadingMore}
