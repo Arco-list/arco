@@ -70,8 +70,17 @@ export async function mintClaimTestLinkAction(input: {
 export async function resetClaimFixtureAction(): Promise<{ ok: true; summary: string } | { ok: false; error: string }> {
   const svc = createServiceRoleSupabaseClient()
 
-  // Everything below deletes accounts — locked to the fixture.
-  const companyId = FIXTURE_COMPANY_ID
+  // Everything below deletes accounts — locked to the fixture. Resolve
+  // by domain: a platform walkthrough creates its own askolli row under
+  // a fresh id (adopted as fixture by test-funnel-vars), and the reset
+  // must clean THAT row, not just the canonical id.
+  const { data: fixtureRow } = await svc
+    .from("companies")
+    .select("id")
+    .eq("domain", FIXTURE_EMAIL_DOMAIN)
+    .limit(1)
+    .maybeSingle()
+  const companyId = fixtureRow?.id ?? FIXTURE_COMPANY_ID
 
   const { data: users } = await svc.auth.admin.listUsers({ page: 1, perPage: 1000 })
   const fixtureUsers = (users?.users ?? []).filter(

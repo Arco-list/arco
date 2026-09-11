@@ -1783,6 +1783,19 @@ export async function updateCoverPhotoAction(input: {
       return { success: false, error: "Failed to update cover photo" }
     }
   } else {
+    // Demote the previous primary first — setting the new one without
+    // this left MULTIPLE primaries, and every is_primary-DESC consumer
+    // (cover fallbacks, galleries) kept showing the oldest of them.
+    const { error: demoteError } = await supabase
+      .from("project_photos")
+      .update({ is_primary: false })
+      .eq("project_id", input.projectId)
+      .neq("id", input.photoId)
+      .eq("is_primary", true)
+    if (demoteError) {
+      logger.db("update", "project_photos", "Failed to demote previous cover photo", { projectId: input.projectId }, demoteError)
+      return { success: false, error: "Failed to update cover photo" }
+    }
     const { error } = await supabase
       .from("project_photos")
       .update({ is_primary: true })

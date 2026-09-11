@@ -448,11 +448,18 @@ export async function dispatchProfessionalInvite(
   // Skip for pro-audience companies (photographers): they reach Arco via
   // architect credit, not via the new-professional invite sequence — and
   // shouldn't get followups even if dispatch is somehow triggered for them.
-  const { isProAudienceCompany, claimNextSendSlot } = await import("@/lib/drip-queue")
+  const { isProAudienceCompany } = await import("@/lib/drip-queue")
   if (!(await isProAudienceCompany(supabase, recipient.id))) {
     const { nextBusinessSlot } = await import("@/lib/date-utils")
-    const followupSendAt = (await claimNextSendSlot(supabase, nextBusinessSlot(3))).toISOString()
-    const finalSendAt = (await claimNextSendSlot(supabase, nextBusinessSlot(7))).toISOString()
+    // Direct +3/+7 business days — deliberately NOT claimNextSendSlot.
+    // The slot ledger serialises COLD outreach bursts; invite steps are
+    // warm, event-driven and low-volume, and routing them through the
+    // ledger meant a saturated calendar deferred the 3-day reminder by
+    // 15 days AND collapsed followup + final onto the same minute
+    // (both claims ran before either row was inserted — MGK Bouw,
+    // Sep 8 2026). The cadence IS the product here.
+    const followupSendAt = nextBusinessSlot(3).toISOString()
+    const finalSendAt = nextBusinessSlot(7).toISOString()
     await supabase
       .from("email_drip_queue")
       .insert([

@@ -56,6 +56,9 @@ export type Prospect = {
   last_email_sent_at: string | null
   landing_visited_at: string | null
   signed_up_at: string | null
+  /** false = account created but code never verified (Signup Started);
+   *  true = first session exists; null/absent = unknown or n/a. */
+  signupVerified?: boolean | null
   company_created_at: string | null
   project_published_at: string | null
   converted_at: string | null
@@ -866,6 +869,31 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     }
   }
 
+  // Pending queue rows flip the sequence pill back to Active: the
+  // contacted drip may read "finished", but a queued stage mail
+  // (visitor-nudge, verified-reminder) means the machine is still
+  // working this contact — the same verdict the contact panel reaches
+  // from its queued step. Scoped to the sales mail families so a
+  // pending homeowner-onboarding row never marks a sales row active.
+  const pendingMailEmails = new Set<string>()
+  {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: pendingRows } = await (supabase as any)
+      .from("email_drip_queue")
+      .select("email")
+      .is("sent_at", null)
+      .is("cancelled_at", null)
+      .in("template", [
+        "outreach-intro", "outreach-followup", "outreach-final",
+        "prospect-intro", "prospect-followup", "prospect-final",
+        "new-professional-invite", "new-professional-followup", "new-professional-final",
+        "visitor-nudge", "verified-reminder",
+      ])
+    for (const r of (pendingRows ?? []) as Array<{ email: string | null }>) {
+      if (r.email) pendingMailEmails.add(r.email.toLowerCase())
+    }
+  }
+
   // Convert prospect rows to flat SalesContact objects.
   const contacts: SalesContact[] = prospectsWithContact.map((p): SalesContact => ({
     prospectId: p.id,
@@ -874,7 +902,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     website: (p as any).website ?? null,
     source: p.source,
     status: p.status,
-    sequenceStatus: p.sequence_status,
+    sequenceStatus: pendingMailEmails.has(p.email.toLowerCase()) ? "active" : p.sequence_status,
     emailsSent: p.emails_sent ?? 0,
     emailsDelivered: p.emails_delivered ?? 0,
     emailsOpened: p.emails_opened ?? 0,
@@ -1555,6 +1583,24 @@ export async function fetchSalesContactForProspect(prospectId: string): Promise<
     .select("id")
     .eq("prospect_id", prospectId)
     .limit(1)
+  // Same Active-override as fetchSalesCompanies: a queued sales mail
+  // (stage mails included) means the machine is still working this
+  // contact, whatever the contacted drip's own flag says.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: pendingRow } = await (supabase as any)
+    .from("email_drip_queue")
+    .select("id")
+    .ilike("email", p.email)
+    .is("sent_at", null)
+    .is("cancelled_at", null)
+    .in("template", [
+      "outreach-intro", "outreach-followup", "outreach-final",
+      "prospect-intro", "prospect-followup", "prospect-final",
+      "new-professional-invite", "new-professional-followup", "new-professional-final",
+      "visitor-nudge", "verified-reminder",
+    ])
+    .limit(1)
+    .maybeSingle()
   return {
     prospectId: p.id,
     email: p.email,
@@ -1562,7 +1608,7 @@ export async function fetchSalesContactForProspect(prospectId: string): Promise<
     website: (p as any).website ?? null,
     source: p.source,
     status: p.status,
-    sequenceStatus: p.sequence_status,
+    sequenceStatus: pendingRow ? "active" : p.sequence_status,
     emailsSent: p.emails_sent ?? 0,
     emailsDelivered: p.emails_delivered ?? 0,
     emailsOpened: p.emails_opened ?? 0,
@@ -1610,7 +1656,18 @@ export async function fetchProspectById(prospectId: string): Promise<Prospect | 
       .maybeSingle()
     companyStatus = (companyRow?.status as string | null) ?? null
   }
-  return { ...withContact, companyStatus } as Prospect & { companyStatus: string | null }
+  // Signup honesty: signed_up_at stamps when the auth user is CREATED —
+  // which is code-SEND (signUpWithOtpAction pre-creates), i.e. only
+  // "Signup Started" on the user ladder. Whether the account ever
+  // verified (a first session exists) decides which divider the
+  // timeline shows: "signed up" vs "signup started".
+  let signupVerified: boolean | null = null
+  const linkedUserId = (withContact as { user_id?: string | null }).user_id
+  if (linkedUserId && (withContact as { signed_up_at?: string | null }).signed_up_at) {
+    const { data: authUser } = await supabase.auth.admin.getUserById(linkedUserId)
+    signupVerified = authUser?.user ? Boolean(authUser.user.last_sign_in_at) : null
+  }
+  return { ...withContact, companyStatus, signupVerified } as Prospect & { companyStatus: string | null }
 }
 
 export async function fetchProspectEvents(prospectId: string) {

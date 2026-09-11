@@ -135,6 +135,10 @@ export async function trackProspectLandingVisit(
     try {
       const prospectEmail = (prospect as any).email as string | null
       if (prospectEmail) {
+        // The visit outran the contacted drip — retire its pending
+        // mails now instead of letting them sit "Scheduled" until the
+        // send-time gate reaches the same verdict.
+        await cancelOvertakenDripRows(supabase, prospectEmail, "visitor")
         const { data: existing } = await supabase
           .from("email_drip_queue")
           .select("id")
@@ -194,6 +198,41 @@ const APOLLO_STAGE_FOR: Record<string, string> = {
   active: "Listed",
 };
 
+// The contacted-series drips — everything a promotion past Contacted
+// makes obsolete.
+const CONTACTED_SERIES_TEMPLATES = [
+  "outreach-intro", "outreach-followup", "outreach-final",
+  "prospect-intro", "prospect-followup", "prospect-final",
+  "new-professional-invite", "new-professional-followup", "new-professional-final",
+];
+
+/**
+ * Eagerly cancel queue rows the promotion just overtook — the same
+ * verdict the drip cron's stage gate would reach at send time, applied
+ * at the transition so the contact panel doesn't show doomed
+ * "Scheduled" rows for weeks. The send-time gate stays as the safety
+ * net for rows enqueued after this moment.
+ */
+async function cancelOvertakenDripRows(
+  supabase: ReturnType<typeof createServiceRoleSupabaseClient>,
+  email: string,
+  stage: "visitor" | "verified" | "owned",
+): Promise<void> {
+  const templates = [...CONTACTED_SERIES_TEMPLATES];
+  if (stage !== "visitor") templates.push("visitor-nudge");
+  if (stage === "owned") templates.push("verified-reminder");
+  try {
+    await (supabase.from("email_drip_queue") as any)
+      .update({ cancelled_at: new Date().toISOString(), cancelled_reason: "status_change" })
+      .ilike("email", email)
+      .is("sent_at", null)
+      .is("cancelled_at", null)
+      .in("template", templates);
+  } catch (err) {
+    logger.error("Failed to cancel overtaken drip rows", { email, stage }, err as Error);
+  }
+}
+
 export async function advanceProspectStage(
   identifier: { email?: string | null; companyId?: string | null },
   stage: "verified" | "owned",
@@ -219,6 +258,14 @@ export async function advanceProspectStage(
     old_status: prospect.status,
     new_status: stage,
   } as any);
+
+  // Retire everything this promotion overtook (verified also ends the
+  // visitor-nudge; owned also ends the verified-reminder). Runs BEFORE
+  // the verified-reminder enqueue below, so that row survives.
+  {
+    const overtakenEmail = ((prospect as any).email as string | null) ?? identifier.email ?? null;
+    if (overtakenEmail) await cancelOvertakenDripRows(supabase, overtakenEmail, stage);
+  }
 
   // Verified-reminder: cart-abandonment mail, +1 business day after the
   // company step was confirmed without a commit. One per address, ever;

@@ -75,9 +75,21 @@ export async function enrolOutreachContact(
   // contact import doesn't blast in one cron tick — each enrolment
   // grabs the next free 5-min slot in 09:00–11:00 Amsterdam, rolling
   // to the next business day when full.
-  const introAt = (await claimNextSendSlot(supabase, nextBusinessSlot(0))).toISOString()
-  const followupAt = (await claimNextSendSlot(supabase, nextBusinessSlot(FOLLOWUP_DAYS))).toISOString()
-  const finalAt = (await claimNextSendSlot(supabase, nextBusinessSlot(FINAL_DAYS))).toISOString()
+  // The three claims run BEFORE any row is inserted, so the ledger
+  // can't see the earlier steps — on a saturated calendar all three
+  // would roll to the same first-free slot and the contact would get
+  // intro + followup + final in one minute. Force each step's base past
+  // the previous step's claimed slot so the days stay strictly ordered.
+  const introSlot = await claimNextSendSlot(supabase, nextBusinessSlot(0))
+  let followupBase = nextBusinessSlot(FOLLOWUP_DAYS)
+  if (followupBase.getTime() <= introSlot.getTime()) followupBase = nextBusinessSlot(1, introSlot)
+  const followupSlot = await claimNextSendSlot(supabase, followupBase)
+  let finalBase = nextBusinessSlot(FINAL_DAYS)
+  if (finalBase.getTime() <= followupSlot.getTime()) finalBase = nextBusinessSlot(1, followupSlot)
+  const finalSlot = await claimNextSendSlot(supabase, finalBase)
+  const introAt = introSlot.toISOString()
+  const followupAt = followupSlot.toISOString()
+  const finalAt = finalSlot.toISOString()
 
   const stepConfig = [
     { template: "outreach-intro", step: 0, sendAt: introAt },

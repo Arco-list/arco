@@ -441,7 +441,9 @@ function TimelineStream({
         { label: "verified", ts: eventTs("prospect.verified"), status: "verified" },
         // Post-remodel ladder: signup is an EVENT (it keeps a divider,
         // dotted like the acquisition stages), 'created' became Owned.
-        { label: "signed up", ts: prospect.signed_up_at, status: "owned" },
+        // signed_up_at stamps at code-SEND (the account is pre-created),
+        // so an account that never verified reads "signup started".
+        { label: prospect.signupVerified === false ? "signup started" : "signed up", ts: prospect.signed_up_at, status: "owned" },
         { label: "owned", ts: eventTs("prospect.owned") ?? prospect.company_created_at, status: "owned" },
         { label: "listed", ts: (prospect as any).converted_at, status: "active" },
       ]
@@ -554,6 +556,9 @@ function TimelineStream({
     "user.signed_up",
     "company_invited",
     "status_changed",
+    // The Contacted chapter IS the sequence start — the release-batch
+    // cron's bookkeeping row would only repeat it.
+    "sequence_auto_started",
   ])
 
   // Cleanup on raw events, in one pass:

@@ -24,19 +24,32 @@ const OLLI_HERO =
 
 /** The fixture exists ON DEMAND: deleting Olli (row, credit, accounts)
  *  is always safe cleanup — the next test send or preview recreates
- *  exactly this state. Nothing here touches real companies. */
-async function ensureClaimFixture(svc: ReturnType<typeof createServiceRoleSupabaseClient>): Promise<void> {
-  // Someone actively testing may have their OWN askolli.com row mid-
-  // funnel (e.g. a platform walkthrough created one while the fixture
-  // was deleted). Recreating the fixture next to it makes a confusing
-  // duplicate — skip creation while any row on the domain exists.
+ *  exactly this state. Nothing here touches real companies.
+ *
+ *  Returns the EFFECTIVE fixture company id. A platform-channel
+ *  walkthrough creates its own askolli.com row under a fresh id; the
+ *  canonical fixture can't be recreated next to it (duplicate), and a
+ *  token minted on the canonical id would violate its FK — which used
+ *  to fail silently and ship test mails with the static sample URL.
+ *  Such a row is ADOPTED as the fixture instead; if a completed
+ *  walkthrough left it claimed, it's un-claimed first (everything on
+ *  askolli.com is test state, same rules as the claim-test reset). */
+async function ensureClaimFixture(svc: ReturnType<typeof createServiceRoleSupabaseClient>): Promise<string> {
   const { data: existing } = await svc
     .from("companies")
-    .select("id")
+    .select("id, owner_id")
     .eq("domain", "askolli.com")
     .limit(1)
     .maybeSingle()
-  if (existing && existing.id !== CLAIM_FIXTURE_ID) return
+  if (existing && existing.id !== CLAIM_FIXTURE_ID) {
+    if (existing.owner_id) {
+      await svc
+        .from("companies")
+        .update({ owner_id: null, status: "invited", audience: "homeowner" } as never)
+        .eq("id", existing.id)
+    }
+    return existing.id
+  }
 
   await svc.from("companies").upsert(
     {
@@ -74,6 +87,7 @@ async function ensureClaimFixture(svc: ReturnType<typeof createServiceRoleSupaba
       invited_service_category_ids: [FIXTURE_SERVICE_ID],
     } as never)
   }
+  return CLAIM_FIXTURE_ID
 }
 
 export async function buildClaimTestFunnelVars(
@@ -91,10 +105,11 @@ export async function buildClaimTestFunnelVars(
       : ("invite" as const)
 
   const svcEnsure = createServiceRoleSupabaseClient()
-  await ensureClaimFixture(svcEnsure)
+  const fixtureId = await ensureClaimFixture(svcEnsure)
 
   let creditId: string | null = null
   let tokenEmail = "hallo@askolli.com"
+  let inviteVisuals: Record<string, unknown> = {}
   if (channel === "invite") {
     // The invite family rides the fixture's pending credit; its invited
     // address becomes the token's proven mailbox.
@@ -102,7 +117,7 @@ export async function buildClaimTestFunnelVars(
     const { data: credit } = await svc
       .from("project_professionals")
       .select("id, invited_email, projects!inner(status)")
-      .eq("company_id", CLAIM_FIXTURE_ID)
+      .eq("company_id", fixtureId)
       .eq("is_project_owner", false)
       .eq("status", "invited")
       .not("invited_email", "is", null)
@@ -112,10 +127,52 @@ export async function buildClaimTestFunnelVars(
       .maybeSingle()
     creditId = credit?.id ?? null
     tokenEmail = (credit?.invited_email as string | null) ?? "niek@askolli.com"
+
+    // The invite templates render a project card + inviter badge — pull
+    // the fixture project's real fields so the email tells the same
+    // story as the funnel behind its button (Olli, credited on the
+    // fixture project) instead of the preview route's generic sample
+    // visuals (which used to leave "Villa Oisterwijk" around an Olli
+    // token — confusing mid-walkthrough).
+    const [{ data: project }, { data: photo }, { data: owner }] = await Promise.all([
+      svc.from("projects").select("title, slug, address_city").eq("id", FIXTURE_PROJECT_ID).maybeSingle(),
+      svc
+        .from("project_photos")
+        .select("url")
+        .eq("project_id", FIXTURE_PROJECT_ID)
+        .order("is_primary", { ascending: false })
+        .order("order_index", { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+      svc
+        .from("project_professionals")
+        .select("companies!inner(name, logo_url, city)")
+        .eq("project_id", FIXTURE_PROJECT_ID)
+        .eq("is_project_owner", true)
+        .limit(1)
+        .maybeSingle(),
+    ])
+    const projectRow = project as { title?: string | null; slug?: string | null; address_city?: string | null } | null
+    const ownerCompany = (owner as { companies?: { name?: string | null; logo_url?: string | null; city?: string | null } } | null)?.companies
+    inviteVisuals = {
+      project_title: projectRow?.title ?? undefined,
+      project_name: projectRow?.title ?? undefined,
+      // Overwrites the sample "Villa" — filtered out of the card
+      // subtitle when undefined.
+      project_type: undefined,
+      project_location: projectRow?.address_city ?? undefined,
+      project_link: projectRow?.slug ? `${origin}/projects/${projectRow.slug}` : undefined,
+      project_image: (photo as { url?: string } | null)?.url ?? OLLI_HERO,
+      project_owner: ownerCompany?.name ?? undefined,
+      inviter_company_name: ownerCompany?.name ?? undefined,
+      inviter_logo_url: ownerCompany?.logo_url ?? undefined,
+      inviter_subtitle: ownerCompany?.city ?? undefined,
+      inviter_page_url: undefined,
+    }
   }
 
   const { token } = await issueClaimToken({
-    companyId: CLAIM_FIXTURE_ID,
+    companyId: fixtureId,
     creditId,
     email: tokenEmail,
     channel,
@@ -136,5 +193,6 @@ export async function buildClaimTestFunnelVars(
     company_subtitle: "Interieurontwerper · Amsterdam",
     logo_url: null,
     hero_image_url: OLLI_HERO,
+    ...inviteVisuals,
   }
 }
