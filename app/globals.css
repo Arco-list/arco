@@ -5991,6 +5991,19 @@ body.no-scroll {
   flex-shrink: 0;
 }
 
+/* Clickable pill action — the per-row "Review" shortcut on admin
+   projects, sitting next to the In review status. Tinted to the same
+   blue as that status; the hover fill signals the click. */
+.status-pill--review {
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.status-pill--review:hover {
+  background: #eff6ff;
+}
+
 .status-pill-dot {
   width: 5px;
   height: 5px;

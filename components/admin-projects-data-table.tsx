@@ -366,18 +366,29 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
         const config = STATUS_CONFIG[project.status] ?? STATUS_CONFIG.draft
         return (
           <div className="flex flex-col gap-0.5">
-            <button
-              type="button"
-              className="arco-table-status hover:opacity-70 transition-opacity cursor-pointer"
-              onClick={(e) => {
-                e.stopPropagation()
-                setStatusDialogProject(project)
-                setStatusSelection(project.status)
-              }}
-            >
-              <span className={`arco-table-status-dot ${config.dotColor}`} />
-              {config.label}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="arco-table-status hover:opacity-70 transition-opacity cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setStatusDialogProject(project)
+                  setStatusSelection(project.status)
+                }}
+              >
+                <span className={`arco-table-status-dot ${config.dotColor}`} />
+                {config.label}
+              </button>
+              {project.status === "in_progress" && (
+                <Link
+                  href={`/dashboard/edit/${project.id}?review=1`}
+                  className="status-pill status-pill--review"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Review
+                </Link>
+              )}
+            </div>
             {project.status === "rejected" && project.rejectionReason && (
               <span className="arco-table-secondary max-w-[180px] truncate" title={project.rejectionReason}>
                 {project.rejectionReason}
