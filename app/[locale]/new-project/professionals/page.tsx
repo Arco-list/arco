@@ -1262,7 +1262,7 @@ function InviteStep({
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text-secondary">
-                    <IconComponent aria-hidden className="h-5 w-5" />
+                    <IconComponent aria-hidden className="h-7 w-7" />
                   </div>
                   <div>
                     <h2 className="body-regular font-semibold text-foreground">{service.name}</h2>

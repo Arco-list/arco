@@ -1396,7 +1396,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                 const ServiceIcon = resolveProfessionalServiceIcon(primary?.slug ?? primary?.name ?? null, (primary as { parentName?: string | null } | undefined)?.parentName ?? null)
                 return (
                   <div className="company-icon-initials">
-                    <ServiceIcon size={40} strokeWidth={1.25} aria-hidden />
+                    <ServiceIcon className="credit-icon-service" aria-hidden />
                   </div>
                 )
               })()

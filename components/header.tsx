@@ -172,7 +172,7 @@ function SearchOverlay({ searchQuery, setSearchQuery, inputRef, onSearch, onClos
                         const Icon = resolveProfessionalServiceIcon(p.serviceSlug ?? p.service ?? null)
                         return (
                           <div className="w-10 h-10 rounded-full bg-[#f5f5f4] shrink-0 flex items-center justify-center text-[#6b6b68]">
-                            <Icon size={18} strokeWidth={1.4} aria-hidden />
+                            <Icon size={28} strokeWidth={1} aria-hidden />
                           </div>
                         )
                       })()
@@ -767,7 +767,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                                 const Icon = resolveProfessionalServiceIcon(activeCompany.serviceSlug ?? null, null)
                                 return (
                                   <span className="w-5 h-5 rounded-full bg-[#f0f0ee] flex items-center justify-center text-[9px] font-medium text-[#6b6b68]">
-                                    {Icon ? <Icon style={{ width: 12, height: 12 }} strokeWidth={1.3} /> : activeCompany.name.charAt(0)}
+                                    {Icon ? <Icon style={{ width: 14, height: 14 }} strokeWidth={1.5} /> : activeCompany.name.charAt(0)}
                                   </span>
                                 )
                               })()}
@@ -813,7 +813,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                                       const Icon = resolveProfessionalServiceIcon(c.serviceSlug ?? null, null)
                                       return (
                                         <span className="w-4 h-4 rounded-full bg-[#f0f0ee] flex items-center justify-center text-[8px] font-medium text-[#a1a1a0]">
-                                          {Icon ? <Icon style={{ width: 10, height: 10 }} strokeWidth={1.3} /> : c.name.charAt(0)}
+                                          {Icon ? <Icon style={{ width: 11, height: 11 }} strokeWidth={1.5} /> : c.name.charAt(0)}
                                         </span>
                                       )
                                     })()}

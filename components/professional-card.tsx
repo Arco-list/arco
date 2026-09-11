@@ -150,7 +150,7 @@ export const ProfessionalCard = memo(function ProfessionalCard({
               )
               return (
                 <div className="pro-card-logo pro-card-logo-placeholder">
-                  <ServiceIcon size={18} strokeWidth={1.4} aria-hidden />
+                  <ServiceIcon size={24} strokeWidth={1} aria-hidden />
                 </div>
               )
             })()

@@ -66,7 +66,7 @@ export function ProfessionalHeader({
             const Icon = resolveProfessionalServiceIcon(primaryServiceSlug ?? services?.split("·")[0]?.trim() ?? null)
             return (
               <div className="company-icon-initials">
-                <Icon size={40} strokeWidth={1.25} aria-hidden />
+                <Icon className="credit-icon-service" aria-hidden />
               </div>
             )
           })()

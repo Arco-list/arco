@@ -798,7 +798,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                 {r.logoUrl
                   ? <img src={r.logoUrl} alt="" />
                   : Icon
-                    ? <Icon className="credit-icon-service" style={{ width: 28, height: 28 }} />
+                    ? <Icon className="credit-icon-service" style={{ width: 28, height: 28, strokeWidth: 1.1 }} />
                     : <span className="credit-icon-initials" style={{ fontSize: 18 }}>{initials}</span>}
               </div>
               <div>

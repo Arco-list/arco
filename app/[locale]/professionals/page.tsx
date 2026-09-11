@@ -96,6 +96,29 @@ export default async function ProfessionalsPage({ params }: { params: Promise<{ 
     logger.error("Failed to render professionals discover page", { component: "ProfessionalsPage" }, error as Error)
   }
 
+  // Service cards — the brand-row pattern from product discover. Only
+  // services with a real bench behind them (10+ professionals) earn a
+  // card; the hub aggregation already carries per-service counts, the
+  // categories lookup adds the uuid the filter context selects on.
+  const MIN_SERVICE_CARD_COUNT = 10
+  let serviceCards: { id: string; slug: string; name: string; nameNl: string | null }[] = []
+  try {
+    const qualifying = hubs
+      .filter((h) => h.kind === "service" && h.serviceSlug && h.count >= MIN_SERVICE_CARD_COUNT)
+      .sort((a, b) => b.count - a.count)
+    if (qualifying.length > 0) {
+      const supabase = await createServerSupabaseClient()
+      const { data: cats } = await supabase
+        .from("categories")
+        .select("id, slug, name, name_nl")
+        .in("slug", qualifying.map((h) => h.serviceSlug as string))
+      const order = new Map(qualifying.map((h, i) => [h.serviceSlug as string, i]))
+      serviceCards = (cats ?? [])
+        .map((c) => ({ id: c.id, slug: c.slug ?? "", name: c.name, nameNl: (c as { name_nl?: string | null }).name_nl ?? null }))
+        .sort((a, b) => (order.get(a.slug) ?? 99) - (order.get(b.slug) ?? 99))
+    }
+  } catch { /* the row simply doesn't render */ }
+
   return (
     <div className="min-h-screen bg-white">
       <TrackPageView path="/professionals" />
@@ -108,6 +131,7 @@ export default async function ProfessionalsPage({ params }: { params: Promise<{ 
             <ProfessionalsGrid
               professionals={professionals}
               initialTotal={total}
+              serviceCards={serviceCards}
               preFooter={
                 <>
                   <ProfessionalPopularSearches hubs={hubs} locale={locale} />

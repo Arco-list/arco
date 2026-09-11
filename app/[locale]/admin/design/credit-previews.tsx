@@ -48,7 +48,6 @@ export function CreditPreviews() {
         .cp-head-icon { flex: 0 0 44px; }
         .cp-row { display: flex; align-items: center; gap: 18px; text-align: left; padding: 13px 8px; border-bottom: 1px solid #eeeeed; }
         .cp-row .credit-icon { width: 44px; height: 44px; margin: 0; flex-shrink: 0; }
-        .cp-row .credit-icon-service { width: 23px; height: 23px; }
         .cp-name { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 400; color: var(--arco-black);
                    line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .cp-service { flex: 0 0 190px; font-size: 14px; color: var(--text-secondary, #6b6b68); line-height: 1.5; }
@@ -74,7 +73,7 @@ export function CreditPreviews() {
             return (
               <div className="cp-row" key={row.company}>
                 <div className="credit-icon">
-                  <Icon className="credit-icon-service" strokeWidth={1} aria-hidden />
+                  <Icon className="credit-icon-service" style={{ width: 34, height: 34, strokeWidth: 0.75 }} aria-hidden />
                 </div>
                 <span className="cp-name">{row.company}</span>
                 <span className="cp-service">{row.service}</span>

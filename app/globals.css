@@ -2643,10 +2643,34 @@ footer .footer-heading {
    mark, the ratio the whole set is drawn to — smaller and the mark
    reads as lost in the circle rather than placed in it. */
 .credit-icon-service {
-  width: 53px;
-  height: 53px;
+  /* The design treatment from /admin/design → Service marks: 72px in
+     the 100px disc at a 0.45 stroke (~1.35px hairline). stroke-width
+     here outranks any strokeWidth attribute a caller passes, so every
+     disc lockup renders identically; small non-disc contexts (18-22px)
+     size and weight the mark inline instead — at those sizes the
+     physical-pixel floor rules. */
+  width: 72px;
+  height: 72px;
+  stroke-width: 0.45;
   color: var(--arco-mid);
 }
+
+/* Service quick-filter cards (professionals discover) — light hover:
+   the disc steps one tone darker and the mark takes the primary. */
+.service-quick-card .credit-icon {
+  transition: background 0.15s ease;
+}
+.service-quick-card .credit-icon-service {
+  transition: color 0.15s ease;
+}
+.service-quick-card:hover .credit-icon {
+  background: #ecebe9;
+}
+.service-quick-card:hover .credit-icon-service {
+  color: var(--primary);
+}
+
+
 
 .credit-icon-initials {
   font-family: var(--font-sans);

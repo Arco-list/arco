@@ -3,16 +3,11 @@
 import type { LucideIcon } from "lucide-react"
 import {
   Briefcase,
-  Cable,
   Cpu,
   Hammer,
-  HeartPulse,
-  Home,
   Leaf,
-  Lock,
   Paintbrush,
   Ruler,
-  ShieldCheck,
   TreePine,
 } from "lucide-react"
 
@@ -39,15 +34,25 @@ import {
   SwimmingPoolIcon,
   TilesStonesIcon,
   WindowsDoorsIcon,
+  StructuralEngineerIcon,
+  RoofingIcon,
+  WellnessIcon,
+  ElectricalIcon,
+  HeatingVentilationIcon,
+  SecurityIcon,
+  SmartHomeIcon,
+  SolarIcon,
+  PainterIcon,
+  FencingIcon,
+  ShedBuilderIcon,
 } from "./custom-service-icons"
 
 const DEFAULT_PROFESSIONAL_ICON: LucideIcon = Briefcase
 
 /**
- * Every service that carries credits has a hand-drawn Arco mark; the
- * handful that do not yet (roof, wellness, electrical, security,
- * domotica, painting, indoor plants, fit-out, garden house, fencing)
- * keep a lucide stand-in until they are drawn.
+ * Every service in the taxonomy now has a hand-drawn Arco mark; only
+ * two synonym-services keep a lucide stand-in (interior fit-out →
+ * Ruler, indoor plants → Leaf).
  *
  * Keys are normalised slugs. Both forms are listed for each service:
  * the taxonomy path (`construction_kitchen`) and the bare
@@ -71,6 +76,8 @@ const SERVICE_ICON_MAP: Record<string, LucideIcon> = {
   landscaping: GardenDesignIcon,
   lighting_designer: LightingDesignIcon,
   lighting_design: LightingDesignIcon,
+  structural_engineer: StructuralEngineerIcon,
+  design_planning_structural_engineer: StructuralEngineerIcon,
 
   // — Construction
   contractor: BuilderIcon,
@@ -100,20 +107,28 @@ const SERVICE_ICON_MAP: Record<string, LucideIcon> = {
   swimming_pools: SwimmingPoolIcon,
   swimming_pool: SwimmingPoolIcon,
   construction_swimming_pool: SwimmingPoolIcon,
-  construction_roof: Home,
-  roof: Home,
-  construction_wellness: HeartPulse,
-  wellness: HeartPulse,
+  construction_roof: RoofingIcon,
+  roof: RoofingIcon,
+  roofing: RoofingIcon,
+  construction_wellness: WellnessIcon,
+  wellness: WellnessIcon,
+  saunas_spas: WellnessIcon,
 
   // — Systems
   systems_lighting: LightingIcon,
   lighting: LightingIcon,
-  systems_electrical_systems: Cable,
-  electrical_systems: Cable,
-  systems_security_systems: ShieldCheck,
-  security_systems: ShieldCheck,
-  systems_domotica: Cpu,
-  domotica: Cpu,
+  systems_electrical_systems: ElectricalIcon,
+  electrical_systems: ElectricalIcon,
+  systems_security_systems: SecurityIcon,
+  security_systems: SecurityIcon,
+  systems_domotica: SmartHomeIcon,
+  domotica: SmartHomeIcon,
+  smart_homes: SmartHomeIcon,
+  systems_smart_homes: SmartHomeIcon,
+  heating_ventilation: HeatingVentilationIcon,
+  systems_heating_ventilation: HeatingVentilationIcon,
+  solar_installer: SolarIcon,
+  systems_solar_installer: SolarIcon,
 
   // — Finishing
   fireplace: FireplaceIcon,
@@ -133,8 +148,9 @@ const SERVICE_ICON_MAP: Record<string, LucideIcon> = {
   finishing_art: ArtIcon,
   finishing_interior_fit_out: Ruler,
   interior_fit_out: Ruler,
-  finishing_painting: Paintbrush,
-  painting: Paintbrush,
+  finishing_painting: PainterIcon,
+  painting: PainterIcon,
+  painter: PainterIcon,
   finishing_indoor_plants: Leaf,
   indoor_plants: Leaf,
 
@@ -148,10 +164,13 @@ const SERVICE_ICON_MAP: Record<string, LucideIcon> = {
   outdoor_outdoor_lighting: OutdoorLightingIcon,
   outdoor_garden: GardenDesignIcon,
   garden: GardenDesignIcon,
-  outdoor_garden_house: Home,
-  garden_house: Home,
-  outdoor_fencing_and_gates: Lock,
-  fencing_and_gates: Lock,
+  outdoor_garden_house: ShedBuilderIcon,
+  garden_house: ShedBuilderIcon,
+  shed_builder: ShedBuilderIcon,
+  outdoor_shed_builder: ShedBuilderIcon,
+  outdoor_fencing_and_gates: FencingIcon,
+  fencing_and_gates: FencingIcon,
+  fencing_gates: FencingIcon,
 }
 
 const CATEGORY_ICON_MAP: Record<string, LucideIcon> = {

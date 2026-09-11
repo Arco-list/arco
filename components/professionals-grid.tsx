@@ -16,6 +16,7 @@ import type { ProfessionalCard } from "@/lib/professionals/types"
 import { useProfessionalsForMap, useProfessionalsQuery } from "@/hooks/use-professionals-query"
 import { SortLinks } from "@/components/sort-links"
 import { pluralizeLabel } from "@/lib/pluralize-label"
+import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services"
 
 // Map preview card: positioned via CSS order (3rd on desktop, 2nd on iPad, hidden on mobile)
 
@@ -24,6 +25,7 @@ export function ProfessionalsGrid({
   initialTotal,
   hubMode = false,
   preFooter,
+  serviceCards = [],
 }: {
   professionals?: ProfessionalCard[]
   initialTotal?: number
@@ -32,6 +34,10 @@ export function ProfessionalsGrid({
   /** Rendered between the grid and the Footer (this component owns the
    *  Footer) — service hubs pass their editorial prose + FAQ here. */
   preFooter?: React.ReactNode
+  /** Service quick-filter cards (the brand-row pattern from product
+   *  discover): disc with the service mark, name below. The page passes
+   *  only services with enough professionals to be worth a card. */
+  serviceCards?: { id: string; slug: string; name: string; nameNl: string | null }[]
 }) {
   const [showMap, setShowMap] = useState(false)
   const t = useTranslations("professionals")
@@ -40,6 +46,7 @@ export function ProfessionalsGrid({
   const {
     selectedCategories,
     selectedServices,
+    setSelectedServices,
     selectedCities,
     setSelectedCities,
     selectedRegions,
@@ -258,6 +265,37 @@ export function ProfessionalsGrid({
             : <h2 className="arco-section-title">{pageTitle}</h2>}
         </div>
       </div>
+
+      {/* Service cards — brand-row pattern from product discover: a disc
+          with the hand-drawn service mark, name below. Clicking selects
+          that service; the row hides once any service/category filter
+          narrows the view (mirroring the brand row). */}
+      {serviceCards.length > 0 && selectedServices.length === 0 && selectedCategories.length === 0 && (
+        <div className="wrap" style={{ paddingTop: 24, paddingBottom: 8 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 32, alignItems: "flex-start" }}>
+            {serviceCards.map((svc) => {
+              const ServiceIcon = resolveProfessionalServiceIcon(svc.slug)
+              return (
+                <button
+                  key={svc.id}
+                  type="button"
+                  onClick={() => setSelectedServices([...selectedServices, svc.id])}
+                  className="credit-card service-quick-card"
+                  // Flex column so a label wider than the 100px disc
+                  // ("Interieurontwerper") overflows symmetrically and
+                  // stays centered under the circle.
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, width: 100, display: "flex", flexDirection: "column", alignItems: "center" }}
+                >
+                  <div className="credit-icon">
+                    <ServiceIcon className="credit-icon-service" strokeWidth={1} />
+                  </div>
+                  <h3 className="arco-label" style={{ whiteSpace: "nowrap", textAlign: "center" }}>{nl ? svc.nameNl ?? svc.name : svc.name}</h3>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="discover-results">
         <div className="wrap">

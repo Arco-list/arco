@@ -5870,7 +5870,7 @@ export default function ListingEditorPage() {
                       // service mark at least says what they did here.
                       const opt = professionalServices.find(o => o.id === inv.serviceIds[0])
                       const ServiceIcon = resolveProfessionalServiceIcon(opt?.slug ?? opt?.name ?? null, opt?.parentName ?? null)
-                      return <ServiceIcon size={20} strokeWidth={1.5} style={{ color: "#a1a1a0" }} />
+                      return <ServiceIcon className="credit-icon-service" style={{ width: 34, height: 34, strokeWidth: 0.75 }} />
                     })()}
                   </div>
 
@@ -6384,7 +6384,7 @@ export default function ListingEditorPage() {
                               // the company's own primary service.
                               const opt = professionalServices.find(o => o.id === (draftCard.serviceIds?.[0] ?? inviteCompanyPrimary[dialogPendingKey]))
                               const Icon = resolveProfessionalServiceIcon(opt?.slug ?? opt?.name ?? null, opt?.parentName ?? null)
-                              return <Icon size={20} strokeWidth={1.5} style={{ color: "#a1a1a0" }} />
+                              return <Icon className="credit-icon-service" style={{ width: 34, height: 34, strokeWidth: 0.75 }} />
                             })()
                           )}
                         </div>
@@ -6557,7 +6557,7 @@ export default function ListingEditorPage() {
                     (() => {
                       const opt = professionalServices.find(o => o.id === draftCard.serviceIds?.[0])
                       const Icon = resolveProfessionalServiceIcon(opt?.slug ?? opt?.name ?? null, opt?.parentName ?? null)
-                      return <Icon size={20} strokeWidth={1.5} style={{ color: draftCard.companyName ? "#a1a1a0" : "#d4d4d2" }} />
+                      return <Icon className="credit-icon-service" style={{ width: 34, height: 34, strokeWidth: 0.75, color: draftCard.companyName ? undefined : "#d4d4d2" }} />
                     })()
                   )}
                 </div>

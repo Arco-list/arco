@@ -2,6 +2,7 @@ import { FAQPreview } from "./faq-preview"
 import { AdminTabs } from "@/components/admin/admin-tabs"
 import { DiscoverCardPreview } from "./discover-card-preview"
 import { ServiceMarksPreview } from "./service-marks-preview"
+import { UiIconsPreview } from "./ui-icons-preview"
 import { CreditPreviews } from "./credit-previews"
 
 export const dynamic = "force-dynamic"
@@ -1061,6 +1062,96 @@ export default function DesignPage() {
           <div id="g-media" style={{ scrollMarginTop: 140, borderTop: "1px solid var(--arco-rule, #e5e5e4)", paddingTop: 32, marginBottom: 32 }}>
             <p className="arco-eyebrow" style={{ color: "var(--primary, #016D75)" }}>Media</p>
           </div>
+          {/* ICONS (UI) */}
+          <div style={{ marginBottom: 80 }}>
+            <h2 id="ui-icons" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Icons</h2>
+            <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
+              The interface icons (nav, account menu, cards) redrawn in the same
+              flowing one-pen hand as the service marks, tuned for symbol duty:
+              subtler wobble, near-miss closures instead of curls, and lucide&rsquo;s
+              optical size (content fills the canvas) so each can drop in
+              one-for-one. Every tile shows the icon at 22px and 16px — judge
+              small-size legibility here. Adoption happens per surface once the
+              set is approved; until then the product still renders lucide.
+            </p>
+            <UiIconsPreview />
+          </div>
+
+          {/* SERVICE MARKS */}
+          <div style={{ marginBottom: 80 }}>
+            <h2 id="service-marks" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Service marks</h2>
+            <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
+              One hand-drawn mark per service, drawn as a single family in the flowing
+              one-pen hand: two to four strokes per mark, long lines that run into each
+              other without lifting (wall into roof into floor), loops as accents, sharp
+              apexes, and closures that end in a near-miss or dip through the line they
+              meet. Always a scene rather than a symbol — the object sits on a ground
+              line. On the discover service cards they render at 72px with stroke 0.45
+              inside the 100px disc, with the light hover (disc a tone darker, mark to
+              primary) — the same treatment previewed below. Elsewhere the shared
+              53px/1 lockup applies.
+            </p>
+            <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
+              A mark stands in wherever a company has no logo — on project credits, on
+              discover cards, in the editor — so it says what a firm <em>does</em> rather
+              than showing dead initials. Each is resolved here through{" "}
+              <code>resolveProfessionalServiceIcon</code> from the service&rsquo;s real
+              <code> categories.slug</code>, so this is exactly what the product renders;
+              a service that falls through to the generic briefcase is a missing mapping.
+            </p>
+            <ServiceMarksPreview />
+          </div>
+
+          {/* CREDITED PROFESSIONALS */}
+          <div style={{ marginBottom: 80 }}>
+            <h2 id="credited-professionals" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Credited professionals</h2>
+            <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
+              The same credit renders twice: as an editable row while the owner is building
+              the project, and as a public card once it is published. Both lead with the
+              service and the company, and both fall back to the hand-drawn service mark when
+              a company has no logo &mdash; so a credit says what a firm <em>did</em> before
+              you read its name.
+            </p>
+            <CreditPreviews />
+          </div>
+
+          {/* PHOTO GALLERY LAYOUTS */}
+          <div style={{ marginBottom: 80 }}>
+            <h2 id="photo-gallery-layouts" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Photo gallery layouts</h2>
+            <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
+              The project photo tour assigns grid spans based on photo orientation —
+              <strong> L</strong> = landscape (aspect 0.9–2.2), <strong> P</strong> = portrait (aspect &lt; 0.9),
+              <strong> Pano</strong> = panoramic (aspect &gt; 2.2). Desktop / iPad share a 6-col grid where the
+              row-unit equals ½ a col-width (1 user row = 6 row-units = 3W tall). Mobile switches to a 2-col
+              grid with <code>grid-auto-flow: dense</code>. Source: <code>assignSpans()</code> in <code>components/project/photo-tour.tsx</code>.
+            </p>
+
+            <h4 className="arco-label" style={{ marginBottom: 20 }}>Desktop / iPad (6-col)</h4>
+            <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 32, marginBottom: 32 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 36 }}>
+                {photoGalleryDesktopCombos.map((combo) => (
+                  <PhotoComboPreview key={combo.name} combo={combo} cols={6} unit={12} gap={3} />
+                ))}
+              </div>
+            </div>
+
+            <h4 className="arco-label" style={{ marginBottom: 20 }}>Mobile (2-col, dense flow)</h4>
+            <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 32, marginBottom: 16 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 36 }}>
+                {photoGalleryMobileCombos.map((combo) => (
+                  <PhotoComboPreview key={combo.name} combo={combo} cols={2} unit={22} gap={3} autoFlow="dense" />
+                ))}
+              </div>
+            </div>
+            <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
+              <p className="arco-small-text">
+                Desktop row-unit: <code>clamp(60px, 7.5vw, 100px)</code>, 8px gap. iPad: <code>clamp(48px, 6.25vw, 80px)</code>, 6px gap — vw factor tuned so cell aspect ratios match desktop as the viewport narrows.
+                Mobile row-unit: <code>(100cqw − gap) / 4</code>, 4px gap — anchored to the gallery's own width via <code>container-type: inline-size</code> so L stays square and P stays 2:3 at any viewport.
+              </p>
+            </div>
+          </div>
+
+          {/* ═══ Responsive ═══ */}
           {/* BRANDED IMAGES */}
           <div style={{ marginBottom: 80 }}>
             <h2 id="branded-images" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Branded images</h2>
@@ -1172,77 +1263,6 @@ export default function DesignPage() {
             </div>
           </div>
 
-          {/* SERVICE MARKS */}
-          <div style={{ marginBottom: 80 }}>
-            <h2 id="service-marks" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Service marks</h2>
-            <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
-              One hand-drawn mark per service, drawn as a single family rather than picked
-              from a stock icon set: 24 × 24, stroke only, four to eight strokes, curves
-              over boxes, nothing mirrored, and a scene rather than a symbol — the object
-              sits on a floor line, a shelf, a ceiling. They render at stroke weight 1 in
-              <code> --arco-mid</code>, filling a disc 1.9 × their size.
-            </p>
-            <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
-              A mark stands in wherever a company has no logo — on project credits, on
-              discover cards, in the editor — so it says what a firm <em>does</em> rather
-              than showing dead initials. Each is resolved here through{" "}
-              <code>resolveProfessionalServiceIcon</code> from the service&rsquo;s real
-              <code> categories.slug</code>, so this is exactly what the product renders;
-              a service that falls through to the generic briefcase is a missing mapping.
-            </p>
-            <ServiceMarksPreview />
-          </div>
-
-          {/* CREDITED PROFESSIONALS */}
-          <div style={{ marginBottom: 80 }}>
-            <h2 id="credited-professionals" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Credited professionals</h2>
-            <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
-              The same credit renders twice: as an editable row while the owner is building
-              the project, and as a public card once it is published. Both lead with the
-              service and the company, and both fall back to the hand-drawn service mark when
-              a company has no logo &mdash; so a credit says what a firm <em>did</em> before
-              you read its name.
-            </p>
-            <CreditPreviews />
-          </div>
-
-          {/* PHOTO GALLERY LAYOUTS */}
-          <div style={{ marginBottom: 80 }}>
-            <h2 id="photo-gallery-layouts" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Photo gallery layouts</h2>
-            <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
-              The project photo tour assigns grid spans based on photo orientation —
-              <strong> L</strong> = landscape (aspect 0.9–2.2), <strong> P</strong> = portrait (aspect &lt; 0.9),
-              <strong> Pano</strong> = panoramic (aspect &gt; 2.2). Desktop / iPad share a 6-col grid where the
-              row-unit equals ½ a col-width (1 user row = 6 row-units = 3W tall). Mobile switches to a 2-col
-              grid with <code>grid-auto-flow: dense</code>. Source: <code>assignSpans()</code> in <code>components/project/photo-tour.tsx</code>.
-            </p>
-
-            <h4 className="arco-label" style={{ marginBottom: 20 }}>Desktop / iPad (6-col)</h4>
-            <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 32, marginBottom: 32 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 36 }}>
-                {photoGalleryDesktopCombos.map((combo) => (
-                  <PhotoComboPreview key={combo.name} combo={combo} cols={6} unit={12} gap={3} />
-                ))}
-              </div>
-            </div>
-
-            <h4 className="arco-label" style={{ marginBottom: 20 }}>Mobile (2-col, dense flow)</h4>
-            <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 32, marginBottom: 16 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 36 }}>
-                {photoGalleryMobileCombos.map((combo) => (
-                  <PhotoComboPreview key={combo.name} combo={combo} cols={2} unit={22} gap={3} autoFlow="dense" />
-                ))}
-              </div>
-            </div>
-            <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
-              <p className="arco-small-text">
-                Desktop row-unit: <code>clamp(60px, 7.5vw, 100px)</code>, 8px gap. iPad: <code>clamp(48px, 6.25vw, 80px)</code>, 6px gap — vw factor tuned so cell aspect ratios match desktop as the viewport narrows.
-                Mobile row-unit: <code>(100cqw − gap) / 4</code>, 4px gap — anchored to the gallery's own width via <code>container-type: inline-size</code> so L stays square and P stays 2:3 at any viewport.
-              </p>
-            </div>
-          </div>
-
-          {/* ═══ Responsive ═══ */}
           <div id="g-responsive" style={{ scrollMarginTop: 140, borderTop: "1px solid var(--arco-rule, #e5e5e4)", paddingTop: 32, marginBottom: 32 }}>
             <p className="arco-eyebrow" style={{ color: "var(--primary, #016D75)" }}>Responsive</p>
           </div>

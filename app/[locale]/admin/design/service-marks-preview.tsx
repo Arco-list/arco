@@ -14,6 +14,10 @@ import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-service
 
 type Mark = { slug: string; name: string }
 
+// The COMPLETE service taxonomy, mirroring the categories table — also
+// the services that have no mark yet. Those render the generic
+// briefcase fallback, which is deliberate: this section doubles as the
+// inventory of marks still to draw.
 const GROUPS: Array<{ name: string; services: Mark[] }> = [
   {
     name: "Design & Planning",
@@ -23,6 +27,7 @@ const GROUPS: Array<{ name: string; services: Mark[] }> = [
       { slug: "interior-designer", name: "Interior Designer" },
       { slug: "lighting-designer", name: "Lighting Designer" },
       { slug: "photographer", name: "Photographer" },
+      { slug: "structural-engineer", name: "Structural engineer" },
     ],
   },
   {
@@ -31,10 +36,22 @@ const GROUPS: Array<{ name: string; services: Mark[] }> = [
       { slug: "bathrooms", name: "Bathrooms" },
       { slug: "builder", name: "Builder" },
       { slug: "kitchens", name: "Kitchens" },
+      { slug: "roofing", name: "Roofing" },
       { slug: "stairs-elevator", name: "Stairs & Elevators" },
       { slug: "swimming-pools", name: "Swimming pools" },
       { slug: "tiles-stones", name: "Tiles & Stones" },
+      { slug: "wellness", name: "Wellness" },
       { slug: "windows-doors", name: "Windows & doors" },
+    ],
+  },
+  {
+    name: "Systems",
+    services: [
+      { slug: "electrical-systems", name: "Electrical systems" },
+      { slug: "heating-ventilation", name: "Heating & Ventilation" },
+      { slug: "security-systems", name: "Security systems" },
+      { slug: "smart-homes", name: "Smart homes" },
+      { slug: "solar-installer", name: "Solar panels" },
     ],
   },
   {
@@ -47,14 +64,17 @@ const GROUPS: Array<{ name: string; services: Mark[] }> = [
       { slug: "furniture", name: "Furniture" },
       { slug: "interior-stylist", name: "Interior stylist" },
       { slug: "lighting", name: "Lighting" },
+      { slug: "painter", name: "Painter" },
     ],
   },
   {
     name: "Outdoor & Garden",
     services: [
+      { slug: "fencing-gates", name: "Fencing & Gates" },
       { slug: "gardener", name: "Gardener" },
       { slug: "outdoor-furniture", name: "Outdoor furniture" },
       { slug: "outdoor-lighting", name: "Outdoor lighting" },
+      { slug: "shed-builder", name: "Shed builder" },
     ],
   },
 ]
@@ -77,7 +97,11 @@ export function ServiceMarksPreview() {
             {group.services.map((service) => {
               const Icon = resolveProfessionalServiceIcon(service.slug)
               return (
-                <div key={service.slug} style={{ textAlign: "center" }}>
+                // service-quick-card: the discover-card treatment — 72px
+                // mark at stroke 0.45 plus the light hover — so this
+                // preview shows the marks exactly as the service cards
+                // ship them, and new marks are judged in that lockup.
+                <div key={service.slug} className="service-quick-card" style={{ textAlign: "center" }}>
                   <div className="credit-icon">
                     <Icon className="credit-icon-service" strokeWidth={1} aria-hidden />
                   </div>

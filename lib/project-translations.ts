@@ -314,7 +314,10 @@ const PROFESSIONAL_SERVICE_LABELS: Record<string, Record<ScopeLocale, string>> =
   bathrooms: { en: "Bathrooms", nl: "Badkamers" },
   "stairs-elevator": { en: "Stairs & Elevators", nl: "Trappen & Liften" },
   "swimming-pools": { en: "Swimming pools", nl: "Zwembaden" },
-  "saunas-spas": { en: "Saunas & Spas", nl: "Sauna's & Spa's" },
+  // Renamed from "Saunas & Spas" — the broader umbrella (sauna, hammam,
+  // home spa); the old slug kept here as alias for any stale references.
+  wellness: { en: "Wellness", nl: "Wellness" },
+  "saunas-spas": { en: "Wellness", nl: "Wellness" },
   // Finishing
   painter: { en: "Painter", nl: "Schilder" },
   flooring: { en: "Flooring", nl: "Vloeren" },
