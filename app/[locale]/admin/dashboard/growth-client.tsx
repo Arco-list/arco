@@ -577,23 +577,6 @@ export function GrowthClient({ initialMetrics, initialLastSynced = null }: Props
         active={view}
         actions={
           <>
-            {/* One sync gesture: the pill also refreshes the PostHog
-                cache (all timeframes), replacing the old separate
-                refresh icon. The debounce keeps a quick double-click
-                from re-querying PostHog when every timeframe is fresh
-                — the metrics sync itself always runs. */}
-            <GrowthSyncBadge
-              initialLastSynced={initialLastSynced}
-              onSync={async () => {
-                const ages = (["days", "weeks", "months", "years"] as Timeframe[])
-                  .map((tf) => cacheAgeByTimeframe[tf])
-                  .filter((a): a is number => typeof a === "number")
-                const allKnownAndFresh =
-                  ages.length > 0 && ages.every((a) => a < REFRESH_DEBOUNCE_MINUTES)
-                if (allKnownAndFresh || isRefreshingAll) return
-                await refreshAllTimeframes()
-              }}
-            />
             {/* Timeframe toggle */}
             <div className="flex items-center gap-1 border border-[#e5e5e4] rounded-[3px] overflow-hidden">
             {TIMEFRAMES.map((tf) => (
@@ -618,13 +601,32 @@ export function GrowthClient({ initialMetrics, initialLastSynced = null }: Props
       {/* Tracking events — floats in the gap under the sticky bar, same
           treatment as the tour-replay link on company edit. */}
       <div className="wrap" style={{ position: "relative", height: 0 }}>
-        <a
-          href="/admin/dashboard/events"
-          className="arco-text-link arco-text-link--primary absolute right-5 md:right-[60px]"
-          style={{ top: 12, fontSize: 12 }}
-        >
-          Tracking events
-        </a>
+        <div className="absolute right-5 md:right-[60px] flex items-center gap-3" style={{ top: 12 }}>
+          {/* One sync gesture: the pill also refreshes the PostHog
+              cache (all timeframes), replacing the old separate
+              refresh icon. The debounce keeps a quick double-click
+              from re-querying PostHog when every timeframe is fresh
+              — the metrics sync itself always runs. */}
+          <GrowthSyncBadge
+            initialLastSynced={initialLastSynced}
+            onSync={async () => {
+              const ages = (["days", "weeks", "months", "years"] as Timeframe[])
+                .map((tf) => cacheAgeByTimeframe[tf])
+                .filter((a): a is number => typeof a === "number")
+              const allKnownAndFresh =
+                ages.length > 0 && ages.every((a) => a < REFRESH_DEBOUNCE_MINUTES)
+              if (allKnownAndFresh || isRefreshingAll) return
+              await refreshAllTimeframes()
+            }}
+          />
+          <a
+            href="/admin/dashboard/events"
+            className="arco-text-link arco-text-link--primary"
+            style={{ fontSize: 12 }}
+          >
+            Tracking events
+          </a>
+        </div>
       </div>
 
       <div className="wrap" style={{ paddingTop: 52, paddingBottom: 48 }}>

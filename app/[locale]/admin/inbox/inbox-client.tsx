@@ -374,36 +374,43 @@ export function InboxClient({
               </button>
             )}
           </div>
-            {/* Sync pill: dot + relative time; click runs the cron's sync
-                on demand. Red = a connection carries a sync error. Same
-                status-pill design as the Growth sync badge. */}
-            <button
-              type="button"
-              className="status-pill"
-              onClick={() => void handleSyncNow()}
-              disabled={isSyncing}
-              title={isSyncing ? "Syncing…" : "Sync now"}
-              style={{
-                background: "none",
-                cursor: isSyncing ? "default" : "pointer",
-                borderColor: syncError ? "#fecaca" : "#bbf7d0",
-                color: syncError ? "#b91c1c" : "#166534",
-                opacity: isSyncing ? 0.6 : 1,
-              }}
-            >
-              <span className={`status-pill-dot ${syncError ? "bg-red-500" : "bg-emerald-500"}`} />
-              {isSyncing ? "syncing…" : lastSyncAt ? formatRelative(lastSyncAt) : "never synced"}
-            </button>
-            {/* Mailbox-count pill: grey inline pill; click adds another
-                mailbox via OAuth. */}
-            <a href="/api/auth/gmail" className="status-pill" title="Add mailbox" style={{ textDecoration: "none", cursor: "pointer" }}>
-              {connCount} mailbox{connCount === 1 ? "" : "es"}
-            </a>
           </>
         }
       />
 
-      <div className="wrap" style={{ paddingTop: 32, paddingBottom: 48 }}>
+      {/* Status pills — float in the gap under the sticky bar, the
+          Status-guide position on Sales/Emails. */}
+      <div className="wrap" style={{ position: "relative", height: 0 }}>
+        <div className="absolute right-5 md:right-[60px] flex items-center gap-2" style={{ top: 12 }}>
+          {/* Sync pill: dot + relative time; click runs the cron's sync
+              on demand. Red = a connection carries a sync error. Same
+              status-pill design as the Growth sync badge. */}
+          <button
+            type="button"
+            className="status-pill"
+            onClick={() => void handleSyncNow()}
+            disabled={isSyncing}
+            title={isSyncing ? "Syncing…" : "Sync now"}
+            style={{
+              background: "none",
+              cursor: isSyncing ? "default" : "pointer",
+              borderColor: syncError ? "#fecaca" : "#bbf7d0",
+              color: syncError ? "#b91c1c" : "#166534",
+              opacity: isSyncing ? 0.6 : 1,
+            }}
+          >
+            <span className={`status-pill-dot ${syncError ? "bg-red-500" : "bg-emerald-500"}`} />
+            {isSyncing ? "syncing…" : lastSyncAt ? formatRelative(lastSyncAt) : "never synced"}
+          </button>
+          {/* Mailbox-count pill: grey inline pill; click adds another
+              mailbox via OAuth. */}
+          <a href="/api/auth/gmail" className="status-pill" title="Add mailbox" style={{ textDecoration: "none", cursor: "pointer" }}>
+            {connCount} mailbox{connCount === 1 ? "" : "es"}
+          </a>
+        </div>
+      </div>
+
+      <div className="wrap" style={{ paddingTop: 52, paddingBottom: 48 }}>
         {header}
 
       {/* List */}

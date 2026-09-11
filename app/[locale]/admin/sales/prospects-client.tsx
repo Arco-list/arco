@@ -1074,40 +1074,6 @@ export function ProspectsClient({
               </button>
             )}
           </div>
-          {/* Apollo pills — compact status-pill duo shared with Inbox and
-              Growth: dot + relative time (click = sync activity now) and
-              a grey contacts pill (click = Import contacts popup). */}
-          {apolloSyncStatus?.connected ? (
-            <>
-              <button
-                type="button"
-                onClick={() => void handleApolloSyncNow()}
-                disabled={apolloIsSyncing}
-                className="status-pill"
-                title={apolloIsSyncing ? "Syncing…" : "Sync Apollo activity now"}
-                style={{
-                  background: "none",
-                  cursor: apolloIsSyncing ? "default" : "pointer",
-                  borderColor: apolloSyncErrored ? "#fecaca" : "#bbf7d0",
-                  color: apolloSyncErrored ? "#b91c1c" : "#166534",
-                  opacity: apolloIsSyncing ? 0.6 : 1,
-                }}
-              >
-                <span className={`status-pill-dot ${apolloSyncErrored ? "bg-red-500" : "bg-emerald-500"}`} />
-                {apolloIsSyncing ? "syncing…" : apolloLastSyncAt ? formatRelativeSync(apolloLastSyncAt) : "never synced"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSyncListId(currentApolloListId ?? "")
-                  setShowApolloSync(true)
-                }}
-                className="status-pill"
-                title="Import contacts from Apollo"
-                style={{ background: "none", cursor: "pointer" }}
-              >
-                {apolloProspectsCount} contacts
-              </button>
           {/* Multi-select status filter — empty selection = all statuses. */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1268,6 +1234,47 @@ export function ProspectsClient({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+          </>
+        }
+      />
+
+      {/* Status pills + guide — float in the gap under the sticky bar
+          (tour-replay position). The Apollo pills moved out of the bar
+          so the bar holds only search + filters; the filter dropdowns
+          no longer disappear when Apollo is disconnected. */}
+      <div className="wrap" style={{ position: "relative", height: 0 }}>
+        <div className="absolute right-5 md:right-[60px] flex items-center gap-2" style={{ top: 12 }}>
+          {apolloSyncStatus?.connected ? (
+            <>
+              <button
+                type="button"
+                onClick={() => void handleApolloSyncNow()}
+                disabled={apolloIsSyncing}
+                className="status-pill"
+                title={apolloIsSyncing ? "Syncing…" : "Sync Apollo activity now"}
+                style={{
+                  background: "none",
+                  cursor: apolloIsSyncing ? "default" : "pointer",
+                  borderColor: apolloSyncErrored ? "#fecaca" : "#bbf7d0",
+                  color: apolloSyncErrored ? "#b91c1c" : "#166534",
+                  opacity: apolloIsSyncing ? 0.6 : 1,
+                }}
+              >
+                <span className={`status-pill-dot ${apolloSyncErrored ? "bg-red-500" : "bg-emerald-500"}`} />
+                {apolloIsSyncing ? "syncing…" : apolloLastSyncAt ? formatRelativeSync(apolloLastSyncAt) : "never synced"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSyncListId(currentApolloListId ?? "")
+                  setShowApolloSync(true)
+                }}
+                className="status-pill"
+                title="Import contacts from Apollo"
+                style={{ background: "none", cursor: "pointer" }}
+              >
+                {apolloProspectsCount} contacts
+              </button>
             </>
           ) : (
             <button
@@ -1284,21 +1291,15 @@ export function ProspectsClient({
               Not connected
             </button>
           )}
-          </>
-        }
-      />
-
-      {/* Status guide — floats in the gap under the sticky bar, same
-          treatment as the tour-replay link on company edit. */}
-      <div className="wrap" style={{ position: "relative", height: 0 }}>
-        <button
-          type="button"
-          onClick={() => setShowStatusGuide(true)}
-          className="arco-text-link arco-text-link--primary absolute right-5 md:right-[60px]"
-          style={{ top: 12, fontSize: 12 }}
-        >
-          Status guide
-        </button>
+          <button
+            type="button"
+            onClick={() => setShowStatusGuide(true)}
+            className="arco-text-link arco-text-link--primary"
+            style={{ fontSize: 12 }}
+          >
+            Status guide
+          </button>
+        </div>
       </div>
 
       <div className="wrap" style={{ paddingTop: 52, paddingBottom: 48 }}>

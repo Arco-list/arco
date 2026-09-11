@@ -673,16 +673,14 @@ export function GrowthModelClient({ initialRows, initialLabels, initialLastSynce
 
   return (
     <>
-      {/* Sticky workbench bar — sync pill on the right, like Growth. */}
-      <AdminTabs
-        title="Model"
-        actions={<GrowthSyncBadge initialLastSynced={initialLastSynced} />}
-      />
+      {/* Sticky workbench bar — pills live below it, in the legend row. */}
+      <AdminTabs title="Model" />
 
       {/* Phase legend — floats in the gap under the sticky bar, same
           position as the Status guide links elsewhere. */}
       <div className="wrap" style={{ position: "relative", height: 0 }}>
         <div className="absolute right-5 md:right-[60px] flex flex-wrap items-center gap-3" style={{ top: 12 }}>
+          <GrowthSyncBadge initialLastSynced={initialLastSynced} />
           {(["acquisition", "retention", "monetization", "churn"] as const).map((d) => (
             <span key={d} className="flex items-center gap-1.5 text-[11px] text-[#6b6b68]">
               <span className="status-pill-dot shrink-0" style={{ background: DRIVER_COLORS[d] }} />

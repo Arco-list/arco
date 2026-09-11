@@ -170,7 +170,6 @@ export function GrowthTableClient({ initialMetrics, initialLastSynced = null }: 
         title="Growth table"
         actions={
           <>
-            <GrowthSyncBadge initialLastSynced={initialLastSynced} />
             <div className="flex items-center gap-1 border border-[#e5e5e4] rounded-[3px] overflow-hidden">
           {TIMEFRAMES.map((tf) => (
             <button
@@ -188,7 +187,15 @@ export function GrowthTableClient({ initialMetrics, initialLastSynced = null }: 
         }
       />
 
-      <div className="wrap" style={{ paddingTop: 32, paddingBottom: 48 }}>
+      {/* Sync pill — floats in the gap under the sticky bar, the
+          Status-guide position elsewhere. */}
+      <div className="wrap" style={{ position: "relative", height: 0 }}>
+        <div className="absolute right-5 md:right-[60px]" style={{ top: 12 }}>
+          <GrowthSyncBadge initialLastSynced={initialLastSynced} />
+        </div>
+      </div>
+
+      <div className="wrap" style={{ paddingTop: 52, paddingBottom: 48 }}>
 
       {/* Page meta — the title lives in the sticky bar */}
       <div className="mb-6">
