@@ -53,7 +53,7 @@ async function loadAdminCompaniesData() {
       // All project_professionals with a company_id — get status + invited services + project details
       supabase
         .from("project_professionals")
-        .select("id, company_id, status, invited_email, invited_service_category_ids, is_project_owner, invite_dispatched_at, project:projects(id, title, slug, status)")
+        .select("id, company_id, status, invited_email, invited_service_category_ids, is_project_owner, invite_dispatched_at, created_at, project:projects(id, title, slug, status)")
         .not("company_id", "is", null),
       // Unclaimed invites: no professional_id AND no company_id
       supabase
@@ -185,11 +185,19 @@ async function loadAdminCompaniesData() {
   const companyProjectsList = new Map<string, LinkedProject[]>()
   const companyInviteServices = new Map<string, string[]>()
   const companyInviteEmail = new Map<string, string>()
+  // Earliest ACCEPTED contributor credit per company — the channel
+  // heuristic compares it against the company row's birth (see below).
+  const earliestAcceptedCreditAt = new Map<string, string>()
   for (const row of projectProfessionalsQuery.data ?? []) {
     if (!row?.company_id) continue
     const companyId = row.company_id as string
     if (row.status === "listed" || row.status === "live_on_page") {
       companyProjectsAccepted.set(companyId, (companyProjectsAccepted.get(companyId) ?? 0) + 1)
+      if (!row.is_project_owner) {
+        const created = (row as { created_at?: string | null }).created_at
+        const prev = earliestAcceptedCreditAt.get(companyId)
+        if (created && (!prev || created < prev)) earliestAcceptedCreditAt.set(companyId, created)
+      }
     } else if (row.status === "invited") {
       companyProjectsPending.set(companyId, (companyProjectsPending.get(companyId) ?? 0) + 1)
     }
@@ -282,7 +290,7 @@ async function loadAdminCompaniesData() {
     firstTouch: string | null,
     consumed: string | null,
     hasInviteCredit: boolean,
-    hasAcceptedContributorCredit: boolean,
+    acceptedCreditAtBirth: boolean,
     claimed: boolean,
     status: string | null,
     isPhotographer: boolean,
@@ -294,16 +302,20 @@ async function loadAdminCompaniesData() {
     // pending-credit rule catches them.
     //
     // Claimed vs unclaimed read credits differently. UNCLAIMED: a
-    // pending credit marks the pipeline the row sits in. CLAIMED: only
-    // an ACCEPTED contributor credit signals an invite conversion — a
-    // pending tag on an existing customer (Bongers, invited on a
-    // client's project long after their own signup) says nothing about
-    // how they were acquired. Owner rows never count: owning a project
-    // is publishing, not being invited.
+    // pending credit marks the pipeline the row sits in. CLAIMED: an
+    // ACCEPTED contributor credit signals an invite conversion ONLY
+    // when the credit existed around the company row's birth (invite-
+    // acquired rows are born FROM their credit) — a credit accepted by
+    // an existing customer months after their own signup (Bongers,
+    // credited on Versteegh's villa in September while a customer
+    // since April) is engagement, not acquisition. Modern conversions
+    // are caught by the consumed claim token anyway; this heuristic
+    // only serves pre-token history. Owner rows never count: owning a
+    // project is publishing, not being invited.
     let ch = consumed
       ?? (isPhotographer ? "invite" : null)
       ?? (claimed
-        ? (hasAcceptedContributorCredit ? "invite" : null)
+        ? (acceptedCreditAtBirth ? "invite" : null)
         : ((hasInviteCredit || status === "invited") ? "invite" : null))
       ?? CHANNEL_FROM_SOURCE[source ?? ""]
       ?? "direct"
@@ -490,7 +502,12 @@ async function loadAdminCompaniesData() {
         (company as { first_touch_source?: string | null }).first_touch_source ?? null,
         consumedChannelByCompany.get(company.id) ?? null,
         (companyProjectsList.get(company.id) ?? []).some((p) => !p.isProjectOwner && p.inviteStatus === "invited"),
-        (companyProjectsList.get(company.id) ?? []).some((p) => !p.isProjectOwner && (p.inviteStatus === "live_on_page" || p.inviteStatus === "listed")),
+        (() => {
+          const earliest = earliestAcceptedCreditAt.get(company.id)
+          if (!earliest || !company.created_at) return false
+          const birth = new Date(company.created_at).getTime()
+          return new Date(earliest).getTime() <= birth + 14 * 86400000
+        })(),
         Boolean(company.owner_id),
         String(displayStatus ?? ""),
         (company as { audience?: string | null }).audience === "pro",

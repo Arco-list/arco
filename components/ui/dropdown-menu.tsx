@@ -7,9 +7,16 @@ import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 function DropdownMenu({
+  modal = false,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
-  return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />
+  // Non-modal by default: Radix's modal scroll-lock sets
+  // overflow:hidden on <body>, which detaches every position:sticky
+  // element while the menu is open — on a scrolled admin page the
+  // sticky workbench bar (and site header) visibly vanish the moment a
+  // filter dropdown opens. Menus close on outside click either way;
+  // callers that truly need the focus trap can pass modal explicitly.
+  return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" modal={modal} {...props} />
 }
 
 function DropdownMenuPortal({
