@@ -186,6 +186,28 @@
   border-radius: 4px; flex-shrink: 0; transition: color 0.15s;
 }
 .svcRemove:hover { color: #e53e3e; }
+/* Search-to-add row: the selected-service box, but dashed — reads as
+   "the next service goes here". The input lives inside the box. */
+.svcAdd {
+  display: flex; align-items: center; gap: 8px; padding: 9px 12px;
+  border: 1px dashed var(--arco-rule); border-radius: 6px;
+  color: var(--arco-light); transition: border-color 0.15s;
+}
+.svcAdd:focus-within { border-color: var(--arco-light); }
+.svcAddInput {
+  flex: 1; min-width: 0; border: none; background: none; outline: none; padding: 0;
+  font-size: 15px; color: var(--arco-black);
+}
+.svcAddInput::placeholder { color: var(--arco-light); }
+.svcResults { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
+.svcResult {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 12px; border: none; background: none; border-radius: 6px;
+  font-size: 14px; color: var(--arco-black); cursor: pointer; text-align: left;
+  transition: background 0.12s;
+}
+.svcResult:hover { background: var(--arco-surface); }
+.svcResultGroup { font-size: 12px; color: var(--arco-light); flex-shrink: 0; }
 /* Extra lucht boven de eerste categorie, los van de dienstrijen. */
 .svcGroup:first-of-type { margin-top: 16px; }
 

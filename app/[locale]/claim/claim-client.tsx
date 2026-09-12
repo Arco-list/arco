@@ -94,6 +94,11 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
   const [photoIdx, setPhotoIdx] = useState(0)
   const dragFrom = useRef<number | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
+  // Search-to-add: the dashed row under the selected services. Typing
+  // filters the full taxonomy so nobody has to guess which dropdown
+  // hides their service; the category groups below stay as the browse
+  // path.
+  const [svcQuery, setSvcQuery] = useState("")
 
   // you step — email-first. The address decides the rest of the screen:
   //   has account            → sign-in code
@@ -202,6 +207,19 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
 
   const svcLabel = (s: { name: string; slug: string | null }) =>
     translateProfessionalService(s.slug ?? s.name, locale) ?? s.name
+
+  // Matches for the search-to-add row: both the localized label and the
+  // raw English name, across all groups, already-selected excluded.
+  const svcMatches = (() => {
+    const q = svcQuery.trim().toLowerCase()
+    if (q.length < 2) return []
+    return ctx.taxonomy
+      .flatMap((g) => g.services.map((s) => ({ service: s, group: g })))
+      .filter(({ service: s }) => !serviceIds.includes(s.id))
+      .filter(({ service: s }) =>
+        svcLabel(s).toLowerCase().includes(q) || s.name.toLowerCase().includes(q))
+      .slice(0, 8)
+  })()
   // Parent-group NL labels live in the professional-service map, which
   // covers parents and children alike; translateCategoryName only knows
   // a partial, older set.
@@ -1081,14 +1099,13 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                       style={fieldErrors.service ? { color: "var(--destructive)" } : undefined}>
                       {t("field_services")}
                     </span>
-                    <p className={styles.note} style={{ margin: "0 0 14px" }}>{t("services_drag_hint")}</p>
+                    {/* The reorder hint only makes sense once there is
+                        something to order; empty state shows just the
+                        search row. */}
+                    {serviceIds.length > 0 && (
+                      <p className={styles.note} style={{ margin: "0 0 14px" }}>{t("services_drag_hint")}</p>
+                    )}
                     <div className={styles.svcSelectedList}>
-                      {serviceIds.length === 0 && (
-                        <div className={styles.svcSelectedEmpty}
-                          style={fieldErrors.service ? { color: "var(--destructive)" } : undefined}>
-                          {t("services_empty")}
-                        </div>
-                      )}
                       {serviceIds.map((id, idx) => {
                         const s = serviceById.get(id)
                         if (!s) return null
@@ -1122,6 +1139,42 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                           </div>
                         )
                       })}
+                      {/* Search-to-add: a dashed version of the service
+                          row — "the next one goes here". Typing searches
+                          the whole taxonomy; the groups below stay as
+                          the browse path. */}
+                      <div className={styles.svcAdd}
+                        style={fieldErrors.service ? { borderColor: "var(--destructive)" } : undefined}>
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden>
+                          <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.4" />
+                          <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                        </svg>
+                        <input className={styles.svcAddInput} type="text" value={svcQuery}
+                          placeholder={t("services_search_placeholder")}
+                          onChange={(e) => {
+                            setSvcQuery(e.target.value)
+                            setFieldErrors((f) => ({ ...f, service: undefined }))
+                          }} />
+                      </div>
+                      {fieldErrors.service && (
+                        <p className="arco-small-text" style={{ marginTop: 4, color: "var(--destructive)" }}>
+                          {t("required_service")}
+                        </p>
+                      )}
+                      {svcMatches.length > 0 && (
+                        <div className={styles.svcResults}>
+                          {svcMatches.map(({ service: s, group: g }) => (
+                            <button key={s.id} type="button" className={styles.svcResult}
+                              onClick={() => { toggleService(s.id); setSvcQuery("") }}>
+                              <span>{svcLabel(s)}</span>
+                              <span className={styles.svcResultGroup}>{groupLabel(g)}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {svcQuery.trim().length >= 2 && svcMatches.length === 0 && (
+                        <div className={styles.svcSelectedEmpty}>{t("services_search_none")}</div>
+                      )}
                     </div>
                     {/* One dropdown per category; the primary service's own
                         category starts open, the rest are a click away. */}
