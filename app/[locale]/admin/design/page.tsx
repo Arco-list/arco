@@ -1263,6 +1263,68 @@ export default function DesignPage() {
             </div>
           </div>
 
+          {/* BADGES — the linking-program icon professionals put on their
+              own site, next to their Facebook / Instagram / Pinterest
+              icons. Glyph-only (the wordmark's "a"): the full wordmark is
+              unreadable at social-row size. Files live in /public/badges. */}
+          <div style={{ marginBottom: 80 }}>
+            <h2 id="badges" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Badges</h2>
+            <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
+              The linking-program icon: professionals add Arco next to their social icons
+              (&ldquo;in het rijtje Facebook · Instagram · Arco&rdquo;), linking to their own
+              Arco page. Glyph-only — the wordmark&rsquo;s <em>a</em> — so it stays legible at
+              the 20–24px social-row size. SVG, served from <code>/badges/</code>.
+            </p>
+            <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 32, marginBottom: 32 }}>
+                {[
+                  { file: "arco-icon-dark.svg", name: "Dark tile — a", note: "default — light sites" },
+                  { file: "arco-icon-white.svg", name: "White tile — a", note: "dark sites" },
+                  { file: "arco-icon-teal.svg", name: "Teal tile — a", note: "brand accent" },
+                  { file: "arco-icon-glyph.svg", name: "Bare glyph — a", note: "recolorable icon sets" },
+                  { file: "arco-icon-co-dark.svg", name: "Dark tile — co", note: "the wordmark's co-ligature" },
+                  { file: "arco-icon-co-white.svg", name: "White tile — co", note: "dark sites" },
+                  { file: "arco-icon-co-teal.svg", name: "Teal tile — co", note: "brand accent" },
+                  { file: "arco-icon-co-glyph.svg", name: "Bare glyph — co", note: "recolorable icon sets" },
+                ].map((b) => (
+                  <div key={b.file} style={{ textAlign: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, marginBottom: 14 }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={`/badges/${b.file}`} alt="" width={64} height={64} />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={`/badges/${b.file}`} alt="" width={32} height={32} />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={`/badges/${b.file}`} alt="" width={22} height={22} />
+                    </div>
+                    <div className="arco-card-title" style={{ marginBottom: 2 }}>{b.name}</div>
+                    <div className="arco-eyebrow" style={{ textTransform: "none" }}>{b.note}</div>
+                  </div>
+                ))}
+              </div>
+              {/* Footer context: how it reads between the real-world set. */}
+              <h4 className="arco-label" style={{ marginBottom: 14 }}>In een social-rij (22px)</h4>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                {["f", "ig", "p"].map((c) => (
+                  <span key={c} style={{ width: 22, height: 22, borderRadius: "50%", background: "#3a3a38", color: "#fff", fontSize: 10, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{c}</span>
+                ))}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/badges/arco-icon-dark.svg" alt="Arco" width={22} height={22} />
+                <span style={{ width: 20 }} />
+                {["f", "ig", "p"].map((c) => (
+                  <span key={`co-${c}`} style={{ width: 22, height: 22, borderRadius: "50%", background: "#3a3a38", color: "#fff", fontSize: 10, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{c}</span>
+                ))}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/badges/arco-icon-co-dark.svg" alt="Arco" width={22} height={22} />
+              </div>
+            </div>
+            <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
+              <p className="arco-small-text">
+                Embed is plain HTML (no iframe, no script) zodat het een echte crawlbare link is:
+                {" "}<code>{`<a href="https://www.arcolist.com/professionals/{slug}"><img src="https://www.arcolist.com/badges/arco-icon-dark.svg" alt="{Bedrijf} op Arco" width="22" height="22"></a>`}</code>
+              </p>
+            </div>
+          </div>
+
           <div id="g-responsive" style={{ scrollMarginTop: 140, borderTop: "1px solid var(--arco-rule, #e5e5e4)", paddingTop: 32, marginBottom: 32 }}>
             <p className="arco-eyebrow" style={{ color: "var(--primary, #016D75)" }}>Responsive</p>
           </div>
