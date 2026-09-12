@@ -416,7 +416,7 @@ function channelForTemplate(template: string): string | null {
 // ── Merged stream ──────────────────────────────────────────────────────
 
 type StreamRow =
-  | { kind: "stage"; ts: string; label: string; dot: string; key: string }
+  | { kind: "stage"; ts: string; label: string; dot: string; key: string; rank: number }
   | { kind: "sequence"; ts: string; step: ProspectSequenceStep; key: string }
   | { kind: "scheduled"; ts: string; step: ProspectSequenceStep; key: string }
   | { kind: "event"; ts: string; event: ProspectEvent; key: string }
@@ -465,8 +465,9 @@ function TimelineStream({
     : []
   if (isInvite && stageDefs.length > 0) stageDefs[0].label = "invited"
   const stageRows: StreamRow[] = stageDefs
-    .filter((s): s is { label: string; ts: string; status: ProspectStatus } => Boolean(s.ts))
-    .map((s) => ({ kind: "stage", ts: s.ts, label: s.label, dot: STATUS_CONFIG[s.status]?.dot ?? "bg-[#a1a1a0]", key: `stage-${s.label}` }))
+    .map((s, ladderRank) => ({ ...s, ladderRank }))
+    .filter((s): s is { label: string; ts: string; status: ProspectStatus; ladderRank: number } => Boolean(s.ts))
+    .map((s) => ({ kind: "stage" as const, ts: s.ts, label: s.label, dot: STATUS_CONFIG[s.status]?.dot ?? "bg-[#a1a1a0]", key: `stage-${s.label}`, rank: s.ladderRank }))
 
   // The visitor-nudge is queued under the abstract 'visitor-nudge' but
   // goes out as a concrete variant (platform/invite/showcase) that also
@@ -655,7 +656,17 @@ function TimelineStream({
     }))
 
   const rows: StreamRow[] = [...stageRows, ...sequenceRows, ...scheduledRows, ...inboundRows, ...replyRows, ...eventRows, ...transactionalRows]
-    .sort((a, b) => b.ts.localeCompare(a.ts))
+    .sort((a, b) => {
+      const t = b.ts.localeCompare(a.ts)
+      if (t !== 0) return t
+      // Same second (claim flows stamp several stages in one moment):
+      // keep the FUNNEL order — newest-first stream, so the furthest
+      // stage (Listed) sits above Verified above Visitor. Non-stage
+      // rows at the same timestamp sort below the dividers.
+      const ar = a.kind === "stage" ? a.rank : -1
+      const br = b.kind === "stage" ? b.rank : -1
+      return br - ar
+    })
 
   if (rows.length === 0) {
     return <p style={{ fontSize: 12, color: "#a1a1a0", margin: "8px 0 0" }}>No events yet.</p>

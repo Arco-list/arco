@@ -277,7 +277,13 @@ export async function advanceProspectStage(
   if (!prospect) return;
   if (!canAdvanceTo(prospect.status, stage)) return;
 
-  await (supabase.from("prospects") as any).update({ status: stage }).eq("id", prospect.id);
+  // Owned = the claim landed: the machine's series is over for this
+  // contact (the stage mails from here — owned-reminder, Listed serie —
+  // are their own sequences). Without this the stored 'active' flag
+  // outlived the conversion and the panel kept reading "Active".
+  await (supabase.from("prospects") as any)
+    .update({ status: stage, ...(stage === "owned" ? { sequence_status: "finished" } : {}) })
+    .eq("id", prospect.id);
   await supabase.from("prospect_events").insert({
     prospect_id: prospect.id,
     event_type: stage === "verified" ? "prospect.verified" : "prospect.owned",
