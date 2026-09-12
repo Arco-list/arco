@@ -524,6 +524,23 @@ export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
     if (targetIndex !== -1) setLightboxIndex(targetIndex)
   }
 
+  // Keep the ACTIVE pill visible while flipping through photos: the
+  // strip scrolls horizontally on mobile, so when the photo's space
+  // changes we center its pill in the strip. scrollTo on the strip
+  // itself (not scrollIntoView) so the page never moves along.
+  const lightboxTagsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!lightboxOpen) return
+    const strip = lightboxTagsRef.current
+    if (!strip) return
+    const active = strip.querySelector<HTMLElement>(".category-tag.active")
+    if (!active) return
+    strip.scrollTo({
+      left: active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2,
+      behavior: "smooth",
+    })
+  }, [lightboxOpen, lightboxIndex])
+
   // Determine which space pill should be active based on current lightbox photo
   const activeLightboxSlug = lightboxOpen && photosWithDims[lightboxIndex]?.space
     ? photosWithDims[lightboxIndex].space
@@ -710,7 +727,7 @@ export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
             {/* Space navigation pills — highlight based on current photo's space */}
             {spaces.length > 0 && (
               <div className="lightbox-categories">
-                <div className="category-tags category-tags-dark">
+                <div className="category-tags category-tags-dark" ref={lightboxTagsRef}>
                   {categories.filter(({ slug }) => slug !== ALL_SLUG).map(({ slug, label }) => (
                     <button
                       key={slug}

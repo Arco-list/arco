@@ -1716,17 +1716,23 @@ footer .footer-heading {
 }
 .hero-photos-btn:hover { background: rgba(0, 0, 0, .6); border-color: rgba(255, 255, 255, .4); }
 @media (max-width: 768px) {
-  /* Same box as the mobile Opslaan/Delen pills in the sub-nav below
-     (28px, 13px type) — but this one keeps its icon + label. */
+  /* Same box as the header's Menu pill (h-8 = 32px, text-sm, 12px
+     side padding) and right-aligned to the same .wrap margin, so pill
+     and Menu sit on one vertical line. Icon + label stay. */
   .hero-photos-btn {
-    right: 20px;
+    right: 24px;
     bottom: 16px;
-    height: 28px;
+    height: 32px;
     padding: 0 12px;
     gap: 6px;
+    font-size: 14px;
     line-height: 1;
   }
-  .hero-photos-btn svg { width: 13px; height: 13px; }
+  .hero-photos-btn svg { width: 14px; height: 14px; }
+}
+@media (max-width: 480px) {
+  /* .wrap drops to 16px on phones — follow it. */
+  .hero-photos-btn { right: 16px; }
 }
 
 /* Hero */
@@ -3032,14 +3038,39 @@ footer .footer-heading {
     right: 12px;
   }
 
-  /* `.lightbox-close` stays at top:24px right:24px across all
-     viewports (set in the base rule). `.lightbox-categories` also
-     stays at top:24px and shares horizontal centering — its
-     max-width keeps the row clear of the close button, and the
-     inner pill strip scrolls horizontally on small screens. */
+  /* Mobile top bar: the space pills span the FULL width (edge padding
+     left, scrolling under a right inset that keeps the last pill clear
+     of the close button) instead of the desktop's centered max-width
+     row. The close button shrinks to 40px and both share one vertical
+     center line (top 16 + 40px row). */
+  .lightbox-close {
+    top: 16px;
+    right: 16px;
+    width: 40px;
+    height: 40px;
+  }
+
+  .lightbox-categories {
+    top: 16px;
+    left: 0;
+    right: 0;
+    transform: none;
+    max-width: none;
+    display: flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 0 64px 0 16px;
+    /* Full-width container overlaps the close button's corner — let
+       clicks fall through it; only the pill strip itself is
+       interactive. */
+    pointer-events: none;
+  }
+
   .lightbox-categories .category-tags {
     gap: 6px;
     margin-bottom: 0;
+    width: 100%;
+    pointer-events: auto;
   }
 
   .lightbox-categories .category-tag {
@@ -5905,6 +5936,12 @@ body.no-scroll {
   color: var(--text-secondary);
 }
 
+/* Plain (non-interactive) crumbs — "Projecten" until it has a landing
+   to link to — must not advertise a click. */
+.discover-breadcrumb span.discover-breadcrumb-item {
+  cursor: default;
+}
+
 .discover-breadcrumb .discover-breadcrumb-current {
   color: var(--arco-black);
 }
@@ -6032,17 +6069,17 @@ body.no-scroll {
 }
 
 /* Clickable pill action — the per-row "Review" shortcut on admin
-   projects, sitting next to the In review status. Filled primary,
-   like every other primary button, at pill size. */
+   projects. Outline primary, matching the Log pill on /admin/sales. */
 .status-pill--review {
-  background: var(--primary);
+  background: transparent;
   border-color: var(--primary);
-  color: var(--primary-foreground);
+  color: var(--primary);
+  font-weight: 500;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: background 0.15s;
 }
 .status-pill--review:hover {
-  opacity: 0.85;
+  background: #f0f7f6;
 }
 
 .status-pill-dot {
