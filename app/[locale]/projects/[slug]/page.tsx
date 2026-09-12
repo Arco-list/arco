@@ -811,7 +811,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       <div className="min-h-screen bg-white">
         <Header />
 
-        <ProjectHero imageUrl={coverPhoto?.url ?? null} alt={localizedTitle} />
+        <ProjectHero imageUrl={coverPhoto?.url ?? null} alt={localizedTitle} photoCount={enrichedPhotos.length} />
 
         <SubNav projectId={project.id} title={localizedTitle} subtitle={[resolvedType, project.address_city].filter(Boolean).join(" · ")} imageUrl={coverPhoto?.url ?? null} slug={project.slug} />
 

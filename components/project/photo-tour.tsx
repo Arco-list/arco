@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useCallback, useMemo } from "react"
+import { useState, useRef, useCallback, useMemo, useEffect } from "react"
 import Image from "next/image"
 import { ChevronRight } from "lucide-react"
 import { useTranslations } from "next-intl"
@@ -413,6 +413,17 @@ export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
   const [showMore, setShowMore] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState(0)
+
+  // The hero's "view photos" pill lives across a server boundary, so it
+  // opens the lightbox via a DOM event instead of threaded props.
+  useEffect(() => {
+    const open = () => {
+      setLightboxIndex(0)
+      setLightboxOpen(true)
+    }
+    window.addEventListener("arco:open-photo-tour", open)
+    return () => window.removeEventListener("arco:open-photo-tour", open)
+  }, [])
   // Client-measured natural dimensions for photos whose width/height
   // weren't recorded in the DB. About two-thirds of historical photos
   // are NULL on those columns; without this fallback they'd get
