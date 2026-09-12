@@ -376,6 +376,7 @@ export async function fetchFunnel(source?: string) {
 export type SalesContact = {
   prospectId: string
   email: string
+  phone: string | null
   contactName: string | null
   website: string | null
   source: string
@@ -829,7 +830,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     "last_email_sent_at", "last_email_opened_at", "last_email_clicked_at",
     "created_at", "updated_at", "ref_code", "user_id", "website",
     "unsubscribed_at", "bounced_at", "complained_at", "not_interested_at",
-    "replied_at", "last_outbound_at", "next_follow_up_at",
+    "replied_at", "last_outbound_at", "next_follow_up_at", "phone",
   ].join(", ")
   const { rows: data, error } = await fetchAllPages<Record<string, unknown>>(
     (from, to) => supabase
@@ -908,6 +909,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     website: (p as any).website ?? null,
     source: p.source,
     status: p.status,
+    phone: (p as any).phone ?? null,
     sequenceStatus: pendingMailEmails.has(p.email.toLowerCase()) ? "active"
       : (p as any).replied_at ? "replied" : p.sequence_status,
     emailsSent: p.emails_sent ?? 0,
@@ -1616,6 +1618,7 @@ export async function fetchSalesContactForProspect(prospectId: string): Promise<
     website: (p as any).website ?? null,
     source: p.source,
     status: p.status,
+    phone: (p as any).phone ?? null,
     sequenceStatus: pendingRow ? "active"
       : (p as any).replied_at ? "replied" : p.sequence_status,
     emailsSent: p.emails_sent ?? 0,

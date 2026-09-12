@@ -26,7 +26,6 @@ import {
   ArrowUp,
   ArrowUpDown,
   ArrowUpRight,
-  MoreHorizontal,
   Star,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -278,10 +277,6 @@ type PendingStatusAction = {
   nextStatus: CompanyStatus
 }
 
-type StatusChangeState = {
-  company: AdminCompanyRow
-  selectedStatus: CompanyStatus
-}
 
 type ProspectCandidate = {
   company: AdminCompanyRow
@@ -332,6 +327,38 @@ const STATUS_LABEL: Record<string, string> = {
   deactivated: "Deactivated",
   invited: "Invited",
   prospected: "Showcased",
+}
+
+/** Why a status can't be picked for this company right now — null when
+ *  allowed. Single source for the Update-status dialog and the row
+ *  menu's hover submenu, so the two can't drift. */
+function companyStatusDisabledReason(company: AdminCompanyRow, value: CompanyStatus): string | null {
+  const isClaimed = !!company.ownerName
+  if (value === "listed" && !company.hasPublishedProjects) {
+    return company.canPublishProjects
+      ? "Publish your first project to list this company page"
+      : "Get invited to a published project to list this company page"
+  }
+  if ((value === ("prospected" as CompanyStatus) || value === ("added" as CompanyStatus)) && isClaimed) {
+    return `Company already claimed by ${company.ownerName}`
+  }
+  // Invited is system-derived: only a credit from another professional
+  // lands a company there — never an admin pick.
+  if (value === ("invited" as CompanyStatus)) return "System-derived — set by a project credit"
+  // Verified and Owned are claim-funnel facts (proven mailbox, linked
+  // owner account) — forcing them by hand would fake a claim that
+  // never happened, and Owned without an owner_id breaks the
+  // listing machinery.
+  if (value === ("verified" as CompanyStatus) || value === ("owned" as CompanyStatus)) {
+    return "System-derived — set by the claim funnel"
+  }
+  if ((value === "listed" || value === "unlisted" || value === ("created" as CompanyStatus)) && !isClaimed) {
+    return "Company must be claimed first"
+  }
+  if (value === "unlisted" && company.listedAt == null) {
+    return "Company has never been listed — must go Listed first before it can be Unlisted"
+  }
+  return null
 }
 
 const COMPANY_STATUS_OPTIONS: { value: CompanyStatus; label: string; description: string; dotColor: string }[] = [
@@ -726,7 +753,9 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const [editingName, setEditingName] = useState<{ id: string; value: string } | null>(null)
   // The company menu is controlled so a click anywhere on the row can
   // open it, anchored to that row's "…" trigger.
-  const [menuRowId, setMenuRowId] = useState<string | null>(null)
+  // Row menu opens AT the click position (a zero-size fixed anchor for
+  // the dropdown), not at the far-right "…" column.
+  const [rowMenu, setRowMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [sorting, setSorting] = useState<SortingState>([{ id: "created", desc: true }])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
@@ -843,7 +872,9 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
 
   const [removeOwnerCompany, setRemoveOwnerCompany] = useState<AdminCompanyRow | null>(null)
   const [pendingAction, setPendingAction] = useState<PendingStatusAction | null>(null)
-  const [statusChange, setStatusChange] = useState<StatusChangeState | null>(null)
+  // Compact status dropdown at the click position (same list as the
+  // row menu's hover submenu) — replaced the old Update-status modal.
+  const [statusMenu, setStatusMenu] = useState<{ company: AdminCompanyRow; x: number; y: number } | null>(null)
   const [deleteCompany, setDeleteCompany] = useState<AdminCompanyRow | null>(null)
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
   const [changeOwnerCompany, setChangeOwnerCompany] = useState<AdminCompanyRow | null>(null)
@@ -893,31 +924,25 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
     })
   }
 
-  const confirmStatusChangeDialog = () => {
-    if (!statusChange) return
-    if (statusChange.selectedStatus === ("prospected" as any)) {
-      const candidate = validateProspectEligibility(statusChange.company)
-      setProspectConfirm({ candidates: [candidate] })
-      setStatusChange(null)
+  // Direct status set from the row menu's hover submenu. Prospected
+  // keeps its eligibility confirm dialog.
+  const applyCompanyStatus = (company: AdminCompanyRow, status: CompanyStatus) => {
+    if (status === ("prospected" as CompanyStatus)) {
+      setProspectConfirm({ candidates: [validateProspectEligibility(company)] })
       return
     }
     startTransition(async () => {
       try {
-        const result = await updateCompanyStatusAction({
-          companyId: statusChange.company.id,
-          status: statusChange.selectedStatus,
-        })
+        const result = await updateCompanyStatusAction({ companyId: company.id, status })
         if (!result.success) {
           toast.error(result.error ?? "Failed to update company status")
           return
         }
-        toast.success(`${statusChange.company.name} status updated to ${STATUS_LABEL[statusChange.selectedStatus]}`)
+        toast.success(`${company.name} status updated to ${STATUS_LABEL[status]}`)
         router.refresh()
       } catch (error) {
         console.error("Failed to update company status", error)
         toast.error("Failed to update company status")
-      } finally {
-        setStatusChange(null)
       }
     })
   }
@@ -968,68 +993,91 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
     })
   }
 
-  const columns = useMemo<ColumnDef<AdminCompanyRow>[]>(() => {
-    // Row actions, shared by the "…" button and the company-name
-    // trigger so the two menus can never drift apart.
-    const renderCompanyMenuItems = (company: AdminCompanyRow) => {
-      const publicUrl = company.slug ? `/professionals/${company.slug}` : null
-      return (
-        <>
-          {publicUrl && (
-            <DropdownMenuItem asChild>
-              <a href={publicUrl} target="_blank" rel="noopener noreferrer">
-                View company
-              </a>
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem
-            onClick={async () => {
-              const result = await generateCompanyLoginLinkAction({ companyId: company.id })
-              if (result.success && result.loginUrl) {
-                await navigator.clipboard.writeText(result.loginUrl)
-                toast.success("Login link copied — paste in an incognito window")
-              } else {
-                toast.error(result.error ?? "Failed to generate login link")
-              }
-            }}
-          >
-            Copy login link
-          </DropdownMenuItem>
+  // Row actions, shared by the "…" button and the company-name
+  // trigger so the two menus can never drift apart.
+  const renderCompanyMenuItems = (company: AdminCompanyRow) => {
+    const publicUrl = company.slug ? `/professionals/${company.slug}` : null
+    return (
+      <>
+        {publicUrl && (
           <DropdownMenuItem asChild>
-            <a href={`/dashboard/company?company_id=${company.id}`} target="_blank" rel="noopener noreferrer">
-              Edit company
+            <a href={publicUrl} target="_blank" rel="noopener noreferrer" className="text-xs cursor-pointer">
+              View company
             </a>
           </DropdownMenuItem>
+        )}
+        <DropdownMenuItem
+          className="text-xs cursor-pointer"
+          onClick={async () => {
+            const result = await generateCompanyLoginLinkAction({ companyId: company.id })
+            if (result.success && result.loginUrl) {
+              await navigator.clipboard.writeText(result.loginUrl)
+              toast.success("Login link copied — paste in an incognito window")
+            } else {
+              toast.error(result.error ?? "Failed to generate login link")
+            }
+          }}
+        >
+          Copy login link
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <a href={`/dashboard/company?company_id=${company.id}`} target="_blank" rel="noopener noreferrer" className="text-xs cursor-pointer">
+            Edit company
+          </a>
+        </DropdownMenuItem>
+        {/* Hover submenu (same two-layer pattern as "Change role"):
+            statuses set directly from the dropdown, dotted like the
+            project-status menu, current one bold. */}
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger className="text-xs">Update status</DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="min-w-[160px]">
+            {COMPANY_STATUS_OPTIONS.map((option) => {
+              const isCurrent = company.status === option.value
+              // Same eligibility rules as the Update-status dialog —
+              // unavailable statuses render inactive, hover title says why.
+              const disabledReason = companyStatusDisabledReason(company, option.value)
+              return (
+                <DropdownMenuItem
+                  key={option.value}
+                  disabled={isPending || Boolean(disabledReason)}
+                  title={disabledReason ?? undefined}
+                  className={cn("text-xs cursor-pointer flex items-center gap-1.5", isCurrent && "font-semibold bg-[#f5f5f4]")}
+                  onClick={() => { if (!isCurrent) applyCompanyStatus(company, option.value) }}
+                >
+                  <span className={cn("inline-block h-1.5 w-1.5 rounded-full", option.dotColor, disabledReason && "opacity-40")} />
+                  {option.label}
+                </DropdownMenuItem>
+              )
+            })}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuItem
+          className="text-xs cursor-pointer"
+          onClick={() => { setChangeOwnerCompany(company); setChangeOwnerEmail("") }}
+        >
+          Change owner
+        </DropdownMenuItem>
+        {company.ownerName && (
           <DropdownMenuItem
-            onClick={() => setStatusChange({ company, selectedStatus: (company.status === "invited" ? "unlisted" : company.status) as CompanyStatus })}
-            disabled={isPending}
+            className="text-xs cursor-pointer text-red-600 focus:text-red-600"
+            onClick={() => setRemoveOwnerCompany(company)}
           >
-            Update status
+            Remove owner
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => { setChangeOwnerCompany(company); setChangeOwnerEmail("") }}
-          >
-            Change owner
-          </DropdownMenuItem>
-          {company.ownerName && (
-            <DropdownMenuItem
-              className="text-red-600 focus:text-red-600"
-              onClick={() => setRemoveOwnerCompany(company)}
-            >
-              Remove owner
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="text-red-600 focus:text-red-600"
-            onClick={() => { setDeleteCompany(company); setDeleteConfirmText("") }}
-          >
-            Delete
-          </DropdownMenuItem>
-        </>
-      )
-    }
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="text-xs cursor-pointer text-red-600 focus:text-red-600"
+          onClick={() => { setDeleteCompany(company); setDeleteConfirmText("") }}
+        >
+          Delete
+        </DropdownMenuItem>
+      </>
+    )
+  }
 
+
+  const columns = useMemo<ColumnDef<AdminCompanyRow>[]>(() => {
     return [
       {
         id: "select",
@@ -1204,7 +1252,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               className="arco-table-status hover:opacity-70 transition-opacity cursor-pointer"
               onClick={(e) => {
                 e.stopPropagation()
-                setStatusChange({ company, selectedStatus: status as CompanyStatus })
+                setStatusMenu({ company, x: e.clientX, y: e.clientY })
               }}
             >
               <span className={cn("arco-table-status-dot", STATUS_DOT[status] ?? "bg-gray-400")} />
@@ -1302,35 +1350,41 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                     </a>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Project status</DropdownMenuLabel>
-                  {CONTRIBUTOR_STATUS_KEYS.map((status) => {
-                    const config = CONTRIBUTOR_STATUS_CONFIG[status]
-                    if (!config) return null
-                    const isCurrent = project.inviteStatus === status
-                    return (
-                      <DropdownMenuItem
-                        key={status}
-                        className={cn("text-xs cursor-pointer flex items-center gap-1.5", isCurrent && "font-semibold bg-[#f5f5f4]")}
-                        onClick={async () => {
-                          if (isCurrent) return
-                          const result = await updateProjectProfessionalStatusAction({
-                            projectId: project.id,
-                            companyId,
-                            status,
-                          })
-                          if (result.success) {
-                            toast.success(`Status updated to ${config.label}`)
-                            router.refresh()
-                          } else {
-                            toast.error(result.error ?? "Failed to update status")
-                          }
-                        }}
-                      >
-                        <span className={cn("inline-block h-1.5 w-1.5 rounded-full", config.dotColor)} />
-                        {config.label}
-                      </DropdownMenuItem>
-                    )
-                  })}
+                  {/* Same two-layer pattern as the company menu: statuses
+                      set directly from a hover submenu. */}
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="text-xs">Update status</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="min-w-[160px]">
+                      {CONTRIBUTOR_STATUS_KEYS.map((status) => {
+                        const config = CONTRIBUTOR_STATUS_CONFIG[status]
+                        if (!config) return null
+                        const isCurrent = project.inviteStatus === status
+                        return (
+                          <DropdownMenuItem
+                            key={status}
+                            className={cn("text-xs cursor-pointer flex items-center gap-1.5", isCurrent && "font-semibold bg-[#f5f5f4]")}
+                            onClick={async () => {
+                              if (isCurrent) return
+                              const result = await updateProjectProfessionalStatusAction({
+                                projectId: project.id,
+                                companyId,
+                                status,
+                              })
+                              if (result.success) {
+                                toast.success(`Status updated to ${config.label}`)
+                                router.refresh()
+                              } else {
+                                toast.error(result.error ?? "Failed to update status")
+                              }
+                            }}
+                          >
+                            <span className={cn("inline-block h-1.5 w-1.5 rounded-full", config.dotColor)} />
+                            {config.label}
+                          </DropdownMenuItem>
+                        )
+                      })}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
                 </DropdownMenuContent>
               </DropdownMenu>
             )
@@ -1382,35 +1436,41 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                               </a>
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuLabel className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Project status</DropdownMenuLabel>
-                            {CONTRIBUTOR_STATUS_KEYS.map((status) => {
-                              const config = CONTRIBUTOR_STATUS_CONFIG[status]
-                              if (!config) return null
-                              const isCurrent = project.inviteStatus === status
-                              return (
-                                <DropdownMenuItem
-                                  key={status}
-                                  className={cn("text-xs cursor-pointer flex items-center gap-1.5", isCurrent && "font-semibold bg-[#f5f5f4]")}
-                                  onClick={async () => {
-                                    if (isCurrent) return
-                                    const result = await updateProjectProfessionalStatusAction({
-                                      projectId: project.id,
-                                      companyId,
-                                      status,
-                                    })
-                                    if (result.success) {
-                                      toast.success(`Status updated to ${config.label}`)
-                                      router.refresh()
-                                    } else {
-                                      toast.error(result.error ?? "Failed to update status")
-                                    }
-                                  }}
-                                >
-                                  <span className={cn("inline-block h-1.5 w-1.5 rounded-full", config.dotColor)} />
-                                  {config.label}
-                                </DropdownMenuItem>
-                              )
-                            })}
+                            {/* Same two-layer pattern as the company menu: statuses
+                                set directly from a hover submenu. */}
+                            <DropdownMenuSub>
+                              <DropdownMenuSubTrigger className="text-xs">Update status</DropdownMenuSubTrigger>
+                              <DropdownMenuSubContent className="min-w-[160px]">
+                                {CONTRIBUTOR_STATUS_KEYS.map((status) => {
+                                  const config = CONTRIBUTOR_STATUS_CONFIG[status]
+                                  if (!config) return null
+                                  const isCurrent = project.inviteStatus === status
+                                  return (
+                                    <DropdownMenuItem
+                                      key={status}
+                                      className={cn("text-xs cursor-pointer flex items-center gap-1.5", isCurrent && "font-semibold bg-[#f5f5f4]")}
+                                      onClick={async () => {
+                                        if (isCurrent) return
+                                        const result = await updateProjectProfessionalStatusAction({
+                                          projectId: project.id,
+                                          companyId,
+                                          status,
+                                        })
+                                        if (result.success) {
+                                          toast.success(`Status updated to ${config.label}`)
+                                          router.refresh()
+                                        } else {
+                                          toast.error(result.error ?? "Failed to update status")
+                                        }
+                                      }}
+                                    >
+                                      <span className={cn("inline-block h-1.5 w-1.5 rounded-full", config.dotColor)} />
+                                      {config.label}
+                                    </DropdownMenuItem>
+                                  )
+                                })}
+                              </DropdownMenuSubContent>
+                            </DropdownMenuSub>
                           </DropdownMenuSubContent>
                         </DropdownMenuSub>
                       )
@@ -1541,41 +1601,14 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           return <span className="arco-table-primary">{r.seoCtr28d.toFixed(1)}%</span>
         },
       },
-      {
-        id: "actions",
-        header: "",
-        cell: ({ row }) => {
-          const company = row.original
-          if (company.type === "invite") return null
-
-          const publicUrl = company.slug ? `/professionals/${company.slug}` : null
-          const isDeactivated = company.status === "deactivated"
-
-          return (
-            <DropdownMenu
-              open={menuRowId === company.id}
-              onOpenChange={(open) => setMenuRowId(open ? company.id : null)}
-            >
-              <DropdownMenuTrigger asChild>
-                <button className="arco-table-action" style={{ display: "flex", alignItems: "center", justifyContent: "center" }} onClick={(e) => e.stopPropagation()}>
-                  <MoreHorizontal className="h-4 w-4" />
-                  <span className="sr-only">Open menu</span>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                {renderCompanyMenuItems(company)}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )
-        },
-        enableSorting: false,
-        enableHiding: false,
-      },
+      // The "…" actions column is gone: the row itself opens the same
+      // menu at the click position, so the button was a second door to
+      // the same room.
     ]
   // editingName is read inside the name cell, so the column defs must
   // rebuild when it changes — otherwise the cell closes over a stale
   // null and the inline input never appears.
-  }, [isPending, editingName, menuRowId, router])
+  }, [isPending, editingName, router])
 
   const table = useReactTable({
     data: filteredData,
@@ -2336,7 +2369,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   onClick={(e) => {
                     if (row.original.type === "invite") return
                     if ((e.target as HTMLElement).closest("button, a, input, select, textarea, [role='menuitem']")) return
-                    setMenuRowId(row.original.id)
+                    setRowMenu({ id: row.original.id, x: e.clientX, y: e.clientY })
                   }}
                   style={row.original.type === "invite" ? undefined : { cursor: "pointer" }}
                 >
@@ -2357,6 +2390,61 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           </tbody>
         </table>
       </div>
+
+      {/* Floating row menu — anchored to an invisible fixed point at
+          the click position, so opening a row doesn't jump the eye to
+          the far-right "…" column. Shared items with that button. */}
+      {(() => {
+        const company = rowMenu ? data.find((c) => c.id === rowMenu.id) ?? null : null
+        return (
+          <DropdownMenu
+            open={Boolean(rowMenu && company)}
+            onOpenChange={(open) => { if (!open) setRowMenu(null) }}
+          >
+            <DropdownMenuTrigger asChild>
+              <span
+                aria-hidden
+                style={{ position: "fixed", left: rowMenu?.x ?? 0, top: rowMenu?.y ?? 0, width: 0, height: 0, padding: 0, margin: 0 }}
+              />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              {company && renderCompanyMenuItems(company)}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
+      })()}
+
+      {/* Compact status dropdown at the click position — the small
+          dotted list from the hover submenu, direct apply, unavailable
+          statuses inactive with the reason as hover title. */}
+      {(() => {
+        const company = statusMenu?.company ?? null
+        return (
+          <DropdownMenu open={Boolean(statusMenu)} onOpenChange={(open) => { if (!open) setStatusMenu(null) }}>
+            <DropdownMenuTrigger asChild>
+              <span aria-hidden style={{ position: "fixed", left: statusMenu?.x ?? 0, top: statusMenu?.y ?? 0, width: 0, height: 0 }} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[160px]">
+              {company && COMPANY_STATUS_OPTIONS.map((option) => {
+                const isCurrent = company.status === option.value
+                const disabledReason = companyStatusDisabledReason(company, option.value)
+                return (
+                  <DropdownMenuItem
+                    key={option.value}
+                    disabled={isPending || Boolean(disabledReason)}
+                    title={disabledReason ?? undefined}
+                    className={cn("text-xs cursor-pointer flex items-center gap-1.5", isCurrent && "font-semibold bg-[#f5f5f4]")}
+                    onClick={() => { if (!isCurrent) applyCompanyStatus(company, option.value) }}
+                  >
+                    <span className={cn("inline-block h-1.5 w-1.5 rounded-full", option.dotColor, disabledReason && "opacity-40")} />
+                    {option.label}
+                  </DropdownMenuItem>
+                )
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
+      })()}
 
       {/* Load more — replaces the previous Previous/Next pagination.
           Shows total loaded vs total matched; button hidden when the
@@ -2609,88 +2697,6 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
       )}
 
       {/* Status Change Dialog */}
-      {statusChange && (
-        <div className="popup-overlay" onClick={() => setStatusChange(null)}>
-          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
-            <div className="popup-header">
-              <h3 className="arco-section-title">Update status</h3>
-              <button type="button" className="popup-close" onClick={() => setStatusChange(null)} aria-label="Close">
-                ✕
-              </button>
-            </div>
-
-            <div className="status-modal-options">
-              {COMPANY_STATUS_OPTIONS.map((option) => {
-                const isSelected = statusChange.selectedStatus === option.value
-                const isClaimed = !!statusChange.company.ownerName
-                const needsPublishedProject = option.value === "listed" && !statusChange.company.hasPublishedProjects
-                const needsUnclaimed = (option.value === ("prospected" as any) || option.value === ("added" as any)) && isClaimed
-                // Invited is a system-derived state: a company lands there
-                // only when another professional credits it on a project.
-                // Admins can never pick it manually — the option is shown
-                // for visibility but always disabled.
-                const isSystemDerived = option.value === ("invited" as any)
-                // Created / Listed / Unlisted all require an owner — you
-                // can't move an Added/Showcased company straight to Created
-                // via admin. Claim it first (via Showcased sequence or an
-                // invite) which lands the company at Created naturally.
-                const needsClaimed = (option.value === "listed" || option.value === "unlisted" || option.value === "created") && !isClaimed
-                // Lifecycle rule: a company that has never been listed
-                // can't move directly to Unlisted — it stays in Created
-                // until its first Listed transition.
-                const needsFirstListing = option.value === "unlisted" && statusChange.company.listedAt == null
-                const isDisabled = needsPublishedProject || needsUnclaimed || isSystemDerived || needsClaimed || needsFirstListing
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={`status-modal-option${isSelected ? " selected" : ""}`}
-                    disabled={isDisabled}
-                    onClick={() => setStatusChange((prev) => prev ? { ...prev, selectedStatus: option.value } : null)}
-                  >
-                    <span className={`status-modal-dot ${option.dotColor}`} />
-                    <div className="status-modal-option-text">
-                      <span className="status-modal-option-label">{option.label}</span>
-                      <span className="status-modal-option-desc">
-                        {isDisabled && !isSystemDerived
-                          ? needsPublishedProject
-                            ? (statusChange.company.canPublishProjects
-                              ? "Publish your first project to list this company page"
-                              : "Get invited to a published project to list this company page")
-                            : needsUnclaimed
-                              ? `Company already claimed by ${statusChange.company.ownerName}`
-                              : needsClaimed
-                                ? "Company must be claimed first"
-                                : needsFirstListing
-                                  ? "Company has never been listed — must go Listed first before it can be Unlisted"
-                                  : option.description
-                          : option.description}
-                      </span>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-
-            <div className="popup-actions">
-              <button type="button" className="btn-tertiary" onClick={() => setStatusChange(null)} disabled={isPending} style={{ flex: 1 }}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={confirmStatusChangeDialog}
-                disabled={isPending || statusChange.selectedStatus === statusChange.company.status}
-                style={{ flex: 1 }}
-              >
-                {isPending ? "Updating…" : statusChange.selectedStatus === ("prospected" as any) ? "Continue" : "Update status"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Prospect Confirmation Dialog */}
       {prospectConfirm && (() => {
         const eligible = prospectConfirm.candidates.filter((c) => c.eligible)
         const ineligible = prospectConfirm.candidates.filter((c) => !c.eligible)

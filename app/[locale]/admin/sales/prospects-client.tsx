@@ -3,8 +3,11 @@
 import { Fragment, useEffect, useRef, useState, useTransition, useCallback } from "react"
 import { ArrowUpRight } from "lucide-react"
 import { toast } from "sonner"
+import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
+import { EmailComposeModal } from "@/components/contact-card/email-compose-modal"
 import { AdminTabs, useAdminTab } from "@/components/admin/admin-tabs"
 import {
+  markProspectNotInterested,
   fetchSalesCompanies,
   skipCallListProspect,
   startProspectSequence,
@@ -27,7 +30,11 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -768,6 +775,24 @@ export function ProspectsClient({
   // Log outbound modal target — opened from the black "Log" pill on a
   // contact row. The panel has its own instance; this one serves the
   // table without opening the panel first.
+  // Companies-style row menu, opened AT the click position via a
+  // zero-size fixed anchor. Only rows with a companies record get it;
+  // company-less prospect rows keep opening the contact panel.
+  const [rowMenu, setRowMenu] = useState<{ row: SalesCompanyRow; x: number; y: number } | null>(null)
+  // Contact menu actions that live at table level: compose opens the
+  // shared modal; the two funnel exits confirm, apply and reload.
+  const [emailTarget, setEmailTarget] = useState<SalesContact | null>(null)
+  const handleNotInterested = async (contact: SalesContact) => {
+    const r = await markProspectNotInterested(contact.prospectId, true)
+    if (r.success) { toast.success("Marked as not interested"); reload({ offset, append: false }) }
+    else toast.error(r.error ?? "Failed")
+  }
+  const handleRemoveFromFunnel = async (contact: SalesContact) => {
+    if (!confirm(`Remove ${contact.contactName ?? contact.email} from the funnel?`)) return
+    const r = await removeProspectFromFunnel(contact.prospectId)
+    if (r.success) { toast.success("Removed from funnel"); reload({ offset, append: false }) }
+    else toast.error(r.error ?? "Failed")
+  }
   const [logOutboundTarget, setLogOutboundTarget] = useState<{
     prospectId: string
     contactLabel: string
@@ -1580,6 +1605,11 @@ export function ProspectsClient({
                   })
                 }
                 showCallColumn={callListOnly}
+                onOpenRowMenu={(e) => setRowMenu({ row, x: e.clientX, y: e.clientY })}
+                onSendEmail={(c) => setEmailTarget(c)}
+                onNotInterested={handleNotInterested}
+                onRemoveFromFunnel={handleRemoveFromFunnel}
+                onRenamed={() => reload({ offset, append: false })}
                 onSkip={async () => {
                   const r = await skipCallListProspect(row.primaryContact.prospectId)
                   if (r.success) {
@@ -1594,6 +1624,75 @@ export function ProspectsClient({
           </tbody>
         </table>
       </div>
+
+      {/* Floating row menu — mirrors /admin/companies: view / copy
+          link / edit / promote, conditional on what the row's company
+          actually supports. */}
+      {(() => {
+        const claimed = rowMenu?.row.claimedCompany ?? null
+        const canShowcase = Boolean(rowMenu?.row.companyId && claimed && !claimed.ownerUserId && claimed.status === "added")
+        return (
+          <DropdownMenu open={Boolean(rowMenu)} onOpenChange={(open) => { if (!open) setRowMenu(null) }}>
+            <DropdownMenuTrigger asChild>
+              <span aria-hidden style={{ position: "fixed", left: rowMenu?.x ?? 0, top: rowMenu?.y ?? 0, width: 0, height: 0 }} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-52">
+              {claimed?.slug && (
+                <DropdownMenuItem asChild>
+                  <a href={`/professionals/${claimed.slug}`} target="_blank" rel="noopener noreferrer" className="text-xs cursor-pointer">
+                    View company
+                  </a>
+                </DropdownMenuItem>
+              )}
+              {claimed?.slug && (
+                <DropdownMenuItem
+                  className="text-xs cursor-pointer"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(`${window.location.origin}/professionals/${claimed.slug}`)
+                    toast.success("Company link copied")
+                  }}
+                >
+                  Copy company link
+                </DropdownMenuItem>
+              )}
+              {rowMenu?.row.companyId && (
+                <DropdownMenuItem asChild>
+                  <a href={`/dashboard/company?company_id=${rowMenu.row.companyId}`} target="_blank" rel="noopener noreferrer" className="text-xs cursor-pointer">
+                    Edit company
+                  </a>
+                </DropdownMenuItem>
+              )}
+              {canShowcase && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <a
+                      href={`/api/admin/promote-showcase?company_id=${rowMenu!.row.companyId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs cursor-pointer"
+                      onClick={() => toast.success("Showcase actief — bedrijfspagina geopend in nieuw tabblad")}
+                    >
+                      Promote to showcase
+                    </a>
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
+      })()}
+
+      {emailTarget && (
+        <EmailComposeModal
+          email={emailTarget.email}
+          emails={[emailTarget.email]}
+          contactLabel={emailTarget.resolvedContact.name?.trim() || emailTarget.contactName || emailTarget.email}
+          prospectId={emailTarget.prospectId}
+          onClose={() => setEmailTarget(null)}
+          onSent={() => { setEmailTarget(null); reload({ offset, append: false }) }}
+        />
+      )}
 
       {/* Load more */}
       {hasMore && (
@@ -1787,6 +1886,11 @@ function CompanyRowView({
   onLogOutbound,
   onSkip,
   showCallColumn,
+  onOpenRowMenu,
+  onSendEmail,
+  onNotInterested,
+  onRemoveFromFunnel,
+  onRenamed,
 }: {
   row: SalesCompanyRow
   selected: boolean
@@ -1802,8 +1906,20 @@ function CompanyRowView({
   onSkip: () => void
   /** True while the Call list toggle is active — renders the Reason column. */
   showCallColumn: boolean
+  /** Row click for rows WITH a companies record: the companies-style
+   *  dropdown at the click position. Company-less rows fall back to
+   *  the contact panel. */
+  onOpenRowMenu: (e: React.MouseEvent) => void
+  onSendEmail: (contact: SalesContact) => void
+  onNotInterested: (contact: SalesContact) => void
+  onRemoveFromFunnel: (contact: SalesContact) => void
+  /** After an inline company rename — parent refetches the table. */
+  onRenamed: () => void
 }) {
   const claimed = row.claimedCompany
+  // Inline rename, companies-table style: name click edits, blur/Enter
+  // saves straight to companies.name.
+  const [editingName, setEditingName] = useState<string | null>(null)
   const companyInitials = (row.companyName ?? "")
     .split(" ")
     .filter(Boolean)
@@ -1848,7 +1964,11 @@ function CompanyRowView({
 
   return (
     <tr
-      onClick={() => onOpenContactCard(row.primaryContact)}
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest("button, a, input, select, textarea, [role='menuitem']")) return
+        if (row.companyId) onOpenRowMenu(e)
+        else onOpenContactCard(row.primaryContact)
+      }}
       style={{ cursor: "pointer" }}
       className="hover:bg-[#fafaf9]"
     >
@@ -1878,16 +1998,38 @@ function CompanyRowView({
           )}
           <div className="flex flex-col min-w-0">
             <span className="flex items-center gap-1 min-w-0">
-              {claimed?.slug ? (
-                <a
-                  href={`/professionals/${claimed.slug}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+              {editingName !== null && row.companyId ? (
+                <input
+                  autoFocus
+                  className="arco-table-primary border-b border-[#016D75] bg-transparent outline-none min-w-0 flex-1"
+                  value={editingName}
+                  onChange={(e) => setEditingName(e.target.value)}
+                  onBlur={async () => {
+                    const trimmed = editingName.trim()
+                    setEditingName(null)
+                    if (!trimmed || trimmed === row.companyName) return
+                    const supabase = getBrowserSupabaseClient()
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const { error } = await supabase.from("companies").update({ name: trimmed } as any).eq("id", row.companyId!)
+                    if (error) { toast.error(error.message); return }
+                    toast.success("Name updated")
+                    onRenamed()
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur()
+                    if (e.key === "Escape") setEditingName(null)
+                  }}
                   onClick={(e) => e.stopPropagation()}
-                  className="arco-table-primary hover:underline truncate"
+                />
+              ) : row.companyId ? (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setEditingName(row.companyName ?? "") }}
+                  className="arco-table-primary truncate hover:text-[#016D75] transition-colors text-left cursor-pointer bg-transparent border-none p-0"
+                  title="Click to edit name"
                 >
                   {row.companyName}
-                </a>
+                </button>
               ) : (
                 <span className="arco-table-primary truncate">{row.companyName}</span>
               )}
@@ -1902,9 +2044,6 @@ function CompanyRowView({
                 >
                   <ArrowUpRight className="h-3.5 w-3.5" />
                 </a>
-              )}
-              {row.companyId && claimed && !claimed.ownerUserId && claimed.status === "added" && (
-                <ShowcasePill companyId={row.companyId} slug={claimed.slug} />
               )}
             </span>
             {subtitle && <span className="arco-table-secondary">{subtitle}</span>}
@@ -1938,10 +2077,20 @@ function CompanyRowView({
           the contact dropdown / +N more popover open without the row's
           Details popup also firing on top. */}
       <td onClick={(e) => e.stopPropagation()}>
-        <ContactsCell row={row} onOpenContactCard={onOpenContactCard} onLogOutbound={onLogOutbound} />
+        <ContactsCell
+          row={row}
+          onOpenContactCard={onOpenContactCard}
+          onLogOutbound={onLogOutbound}
+          onSendEmail={onSendEmail}
+          onNotInterested={onNotInterested}
+          onRemoveFromFunnel={onRemoveFromFunnel}
+        />
       </td>
 
-      {/* Status (aggregated) */}
+      {/* Status (aggregated over the row's contacts) — read-only by
+          design: it's the MAX across contacts, so editing it here
+          would silently mutate one contact under an aggregate. Status
+          moves through the real funnel events. */}
       <td>
         <div className="flex items-center gap-1.5">
           <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${statusCfg.dot}`} />
@@ -2021,28 +2170,77 @@ function ContactsCell({
   row,
   onOpenContactCard,
   onLogOutbound,
+  onSendEmail,
+  onNotInterested,
+  onRemoveFromFunnel,
 }: {
   row: SalesCompanyRow
   onOpenContactCard: (contact: SalesContact) => void
   onLogOutbound: (contact: SalesContact) => void
+  onSendEmail: (contact: SalesContact) => void
+  onNotInterested: (contact: SalesContact) => void
+  onRemoveFromFunnel: (contact: SalesContact) => void
 }) {
   const primary = row.primaryContact
   const overflow = row.contacts.length - 1
 
+  // Companies-style contact menu, shared by the primary chip and each
+  // +N-more contact.
+  const renderContactMenuItems = (contact: SalesContact) => {
+    const phone = contact.phone ?? row.claimedCompany?.phone ?? null
+    return (
+      <>
+        <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => onOpenContactCard(contact)}>
+          Details
+        </DropdownMenuItem>
+        <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => onLogOutbound(contact)}>
+          Log outbound
+        </DropdownMenuItem>
+        <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => onSendEmail(contact)}>
+          Send email
+        </DropdownMenuItem>
+        {phone && (
+          <DropdownMenuItem asChild>
+            <a href={`tel:${phone.replace(/[^+\d]/g, "")}`} className="text-xs cursor-pointer">
+              Call
+            </a>
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="text-xs cursor-pointer text-[#b45309] focus:text-[#b45309]"
+          onClick={() => onNotInterested(contact)}
+        >
+          Not interested
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="text-xs cursor-pointer text-red-600 focus:text-red-600"
+          onClick={() => onRemoveFromFunnel(contact)}
+        >
+          Remove from funnel
+        </DropdownMenuItem>
+      </>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-0.5">
-      {/* Primary contact — opens the Contact Card panel directly. The
-          quiet "Log" pill sits right after the name and logs an
-          outbound touch without opening the panel. Rendered as a span
-          (not <button>) because it lives inside the row's open-panel
-          button — nested buttons are invalid HTML. */}
-      <button
-        type="button"
-        onClick={() => onOpenContactCard(primary)}
-        className="flex items-center gap-1.5 hover:text-[#016D75] transition-colors cursor-pointer text-left"
-      >
-        <ContactInline contact={primary} afterName={<LogPill onActivate={() => onLogOutbound(primary)} />} companyShowcased={row.claimedCompany?.status === "prospected"} />
-      </button>
+      {/* Primary contact — opens the contact menu (companies pattern);
+          Details in the menu opens the panel. The quiet "Log" pill
+          stays as the one-click shortcut. */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="flex items-center gap-1.5 hover:text-[#016D75] transition-colors cursor-pointer text-left"
+          >
+            <ContactInline contact={primary} companyShowcased={row.claimedCompany?.status === "prospected"} />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="min-w-[180px]">
+          {renderContactMenuItems(primary)}
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {/* Overflow — dropdown is only a picker for WHICH contact; each
           item opens that contact's panel. */}
@@ -2059,13 +2257,14 @@ function ContactsCell({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-[280px]">
             {row.contacts.slice(1).map((c) => (
-              <DropdownMenuItem
-                key={c.prospectId}
-                className="text-xs cursor-pointer"
-                onClick={() => onOpenContactCard(c)}
-              >
-                <ContactInline contact={c} afterName={<LogPill onActivate={() => onLogOutbound(c)} />} companyShowcased={row.claimedCompany?.status === "prospected"} />
-              </DropdownMenuItem>
+              <DropdownMenuSub key={c.prospectId}>
+                <DropdownMenuSubTrigger className="text-xs">
+                  <ContactInline contact={c} companyShowcased={row.claimedCompany?.status === "prospected"} />
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="min-w-[180px]">
+                  {renderContactMenuItems(c)}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -2085,52 +2284,6 @@ function ContactsCell({
  *  Suppression states (bounced / complained / unsubscribed) override
  *  the row's Sequence column instead — keeping the source pill stable
  *  here so the admin can still identify the channel at a glance. */
-/** Quiet primary-outline "Log" pill. Span-based so it can nest inside
- *  clickable rows / menu items without invalid button-in-button HTML;
- *  stopPropagation keeps the outer open-panel click from firing. */
-function LogPill({ onActivate }: { onActivate: () => void }) {
-  return (
-    <span
-      role="button"
-      tabIndex={0}
-      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onActivate() }}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onActivate() } }}
-      className={ACTION_PILL_CLASS}
-      title="Log outbound"
-    >
-      Log
-    </span>
-  )
-}
-
-/** Quiet pill on unowned catalogue rows ("added"): one click promotes
- *  the outreach company to a visible showcase ("prospected") — the
- *  bridge from the Sales pipeline to the marketplace. */
-function ShowcasePill({ companyId, slug }: { companyId: string; slug: string | null }) {
-  const [clicked, setClicked] = useState(false)
-  void slug
-  // A real <a target="_blank"> is never popup-blocked — the previous
-  // window.open()-after-await approach silently failed in Safari. The
-  // route promotes server-side, then redirects the new tab into the
-  // company editor.
-  return (
-    <a
-      href={`/api/admin/promote-showcase?company_id=${companyId}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={(e) => {
-        e.stopPropagation()
-        setClicked(true)
-        toast.success("Showcase actief — bedrijfspagina geopend in nieuw tabblad")
-      }}
-      className={clicked ? "text-[11px] text-[#016D75] hover:underline shrink-0" : ACTION_PILL_CLASS}
-      title="Maak zichtbaar als showcase op de marketplace"
-    >
-      {clicked ? "Showcase ✓" : "Showcase"}
-    </a>
-  )
-}
-
 function ContactInline({ contact, afterName, companyShowcased = false }: { contact: SalesContact; afterName?: React.ReactNode; companyShowcased?: boolean }) {
   const statusCfg = STATUS_CONFIG[contact.status] ?? STATUS_CONFIG.prospect
   const sequenceCfg = SEQUENCE_CONFIG[contact.sequenceStatus] ?? SEQUENCE_CONFIG.not_started

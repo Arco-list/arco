@@ -23,7 +23,6 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  MoreHorizontal,
   Star,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -191,6 +190,47 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
   const [deleteProject, setDeleteProject] = useState<AdminProjectRow | null>(null)
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
   const [showStatusGuide, setShowStatusGuide] = useState(false)
+  // Companies-pattern menus: the row menu and the compact status
+  // dropdown both open at the click position via a fixed zero-size
+  // anchor.
+  const [rowMenu, setRowMenu] = useState<{ project: AdminProjectRow; x: number; y: number } | null>(null)
+  const [statusMenu, setStatusMenu] = useState<{ project: AdminProjectRow; x: number; y: number } | null>(null)
+
+  // Direct status set from the compact dropdowns. Rejected keeps the
+  // dialog — a rejection needs its reasons.
+  const applyProjectStatus = (project: AdminProjectRow, status: ProjectStatus) => {
+    if (status === "rejected") {
+      setStatusSelection("rejected")
+      setRejectionReason("")
+      setStatusDialogProject(project)
+      return
+    }
+    startTransition(async () => {
+      try {
+        // Same constraint as the dialog: an unlisted owner company
+        // downgrades Listed to Unlisted.
+        let finalStatus = status
+        if (finalStatus === "published") {
+          const ownerCompany = project.companies.find(c => c.isOwner)
+          const ownerStatus = ownerCompany?.companyStatus
+          if (ownerStatus === "created" || ownerStatus === "owned" || ownerStatus === "verified" || ownerStatus === "unclaimed") {
+            finalStatus = "archived"
+            toast.info("Owner company is not listed — project set to Unlisted instead")
+          }
+        }
+        const result = await setProjectStatusAction({ projectId: project.id, status: finalStatus, rejectionReason: null })
+        if (!result.success) {
+          const error = "error" in result ? result.error : null
+          toast.error("Status update failed", { description: typeof error === "object" && error ? error.message : "Unknown error" })
+          return
+        }
+        toast.success("Status updated", { description: `${project.title} is now ${STATUS_CONFIG[finalStatus].label.toLowerCase()}.` })
+        router.refresh()
+      } catch {
+        toast.error("Unexpected error while updating status.")
+      }
+    })
+  }
 
   const handleStatusSubmit = () => {
     if (!statusDialogProject) return
@@ -373,8 +413,7 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
                 className="arco-table-status hover:opacity-70 transition-opacity cursor-pointer"
                 onClick={(e) => {
                   e.stopPropagation()
-                  setStatusDialogProject(project)
-                  setStatusSelection(project.status)
+                  setStatusMenu({ project, x: e.clientX, y: e.clientY })
                 }}
               >
                 <span className={`arco-table-status-dot ${config.dotColor}`} />
@@ -470,7 +509,10 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
                 </a>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuLabel className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Project status</DropdownMenuLabel>
+              {/* Same two-layer pattern as the companies menus. */}
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="text-xs">Update status</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="min-w-[160px]">
               {(["invited", "live_on_page", "listed", "unlisted", "rejected", "removed"] as const).map((status) => {
                 const config = CONTRIBUTOR_STATUS_CONFIG[status]
                 if (!config) return null
@@ -499,6 +541,8 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
                   </DropdownMenuItem>
                 )
               })}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
             </DropdownMenuContent>
           </DropdownMenu>
         )
@@ -540,7 +584,11 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
                           </a>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuLabel className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">Project status</DropdownMenuLabel>
+                        {/* Same two-layer pattern as the in-table
+                            company chips: status behind Update status. */}
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger className="text-xs">Update status</DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent className="min-w-[160px]">
                         {(["invited", "live_on_page", "listed", "unlisted", "rejected", "removed"] as const).map((status) => {
                           const config = CONTRIBUTOR_STATUS_CONFIG[status]
                           if (!config) return null
@@ -569,6 +617,8 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
                             </DropdownMenuItem>
                           )
                         })}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
                       </DropdownMenuSubContent>
                     </DropdownMenuSub>
                   ))}
@@ -684,56 +734,8 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
         return <span className="arco-table-primary">{r.seoCtr28d.toFixed(1)}%</span>
       },
     },
-    {
-      id: "actions",
-      header: "",
-      cell: ({ row }) => {
-        const project = row.original
-        const projectPath = project.slug ? `/projects/${project.slug}` : `/projects/${project.id}`
-        const viewUrl = project.status === "published" ? projectPath : `${projectPath}?preview`
-
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="arco-table-action" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <MoreHorizontal className="h-4 w-4" />
-                <span className="sr-only">Open menu</span>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem asChild>
-                <a href={viewUrl} target="_blank" rel="noopener noreferrer">
-                  View project
-                </a>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href={`/dashboard/edit/${project.id}`}>
-                  Edit project
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  setStatusSelection(project.status)
-                  setRejectionReason("")
-                  setStatusDialogProject(project)
-                }}
-              >
-                Update status
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-red-600 focus:text-red-600"
-                onClick={() => { setDeleteProject(project); setDeleteConfirmText("") }}
-              >
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )
-      },
-      enableSorting: false,
-      enableHiding: false,
-    },
+    // The "…" actions column is gone: the row itself opens the same
+    // menu at the click position (companies pattern).
   ], [])
 
   const table = useReactTable({
@@ -1231,7 +1233,14 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
           <tbody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id}>
+                <tr
+                  key={row.id}
+                  onClick={(e) => {
+                    if ((e.target as HTMLElement).closest("button, a, input, select, textarea, [role='menuitem']")) return
+                    setRowMenu({ project: row.original, x: e.clientX, y: e.clientY })
+                  }}
+                  style={{ cursor: "pointer" }}
+                >
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} style={cell.column.id === "select" ? { width: 32, paddingRight: 0 } : undefined}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -1249,6 +1258,90 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
           </tbody>
         </table>
       </div>
+
+      {/* Row menu at the click position — companies pattern. */}
+      {(() => {
+        const project = rowMenu?.project ?? null
+        const projectPath = project ? (project.slug ? `/projects/${project.slug}` : `/projects/${project.id}`) : "#"
+        const viewUrl = project?.status === "published" ? projectPath : `${projectPath}?preview`
+        return (
+          <DropdownMenu open={Boolean(rowMenu)} onOpenChange={(open) => { if (!open) setRowMenu(null) }}>
+            <DropdownMenuTrigger asChild>
+              <span aria-hidden style={{ position: "fixed", left: rowMenu?.x ?? 0, top: rowMenu?.y ?? 0, width: 0, height: 0 }} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              {project && (
+                <>
+                  <DropdownMenuItem asChild>
+                    <a href={viewUrl} target="_blank" rel="noopener noreferrer" className="text-xs cursor-pointer">
+                      View project
+                    </a>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href={`/dashboard/edit/${project.id}`} className="text-xs cursor-pointer">
+                      Edit project
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="text-xs">Update status</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="min-w-[160px]">
+                      {STATUS_OPTIONS.map((option) => {
+                        const isCurrent = project.status === option.value
+                        return (
+                          <DropdownMenuItem
+                            key={option.value}
+                            title={option.description}
+                            className={cn("text-xs cursor-pointer flex items-center gap-1.5", isCurrent && "font-semibold bg-[#f5f5f4]")}
+                            onClick={() => { if (!isCurrent) applyProjectStatus(project, option.value) }}
+                          >
+                            <span className={cn("inline-block h-1.5 w-1.5 rounded-full", STATUS_CONFIG[option.value]?.dotColor ?? "bg-gray-400")} />
+                            {option.label}
+                          </DropdownMenuItem>
+                        )
+                      })}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-xs cursor-pointer text-red-600 focus:text-red-600"
+                    onClick={() => { setDeleteProject(project); setDeleteConfirmText("") }}
+                  >
+                    Delete
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
+      })()}
+
+      {/* Compact status dropdown at the click position. */}
+      {(() => {
+        const project = statusMenu?.project ?? null
+        return (
+          <DropdownMenu open={Boolean(statusMenu)} onOpenChange={(open) => { if (!open) setStatusMenu(null) }}>
+            <DropdownMenuTrigger asChild>
+              <span aria-hidden style={{ position: "fixed", left: statusMenu?.x ?? 0, top: statusMenu?.y ?? 0, width: 0, height: 0 }} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[160px]">
+              {project && STATUS_OPTIONS.map((option) => {
+                const isCurrent = project.status === option.value
+                return (
+                  <DropdownMenuItem
+                    key={option.value}
+                    title={option.description}
+                    className={cn("text-xs cursor-pointer flex items-center gap-1.5", isCurrent && "font-semibold bg-[#f5f5f4]")}
+                    onClick={() => { if (!isCurrent) applyProjectStatus(project, option.value) }}
+                  >
+                    <span className={cn("inline-block h-1.5 w-1.5 rounded-full", STATUS_CONFIG[option.value]?.dotColor ?? "bg-gray-400")} />
+                    {option.label}
+                  </DropdownMenuItem>
+                )
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
+      })()}
 
       {/* Load more — replaces Previous/Next. Hidden when every
           filtered row is already on screen. */}
