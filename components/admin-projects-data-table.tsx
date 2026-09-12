@@ -115,10 +115,11 @@ const REJECTION_REASONS = [
   "Not a residential project",
   "Insufficient photos",
   "Low quality images",
+  "No real photos (renders)",
   "Missing project details",
   "Duplicate project",
   "Inappropriate content",
-  "Not architecture or interior design",
+  "Not distinctive enough as architecture or interior design",
 ]
 
 const STATUS_CONFIG: Record<ProjectStatus, { label: string; className: string; dotColor: string }> = {

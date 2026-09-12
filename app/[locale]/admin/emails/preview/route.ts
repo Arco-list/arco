@@ -21,7 +21,10 @@ const TEST_VARS = {
   // One-click acceptance — present on real invites, so the preview must
   // show the CTA the recipient actually gets.
   accept_url: 'https://arcolist.com/invite/accept?t=preview-token',
-  rejection_reason: 'The project photos do not meet our quality guidelines. Please upload higher resolution images and resubmit.',
+  // Real stored shape: the ". "-joined canonical labels the admin ticked
+  // (two here, so the preview shows the bulleted multi-reason variant).
+  // The template maps each label to its full sentence.
+  rejection_reason: 'Low quality images. No real photos (renders)',
   company_name: 'Marco van Veldhuizen',
   code: '847291',
   businessname: 'Studio Architectuur',
@@ -30,6 +33,9 @@ const TEST_VARS = {
   hero_image_url: 'https://marcovanveldhuizen.nl/cms/wp-content/uploads/2022/12/MARCO-VAN-VELDHUIZEN_OISTERWIJK-3501-HR-min.jpg',
   logo_url: 'https://ogvobdcrectqsegqrquz.supabase.co/storage/v1/object/public/company-logos/marco-van-veldhuizen.png',
   company_subtitle: 'Architect · Naarden',
+  // Primary-service slug — the verified-reminder badge renders the
+  // hand-drawn service mark PNG from this.
+  service_slug: 'architect',
   // Inviter fields — used by professional-invite + new-professional-* so the
   // preview renders with the inviter badge. In production these are
   // populated by the dispatcher from the project owner's company.

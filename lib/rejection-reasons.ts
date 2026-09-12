@@ -15,9 +15,13 @@ export const REJECTION_REASON_KEYS: Record<string, string> = {
   "not a residential project": "not_residential",
   "insufficient photos": "insufficient_photos",
   "low quality images": "low_quality_images",
+  "no real photos (renders)": "no_real_photos",
   "missing project details": "missing_details",
   "duplicate project": "duplicate",
   "inappropriate content": "inappropriate",
+  // The clarified phrase, plus the pre-clarification one still stored on
+  // historical rejections — both resolve to the same (updated) copy.
+  "not distinctive enough as architecture or interior design": "not_architecture",
   "not architecture or interior design": "not_architecture",
   // Written by the admin action when a status change carries no reason.
   "no reason provided": "none_given",
