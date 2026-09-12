@@ -222,7 +222,16 @@ export function ProfessionalsMap({ professionals, onClose }: ProfessionalsMapPro
     const el = containerRef.current
     if (!el) return
 
-    // Prevent page from scrolling below the map
+    // Pin the page at the top BEFORE freezing scroll: body
+    // overflow:hidden freezes the current offset and detaches sticky
+    // elements, so opening the map while scrolled left the header and
+    // filter bar half out of view.
+    window.scrollTo(0, 0)
+    // Prevent the page from scrolling below the map. Lock BOTH
+    // scrollers: overflow on <body> alone does not reliably lock the
+    // viewport in every browser (Safari keeps scrolling the document),
+    // which let the header and filter bar scroll away in map view.
+    document.documentElement.style.overflow = "hidden"
     document.body.style.overflow = "hidden"
 
     const updateHeight = () => {
@@ -248,6 +257,7 @@ export function ProfessionalsMap({ professionals, onClose }: ProfessionalsMapPro
     rafId = requestAnimationFrame(checkPosition)
 
     return () => {
+      document.documentElement.style.overflow = ""
       document.body.style.overflow = ""
       window.removeEventListener("resize", updateHeight)
       cancelAnimationFrame(rafId)
@@ -390,9 +400,12 @@ export function ProfessionalsMap({ professionals, onClose }: ProfessionalsMapPro
     if (currentIds === prevMappableIdsRef.current) return
     prevMappableIdsRef.current = currentIds
 
-    // Nothing to render or zoom to yet (map opened before the RPC returned)
-    if (mappable.length === 0) return
-
+    // Always re-render, ALSO when the set became empty — the early
+    // return that used to sit here left the previous markers standing
+    // when a filter matched nothing (and the NL recenter below was
+    // unreachable). renderMarkers clears old markers first. The
+    // map-just-opened case (empty before the RPC returns) never gets
+    // here: its id-string equals the initial ref value above.
     // Re-render markers immediately (don't wait for idle) — this covers
     // both the first non-empty arrival (async fetch from the map hook)
     // and subsequent filter-driven changes.

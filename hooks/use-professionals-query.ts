@@ -454,7 +454,9 @@ export function useProfessionalsForMap(enabled: boolean): {
     })()
 
     return () => controller.abort()
-  }, [enabled, keyword, selectedCategories, selectedServices, selectedCities, sortBy, locale])
+    // selectedRegions/regionCityMap feed effectiveCityFilters above —
+    // without them in the deps a province filter never refetched the map.
+  }, [enabled, keyword, selectedCategories, selectedServices, selectedCities, selectedRegions, regionCityMap, sortBy, locale])
 
   return { mapProfessionals, isMapLoading }
 }
