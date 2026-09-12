@@ -197,6 +197,24 @@ export async function setProjectStatusAction(input: {
     )
   }
 
+  // Company-live suppression needs the owning company's status BEFORE
+  // this update: when THIS publish is what first lists the company, the
+  // listing trigger (migration 237) sends the company-live mail and the
+  // transactional project-live for the same moment must stay silent.
+  // Projects published while the company is already listed mail normally.
+  let ownerCompanyWasListed = true
+  if (statusResult.data === "published") {
+    const { data: ownerLink } = await supabase
+      .from("project_professionals")
+      .select("company_id, companies!inner(status)")
+      .eq("project_id", idResult.data)
+      .eq("is_project_owner", true)
+      .maybeSingle()
+    const ownerCompany = (ownerLink as { companies?: { status?: string | null } | { status?: string | null }[] } | null)?.companies
+    const preStatus = Array.isArray(ownerCompany) ? ownerCompany[0]?.status : ownerCompany?.status
+    if (preStatus) ownerCompanyWasListed = preStatus === "listed"
+  }
+
   const updatePayload: Record<string, unknown> = {
     status: statusResult.data,
     status_updated_at: new Date().toISOString(),
@@ -431,7 +449,10 @@ export async function setProjectStatusAction(input: {
                 project_type: projectTypeLabel,
                 dashboard_link: `${baseUrl}/dashboard/listings`,
                 rejection_reason: trimmedReason || 'No reason provided'
-              }
+              },
+              // Resolve the mail language from the owner's profile, not
+              // their email TLD.
+              { userId: project?.client_id ?? null }
             )
             
             logger.info("Project rejection email sent", {
@@ -455,8 +476,15 @@ export async function setProjectStatusAction(input: {
           })
         }
       } else if (statusResult.data === "published") {
-        // Send project live email to owner
-        if (ownerEmail) {
+        // Send project live email to owner — except when this publish
+        // just listed the company for the first time: the Company Live
+        // mail owns that moment (see the pre-update capture above).
+        if (ownerEmail && !ownerCompanyWasListed) {
+          logger.info("Project live email suppressed — company-live covers the first listing", {
+            scope: "admin-projects",
+            projectId: idResult.data,
+          })
+        } else if (ownerEmail) {
           try {
             await sendProjectStatusEmail(
               ownerEmail,
@@ -470,7 +498,8 @@ export async function setProjectStatusAction(input: {
                 project_type: projectTypeLabel,
                 project_link: `${baseUrl}/projects/${(project as any)?.slug ?? idResult.data}`,
                 dashboard_link: `${baseUrl}/dashboard/listings`
-              }
+              },
+              { userId: project?.client_id ?? null }
             )
             
             logger.info("Project live email sent", {

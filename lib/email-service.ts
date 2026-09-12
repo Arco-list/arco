@@ -1,6 +1,7 @@
 'use server'
 
 import { buildUnsubscribeUrl } from './unsubscribe-token'
+import { REJECTION_REASON_KEYS } from './rejection-reasons'
 
 // Lazy-initialize Resend to avoid crashing at module load if RESEND_API_KEY is missing
 let _resend: import('resend').Resend | null = null
@@ -184,6 +185,14 @@ export type EmailTemplate =
   | 'visitor-nudge-showcase'
   | 'visitor-nudge-platform'
   | 'verified-reminder'
+  | 'owned-publisher'
+  | 'owned-contributor'
+  | 'owned-invited'
+  | 'company-live-publisher'
+  | 'company-live-contributor'
+  | 'listed-professionals-publisher'
+  | 'listed-professionals-contributor'
+  | 'listed-backlink'
   | 'auth-confirm-signup'
   | 'auth-magic-link'
   | 'auth-recovery'
@@ -241,6 +250,21 @@ const TEMPLATE_AUDIENCE: Record<EmailTemplate, EmailAudience> = {
   'project-rejected': 'pro',
   'team-invite': 'pro',
   'domain-verification': 'pro',
+  // Owned reminder — one drip step, sent only when the claim did NOT
+  // convert to Listed; variant resolved at send (lib/owned-welcome.ts):
+  // publisher (publish your first project), contributor (get credited
+  // by a pro), invited (accept the waiting credit).
+  'owned-publisher': 'pro',
+  'owned-contributor': 'pro',
+  'owned-invited': 'pro',
+  // Listed series — company live (replaces the first project-live),
+  // the credits/network mail, and the backlink ask. Variants resolved
+  // at send (lib/listed-mails.ts).
+  'company-live-publisher': 'pro',
+  'company-live-contributor': 'pro',
+  'listed-professionals-publisher': 'pro',
+  'listed-professionals-contributor': 'pro',
+  'listed-backlink': 'pro',
   // Client transactional / marketing
   'welcome-homeowner': 'client',
   'discover-projects': 'client',
@@ -672,9 +696,65 @@ function renderProjectLive(vars: EmailVariables, locale: EmailLocale = 'en'): { 
   }
 }
 
+// Full-sentence email copy per rejection category: what was wrong plus
+// what the owner should do about it. The dashboard keeps showing the
+// short labels; only the mail spells it out. Keyed by the canonical keys
+// from lib/rejection-reasons.ts — a category without an entry here (or a
+// hand-typed admin note) falls back to the stored text verbatim.
+const REJECTION_REASON_EMAIL_COPY: Record<string, { en: string; nl: string }> = {
+  not_residential: {
+    en: 'This project falls outside Arco: for now we only list residential projects.',
+    nl: 'Dit project valt buiten Arco: we tonen nu nog alleen woonprojecten.',
+  },
+  insufficient_photos: {
+    en: 'The project has too few photos. Add more images and resubmit it.',
+    nl: 'Het project heeft te weinig foto’s. Voeg meer afbeeldingen toe en dien het opnieuw in.',
+  },
+  low_quality_images: {
+    en: 'The project photos do not meet our quality guidelines. Upload higher-resolution images and resubmit the project.',
+    nl: 'De projectfoto’s voldoen niet aan onze kwaliteitsrichtlijnen. Upload afbeeldingen in hogere resolutie en dien het project opnieuw in.',
+  },
+  no_real_photos: {
+    en: 'The project contains renders instead of photos of the built work. Replace them with real photos and resubmit it.',
+    nl: 'Het project bevat renders in plaats van foto’s van het gerealiseerde werk. Vervang ze door echte foto’s en dien het opnieuw in.',
+  },
+  missing_details: {
+    en: 'Some project details are missing. Complete the project and resubmit it.',
+    nl: 'Er ontbreken projectgegevens. Vul het project verder aan en dien het opnieuw in.',
+  },
+  duplicate: {
+    en: 'This project is already on Arco.',
+    nl: 'Dit project staat al op Arco.',
+  },
+  inappropriate: {
+    en: 'The project contains content that does not fit our guidelines.',
+    nl: 'Het project bevat inhoud die niet past binnen onze richtlijnen.',
+  },
+  not_architecture: {
+    en: 'The project does not show enough distinctive architecture or interior design work to be listed on Arco.',
+    nl: 'Het project laat niet genoeg onderscheidend architectuur- of interieurontwerp zien om op Arco getoond te worden.',
+  },
+}
+
 function renderProjectRejected(vars: EmailVariables, locale: EmailLocale = 'en'): { subject: string; html: string } {
   const fallbackTitle = locale === 'nl' ? 'Je project' : 'Your project'
   const projectName = vars.project_title || vars.Project_title || vars.project_name || fallbackTitle
+  // The stored reason is the ". "-joined list of canonical labels the
+  // admin ticked, optionally ending in a free-text note. Each label maps
+  // to its full sentence above; unknown parts (the note) pass verbatim,
+  // and a bare "No reason provided" renders no reason block at all.
+  const storedReason = typeof vars.rejection_reason === 'string' ? vars.rejection_reason : ''
+  const reasonSentences = storedReason
+    .split('. ')
+    .map((part) => part.trim().replace(/\.$/, ''))
+    .filter(Boolean)
+    .map((part) => {
+      const key = REJECTION_REASON_KEYS[part.toLowerCase()]
+      if (key === 'none_given') return null
+      const sentence = key ? REJECTION_REASON_EMAIL_COPY[key] : undefined
+      return sentence ? sentence[locale === 'nl' ? 'nl' : 'en'] : `${part}.`
+    })
+    .filter((s): s is string => Boolean(s))
   const copy = locale === 'nl'
     ? {
         subject: `Update over ${projectName}`,
@@ -682,6 +762,7 @@ function renderProjectRejected(vars: EmailVariables, locale: EmailLocale = 'en')
         hi: (name?: string) => (name ? `Hoi ${name},` : 'Hoi,'),
         intro: `We hebben je project beoordeeld en het is nu niet goedgekeurd.`,
         reasonLabel: 'Reden',
+        reasonsLabel: 'Redenen',
         resubmit: 'Je kunt je project aanpassen en opnieuw ter beoordeling aanbieden.',
         button: 'Ga naar dashboard',
       }
@@ -691,6 +772,7 @@ function renderProjectRejected(vars: EmailVariables, locale: EmailLocale = 'en')
         hi: (name?: string) => (name ? `Hi ${name},` : 'Hi,'),
         intro: `We've reviewed your project and it wasn't approved at this time.`,
         reasonLabel: 'Reason',
+        reasonsLabel: 'Reasons',
         resubmit: 'You can update your project and resubmit it for review.',
         button: 'Go to dashboard',
       }
@@ -700,7 +782,8 @@ function renderProjectRejected(vars: EmailVariables, locale: EmailLocale = 'en')
       ${heading(copy.h1)}
       ${body(`${copy.hi(vars.firstname)}<br><br>${copy.intro}`)}
       ${projectCard(vars)}
-      ${vars.rejection_reason ? body(`<strong>${copy.reasonLabel}:</strong> ${vars.rejection_reason}`) : ''}
+      ${reasonSentences.length === 1 ? body(`<strong>${copy.reasonLabel}:</strong> ${reasonSentences[0]}`) : ''}
+      ${reasonSentences.length > 1 ? body(`<strong>${copy.reasonsLabel}:</strong><br>${reasonSentences.map((s) => `•&nbsp;&nbsp;${s}`).join('<br>')}`) : ''}
       ${body(copy.resubmit)}
       ${vars.dashboard_link ? button(copy.button, vars.dashboard_link) : ''}
     `, locale),
@@ -1790,14 +1873,12 @@ function renderVisitorNudgeInvite(vars: EmailVariables, locale: EmailLocale = 'n
         h1: `Your credit on ${projectName} is ready`,
         intro: `${inviterName} credited ${companyName} on ${projectName}. Confirming takes less than two minutes — the project then appears on your own free Arco page.`,
         button: `Confirm your credit`,
-        questions: `Questions? Just reply to this email.`,
       }
     : {
         subject: `Je vermelding op ${projectName} staat klaar`,
         h1: `Je vermelding op ${projectName} staat klaar`,
         intro: `${inviterName} heeft ${companyName} vermeld op ${projectName}. Bevestigen kost minder dan twee minuten — het project verschijnt daarna op je eigen gratis Arco-pagina.`,
         button: `Bevestig je vermelding`,
-        questions: `Vragen? Reageer gewoon op deze email.`,
       }
 
   return {
@@ -1807,7 +1888,6 @@ function renderVisitorNudgeInvite(vars: EmailVariables, locale: EmailLocale = 'n
       ${body(copy.intro)}
       ${vars.project_link ? linkedProjectCard(vars, vars.project_link) : projectCard(vars)}
       ${button(copy.button, claimUrl)}
-      ${body(copy.questions)}
     `, locale),
   }
 }
@@ -1830,7 +1910,6 @@ function renderVisitorNudgeShowcase(vars: EmailVariables, locale: EmailLocale = 
         h1: `${companyName} is ready for you`,
         intro: `Your page for ${companyName} is standing ready on Arco. Claiming takes less than two minutes — after that you can edit your profile, add projects and be found by clients.`,
         button: `Claim your page`,
-        questions: `Questions? Just reply to this email, happy to help.`,
         signoffRole: 'Founder, Arco',
       }
     : {
@@ -1838,7 +1917,6 @@ function renderVisitorNudgeShowcase(vars: EmailVariables, locale: EmailLocale = 
         h1: `${companyName} staat voor je klaar`,
         intro: `Je pagina voor ${companyName} staat klaar op Arco. Claimen kost minder dan twee minuten — daarna kun je je profiel aanpassen, projecten toevoegen en gevonden worden door opdrachtgevers.`,
         button: `Claim je pagina`,
-        questions: `Vragen? Reageer op deze email, ik help je graag.`,
         signoffRole: 'Oprichter, Arco',
       }
 
@@ -1849,7 +1927,6 @@ function renderVisitorNudgeShowcase(vars: EmailVariables, locale: EmailLocale = 
       ${body(copy.intro)}
       ${card}
       ${button(copy.button, claimUrl)}
-      ${body(copy.questions)}
       <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
         Niek van Leeuwen<br/>
         <span style="color:#a1a1a0;">${copy.signoffRole}</span>
@@ -1868,7 +1945,6 @@ function renderVisitorNudgePlatform(vars: EmailVariables, locale: EmailLocale = 
         h1: `Finish ${companyName} on Arco`,
         intro: `Your free page for ${companyName} is one step away — finishing takes less than two minutes. Clients can then view your work and reach out directly.`,
         button: `Continue claiming`,
-        questions: `Questions? Just reply to this email, happy to help.`,
         signoffRole: 'Founder, Arco',
       }
     : {
@@ -1876,7 +1952,6 @@ function renderVisitorNudgePlatform(vars: EmailVariables, locale: EmailLocale = 
         h1: `Maak ${companyName} af op Arco`,
         intro: `Je gratis pagina voor ${companyName} is nog één stap verwijderd — afronden kost minder dan twee minuten. Opdrachtgevers kunnen daarna je werk bekijken en direct contact opnemen.`,
         button: `Ga verder met claimen`,
-        questions: `Vragen? Reageer op deze email, ik help je graag.`,
         signoffRole: 'Oprichter, Arco',
       }
 
@@ -1886,7 +1961,6 @@ function renderVisitorNudgePlatform(vars: EmailVariables, locale: EmailLocale = 
       ${heading(copy.h1)}
       ${body(copy.intro)}
       ${button(copy.button, refUrl)}
-      ${body(copy.questions)}
       <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
         Niek van Leeuwen<br/>
         <span style="color:#a1a1a0;">${copy.signoffRole}</span>
@@ -1902,36 +1976,367 @@ function renderVisitorNudgePlatform(vars: EmailVariables, locale: EmailLocale = 
 // so the honest promise is "your work is saved — one step left". Brand
 // voice: the remaining step is product-mechanical, not a pitch.
 
+// The hand-drawn service marks, pre-rendered as PNGs (mail clients
+// strip inline SVG) on the product's light disc: 256px, mark at 72%,
+// ~1px stroke at the 32px badge size. Hosted in the public
+// category-images bucket; regenerate + re-upload when a mark changes.
+const SERVICE_MARK_PNG_SLUGS = new Set([
+  'architect', 'garden-designer', 'interior-designer', 'lighting-designer', 'photographer',
+  'structural-engineer', 'bathrooms', 'builder', 'kitchens', 'roofing', 'stairs-elevator',
+  'swimming-pools', 'tiles-stones', 'wellness', 'windows-doors', 'electrical-systems',
+  'heating-ventilation', 'security-systems', 'smart-homes', 'solar-installer', 'art',
+  'cabinet-maker', 'fireplace', 'flooring', 'furniture', 'interior-stylist', 'lighting',
+  'painter', 'fencing-gates', 'gardener', 'outdoor-furniture', 'outdoor-lighting', 'shed-builder',
+])
+
+function serviceMarkImageUrl(slug: string | null | undefined): string | null {
+  if (!slug) return null
+  const normalized = slug.toLowerCase().replace(/_/g, '-')
+  if (!SERVICE_MARK_PNG_SLUGS.has(normalized)) return null
+  return `https://ogvobdcrectqsegqrquz.supabase.co/storage/v1/object/public/category-images/service-marks/${normalized}.png`
+}
+
 function renderVerifiedReminder(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
   const companyName = vars.company_name || (locale === 'nl' ? 'je bedrijf' : 'your company')
   const claimUrl = vars.claim_url || vars.ref_url || 'https://www.arcolist.com/claim'
+  // Recognition block: which company this is about, at a glance. The
+  // icon is the company's hand-drawn service mark (platform pattern),
+  // falling back to logo, then the initial letter. Service slug, logo
+  // and city are enriched at send time by the drip cron.
+  const badge = vars.company_name
+    ? inviterBadge({
+        name: vars.company_name,
+        logoUrl: serviceMarkImageUrl(vars.service_slug) ?? vars.logo_url,
+        subtitle: vars.company_subtitle ?? null,
+      })
+    : ''
 
+  // The CTA reopens the claim funnel on the (prefilled) review step:
+  // check your details, hit continue, create the account. The copy
+  // promises exactly that — review + one minute — nothing more.
   const copy = locale === 'en'
     ? {
         subject: `One step left: your account for ${companyName}`,
         h1: `One step left`,
-        intro: `You confirmed ${companyName} on Arco — only your account is missing. Everything you filled in is saved, so finishing takes less than a minute.`,
-        after: `Once done, your free page is yours: edit your profile, add projects, and be found by clients.`,
+        intro: `You confirmed ${companyName} on Arco — only your account is missing. Everything you filled in is saved: review your details and finish in under a minute.`,
+        notPublic: `Nothing is public yet — that only happens once you've created your account.`,
+        after: `From then on your free page is yours: edit your profile, add projects, and be found by clients.`,
         button: `Finish your account`,
-        questions: `Questions? Just reply to this email.`,
       }
     : {
         subject: `Nog één stap: je account voor ${companyName}`,
         h1: `Nog één stap`,
-        intro: `Je hebt ${companyName} bevestigd op Arco — alleen je account ontbreekt nog. Alles wat je invulde is bewaard, dus afronden kost minder dan een minuut.`,
+        intro: `Je hebt ${companyName} bevestigd op Arco — alleen je account ontbreekt nog. Alles wat je invulde is bewaard: bekijk je gegevens en rond in minder dan een minuut af.`,
+        notPublic: `Er staat nog niets openbaar — dat gebeurt pas nadat je je account hebt aangemaakt.`,
         after: `Daarna is je gratis pagina van jou: profiel aanpassen, projecten toevoegen en gevonden worden door opdrachtgevers.`,
         button: `Maak je account af`,
-        questions: `Vragen? Reageer gewoon op deze email.`,
       }
 
   return {
     subject: copy.subject,
     html: lb(vars, `
       ${heading(copy.h1)}
+      ${badge}
       ${body(copy.intro)}
-      ${body(copy.after)}
+      ${body(copy.notPublic)}
       ${button(copy.button, claimUrl)}
-      ${body(copy.questions)}
+      ${body(copy.after)}
+    `, locale),
+  }
+}
+
+function renderOwnedPublisher(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'je bedrijf' : 'your company')
+  const dashboardUrl = vars.dashboard_link || 'https://www.arcolist.com/dashboard/company'
+  const badge = vars.company_name
+    ? inviterBadge({
+        name: vars.company_name,
+        logoUrl: serviceMarkImageUrl(vars.service_slug) ?? vars.logo_url,
+        subtitle: vars.company_subtitle ?? null,
+      })
+    : ''
+
+  const copy = locale === 'en'
+    ? {
+        subject: `Your page isn't live yet — publish your first project`,
+        h1: `Publish your first project`,
+        intro: `You claimed ${companyName}, but your page isn't live on Arco yet. It goes live the moment your first project is published.`,
+        work: `Clients search by built work — one project with good photos is enough to get found. Adding it takes a few minutes.`,
+        button: `Publish your first project`,
+      }
+    : {
+        subject: `Je pagina staat nog niet live — publiceer je eerste project`,
+        h1: `Publiceer je eerste project`,
+        intro: `Je hebt ${companyName} geclaimd, maar je pagina staat nog niet live op Arco. Dat gebeurt zodra je eerste project gepubliceerd is.`,
+        work: `Opdrachtgevers zoeken op gerealiseerd werk — één project met goede foto's is genoeg om gevonden te worden. Toevoegen kost een paar minuten.`,
+        button: `Publiceer je eerste project`,
+      }
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${badge}
+      ${body(copy.intro)}
+      ${body(copy.work)}
+      ${button(copy.button, dashboardUrl)}
+    `, locale),
+  }
+}
+
+function renderOwnedContributor(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'je bedrijf' : 'your company')
+  const pageUrl = vars.company_page_url || vars.dashboard_link || 'https://www.arcolist.com/dashboard/company'
+  const badge = vars.company_name
+    ? inviterBadge({
+        name: vars.company_name,
+        logoUrl: serviceMarkImageUrl(vars.service_slug) ?? vars.logo_url,
+        subtitle: vars.company_subtitle ?? null,
+      })
+    : ''
+
+  const copy = locale === 'en'
+    ? {
+        subject: `Your page isn't live yet — get credited by a pro`,
+        h1: `Get credited on a project`,
+        intro: `You claimed ${companyName}, but your page isn't live on Arco yet. Your page goes live through the projects you worked on: as soon as an architect or designer credits you on a published project, that work appears on your page.`,
+        work: `Working with an architect or interior designer who's on Arco? Ask them to credit you on the project — that's all it takes.`,
+        button: `View your page`,
+      }
+    : {
+        subject: `Je pagina staat nog niet live — word vermeld door een pro`,
+        h1: `Word vermeld op een project`,
+        intro: `Je hebt ${companyName} geclaimd, maar je pagina staat nog niet live op Arco. Jouw pagina gaat live via de projecten waar je aan meewerkte: zodra een architect of ontwerper je vermeldt op een gepubliceerd project, verschijnt dat werk op je pagina.`,
+        work: `Werk je samen met een architect of interieurontwerper die op Arco staat? Vraag of ze je vermelden op het project — meer is het niet.`,
+        button: `Bekijk je pagina`,
+      }
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${badge}
+      ${body(copy.intro)}
+      ${body(copy.work)}
+      ${button(copy.button, pageUrl)}
+    `, locale),
+  }
+}
+
+function renderOwnedInvited(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'je bedrijf' : 'your company')
+  const projectName = vars.project_title || (locale === 'nl' ? 'een project' : 'a project')
+  const dashboardUrl = vars.dashboard_link || 'https://www.arcolist.com/dashboard/company'
+  const inviter = vars.inviter_company_name
+  const badge = vars.company_name
+    ? inviterBadge({
+        name: vars.company_name,
+        logoUrl: serviceMarkImageUrl(vars.service_slug) ?? vars.logo_url,
+        subtitle: vars.company_subtitle ?? null,
+      })
+    : ''
+
+  const copy = locale === 'en'
+    ? {
+        subject: `Put your page live — your credit on ${projectName} is waiting`,
+        h1: `Put your page live`,
+        intro: `You claimed ${companyName}, and a credit on ${projectName}${inviter ? ` by ${inviter}` : ''} is waiting for you. Accept it and your page goes live with built work on it.`,
+        button: `Put your page live`,
+      }
+    : {
+        subject: `Zet je pagina live — je vermelding op ${projectName} staat klaar`,
+        h1: `Zet je pagina live`,
+        intro: `Je hebt ${companyName} geclaimd, en er staat een vermelding op ${projectName}${inviter ? ` van ${inviter}` : ''} voor je klaar. Accepteer de vermelding en je pagina staat live, met gerealiseerd werk erop.`,
+        button: `Zet je pagina live`,
+      }
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${badge}
+      ${body(copy.intro)}
+      ${vars.project_link ? linkedProjectCard(vars, vars.project_link) : projectCard(vars)}
+      ${button(copy.button, dashboardUrl)}
+    `, locale),
+  }
+}
+
+function listedBadgeBlock(vars: EmailVariables): string {
+  return vars.company_name
+    ? inviterBadge({
+        name: vars.company_name,
+        logoUrl: serviceMarkImageUrl(vars.service_slug) ?? vars.logo_url,
+        subtitle: vars.company_subtitle ?? null,
+      })
+    : ''
+}
+
+/** Full company card for the Company Live mails: cover image + icon
+ *  (logo, else service mark) + name + "service · city". The live page
+ *  in miniature — the reward moment. */
+function companyLiveCard(vars: EmailVariables): string {
+  if (!vars.company_name) return ''
+  return companyCard({
+    name: vars.company_name,
+    href: vars.company_page_url || 'https://www.arcolist.com/professionals',
+    logoUrl: vars.logo_url ?? serviceMarkImageUrl(vars.service_slug),
+    heroUrl: vars.hero_image_url,
+    subtitle: vars.company_subtitle ?? null,
+  })
+}
+
+function renderCompanyLivePublisher(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'Je bedrijf' : 'Your company')
+  const pageUrl = vars.company_page_url || 'https://www.arcolist.com/professionals'
+  const copy = locale === 'en'
+    ? {
+        subject: `${companyName} is live on Arco`,
+        h1: `You're live on Arco`,
+        intro: `${companyName} is live: your page and your work are now out there for clients to find.`,
+        credits: `Tip: credit the professionals you worked with on your projects — from builder to kitchen maker. They appear on your projects and your projects appear on their company pages: that's how work travels on Arco.`,
+        cover: `And make it yours: you can change your cover photo from your dashboard.`,
+        button: `View your page`,
+      }
+    : {
+        subject: `${companyName} staat live op Arco`,
+        h1: `Je staat live op Arco`,
+        intro: `${companyName} staat live: je pagina en je werk zijn nu vindbaar voor opdrachtgevers.`,
+        credits: `Tip: vermeld de professionals waarmee je aan je projecten werkte — van aannemer tot keukenbouwer. Zij verschijnen bij jouw projecten en jouw projecten verschijnen op hun bedrijfspagina's: zo reist je werk verder op Arco.`,
+        cover: `En maak hem van jou: je coverfoto pas je aan via je dashboard.`,
+        button: `Bekijk je pagina`,
+      }
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
+      ${companyLiveCard(vars)}
+      ${body(copy.credits)}
+      ${body(copy.cover)}
+      ${button(copy.button, pageUrl)}
+    `, locale),
+  }
+}
+
+function renderCompanyLiveContributor(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'je bedrijf' : 'your company')
+  const pageUrl = vars.company_page_url || 'https://www.arcolist.com/professionals'
+  const copy = locale === 'en'
+    ? {
+        subject: `Your page is live on Arco`,
+        h1: `You're live on Arco`,
+        intro: `Your page for ${companyName} is live: clients now see who you are and the projects you worked on.`,
+        grow: `Your page grows with every credit: each architect or designer who credits you on a new project automatically builds your page further.`,
+        cover: `And make it yours: you can change your cover photo from your dashboard.`,
+        button: `View your page`,
+      }
+    : {
+        subject: `Je pagina staat live op Arco`,
+        h1: `Je staat live op Arco`,
+        intro: `Je pagina voor ${companyName} staat live: opdrachtgevers zien nu wie je bent en aan welke projecten je meewerkte.`,
+        grow: `Je pagina groeit met elke vermelding: iedere architect of ontwerper die je vermeldt op een nieuw project, bouwt automatisch mee aan jouw pagina.`,
+        cover: `En maak hem van jou: je coverfoto pas je aan via je dashboard.`,
+        button: `Bekijk je pagina`,
+      }
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
+      ${companyLiveCard(vars)}
+      ${body(copy.grow)}
+      ${body(copy.cover)}
+      ${button(copy.button, pageUrl)}
+    `, locale),
+  }
+}
+
+function renderListedProfessionalsPublisher(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const dashboardUrl = vars.dashboard_link || 'https://www.arcolist.com/dashboard/company'
+  const copy = locale === 'en'
+    ? {
+        subject: `Credit the professionals you worked with`,
+        h1: `Credit your professionals`,
+        intro: `On every Arco project you can credit the professionals you worked with — from builder to kitchen maker to landscaper.`,
+        why: `Every credit makes your project more complete and shows it on more pages. That's how visibility works on Arco: companies that credit and get credited are found the most. There's no cap — more credits, more reach.`,
+        button: `Add professionals`,
+      }
+    : {
+        subject: `Vermeld de professionals waarmee je werkte`,
+        h1: `Vermeld je professionals`,
+        intro: `Bij elk project op Arco kun je de professionals vermelden waarmee je samenwerkte — van aannemer tot keukenbouwer tot hovenier.`,
+        why: `Elke vermelding maakt je project completer en toont het op meer pagina's. Zo werkt zichtbaarheid op Arco: bedrijven die vermelden en vermeld worden, worden het vaakst gevonden. Er zit geen maximum aan — meer vermeldingen, meer bereik.`,
+        button: `Voeg professionals toe`,
+      }
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${listedBadgeBlock(vars)}
+      ${body(copy.intro)}
+      ${body(copy.why)}
+      ${button(copy.button, dashboardUrl)}
+    `, locale),
+  }
+}
+
+function renderListedProfessionalsContributor(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const pageUrl = vars.company_page_url || vars.dashboard_link || 'https://www.arcolist.com/dashboard/company'
+  const copy = locale === 'en'
+    ? {
+        subject: `How to get more projects on your page`,
+        h1: `More projects on your page`,
+        intro: `Your page grows through the projects you worked on. Did you work with architects or designers whose projects aren't on Arco yet? Ask them to add the project and credit you.`,
+        why: `Every extra project shows more of your work — and every credit counts toward how often you get found.`,
+        button: `View your page`,
+      }
+    : {
+        subject: `Zo krijg je meer projecten op je pagina`,
+        h1: `Meer projecten op je pagina`,
+        intro: `Je pagina groeit via de projecten waar je aan meewerkte. Werkte je met architecten of ontwerpers van wie het project nog niet op Arco staat? Vraag ze het project toe te voegen en jou te vermelden.`,
+        why: `Elk extra project laat meer van je werk zien — en elke vermelding telt mee in hoe vaak je gevonden wordt.`,
+        button: `Bekijk je pagina`,
+      }
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${listedBadgeBlock(vars)}
+      ${body(copy.intro)}
+      ${body(copy.why)}
+      ${button(copy.button, pageUrl)}
+    `, locale),
+  }
+}
+
+function renderListedBacklink(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  // NOT enqueued yet — waits for the badge page. The CTA points at the
+  // planned /badges route; activate the mail once that page exists.
+  const badgesUrl = `${(process.env.NEXT_PUBLIC_SITE_URL || 'https://www.arcolist.com')}/badges`
+  const copy = locale === 'en'
+    ? {
+        subject: `Add 'Listed on Arco' to your website`,
+        h1: `Show you're on Arco`,
+        intro: `Put 'Listed on Arco' on your own website. The badge links to your Arco page — good for your visitors, and good for how well your page gets found.`,
+        how: `Logos and ready-made HTML are on the badge page; copy and paste is all it takes.`,
+        button: `Get the badge`,
+      }
+    : {
+        subject: `Zet 'Listed on Arco' op je website`,
+        h1: `Laat zien dat je op Arco staat`,
+        intro: `Zet 'Listed on Arco' op je eigen website. Het badge linkt naar je Arco-pagina — goed voor je bezoekers, en goed voor hoe goed je pagina gevonden wordt.`,
+        how: `Logo's en kant-en-klare HTML vind je op de badge-pagina; kopiëren en plakken is genoeg.`,
+        button: `Bekijk de badges`,
+      }
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${listedBadgeBlock(vars)}
+      ${body(copy.intro)}
+      ${body(copy.how)}
+      ${button(copy.button, badgesUrl)}
     `, locale),
   }
 }
@@ -1959,6 +2364,14 @@ const TEMPLATE_RENDERERS: Record<EmailTemplate, TemplateRenderer> = {
   'visitor-nudge-showcase': renderVisitorNudgeShowcase,
   'visitor-nudge-platform': renderVisitorNudgePlatform,
   'verified-reminder': renderVerifiedReminder,
+  'owned-publisher': renderOwnedPublisher,
+  'owned-contributor': renderOwnedContributor,
+  'owned-invited': renderOwnedInvited,
+  'company-live-publisher': renderCompanyLivePublisher,
+  'company-live-contributor': renderCompanyLiveContributor,
+  'listed-professionals-publisher': renderListedProfessionalsPublisher,
+  'listed-professionals-contributor': renderListedProfessionalsContributor,
+  'listed-backlink': renderListedBacklink,
   'auth-confirm-signup': renderAuthConfirmSignup,
   'auth-magic-link': renderAuthMagicLink,
   'auth-recovery': renderAuthRecovery,

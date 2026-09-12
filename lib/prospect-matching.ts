@@ -99,26 +99,23 @@ async function syncAccountStageForCompany(companyId: string | null | undefined) 
 }
 
 /**
- * When a user signs up, match to a prospect by:
- * 1. prospect_ref cookie (set when they clicked an Apollo email link)
- * 2. Exact email match (fallback)
- * This allows matching even when the user signs up with a personal email.
+ * Shared prospect lookup for the signup paths: ref cookie (email,
+ * ref_code or apollo_contact_id), then signup email, then the claim
+ * cookie's company.
  */
-export async function matchProspectOnSignup(
+async function findProspectForSignup(
+  supabase: ReturnType<typeof createServiceRoleSupabaseClient>,
   email: string,
-  userId: string,
   prospectRef?: string | null,
-  claimCompanyId?: string | null
-): Promise<void> {
-  const supabase = createServiceRoleSupabaseClient();
-
+  claimCompanyId?: string | null,
+): Promise<any | null> {
   let prospect: any = null;
 
   // Try matching by ref cookie first (email, ref_code, or apollo_contact_id)
   if (prospectRef) {
     const { data: byEmail } = await supabase
       .from("prospects")
-      .select("id, status, apollo_contact_id, apollo_sequence_id, company_id")
+      .select("id, status, signed_up_at, apollo_contact_id, apollo_sequence_id, company_id")
       .eq("email", prospectRef.toLowerCase())
       .maybeSingle();
     prospect = byEmail;
@@ -126,7 +123,7 @@ export async function matchProspectOnSignup(
     if (!prospect) {
       const { data: byRef } = await supabase
         .from("prospects")
-        .select("id, status, apollo_contact_id, apollo_sequence_id, company_id")
+        .select("id, status, signed_up_at, apollo_contact_id, apollo_sequence_id, company_id")
         .eq("ref_code", prospectRef)
         .maybeSingle();
       prospect = byRef;
@@ -135,7 +132,7 @@ export async function matchProspectOnSignup(
     if (!prospect) {
       const { data: byApollo } = await supabase
         .from("prospects")
-        .select("id, status, apollo_contact_id, apollo_sequence_id, company_id")
+        .select("id, status, signed_up_at, apollo_contact_id, apollo_sequence_id, company_id")
         .eq("apollo_contact_id", prospectRef)
         .maybeSingle();
       prospect = byApollo;
@@ -146,7 +143,7 @@ export async function matchProspectOnSignup(
   if (!prospect) {
     const { data: bySignupEmail } = await supabase
       .from("prospects")
-      .select("id, status, apollo_contact_id, apollo_sequence_id, company_id")
+      .select("id, status, signed_up_at, apollo_contact_id, apollo_sequence_id, company_id")
       .eq("email", email.toLowerCase())
       .maybeSingle();
     prospect = bySignupEmail;
@@ -156,14 +153,84 @@ export async function matchProspectOnSignup(
   if (!prospect && claimCompanyId) {
     const { data: byCompany } = await supabase
       .from("prospects")
-      .select("id, status, apollo_contact_id, apollo_sequence_id, company_id")
+      .select("id, status, signed_up_at, apollo_contact_id, apollo_sequence_id, company_id")
       .eq("company_id", claimCompanyId)
       .maybeSingle();
     prospect = byCompany;
   }
 
+  return prospect;
+}
+
+/**
+ * Signup STARTED — the code-send moment. The account is pre-created
+ * (admin.createUser in signUpWithOtpAction) but nothing is proven yet,
+ * so this only links the account to the prospect and logs
+ * 'prospect.signup_started'. No signed_up_at stamp, no sequence
+ * retirement, no Apollo stop: an abandoned signup keeps being chased
+ * by the funnel mails. The real "Signed up" fires at the first
+ * verified session (DB trigger, migration 238) or via
+ * matchProspectOnSignup on the OAuth callback.
+ */
+export async function matchProspectOnSignupStarted(
+  email: string,
+  userId: string,
+  prospectRef?: string | null,
+  claimCompanyId?: string | null
+): Promise<void> {
+  const supabase = createServiceRoleSupabaseClient();
+  const prospect = await findProspectForSignup(supabase, email, prospectRef, claimCompanyId);
+  if (!prospect) {
+    logger.debug("No prospect found for signup start", { email, prospectRef, claimCompanyId });
+    return;
+  }
+
+  await (supabase.from("prospects") as any)
+    .update({ user_id: userId })
+    .eq("id", prospect.id);
+
+  await logProspectEvent(
+    supabase,
+    prospect.id,
+    "prospect.signup_started",
+    "app",
+    prospect.status,
+    prospect.status,
+    { userId }
+  );
+}
+
+/**
+ * When a user signs up, match to a prospect by:
+ * 1. prospect_ref cookie (set when they clicked an Apollo email link)
+ * 2. Exact email match (fallback)
+ * This allows matching even when the user signs up with a personal email.
+ *
+ * This is the VERIFIED signup: only call it from paths where a real
+ * session exists (OAuth callback). The OTP path logs signup_started at
+ * code-send and gets the real stamp from the first-sign-in trigger
+ * (migration 238) — the signed_up_at guard below keeps the two paths
+ * from double-stamping each other.
+ */
+export async function matchProspectOnSignup(
+  email: string,
+  userId: string,
+  prospectRef?: string | null,
+  claimCompanyId?: string | null
+): Promise<void> {
+  const supabase = createServiceRoleSupabaseClient();
+  const prospect = await findProspectForSignup(supabase, email, prospectRef, claimCompanyId);
   if (!prospect) {
     logger.debug("No prospect found for signup", { email, prospectRef, claimCompanyId });
+    return;
+  }
+
+  // Already stamped (e.g. the first-sign-in trigger beat this call):
+  // just make sure the account link exists and stop.
+  if (prospect.signed_up_at) {
+    await (supabase.from("prospects") as any)
+      .update({ user_id: userId })
+      .eq("id", prospect.id);
     return;
   }
 

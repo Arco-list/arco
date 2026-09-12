@@ -417,12 +417,17 @@ async function ingestInboundEmail(
 
   // Cancel pending drips by email (covers every company / template
   // they were enrolled in). Idempotent — already-cancelled rows aren't
-  // touched again.
+  // touched again. Stage mails for Verified/Owned/Listed survive the
+  // reply: they nudge account completion, which a conversation doesn't
+  // replace (the visitor-nudge does NOT survive — the human thread
+  // covers that pitch). Extend this list when owned/listed-stage mails
+  // get their own templates.
   try {
     const { cancelPendingDripRows } = await import("@/lib/drip-queue")
     await cancelPendingDripRows(supabase, {
       email: parsed.fromEmail,
       reason: "replied",
+      spareTemplates: ["verified-reminder", "owned-welcome", "company-live", "listed-professionals", "listed-backlink"],
     })
   } catch (err) {
     logger.error("[gmail-sync] drip cancellation on reply failed", {

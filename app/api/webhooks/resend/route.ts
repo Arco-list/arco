@@ -244,7 +244,7 @@ export async function POST(request: NextRequest) {
   if (recipientEmail) {
     const { data: prospect } = await supabase
       .from("prospects")
-      .select("id, status, company_id, apollo_contact_id, landing_visited_at, emails_sent, emails_delivered, emails_opened, emails_clicked")
+      .select("id, status, company_id, company_name, apollo_contact_id, landing_visited_at, emails_sent, emails_delivered, emails_opened, emails_clicked")
       .eq("email", recipientEmail)
       .maybeSingle()
 
@@ -297,6 +297,20 @@ export async function POST(request: NextRequest) {
           new_status: "visitor",
           metadata: { via: "email_click", message_id: messageId ?? null },
         } as never)
+
+        // Visitor status implies the visitor sequence: this promotion
+        // path schedules the nudge exactly like the ref-code landing
+        // visit does (shared helper, deduped per address).
+        try {
+          const { enqueueVisitorNudge } = await import("@/lib/prospect-ref")
+          await enqueueVisitorNudge(supabase, {
+            email: recipientEmail,
+            company_id: (prospect as { company_id?: string | null }).company_id ?? null,
+            company_name: (prospect as { company_name?: string | null }).company_name ?? null,
+          })
+        } catch (err) {
+          console.error("[resend-webhook] Failed to enqueue visitor nudge on click-visit", err)
+        }
 
         // Apollo: contact stage directly, account stage via the resolver
         // (single owner of that field). Both non-blocking.

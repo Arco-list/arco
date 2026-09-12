@@ -133,31 +133,11 @@ export async function trackProspectLandingVisit(
   // reaches Verified before it fires.
   if (updates.status === "visitor") {
     try {
-      const prospectEmail = (prospect as any).email as string | null
-      if (prospectEmail) {
-        // The visit outran the contacted drip — retire its pending
-        // mails now instead of letting them sit "Scheduled" until the
-        // send-time gate reaches the same verdict.
-        await cancelOvertakenDripRows(supabase, prospectEmail, "visitor")
-        const { data: existing } = await supabase
-          .from("email_drip_queue")
-          .select("id")
-          .ilike("email", prospectEmail)
-          .eq("template", "visitor-nudge")
-          .limit(1)
-          .maybeSingle()
-        if (!existing) {
-          const { nextBusinessSlot } = await import("@/lib/date-utils")
-          await (supabase.from("email_drip_queue") as any).insert({
-            email: prospectEmail,
-            template: "visitor-nudge",
-            sequence: "visitor-nudge",
-            company_id: (prospect as any).company_id ?? null,
-            send_at: nextBusinessSlot(1).toISOString(),
-            variables: { company_name: (prospect as any).company_name ?? undefined },
-          })
-        }
-      }
+      await enqueueVisitorNudge(supabase, {
+        email: (prospect as any).email as string | null,
+        company_id: (prospect as any).company_id ?? null,
+        company_name: (prospect as any).company_name ?? null,
+      })
     } catch (err) {
       logger.error("Failed to enqueue visitor nudge", { prospectId: (prospect as any).id }, err as Error)
     }
@@ -205,6 +185,53 @@ const CONTACTED_SERIES_TEMPLATES = [
   "prospect-intro", "prospect-followup", "prospect-final",
   "new-professional-invite", "new-professional-followup", "new-professional-final",
 ];
+
+/**
+ * Schedule the one-step visitor-nudge (+1 business day) for a prospect
+ * that just became a Visitor, first retiring the contacted-series
+ * mails the visit outran. Shared by BOTH promotion paths — the
+ * ref-code landing visit here and the email-click promotion in the
+ * Resend webhook — so Visitor status always implies the visitor
+ * sequence. The dedupe on any existing visitor-nudge row (sent or
+ * cancelled) keeps it to at most one per address; the drip cron's
+ * stage gate cancels it if the prospect reaches Verified first.
+ */
+export async function enqueueVisitorNudge(
+  supabase: ReturnType<typeof createServiceRoleSupabaseClient>,
+  prospect: { email: string | null; company_id?: string | null; company_name?: string | null },
+): Promise<void> {
+  const email = prospect.email
+  if (!email) return
+  await cancelOvertakenDripRows(supabase, email, "visitor")
+  // A contact who already wrote back is in a human conversation — the
+  // nudge would read as a tone-deaf robot butting in. Same policy as
+  // the reply-cancel, which retires the visitor-nudge too.
+  const { data: replied } = await supabase
+    .from("prospects")
+    .select("id")
+    .ilike("email", email)
+    .not("replied_at", "is", null)
+    .limit(1)
+    .maybeSingle()
+  if (replied) return
+  const { data: existing } = await supabase
+    .from("email_drip_queue")
+    .select("id")
+    .ilike("email", email)
+    .eq("template", "visitor-nudge")
+    .limit(1)
+    .maybeSingle()
+  if (existing) return
+  const { nextBusinessSlot } = await import("@/lib/date-utils")
+  await (supabase.from("email_drip_queue") as any).insert({
+    email,
+    template: "visitor-nudge",
+    sequence: "visitor-nudge",
+    company_id: prospect.company_id ?? null,
+    send_at: nextBusinessSlot(1).toISOString(),
+    variables: { company_name: prospect.company_name ?? undefined },
+  })
+}
 
 /**
  * Eagerly cancel queue rows the promotion just overtook — the same
@@ -296,6 +323,38 @@ export async function advanceProspectStage(
       }
     } catch (err) {
       logger.error("Failed to enqueue verified reminder", { prospectId: prospect.id }, err as Error);
+    }
+  }
+
+  // Owned-welcome: pro onboarding, +1 business day after the claim.
+  // One per address, ever; the abstract template resolves at send time
+  // into the publisher or contributor variant (lib/owned-welcome.ts),
+  // and the cron's stage gate cancels it if they reach Active first.
+  if (stage === "owned") {
+    try {
+      const email = ((prospect as any).email as string | null) ?? identifier.email ?? null;
+      if (email) {
+        const { data: existing } = await supabase
+          .from("email_drip_queue")
+          .select("id")
+          .ilike("email", email)
+          .eq("template", "owned-welcome")
+          .limit(1)
+          .maybeSingle();
+        if (!existing) {
+          const { nextBusinessSlot } = await import("@/lib/date-utils");
+          await (supabase.from("email_drip_queue") as any).insert({
+            email,
+            template: "owned-welcome",
+            sequence: "owned-welcome",
+            company_id: (prospect as any).company_id ?? identifier.companyId ?? null,
+            send_at: nextBusinessSlot(1).toISOString(),
+            variables: { company_name: (prospect as any).company_name ?? undefined },
+          });
+        }
+      }
+    } catch (err) {
+      logger.error("Failed to enqueue owned welcome", { prospectId: prospect.id }, err as Error);
     }
   }
 

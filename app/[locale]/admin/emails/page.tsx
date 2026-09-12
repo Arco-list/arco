@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-type UserAudience = "all" | "professional" | "client" | "admin"
+type UserAudience = "all" | "professional" | "client" | "admin" | "publisher" | "contributor"
 
 type EmailSender = {
   name: string
@@ -46,6 +46,10 @@ const SENDERS: Record<string, EmailSender> = {
 const AUDIENCE_CONFIG: Record<UserAudience, { label: string; cls: string }> = {
   all: { label: "All", cls: "bg-[#f5f5f4] text-[#6b6b68]" },
   professional: { label: "Professional", cls: "bg-[#e6f4f5] text-[#016D75]" },
+  // Sub-audiences within professional: which route to Listed the
+  // variant addresses.
+  publisher: { label: "Publisher", cls: "bg-[#e6f4f5] text-[#016D75]" },
+  contributor: { label: "Contributor", cls: "bg-[#eef2ff] text-[#4f46e5]" },
   client: { label: "Client", cls: "bg-amber-50 text-amber-700" },
   admin: { label: "Admin", cls: "bg-violet-50 text-violet-700" },
 }
@@ -79,9 +83,25 @@ const INITIAL_TEMPLATES: EmailTemplate[] = [
   // at send time by lib/visitor-nudge.ts from the live channel.
   { id: "visitor-nudge-invite", name: "Invite Visitor Nudge", type: "marketing", audience: "professional", description: "Funnel opened, not claimed — invite variant leads with the credited project", trigger: "Drip queue · 1 day after funnel visit · variant resolved at send", subject: "Je vermelding op [Project] staat klaar", sends: 0, deliveryRate: 100, active: true, drip: "visitor-nudge", dripDay: 1, from: SENDERS.arco },
   { id: "visitor-nudge-showcase", name: "Showcase Visitor Nudge", type: "marketing", audience: "professional", description: "Funnel opened, not claimed — showcase variant leads with the built page", trigger: "Drip queue · 1 day after funnel visit · variant resolved at send", subject: "[Company] op Arco staat voor je klaar", sends: 0, deliveryRate: 100, active: true, drip: "visitor-nudge", dripDay: 1, from: SENDERS.niek },
-  { id: "visitor-nudge-platform", name: "Platform Visitor Nudge", type: "marketing", audience: "professional", description: "Funnel opened, not claimed — platform variant leads with the company name", trigger: "Drip queue · 1 day after funnel visit · variant resolved at send", subject: "Maak [Company] af op Arco", sends: 0, deliveryRate: 100, active: true, drip: "visitor-nudge", dripDay: 1, from: SENDERS.niek },
+  { id: "visitor-nudge-platform", name: "Outreach Visitor Nudge", type: "marketing", audience: "professional", description: "Funnel opened, not claimed — outreach variant (nothing on the platform yet) leads with the company name", trigger: "Drip queue · 1 day after funnel visit · variant resolved at send", subject: "Maak [Company] af op Arco", sends: 0, deliveryRate: 100, active: true, drip: "visitor-nudge", dripDay: 1, from: SENDERS.niek },
   // Verified-reminder — cart abandonment: step 1 confirmed, no commit.
   { id: "verified-reminder", name: "Verified Reminder", type: "marketing", audience: "professional", description: "Step 1 confirmed without the account commit — details are saved, one step left", trigger: "Drip queue · 1 day after Verified · stops at Owned", subject: "Nog één stap: je account voor [Company]", sends: 0, deliveryRate: 100, active: true, drip: "verified-reminder", dripDay: 1, from: SENDERS.arco },
+  // Owned-reminder — one drip step ('owned-welcome' in the queue),
+  // sent only when the claim did NOT convert to Listed; the variant is
+  // the company's route to going live, resolved at send by
+  // lib/owned-welcome.ts.
+  { id: "owned-publisher", name: "Publisher Reminder", type: "marketing", audience: "publisher", description: "Claimed, not listed, category publishes own work — publish your first project", trigger: "Drip queue · 1 day after Owned · skipped when Listed · variant resolved at send", subject: "Je pagina staat nog niet live — publiceer je eerste project", sends: 0, deliveryRate: 100, active: true, drip: "owned-welcome", dripDay: 1, from: SENDERS.niek },
+  { id: "owned-contributor", name: "Contributor Reminder", type: "marketing", audience: "contributor", description: "Claimed, not listed, category without own projects — get credited by a pro you work with", trigger: "Drip queue · 1 day after Owned · skipped when Listed · variant resolved at send", subject: "Je pagina staat nog niet live — word vermeld door een pro", sends: 0, deliveryRate: 100, active: true, drip: "owned-welcome", dripDay: 1, from: SENDERS.niek },
+  { id: "owned-invited", name: "Invited Reminder", type: "marketing", audience: "professional", description: "Claimed, not listed, a credit is waiting — accept it and the page goes live", trigger: "Drip queue · 1 day after Owned · skipped when Listed · variant resolved at send", subject: "Zet je pagina live — je vermelding op [Project] staat klaar", sends: 0, deliveryRate: 100, active: true, drip: "owned-welcome", dripDay: 1, from: SENDERS.niek },
+  // Listed series ('company-live' / 'listed-professionals' /
+  // 'listed-backlink' in the queue, migration 237) — variant resolved
+  // at send by lib/listed-mails.ts. Company Live replaces the
+  // transactional project-live for the publish that caused the listing.
+  { id: "company-live-publisher", name: "Company Live — Publisher", type: "marketing", audience: "publisher", description: "First listing, own published project — you're live, plus the credits tip", trigger: "Drip queue · immediately at first listing · variant resolved at send", subject: "[Company] staat live op Arco", sends: 0, deliveryRate: 100, active: true, drip: "listed-series", dripDay: 0, from: SENDERS.niek },
+  { id: "company-live-contributor", name: "Company Live — Contributor", type: "marketing", audience: "contributor", description: "First listing via a credit — you're live, your page grows with every credit", trigger: "Drip queue · immediately at first listing · variant resolved at send", subject: "Je pagina staat live op Arco", sends: 0, deliveryRate: 100, active: true, drip: "listed-series", dripDay: 0, from: SENDERS.niek },
+  { id: "listed-professionals-publisher", name: "Credit Your Professionals", type: "marketing", audience: "publisher", description: "The network motor: credit the pros you worked with — always sent, more credits = more reach", trigger: "Drip queue · 3 business days after listing · variant resolved at send", subject: "Vermeld de professionals waarmee je werkte", sends: 0, deliveryRate: 100, active: true, drip: "listed-series", dripDay: 3, from: SENDERS.niek },
+  { id: "listed-professionals-contributor", name: "More Projects On Your Page", type: "marketing", audience: "contributor", description: "Ask the architects you worked with to put shared projects on Arco", trigger: "Drip queue · 3 business days after listing · variant resolved at send", subject: "Zo krijg je meer projecten op je pagina", sends: 0, deliveryRate: 100, active: true, drip: "listed-series", dripDay: 3, from: SENDERS.niek },
+  { id: "listed-backlink", name: "Listed Backlink", type: "marketing", audience: "professional", description: "'Listed on Arco' badge for their own site — NOT enqueued until the /badges page exists", trigger: "Planned · +10 business days after listing · waiting for the badge page", subject: "Zet 'Listed on Arco' op je website", sends: 0, deliveryRate: 100, active: false, drip: "listed-series", dripDay: 10, from: SENDERS.niek },
 ]
 
 // Small ⓘ with a native-title hover explaining the benchmark behind a
@@ -153,7 +173,7 @@ const FUNNEL_LANES: FunnelLane[] = [
     sequences: [
       { channel: "Invite", templateIds: ["visitor-nudge-invite"] },
       { channel: "Showcase", templateIds: ["visitor-nudge-showcase"] },
-      { channel: "Platform", templateIds: ["visitor-nudge-platform"] },
+      { channel: "Outreach", templateIds: ["visitor-nudge-platform"] },
     ],
     ghosts: [],
   },
@@ -182,11 +202,14 @@ const FUNNEL_LANES: FunnelLane[] = [
     transactional: [
       { templateId: "magic-link", note: "Alleen bij een afwijkend e-mailadres in stap 2" },
     ],
-    sequences: [],
-    ghosts: [
-      { name: "Publiceer je eerste project", timing: "+2 dagen", audience: "Publisher" },
-      { name: "Zo kom je op projecten te staan", timing: "+2 dagen", audience: "Contributor" },
+    sequences: [
+      { channel: "Publisher", templateIds: ["owned-publisher"] },
+      { channel: "Contributor", templateIds: ["owned-contributor"] },
+      { channel: "Invited", templateIds: ["owned-invited"] },
     ],
+    // The two "+2 dagen" placeholders that used to sit here are built:
+    // the owned-reminder variants above cover both routes.
+    ghosts: [],
   },
   {
     key: "active",
@@ -196,13 +219,16 @@ const FUNNEL_LANES: FunnelLane[] = [
     meaning: "Live met project of credit",
     stop: "Einde ladder — daarna alleen transactioneel",
     transactional: [
-      { templateId: "project-live", note: "Bezit het moment — krijgt het 'voeg professionals toe'-blok" },
+      { templateId: "project-live", note: "Vanaf project #2 — de eerste listing krijgt Company Live in plaats hiervan" },
     ],
-    sequences: [],
-    ghosts: [
-      { name: "Credit je team", timing: "+7 dagen", condition: "Alleen als het project dan nog < 3 credits heeft", audience: "Publisher" },
-      { name: "Nodig je opdrachtgevers uit", timing: "+7 dagen", audience: "Contributor" },
+    sequences: [
+      { channel: "Publisher", templateIds: ["company-live-publisher", "listed-professionals-publisher"] },
+      { channel: "Contributor", templateIds: ["company-live-contributor", "listed-professionals-contributor"] },
+      { channel: "All", templateIds: ["listed-backlink"] },
     ],
+    // "Credit je team" / "Nodig je opdrachtgevers uit" placeholders are
+    // built: the listed-professionals variants cover both.
+    ghosts: [],
   },
 ]
 
@@ -282,14 +308,7 @@ function AdminEmailsPage() {
     [...lane.transactional.map((x) => x.templateId), ...lane.sequences.flatMap((s) => s.templateIds)]
       .reduce((n, id) => n + (templateStats[id]?.sends ?? 0), 0)
 
-  useEffect(() => {
-    fetchProspectFunnelCounts().then(({ counts, error }) => {
-      if (!error) setFunnelCounts(counts)
-    })
-    fetchClientFunnelCounts().then(({ counts, error }) => {
-      if (!error) setClientCounts(counts)
-    })
-  }, [])
+
   const [templates, setTemplates] = useState(INITIAL_TEMPLATES)
   const [templateStats, setTemplateStats] = useState<Record<string, TemplateStats>>({})
   const [previewTemplate, setPreviewTemplate] = useState<string | null>(null)
@@ -341,6 +360,14 @@ function AdminEmailsPage() {
       : timeFilter === "90d" ? new Date(Date.now() - 90 * 86400000).toISOString()
       : undefined
     if (!statsLoaded) setIsLoading(true)
+    // Funnel counts follow the same window: the connectors then show
+    // cohort conversion for prospects/accounts created in the period.
+    fetchProspectFunnelCounts(sinceDate).then(({ counts, error }) => {
+      if (!error) setFunnelCounts(counts)
+    })
+    fetchClientFunnelCounts(sinceDate).then(({ counts, error }) => {
+      if (!error) setClientCounts(counts)
+    })
     Promise.all([fetchRecentEmails(), fetchTemplateStats(sinceDate, timeFilter === "30d")]).then(([emailResult, statsResult]) => {
       if (emailResult.error) setError(emailResult.error)
       else setEmails(emailResult.emails)
@@ -536,12 +563,19 @@ function AdminEmailsPage() {
               ? (funnelCounts as Record<string, number> | null)
               : (clientCounts as Record<string, number> | null)
             const stageKeys = lanes.map(l => l.key)
-            // Cohort math mirrors the Sales funnel: "reached this stage
-            // or beyond", so the connector rates survive people moving
-            // through quickly.
-            const cohorted = stageKeys.map((_, i) =>
-              stageKeys.slice(i).reduce((sum, k) => sum + (counts?.[k] ?? 0), 0)
-            )
+            // All-time: cohort math like the Sales funnel ("reached this
+            // stage or beyond") over the current inventory. Windowed pro
+            // funnel: the counts are stage ATTAINMENTS in the period, so
+            // the connector is the direct step-on-step flow rate — no
+            // cohort slicing (that read 100% on short windows). Client
+            // funnel keys are both stamped at creation, so cohort math
+            // stays correct there in every window.
+            const windowedFlow = activeTab === "funnel" && timeFilter !== "all"
+            const cohorted = windowedFlow
+              ? stageKeys.map((k) => counts?.[k] ?? 0)
+              : stageKeys.map((_, i) =>
+                  stageKeys.slice(i).reduce((sum, k) => sum + (counts?.[k] ?? 0), 0)
+                )
             const statCells = (id: string) => {
               const s = templateStats[id]
               const sends = s?.sends ?? 0

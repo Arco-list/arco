@@ -192,8 +192,19 @@ const TEMPLATE_ID_TO_NAME: Record<string, string> = {
   // Visitor-nudge — one drip step, channel variant resolved at send.
   "visitor-nudge-invite": "Invite Visitor Nudge",
   "visitor-nudge-showcase": "Showcase Visitor Nudge",
-  "visitor-nudge-platform": "Platform Visitor Nudge",
+  "visitor-nudge-platform": "Outreach Visitor Nudge",
   "verified-reminder": "Verified Reminder",
+  "owned-welcome": "Owned Reminder",
+  "owned-publisher": "Publisher Reminder",
+  "owned-contributor": "Contributor Reminder",
+  "owned-invited": "Invited Reminder",
+  "company-live": "Company Live",
+  "company-live-publisher": "Company Live — Publisher",
+  "company-live-contributor": "Company Live — Contributor",
+  "listed-professionals": "Listed Professionals",
+  "listed-professionals-publisher": "Credit Your Professionals",
+  "listed-professionals-contributor": "More Projects On Your Page",
+  "listed-backlink": "Listed Backlink",
 }
 
 const SUBJECT_TO_TEMPLATE: [RegExp, string, string][] = [
@@ -203,10 +214,26 @@ const SUBJECT_TO_TEMPLATE: [RegExp, string, string][] = [
   [/is ready for you$/i, "visitor-nudge-showcase", "Showcase Visitor Nudge"],
   [/^Je vermelding op .* staat klaar$/i, "visitor-nudge-invite", "Invite Visitor Nudge"],
   [/^Your credit on .* is ready$/i, "visitor-nudge-invite", "Invite Visitor Nudge"],
-  [/^Maak .* af op Arco$/i, "visitor-nudge-platform", "Platform Visitor Nudge"],
-  [/^Finish .* on Arco$/i, "visitor-nudge-platform", "Platform Visitor Nudge"],
+  [/^Maak .* af op Arco$/i, "visitor-nudge-platform", "Outreach Visitor Nudge"],
+  [/^Finish .* on Arco$/i, "visitor-nudge-platform", "Outreach Visitor Nudge"],
   [/^Nog één stap: je account/i, "verified-reminder", "Verified Reminder"],
   [/^One step left: your account/i, "verified-reminder", "Verified Reminder"],
+  [/publiceer je eerste project$/i, "owned-publisher", "Publisher Reminder"],
+  [/publish your first project$/i, "owned-publisher", "Publisher Reminder"],
+  [/word vermeld door een pro$/i, "owned-contributor", "Contributor Reminder"],
+  [/get credited by a pro$/i, "owned-contributor", "Contributor Reminder"],
+  [/^Zet je pagina live/i, "owned-invited", "Invited Reminder"],
+  [/^Put your page live/i, "owned-invited", "Invited Reminder"],
+  // Contributor first — its subject also ends in "staat live op Arco".
+  [/^Je pagina staat live op Arco$/i, "company-live-contributor", "Company Live — Contributor"],
+  [/^Your page is live on Arco$/i, "company-live-contributor", "Company Live — Contributor"],
+  [/staat live op Arco$/i, "company-live-publisher", "Company Live — Publisher"],
+  [/is live on Arco$/i, "company-live-publisher", "Company Live — Publisher"],
+  [/^Vermeld de professionals/i, "listed-professionals-publisher", "Credit Your Professionals"],
+  [/^Credit the professionals/i, "listed-professionals-publisher", "Credit Your Professionals"],
+  [/meer projecten op je pagina$/i, "listed-professionals-contributor", "More Projects On Your Page"],
+  [/more projects on your page$/i, "listed-professionals-contributor", "More Projects On Your Page"],
+  [/'Listed on Arco'/i, "listed-backlink", "Listed Backlink"],
   // Auth templates — EN + NL
   [/is your Arco sign-in code/i, "magic-link", "Sign-in Code"],
   [/is je Arco-inlogcode/i, "magic-link", "Sign-in Code"],
@@ -884,29 +911,46 @@ export type ClientFunnelCounts = {
   signup: number
 }
 
-export async function fetchClientFunnelCounts(): Promise<{ counts: ClientFunnelCounts; error?: string }> {
+/**
+ * Client funnel counts, optionally restricted to accounts CREATED since
+ * `sinceIso` (the page's time window) — the funnel then reads as the
+ * cohort that entered in the period. Both sources paginate: a bare
+ * profiles select and a single listUsers page silently cap at 1000
+ * rows, which would freeze the counts once the user base outgrows that.
+ */
+export async function fetchClientFunnelCounts(sinceIso?: string): Promise<{ counts: ClientFunnelCounts; error?: string }> {
   const empty: ClientFunnelCounts = { started: 0, signup: 0 }
   try {
     const supabase = createServiceRoleSupabaseClient()
-    const [{ data: profiles, error: profilesError }, usersRes] = await Promise.all([
-      supabase.from('profiles').select('id, user_types'),
-      supabase.auth.admin.listUsers({ perPage: 1000 }),
-    ])
-    if (profilesError) return { counts: empty, error: profilesError.message }
-    if (usersRes.error) return { counts: empty, error: usersRes.error.message }
-    const clientIds = new Set(
-      (profiles ?? [])
-        .filter((p) => {
-          const types = (p.user_types ?? []) as string[]
-          return types.includes('client') && !types.includes('admin')
-        })
-        .map((p) => p.id),
-    )
+
+    const clientIds = new Set<string>()
+    const PAGE = 1000
+    for (let from = 0; ; from += PAGE) {
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, user_types')
+        .range(from, from + PAGE - 1)
+      if (profilesError) return { counts: empty, error: profilesError.message }
+      for (const p of profiles ?? []) {
+        const types = (p.user_types ?? []) as string[]
+        if (types.includes('client') && !types.includes('admin')) clientIds.add(p.id)
+      }
+      if ((profiles ?? []).length < PAGE) break
+    }
+
     const counts = { ...empty }
-    for (const u of usersRes.data?.users ?? []) {
-      if (!clientIds.has(u.id)) continue
-      if (u.last_sign_in_at) counts.signup += 1
-      else counts.started += 1
+    const since = sinceIso ? new Date(sinceIso).getTime() : null
+    for (let page = 1; ; page++) {
+      const usersRes = await supabase.auth.admin.listUsers({ page, perPage: 1000 })
+      if (usersRes.error) return { counts: empty, error: usersRes.error.message }
+      const users = usersRes.data?.users ?? []
+      for (const u of users) {
+        if (!clientIds.has(u.id)) continue
+        if (since && (!u.created_at || new Date(u.created_at).getTime() < since)) continue
+        if (u.last_sign_in_at) counts.signup += 1
+        else counts.started += 1
+      }
+      if (users.length < 1000) break
     }
     return { counts }
   } catch (e) {
@@ -914,18 +958,70 @@ export async function fetchClientFunnelCounts(): Promise<{ counts: ClientFunnelC
   }
 }
 
-export async function fetchProspectFunnelCounts(): Promise<{ counts: ProspectFunnelCounts; error?: string }> {
+/**
+ * Prospect funnel counts, optionally restricted to prospects CREATED
+ * since `sinceIso` — with a window the connectors read as cohort
+ * conversion for prospects that entered in the period.
+ */
+export async function fetchProspectFunnelCounts(sinceIso?: string): Promise<{ counts: ProspectFunnelCounts; error?: string }> {
   const empty: ProspectFunnelCounts = { contacted: 0, visitor: 0, verified: 0, owned: 0, active: 0 }
   try {
     const supabase = createServiceRoleSupabaseClient()
-    const { data, error } = await supabase.from('prospects').select('status')
-    if (error) return { counts: empty, error: error.message }
-    const counts = { ...empty }
-    for (const row of (data ?? []) as Array<{ status: string | null }>) {
-      const s = row.status as keyof ProspectFunnelCounts | null
-      if (s && s in counts) counts[s] += 1
+
+    if (!sinceIso) {
+      // All time: current inventory per stage. Per-status HEAD counts —
+      // a plain select('status') silently caps at 1000 rows, which
+      // zeroed out the rare stages and blanked the connectors.
+      const statuses = Object.keys(empty) as Array<keyof ProspectFunnelCounts>
+      const results = await Promise.all(
+        statuses.map((s) =>
+          supabase.from('prospects').select('id', { count: 'exact', head: true }).eq('status', s),
+        ),
+      )
+      const counts = { ...empty }
+      for (let i = 0; i < statuses.length; i++) {
+        if (results[i].error) return { counts: empty, error: results[i].error!.message }
+        counts[statuses[i]] = results[i].count ?? 0
+      }
+      return { counts }
     }
-    return { counts }
+
+    // Windowed: stage ATTAINMENTS in the period — how many prospects
+    // REACHED each stage inside the window. (The earlier entry-cohort
+    // read was degenerate on short windows: barely anyone created this
+    // week has had time to progress, and direct claims enter mid-ladder,
+    // so every late connector showed 100%.) Sources: transition events
+    // where they're logged, stage timestamps on the prospect row where
+    // they're authoritative.
+    const dedupe = (rows: Array<{ prospect_id?: string | null; id?: string | null }> | null) => {
+      const s = new Set<string>()
+      for (const r of rows ?? []) {
+        const v = r.prospect_id ?? r.id
+        if (v) s.add(v)
+      }
+      return s
+    }
+    const [contactedEv, visited, verifiedEv, ownedEv, ownedCc, converted] = await Promise.all([
+      supabase.from('prospect_events').select('prospect_id').eq('new_status', 'contacted').gte('created_at', sinceIso),
+      supabase.from('prospects').select('id', { count: 'exact', head: true }).gte('landing_visited_at', sinceIso),
+      supabase.from('prospect_events').select('prospect_id').eq('new_status', 'verified').gte('created_at', sinceIso),
+      supabase.from('prospect_events').select('prospect_id').eq('new_status', 'owned').gte('created_at', sinceIso),
+      supabase.from('prospects').select('id').gte('company_created_at', sinceIso),
+      supabase.from('prospects').select('id', { count: 'exact', head: true }).gte('converted_at', sinceIso),
+    ])
+    const firstError = [contactedEv, visited, verifiedEv, ownedEv, ownedCc, converted].find((r) => r.error)
+    if (firstError?.error) return { counts: empty, error: firstError.error.message }
+    const ownedIds = dedupe(ownedEv.data as never)
+    for (const id of dedupe(ownedCc.data as never)) ownedIds.add(id)
+    return {
+      counts: {
+        contacted: dedupe(contactedEv.data as never).size,
+        visitor: visited.count ?? 0,
+        verified: dedupe(verifiedEv.data as never).size,
+        owned: ownedIds.size,
+        active: converted.count ?? 0,
+      },
+    }
   } catch (e) {
     return { counts: empty, error: e instanceof Error ? e.message : 'Failed to load funnel counts' }
   }

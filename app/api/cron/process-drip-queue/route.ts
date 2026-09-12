@@ -222,6 +222,13 @@ async function sendOne(
     // variant (invite/showcase/platform) is resolved at send below.
     "visitor-nudge",
     "verified-reminder",
+    // Abstract too — resolves to owned-publisher / owned-contributor.
+    "owned-welcome",
+    // The Listed series (migration 237) — abstract, variants resolved
+    // at send via lib/listed-mails.ts.
+    "company-live",
+    "listed-professionals",
+    "listed-backlink",
   ])
   // Subset that triggers a status='prospect' → 'contacted' flip.
   // Currently only the Outreach intro fires through this cron (the
@@ -259,6 +266,7 @@ async function sendOne(
     "outreach-final": 1,
     "visitor-nudge": 2,
     "verified-reminder": 3,
+    "owned-welcome": 4,
   }
 
   let recipient = row.email
@@ -294,6 +302,46 @@ async function sendOne(
     }
   }
 
+  // Homeowner-drip ↔ professional gate (mirror of the enqueue guard in
+  // migration 236): the welcome series is client onboarding, so a user
+  // who became a professional between enqueue and send — claimed a
+  // company, or gained the type — gets the pro onboarding instead.
+  // Cancels the whole remaining series in one sweep.
+  const HOMEOWNER_TEMPLATES = new Set(["welcome-homeowner", "discover-projects", "find-professionals"])
+  if (HOMEOWNER_TEMPLATES.has(row.template) && row.user_id) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("user_types")
+      .eq("id", row.user_id)
+      .maybeSingle()
+    let isProfessional = ((profile?.user_types as string[] | null) ?? []).includes("professional")
+    if (!isProfessional) {
+      const { data: owned } = await supabase
+        .from("companies")
+        .select("id")
+        .eq("owner_id", row.user_id)
+        .limit(1)
+        .maybeSingle()
+      isProfessional = Boolean(owned)
+    }
+    if (isProfessional) {
+      const { error } = await supabase
+        .from("email_drip_queue")
+        .update({
+          cancelled_at: new Date().toISOString(),
+          cancelled_reason: "status_change",
+        } as never)
+        .eq("user_id", row.user_id)
+        .eq("sequence", "homeowner-welcome")
+        .is("sent_at", null)
+        .is("cancelled_at", null)
+      if (error) {
+        logger.error("cron-drip-queue: Failed to cancel homeowner series for professional", { rowId: row.id, supabaseError: error })
+      }
+      return "cancelled"
+    }
+  }
+
   // Visitor-nudge: the variant (invite / showcase / platform copy) and
   // the funnel link are resolved NOW, not at enqueue — a credit that
   // appeared overnight upgrades the mail to the invite experience.
@@ -310,6 +358,88 @@ async function sendOne(
       // transient failure (attempt_count++) and retried next tick.
       resolutionError = err instanceof Error ? err.message : "visitor-nudge resolution failed"
       logger.error("cron-drip-queue: visitor-nudge resolution failed", { rowId: row.id, error: resolutionError })
+    }
+  }
+
+  // Verified-reminder: enrich with the company block (logo + city) the
+  // same way buildVisitorNudge does, so the mail shows at a glance
+  // which company it is about. Never fatal — without these vars the
+  // badge degrades to the initial-letter icon + stored name.
+  if (row.template === "verified-reminder" && row.company_id) {
+    try {
+      const { data: company } = await supabase
+        .from("companies")
+        .select("name, logo_url, city, primary_service:categories!companies_primary_service_id_fkey(slug)")
+        .eq("id", row.company_id)
+        .maybeSingle()
+      if (company) {
+        variables.company_name = variables.company_name || company.name || undefined
+        variables.logo_url = company.logo_url ?? undefined
+        variables.company_subtitle = company.city ?? undefined
+        const svc = company.primary_service as { slug: string | null } | { slug: string | null }[] | null
+        variables.service_slug = (Array.isArray(svc) ? svc[0]?.slug : svc?.slug) ?? undefined
+      }
+    } catch (err) {
+      console.error("[process-drip-queue] verified-reminder enrichment failed", err)
+    }
+  }
+
+  // Owned-reminder: only for claims that did NOT convert to Listed.
+  // The company check is the source of truth (the prospect stage gate
+  // above only catches it once the prospect row advanced to Active);
+  // already live → the reminder has nothing to remind.
+  if (row.template === "owned-welcome" && row.company_id) {
+    const { data: ownedCompany } = await supabase
+      .from("companies")
+      .select("status")
+      .eq("id", row.company_id)
+      .maybeSingle()
+    if (ownedCompany?.status === "listed") {
+      const { error } = await supabase
+        .from("email_drip_queue")
+        .update({
+          cancelled_at: new Date().toISOString(),
+          cancelled_reason: "status_change",
+        } as never)
+        .eq("id", row.id)
+      if (error) {
+        logger.error("cron-drip-queue: Failed to cancel owned reminder for listed company", { rowId: row.id, supabaseError: error })
+      }
+      return "cancelled"
+    }
+  }
+
+  // Listed series: publisher/contributor resolved NOW — a company that
+  // published its own project between listing and send gets the
+  // publisher framing. No stage gate: Listed is the top of the ladder.
+  if (row.template === "company-live" || row.template === "listed-professionals" || row.template === "listed-backlink") {
+    try {
+      const { buildCompanyLive, buildListedProfessionals, buildListedBacklink } = await import("@/lib/listed-mails")
+      const resolved = row.template === "company-live"
+        ? await buildCompanyLive(row.company_id)
+        : row.template === "listed-professionals"
+          ? await buildListedProfessionals(row.company_id)
+          : await buildListedBacklink(row.company_id)
+      sendTemplate = resolved.template
+      Object.assign(variables, resolved.variables)
+    } catch (err) {
+      resolutionError = err instanceof Error ? err.message : "listed-series resolution failed"
+      logger.error("cron-drip-queue: listed-series resolution failed", { rowId: row.id, error: resolutionError })
+    }
+  }
+
+  // Owned-reminder: the variant (publisher / contributor / invited) is
+  // resolved NOW — a credit that arrived between claim and send turns
+  // the mail into "accept your waiting credit".
+  if (row.template === "owned-welcome") {
+    try {
+      const { buildOwnedWelcome } = await import("@/lib/owned-welcome")
+      const welcome = await buildOwnedWelcome(row.company_id, recipient)
+      sendTemplate = welcome.template
+      Object.assign(variables, welcome.variables)
+    } catch (err) {
+      resolutionError = err instanceof Error ? err.message : "owned-welcome resolution failed"
+      logger.error("cron-drip-queue: owned-welcome resolution failed", { rowId: row.id, error: resolutionError })
     }
   }
 

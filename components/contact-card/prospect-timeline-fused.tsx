@@ -250,14 +250,26 @@ function ActivitySection({
   const stepMeta = (template: string): { stage: string; audience: string | null } => {
     if (template === "verified-reminder") return { stage: "Verified", audience: "All" }
     if (template.startsWith("visitor-nudge")) return { stage: "Visitor", audience: sourceChannel }
+    if (template === "owned-welcome" || template.startsWith("owned-")) return { stage: "Owned", audience: sourceChannel }
+    if (template.startsWith("company-live") || template.startsWith("listed-")) return { stage: "Listed", audience: sourceChannel }
     return { stage: "Contacted", audience: channelForTemplate(template) ?? sourceChannel }
   }
-  const queuedStep = bundle.sequence.find((st) => st.status === "queued")
+  // "Next to fire" literally: the queued step with the earliest
+  // send_at, not the first one in array order — with a visitor-nudge
+  // queued alongside later outreach mails the nudge is the anchor.
+  const queuedStep = [...bundle.sequence]
+    .filter((st) => st.status === "queued")
+    .sort((a, b) => (a.timestamp ?? "9999").localeCompare(b.timestamp ?? "9999"))[0] ?? null
   const anchorStep = queuedStep ?? [...bundle.sequence].reverse().find((st) => st.status === "sent") ?? null
   const seqMeta = anchorStep ? stepMeta(anchorStep.template) : null
   // A queued stage mail means the machine is still working this contact,
   // whatever the contacted-drip's own flag says.
-  const displaySeqStatus = p?.sequence_status === "paused" ? "paused" : queuedStep ? "active" : p?.sequence_status
+  // Replied beats the stored flag once nothing is queued anymore: the
+  // reply cancelled the series, so the stored "active" would be stale.
+  const displaySeqStatus = p?.sequence_status === "paused" ? "paused"
+    : queuedStep ? "active"
+    : p?.replied_at ? "replied"
+    : p?.sequence_status
 
   // Suppression state — rendered as an inline suffix on Status so a
   // bounced/unsubscribed/complained prospect reads as red at a glance.
@@ -441,8 +453,11 @@ function TimelineStream({
         { label: "verified", ts: eventTs("prospect.verified"), status: "verified" },
         // Post-remodel ladder: signup is an EVENT (it keeps a divider,
         // dotted like the acquisition stages), 'created' became Owned.
-        // signed_up_at stamps at code-SEND (the account is pre-created),
-        // so an account that never verified reads "signup started".
+        // Since migration 238 signed_up_at stamps at the first VERIFIED
+        // session (code-send only logs prospect.signup_started, which
+        // renders as a plain event row). The signupVerified fallback
+        // stays for HISTORICAL rows stamped at code-send under the old
+        // model — those still read "signup started".
         { label: prospect.signupVerified === false ? "signup started" : "signed up", ts: prospect.signed_up_at, status: "owned" },
         { label: "owned", ts: eventTs("prospect.owned") ?? prospect.company_created_at, status: "owned" },
         { label: "listed", ts: (prospect as any).converted_at, status: "active" },
@@ -453,17 +468,39 @@ function TimelineStream({
     .filter((s): s is { label: string; ts: string; status: ProspectStatus } => Boolean(s.ts))
     .map((s) => ({ kind: "stage", ts: s.ts, label: s.label, dot: STATUS_CONFIG[s.status]?.dot ?? "bg-[#a1a1a0]", key: `stage-${s.label}` }))
 
+  // The visitor-nudge is queued under the abstract 'visitor-nudge' but
+  // goes out as a concrete variant (platform/invite/showcase) that also
+  // lands in email_events as a transactional send — the same mail would
+  // show twice. The send row upgrades the sequence row's template to
+  // the concrete variant (full display name + the right preview) and is
+  // dropped from the transactional stream below.
+  const nudgeSends = bundle.transactional.filter((t) => (t.template ?? "").startsWith("visitor-nudge"))
+  const ownedSends = bundle.transactional.filter((t) => (t.template ?? "").startsWith("owned-"))
+  const companyLiveSends = bundle.transactional.filter((t) => (t.template ?? "").startsWith("company-live-"))
+  const listedProSends = bundle.transactional.filter((t) => (t.template ?? "").startsWith("listed-professionals-"))
+
   // Sequence sends folded in as their own row type so we can render a
   // clickable template link + language pill + engagement pill instead
   // of the generic event line.
   const sequenceRows: StreamRow[] = bundle.sequence
     .filter((s) => s.status === "sent" && s.timestamp)
-    .map((s) => ({
-      kind: "sequence" as const,
-      ts: s.timestamp as string,
-      key: `seq-${s.template}`,
-      step: s,
-    }))
+    .map((s) => {
+      const step = s.template === "visitor-nudge" && nudgeSends.length > 0
+        ? { ...s, template: nudgeSends[0].template as string }
+        : s.template === "owned-welcome" && ownedSends.length > 0
+          ? { ...s, template: ownedSends[0].template as string }
+          : s.template === "company-live" && companyLiveSends.length > 0
+            ? { ...s, template: companyLiveSends[0].template as string }
+            : s.template === "listed-professionals" && listedProSends.length > 0
+              ? { ...s, template: listedProSends[0].template as string }
+              : s
+      return {
+        kind: "sequence" as const,
+        ts: s.timestamp as string,
+        key: `seq-${s.template}`,
+        step,
+      }
+    })
 
   // Queued sends surface as future rows ABOVE today (desc sort puts a
   // future send_at on top) so the panel answers "what's hitting this
@@ -600,14 +637,22 @@ function TimelineStream({
 
   // Transactional sends (magic links, project status, welcome, domain
   // verification…) from the unified email_events table. Sequence sends
-  // are campaign_kind sales_outbound/invite and excluded at the query,
-  // so nothing here duplicates a SequenceRow.
-  const transactionalRows: StreamRow[] = bundle.transactional.map((t) => ({
-    kind: "transactional" as const,
-    ts: t.occurred_at,
-    key: `txn-${t.id}`,
-    row: t,
-  }))
+  // are campaign_kind sales_outbound/invite and excluded at the query;
+  // drip stage mails (visitor-nudge, verified-reminder) already render
+  // as their SequenceRow, so their send registration is dropped here.
+  const transactionalRows: StreamRow[] = bundle.transactional
+    .filter((t) => {
+      const tpl = t.template ?? ""
+      return !tpl.startsWith("visitor-nudge") && !tpl.startsWith("owned-")
+        && !tpl.startsWith("company-live") && !tpl.startsWith("listed-")
+        && tpl !== "verified-reminder"
+    })
+    .map((t) => ({
+      kind: "transactional" as const,
+      ts: t.occurred_at,
+      key: `txn-${t.id}`,
+      row: t,
+    }))
 
   const rows: StreamRow[] = [...stageRows, ...sequenceRows, ...scheduledRows, ...inboundRows, ...replyRows, ...eventRows, ...transactionalRows]
     .sort((a, b) => b.ts.localeCompare(a.ts))

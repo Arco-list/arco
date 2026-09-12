@@ -13,7 +13,7 @@ export type ProspectStatus =
   | "active"
   | "removed"
 
-export type SequenceStatus = "not_started" | "active" | "paused" | "finished"
+export type SequenceStatus = "not_started" | "active" | "paused" | "finished" | "replied"
 
 /**
  * Resolved "contact" for the Sales table row — the person we're actually
@@ -66,6 +66,7 @@ export type Prospect = {
   bounced_at: string | null
   complained_at: string | null
   not_interested_at: string | null
+  replied_at?: string | null
   notes: string | null
   created_at: string
   updated_at: string
@@ -521,6 +522,10 @@ const SEQUENCE_RANK: Record<SequenceStatus, number> = {
   finished: 1,
   paused: 2,
   active: 3,
+  // Above active: when the furthest-progressed contact at a company
+  // wrote back, that human signal defines the row — not a co-contact's
+  // drip state (or a stale 'active' flag from the Apollo era).
+  replied: 4,
 }
 
 export type SalesSortBy =
@@ -824,7 +829,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     "last_email_sent_at", "last_email_opened_at", "last_email_clicked_at",
     "created_at", "updated_at", "ref_code", "user_id", "website",
     "unsubscribed_at", "bounced_at", "complained_at", "not_interested_at",
-    "last_outbound_at", "next_follow_up_at",
+    "replied_at", "last_outbound_at", "next_follow_up_at",
   ].join(", ")
   const { rows: data, error } = await fetchAllPages<Record<string, unknown>>(
     (from, to) => supabase
@@ -887,7 +892,8 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
         "outreach-intro", "outreach-followup", "outreach-final",
         "prospect-intro", "prospect-followup", "prospect-final",
         "new-professional-invite", "new-professional-followup", "new-professional-final",
-        "visitor-nudge", "verified-reminder",
+        "visitor-nudge", "verified-reminder", "owned-welcome",
+        "company-live", "listed-professionals", "listed-backlink",
       ])
     for (const r of (pendingRows ?? []) as Array<{ email: string | null }>) {
       if (r.email) pendingMailEmails.add(r.email.toLowerCase())
@@ -902,7 +908,8 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     website: (p as any).website ?? null,
     source: p.source,
     status: p.status,
-    sequenceStatus: pendingMailEmails.has(p.email.toLowerCase()) ? "active" : p.sequence_status,
+    sequenceStatus: pendingMailEmails.has(p.email.toLowerCase()) ? "active"
+      : (p as any).replied_at ? "replied" : p.sequence_status,
     emailsSent: p.emails_sent ?? 0,
     emailsDelivered: p.emails_delivered ?? 0,
     emailsOpened: p.emails_opened ?? 0,
@@ -1597,7 +1604,8 @@ export async function fetchSalesContactForProspect(prospectId: string): Promise<
       "outreach-intro", "outreach-followup", "outreach-final",
       "prospect-intro", "prospect-followup", "prospect-final",
       "new-professional-invite", "new-professional-followup", "new-professional-final",
-      "visitor-nudge", "verified-reminder",
+      "visitor-nudge", "verified-reminder", "owned-welcome",
+        "company-live", "listed-professionals", "listed-backlink",
     ])
     .limit(1)
     .maybeSingle()
@@ -1608,7 +1616,8 @@ export async function fetchSalesContactForProspect(prospectId: string): Promise<
     website: (p as any).website ?? null,
     source: p.source,
     status: p.status,
-    sequenceStatus: pendingRow ? "active" : p.sequence_status,
+    sequenceStatus: pendingRow ? "active"
+      : (p as any).replied_at ? "replied" : p.sequence_status,
     emailsSent: p.emails_sent ?? 0,
     emailsDelivered: p.emails_delivered ?? 0,
     emailsOpened: p.emails_opened ?? 0,
@@ -2972,7 +2981,7 @@ export async function getProspectSequence(prospectId: string): Promise<{
       .ilike("email", prospect.email)
       // prospect-* included: a showcase promotion mid-track swaps the
       // remaining steps to the showcase drip — those rows must show.
-      .in("template", ["outreach-intro", "outreach-followup", "outreach-final", "prospect-intro", "prospect-followup", "prospect-final", "visitor-nudge", "verified-reminder"])
+      .in("template", ["outreach-intro", "outreach-followup", "outreach-final", "prospect-intro", "prospect-followup", "prospect-final", "visitor-nudge", "verified-reminder", "owned-welcome", "company-live", "listed-professionals", "listed-backlink"])
       .order("created_at", { ascending: false })
 
     const hasOutreachRows = (outreachQueueRows ?? []).some((r: { template: string }) => r.template.startsWith("outreach-"))
@@ -3033,6 +3042,12 @@ export async function getProspectSequence(prospectId: string): Promise<{
     if (nudgeRow) outreachSteps.push(queueRowToProspectStep("visitor-nudge", "Visitor Nudge", nudgeRow))
     const verifiedRow = outreachByTemplate.get("verified-reminder")
     if (verifiedRow) outreachSteps.push(queueRowToProspectStep("verified-reminder", "Verified Reminder", verifiedRow))
+    const ownedRow = outreachByTemplate.get("owned-welcome")
+    if (ownedRow) outreachSteps.push(queueRowToProspectStep("owned-welcome", "Owned Reminder", ownedRow))
+    for (const [tpl, label] of [["company-live", "Company Live"], ["listed-professionals", "Listed Professionals"], ["listed-backlink", "Listed Backlink"]] as const) {
+      const r = outreachByTemplate.get(tpl)
+      if (r) outreachSteps.push(queueRowToProspectStep(tpl, label, r))
+    }
 
     return { success: true, steps: outreachSteps, locale: outreachLocale }
   }
@@ -3070,7 +3085,7 @@ export async function getProspectSequence(prospectId: string): Promise<{
     .from("email_drip_queue")
     .select("template, send_at, sent_at, cancelled_at, cancelled_reason, attempt_count, last_error, opened_at, clicked_at, last_event_cached")
     .eq("company_id", prospect.company_id)
-    .in("template", [followupTemplate, finalTemplate, "visitor-nudge", "verified-reminder"])
+    .in("template", [followupTemplate, finalTemplate, "visitor-nudge", "verified-reminder", "owned-welcome", "company-live", "listed-professionals", "listed-backlink"])
     .order("created_at", { ascending: false })
 
   // Build a map: template → most recent row (we sorted desc above)
@@ -3112,6 +3127,12 @@ export async function getProspectSequence(prospectId: string): Promise<{
   if (nudgeRow) steps.push(queueRowToProspectStep("visitor-nudge", "Visitor Nudge", nudgeRow))
   const verifiedRow = queueByTemplate.get("verified-reminder")
   if (verifiedRow) steps.push(queueRowToProspectStep("verified-reminder", "Verified Reminder", verifiedRow))
+  const ownedRow = queueByTemplate.get("owned-welcome")
+  if (ownedRow) steps.push(queueRowToProspectStep("owned-welcome", "Owned Reminder", ownedRow))
+  for (const [tpl, label] of [["company-live", "Company Live"], ["listed-professionals", "Listed Professionals"], ["listed-backlink", "Listed Backlink"]] as const) {
+    const r = queueByTemplate.get(tpl)
+    if (r) steps.push(queueRowToProspectStep(tpl, label, r))
+  }
 
   return { success: true, steps, locale }
 }

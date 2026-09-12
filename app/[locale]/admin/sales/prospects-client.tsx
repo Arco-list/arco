@@ -68,6 +68,9 @@ export const SEQUENCE_CONFIG: Record<SequenceStatus, { label: string; dot: strin
   active: { label: "Active", dot: "bg-[#2563eb]" },
   paused: { label: "Paused", dot: "bg-amber-400" },
   finished: { label: "Finished", dot: "bg-emerald-500" },
+  // Derived state: the contact wrote back and nothing is queued anymore —
+  // the machine is done here, a human owns the thread.
+  replied: { label: "Replied", dot: "bg-emerald-500" },
 }
 
 // Sequence-filter dropdown options. Real sequence_status values plus
@@ -208,8 +211,22 @@ const TEMPLATE_NAMES: Record<string, string> = {
   "visitor-nudge": "Visitor Nudge",
   "visitor-nudge-invite": "Invite Visitor Nudge",
   "visitor-nudge-showcase": "Showcase Visitor Nudge",
-  "visitor-nudge-platform": "Platform Visitor Nudge",
+  // Internal id stays '-platform' (historic email_events rows carry
+  // it); the audience is outreach prospects — the "platform" was only
+  // ever the tokenless landing this variant links to.
+  "visitor-nudge-platform": "Outreach Visitor Nudge",
   "verified-reminder": "Verified Reminder",
+  "owned-welcome": "Owned Reminder",
+  "owned-publisher": "Publisher Reminder",
+  "owned-contributor": "Contributor Reminder",
+  "owned-invited": "Invited Reminder",
+  "company-live": "Company Live",
+  "company-live-publisher": "Company Live — Publisher",
+  "company-live-contributor": "Company Live — Contributor",
+  "listed-professionals": "Listed Professionals",
+  "listed-professionals-publisher": "Credit Your Professionals",
+  "listed-professionals-contributor": "More Projects On Your Page",
+  "listed-backlink": "Listed Backlink",
   // Auth-hook templates — the timeline receives the raw render ids;
   // shown under the same names as the /emails Transactional tab.
   "auth-magic-link": "Sign-in Code",
@@ -291,6 +308,7 @@ const EVENT_LABELS: Record<string, string> = {
   company_invited: "Company invited",
   "prospect.landing_visited": "Visited landing page",
   "prospect.signed_up": "Signed Up",
+  "prospect.signup_started": "Signup Started",
   "prospect.company_created": "Company Created",
   "prospect.listed": "Company Listed",
   "company.draft": "Company Created",

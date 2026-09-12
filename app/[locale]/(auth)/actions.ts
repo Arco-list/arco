@@ -320,8 +320,11 @@ export const signUpWithOtpAction = async (
         const cookieStore = await getCookies();
         const prospectRef = cookieStore.get('prospect_ref')?.value ?? null;
         const claimCompanyId = cookieStore.get('prospect_claim_company_id')?.value ?? null;
-        const { matchProspectOnSignup } = await import('@/lib/prospect-matching');
-        await matchProspectOnSignup(email, newUser.user.id, prospectRef, claimCompanyId);
+        // Code-send is only Signup STARTED — the real "Signed up" event
+        // and signed_up_at stamp fire at the first verified session
+        // (migration 238), so ghosts never count as signups.
+        const { matchProspectOnSignupStarted } = await import('@/lib/prospect-matching');
+        await matchProspectOnSignupStarted(email, newUser.user.id, prospectRef, claimCompanyId);
       } catch (err) {
         logger.error("Failed to match prospect on OTP signup", { userId: newUser.user.id }, err as Error);
       }

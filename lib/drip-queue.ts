@@ -72,6 +72,10 @@ export interface CancelDripRowsArgs {
   email?: string | null
   userId?: string | null
   reason: CancellationReason
+  /** Templates to leave untouched — e.g. a reply cancels the sales
+   *  series but spares stage mails (verified-reminder), which serve
+   *  account completion rather than the conversation. */
+  spareTemplates?: readonly string[]
 }
 
 export async function cancelPendingDripRows(
@@ -81,7 +85,7 @@ export async function cancelPendingDripRows(
   supabase: SupabaseClient<any, any, any>,
   args: CancelDripRowsArgs,
 ): Promise<number> {
-  const { companyId, email, userId, reason } = args
+  const { companyId, email, userId, reason, spareTemplates } = args
 
   if (!companyId && !email && !userId) {
     logger.warn("cancelPendingDripRows called with no selectors", { reason })
@@ -100,7 +104,7 @@ export async function cancelPendingDripRows(
     column: "company_id" | "email" | "user_id",
     value: string,
   ) => {
-    const { data, error } = await supabase
+    let query = supabase
       .from("email_drip_queue")
       .update({
         cancelled_at: new Date().toISOString(),
@@ -109,7 +113,10 @@ export async function cancelPendingDripRows(
       .eq(column, value)
       .is("sent_at", null)
       .is("cancelled_at", null)
-      .select("id")
+    if (spareTemplates && spareTemplates.length > 0) {
+      query = query.not("template", "in", `(${spareTemplates.join(",")})`)
+    }
+    const { data, error } = await query.select("id")
 
     if (error) {
       logger.error(`drip-queue: cancellation failed (${column})`, {
