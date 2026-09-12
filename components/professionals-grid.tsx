@@ -123,9 +123,13 @@ export function ProfessionalsGrid({
         .filter((r): r is string => Boolean(r)),
     ),
   )
+  // Effective provinces = explicit picks plus provinces derived from
+  // selected cities — a picked city replaces its region chip, so the
+  // derived set keeps the city list narrowed instead of national.
+  const crumbEffectiveRegions = Array.from(new Set([...selectedRegions, ...derivedRegions]))
   const cityChoices = (
-    selectedRegions.length > 0
-      ? Array.from(new Set([...selectedRegions.flatMap((r) => regionCityMap[r] ?? []), ...selectedCities]))
+    crumbEffectiveRegions.length > 0
+      ? Array.from(new Set([...crumbEffectiveRegions.flatMap((r) => regionCityMap[r] ?? []), ...selectedCities]))
       : cities
   ).slice().sort((a, b) => a.localeCompare(b))
   const crumbItems = (role: "provinces" | "cities"): BreadcrumbSelectItem[] =>
@@ -238,15 +242,43 @@ export function ProfessionalsGrid({
       <div className="discover-page-title">
         <div className="wrap">
           <nav aria-label="Breadcrumb" className="discover-breadcrumb">
-            <Link href="/professionals" className="discover-breadcrumb-item">
-              {t("title")}
-            </Link>
-            <span className="discover-breadcrumb-sep" aria-hidden="true">/</span>
+            {/* Not a link (yet): becomes one again when a dedicated
+                professionals landing exists to point at. */}
             <span className="discover-breadcrumb-item">
-              {t("breadcrumb_netherlands")}
+              {t("title")}
             </span>
             <span className="discover-breadcrumb-sep" aria-hidden="true">/</span>
-            <BreadcrumbSelect label={provinceCrumbLabel} items={crumbItems("provinces")} muted={provinceLabelSource.length === 0} />
+            {/* Country level: click resets the geo filters to all of
+                NL — becomes a country selector once more countries
+                exist. */}
+            <button
+              type="button"
+              className="discover-breadcrumb-item"
+              onClick={() => {
+                setSelectedRegions([])
+                setSelectedCities([])
+              }}
+            >
+              {t("breadcrumb_netherlands")}
+            </button>
+            <span className="discover-breadcrumb-sep" aria-hidden="true">/</span>
+            {/* With cities picked the province level collapses from a
+                dropdown to a drill-back: one click refilters on the
+                covering province(s) and drops the city filters. */}
+            {selectedCities.length > 0 ? (
+              <button
+                type="button"
+                className="discover-breadcrumb-item discover-breadcrumb-current"
+                onClick={() => {
+                  setSelectedRegions(provinceLabelSource)
+                  setSelectedCities([])
+                }}
+              >
+                {provinceCrumbLabel}
+              </button>
+            ) : (
+              <BreadcrumbSelect label={provinceCrumbLabel} items={crumbItems("provinces")} muted={provinceLabelSource.length === 0} />
+            )}
             {showCityLevel && (
               <>
                 <span className="discover-breadcrumb-sep" aria-hidden="true">/</span>

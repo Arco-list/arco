@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { Link } from "@/i18n/navigation"
 import { useLocale, useTranslations } from "next-intl"
 import { useFilters } from "@/contexts/filter-context"
 import { FilterBar, type SortOption, DEFAULT_PROJECT_SORT } from "@/components/filter-bar"
@@ -46,14 +45,6 @@ export function DiscoverClient({ initialProjects, initialSort = DEFAULT_PROJECT_
   // the filter write-back maps the resulting state to a hub URL when it
   // matches exactly one preset (single city -> /projects/amsterdam).
   const regionLabel = (r: string) => (PROVINCES[r] ? (nl ? PROVINCES[r].nl : PROVINCES[r].en) : r)
-  // City choices narrow to the selected provinces' cities once a
-  // province is picked (already-selected cities always stay listed so
-  // they can be unchecked).
-  const cityChoices = (
-    selectedRegions.length > 0
-      ? Array.from(new Set([...selectedRegions.flatMap((r) => regionCityMap[r] ?? []), ...selectedLocations]))
-      : (taxonomy.cities ?? [])
-  ).slice().sort((a, b) => a.localeCompare(b))
   // Provinces containing a selected city count as covered (derived) —
   // they show checked even without an explicit region chip.
   const derivedRegions = Array.from(
@@ -63,6 +54,16 @@ export function DiscoverClient({ initialProjects, initialSort = DEFAULT_PROJECT_
         .filter((r): r is string => Boolean(r)),
     ),
   )
+  // City choices narrow to the EFFECTIVE provinces — explicit picks
+  // plus provinces derived from selected cities. Picking a city
+  // replaces its region chip (drill-down), so without the derived set
+  // one selected city reopened the full national list.
+  const effectiveRegions = Array.from(new Set([...selectedRegions, ...derivedRegions]))
+  const cityChoices = (
+    effectiveRegions.length > 0
+      ? Array.from(new Set([...effectiveRegions.flatMap((r) => regionCityMap[r] ?? []), ...selectedLocations]))
+      : (taxonomy.cities ?? [])
+  ).slice().sort((a, b) => a.localeCompare(b))
   const roleItems = (role: "provinces" | "cities"): BreadcrumbSelectItem[] =>
     role === "provinces"
       ? Object.keys(regionCityMap).map((r) => ({
@@ -174,15 +175,43 @@ export function DiscoverClient({ initialProjects, initialSort = DEFAULT_PROJECT_
 
           {/* Breadcrumb */}
           <nav aria-label="Breadcrumb" className="discover-breadcrumb">
-            <Link href="/projects" className="discover-breadcrumb-item">
-              {t("title")}
-            </Link>
-            <span className="discover-breadcrumb-sep" aria-hidden="true">/</span>
+            {/* Not a link (yet): becomes one again when a dedicated
+                projects landing exists to point at. */}
             <span className="discover-breadcrumb-item">
-              {t("breadcrumb_netherlands")}
+              {t("title")}
             </span>
             <span className="discover-breadcrumb-sep" aria-hidden="true">/</span>
-            <BreadcrumbSelect label={provinceCrumbLabel} items={roleItems("provinces")} muted={selectedRegions.length === 0} />
+            {/* Country level: click resets the geo filters to all of
+                NL — becomes a country selector once more countries
+                exist. */}
+            <button
+              type="button"
+              className="discover-breadcrumb-item"
+              onClick={() => {
+                setSelectedRegions([])
+                setSelectedLocations([])
+              }}
+            >
+              {t("breadcrumb_netherlands")}
+            </button>
+            <span className="discover-breadcrumb-sep" aria-hidden="true">/</span>
+            {/* With cities picked the province level collapses from a
+                dropdown to a drill-back: one click refilters on the
+                covering province(s) and drops the city filters. */}
+            {selectedLocations.length > 0 ? (
+              <button
+                type="button"
+                className="discover-breadcrumb-item discover-breadcrumb-current"
+                onClick={() => {
+                  setSelectedRegions(provinceLabelSource)
+                  setSelectedLocations([])
+                }}
+              >
+                {provinceCrumbLabel}
+              </button>
+            ) : (
+              <BreadcrumbSelect label={provinceCrumbLabel} items={roleItems("provinces")} muted={selectedRegions.length === 0} />
+            )}
             {showCityLevel && (
               <>
                 <span className="discover-breadcrumb-sep" aria-hidden="true">/</span>
