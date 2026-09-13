@@ -21,9 +21,9 @@ import { join } from "node:path"
  * The Arco brand tile — black rounded-square wordmark from
  * /public/arco-og-badge.png — is drawn flush to the bottom edge of the
  * output with top corners rounded and bottom corners squared off (so it
- * meets the image edge cleanly). Sized to ~130 px absolute on every
+ * meets the image edge cleanly). Sized to ~100 px absolute on every
  * output so the mark reads at consistent visual weight across formats.
- * Right inset: 5% of image width.
+ * Left inset: 5% of image width.
  *
  * ── Encoder ───────────────────────────────────────────────────────────────
  *
@@ -60,7 +60,7 @@ const SOCIAL = { w: 1200, h: 630 } as const
 // Absolute badge width in the output. Kept constant across formats so the
 // brand mark reads at identical visual weight in Pinterest and social
 // previews alike.
-const BADGE_WIDTH = 150
+const BADGE_WIDTH = 100
 const BADGE_INSET_RATIO = 0.05
 
 // Corner radius of the top corners of the badge as a fraction of tile
@@ -181,8 +181,7 @@ export async function composeBrandedImage(
   badge.resize({ w: BADGE_WIDTH, h: BADGE_WIDTH })
 
   // ── Composite ──────────────────────────────────────────────────────────
-  const rightInset = Math.round(targetW * BADGE_INSET_RATIO)
-  const badgeX = targetW - BADGE_WIDTH - rightInset
+  const badgeX = Math.round(targetW * BADGE_INSET_RATIO)
   const badgeY = targetH - BADGE_WIDTH
   source.composite(badge, badgeX, badgeY)
 
