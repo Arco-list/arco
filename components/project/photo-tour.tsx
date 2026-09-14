@@ -557,6 +557,10 @@ export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
   const touchStartY = useRef<number | null>(null)
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    // A drag that starts on the space-pill strip is the strip's own
+    // horizontal scroll — counting it as a photo swipe would flip the
+    // photo and snap the strip back to the active pill.
+    if ((e.target as HTMLElement).closest(".lightbox-categories")) return
     touchStartX.current = e.touches[0].clientX
     touchStartY.current = e.touches[0].clientY
   }, [])

@@ -5176,7 +5176,10 @@ export default function ListingEditorPage() {
 
         {/* ── Hero ──────────────────────────────────────────────── */}
         <section style={{
-          position: "relative", width: "100%", height: "82vh", minHeight: 560,
+          // Same wide-screen guard as .project-hero: the height floor
+          // follows the width (42vw, capped) so ultrawide windows keep
+          // a hero-worthy aspect instead of a strip.
+          position: "relative", width: "100%", height: "82vh", minHeight: "max(560px, min(42vw, 950px))",
           overflow: "hidden", background: "#111",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>

@@ -4,6 +4,7 @@ import { DiscoverCardPreview } from "./discover-card-preview"
 import { ServiceMarksPreview } from "./service-marks-preview"
 import { UiIconsPreview } from "./ui-icons-preview"
 import { CreditPreviews } from "./credit-previews"
+import { GardenDesignIcon, KitchenIcon } from "@/lib/icons/custom-service-icons"
 
 export const dynamic = "force-dynamic"
 
@@ -71,6 +72,17 @@ const PHOTO_MOODS: Record<string, string> = {
 // so it stays proportional across viewport widths — pass this when the
 // tile lives inside a responsive/masonry card. `size` gives an absolute
 // pixel fallback for fixed-size demos.
+function ArcoWordmark({ style }: { style?: React.CSSProperties }) {
+  return (
+    <svg viewBox="26 90 184 55" xmlns="http://www.w3.org/2000/svg" aria-label="arco" style={style}>
+      <path fill="#fff" d="M51.6904 92.6904C37.7704 92.6904 26.4804 104.12 26.6904 118.08C26.8904 131.4 37.7204 142.34 51.0404 142.68C56.1204 142.81 60.8604 141.42 64.8604 138.93V140.59C64.8604 141.34 65.4704 141.95 66.2204 141.95H75.3204C76.0704 141.95 76.6804 141.34 76.6804 140.59V117.69C76.6804 103.91 65.4704 92.6904 51.6804 92.6904H51.6904ZM51.6904 130.86C44.4304 130.86 38.5204 124.95 38.5204 117.69C38.5204 110.43 44.4304 104.52 51.6904 104.52C58.9504 104.52 64.8604 110.43 64.8604 117.69C64.8604 124.95 58.9504 130.86 51.6904 130.86Z" />
+      <path fill="#fff" d="M121.55 98.8004L116.37 106.28C115.95 106.88 115.13 107.05 114.51 106.65C112.32 105.22 109.67 104.42 106.85 104.52C99.7198 104.78 94.1598 110.83 94.1598 117.97V140.59C94.1598 141.34 93.5498 141.95 92.7998 141.95H83.6998C82.9498 141.95 82.3398 141.34 82.3398 140.59V95.1204C82.3398 94.3704 82.9498 93.7604 83.6998 93.7604H92.7998C93.5498 93.7604 94.1598 94.3704 94.1598 95.1204V96.4504C97.9898 94.0704 102.5 92.6904 107.33 92.6904C112.45 92.6904 117.22 94.2404 121.19 96.8904C121.82 97.3104 121.98 98.1804 121.55 98.8004Z" />
+      <path fill="#fff" d="M159.49 120.05C158.88 120.05 158.34 120.46 158.18 121.05C156.65 126.53 151.81 130.68 145.9 130.85C138.01 131.08 131.6 124.33 132.4 116.33C133.01 110.24 138.29 105.07 144.39 104.56C147.46 104.3 150.34 105.11 152.69 106.65C153.3 107.05 154.12 106.87 154.54 106.27L159.71 98.7902C160.14 98.1602 159.98 97.3002 159.35 96.8802C155.38 94.2302 150.62 92.6802 145.51 92.6802C137.86 92.6802 131.01 96.1302 126.42 101.55C125.96 102.09 125.53 102.64 125.12 103.21L124.78 103.71C122.08 107.7 120.5 112.51 120.5 117.67C120.5 123.81 122.72 129.44 126.42 133.8C131.01 139.22 137.86 142.67 145.51 142.67C153.16 142.67 160.01 139.22 164.6 133.8C167.48 130.39 169.47 126.2 170.2 121.6C170.33 120.78 169.68 120.04 168.85 120.04H159.49V120.05Z" />
+      <path fill="#fff" d="M183.689 92.6904C176.049 92.6904 169.189 96.1404 164.599 101.56C161.879 104.77 159.959 108.69 159.139 112.99C158.979 113.82 159.639 114.59 160.479 114.59H169.939C170.529 114.59 171.039 114.21 171.229 113.65C172.959 108.5 177.639 104.67 183.309 104.52C191.199 104.3 197.609 111.06 196.789 119.07C196.169 125.15 190.889 130.31 184.799 130.81C181.739 131.06 178.869 130.26 176.519 128.73C175.909 128.33 175.089 128.51 174.669 129.11L169.489 136.59C169.059 137.22 169.219 138.08 169.849 138.5C174.129 141.35 179.329 142.92 184.909 142.66C197.679 142.05 208.039 131.68 208.649 118.91C209.339 104.57 197.869 92.6904 183.679 92.6904H183.689Z" />
+    </svg>
+  )
+}
+
 function BrandedTile({
   size = 96,
   pct,
@@ -85,7 +97,7 @@ function BrandedTile({
   return (
     <div style={{
       position: "absolute",
-      right: "5%",
+      left: "5%",
       bottom: 0,
       ...dimensionStyle,
       ...radiusStyle,
@@ -95,12 +107,7 @@ function BrandedTile({
       justifyContent: "center",
       filter: "drop-shadow(0 -2px 10px rgba(0,0,0,.22))",
     }}>
-      <svg viewBox="26 90 184 55" xmlns="http://www.w3.org/2000/svg" aria-label="arco" style={{ width: "78%", height: "auto" }}>
-        <path fill="#fff" d="M51.6904 92.6904C37.7704 92.6904 26.4804 104.12 26.6904 118.08C26.8904 131.4 37.7204 142.34 51.0404 142.68C56.1204 142.81 60.8604 141.42 64.8604 138.93V140.59C64.8604 141.34 65.4704 141.95 66.2204 141.95H75.3204C76.0704 141.95 76.6804 141.34 76.6804 140.59V117.69C76.6804 103.91 65.4704 92.6904 51.6804 92.6904H51.6904ZM51.6904 130.86C44.4304 130.86 38.5204 124.95 38.5204 117.69C38.5204 110.43 44.4304 104.52 51.6904 104.52C58.9504 104.52 64.8604 110.43 64.8604 117.69C64.8604 124.95 58.9504 130.86 51.6904 130.86Z" />
-        <path fill="#fff" d="M121.55 98.8004L116.37 106.28C115.95 106.88 115.13 107.05 114.51 106.65C112.32 105.22 109.67 104.42 106.85 104.52C99.7198 104.78 94.1598 110.83 94.1598 117.97V140.59C94.1598 141.34 93.5498 141.95 92.7998 141.95H83.6998C82.9498 141.95 82.3398 141.34 82.3398 140.59V95.1204C82.3398 94.3704 82.9498 93.7604 83.6998 93.7604H92.7998C93.5498 93.7604 94.1598 94.3704 94.1598 95.1204V96.4504C97.9898 94.0704 102.5 92.6904 107.33 92.6904C112.45 92.6904 117.22 94.2404 121.19 96.8904C121.82 97.3104 121.98 98.1804 121.55 98.8004Z" />
-        <path fill="#fff" d="M159.49 120.05C158.88 120.05 158.34 120.46 158.18 121.05C156.65 126.53 151.81 130.68 145.9 130.85C138.01 131.08 131.6 124.33 132.4 116.33C133.01 110.24 138.29 105.07 144.39 104.56C147.46 104.3 150.34 105.11 152.69 106.65C153.3 107.05 154.12 106.87 154.54 106.27L159.71 98.7902C160.14 98.1602 159.98 97.3002 159.35 96.8802C155.38 94.2302 150.62 92.6802 145.51 92.6802C137.86 92.6802 131.01 96.1302 126.42 101.55C125.96 102.09 125.53 102.64 125.12 103.21L124.78 103.71C122.08 107.7 120.5 112.51 120.5 117.67C120.5 123.81 122.72 129.44 126.42 133.8C131.01 139.22 137.86 142.67 145.51 142.67C153.16 142.67 160.01 139.22 164.6 133.8C167.48 130.39 169.47 126.2 170.2 121.6C170.33 120.78 169.68 120.04 168.85 120.04H159.49V120.05Z" />
-        <path fill="#fff" d="M183.689 92.6904C176.049 92.6904 169.189 96.1404 164.599 101.56C161.879 104.77 159.959 108.69 159.139 112.99C158.979 113.82 159.639 114.59 160.479 114.59H169.939C170.529 114.59 171.039 114.21 171.229 113.65C172.959 108.5 177.639 104.67 183.309 104.52C191.199 104.3 197.609 111.06 196.789 119.07C196.169 125.15 190.889 130.31 184.799 130.81C181.739 131.06 178.869 130.26 176.519 128.73C175.909 128.33 175.089 128.51 174.669 129.11L169.489 136.59C169.059 137.22 169.219 138.08 169.849 138.5C174.129 141.35 179.329 142.92 184.909 142.66C197.679 142.05 208.039 131.68 208.649 118.91C209.339 104.57 197.869 92.6904 183.679 92.6904H183.689Z" />
-      </svg>
+      <ArcoWordmark style={{ width: "78%", height: "auto" }} />
     </div>
   )
 }
@@ -155,8 +162,8 @@ export default function DesignPage() {
   const typography = [
     { name: "Hero", className: "arco-hero-title", specs: ".arco-hero-title · Serif, 400 · 42–72px (5.5vw) · ≤768 42px · ≤480 42px", preview: <h1 className="arco-hero-title">Exceptional architecture.<br/>Trusted professionals.</h1> },
     { name: "Page", className: "arco-page-title", specs: ".arco-page-title · Serif, 300 · 48px · ≤768 36px · ≤480 32px", preview: <h2 className="arco-page-title">The professional network architects trust</h2> },
-    { name: "Section", className: "arco-section-title", specs: ".arco-section-title · Serif, 300 · 34px · ≤768 28px · ≤480 24px", preview: <h3 className="arco-section-title">Recent Projects</h3> },
-    { name: "Sub-section", className: "arco-subsection-title", specs: ".arco-subsection-title · Serif, 300 · 26px · ≤768 22px · ≤480 20px", preview: <h3 className="arco-subsection-title">Curated Platform</h3> },
+    { name: "Section", className: "arco-section-title", specs: ".arco-section-title · Serif, 300 · 36px · ≤768 30px · ≤480 26px", preview: <h3 className="arco-section-title">Recent Projects</h3> },
+    { name: "Sub-section", className: "arco-subsection-title", specs: ".arco-subsection-title · Serif, 300 · 28px · ≤768 24px · ≤480 22px", preview: <h3 className="arco-subsection-title">Curated Platform</h3> },
     { name: "Label", className: "arco-label", specs: ".arco-label · Sans, 500 · 15px", preview: <h4 className="arco-label">Primary Colors</h4> },
     { name: "Standard", className: "arco-card-title", specs: ".arco-card-title · Sans, 400 · 15px · Buttons, cards, input values", preview: <h4 className="arco-card-title">Contemporary Villa on the Amstel</h4> },
     { name: "Body", className: "arco-body-text", specs: ".arco-body-text · Sans, 300, Mid Gray · 15px", preview: <p className="arco-body-text">Arco is where leading architects publish their residential work and credential the professionals they collaborate with.</p> },
@@ -1175,7 +1182,7 @@ export default function DesignPage() {
                       "radial-gradient(80% 60% at 70% 90%, rgba(120,90,60,.35), transparent 60%)," +
                       "linear-gradient(180deg, #e2d7c1 0%, #b39775 55%, #6d4f34 100%)",
                   }}>
-                    <BrandedTile pct={16} />
+                    <BrandedTile pct={10} />
                   </div>
                   <div className="arco-eyebrow" style={{ marginTop: 10 }}>Portrait pin · 1000 × 1500</div>
                 </div>
@@ -1187,7 +1194,7 @@ export default function DesignPage() {
                       "radial-gradient(70% 50% at 20% 90%, rgba(90,60,40,.38), transparent 60%)," +
                       "linear-gradient(180deg, #e6d9c2 0%, #b09371 55%, #6a4a30 100%)",
                   }}>
-                    <BrandedTile pct={16} />
+                    <BrandedTile pct={10} />
                   </div>
                   <div className="arco-eyebrow" style={{ marginTop: 10 }}>Square pin · 1000 × 1000</div>
                 </div>
@@ -1199,7 +1206,7 @@ export default function DesignPage() {
                       "radial-gradient(70% 55% at 80% 85%, rgba(60,90,110,.4), transparent 60%)," +
                       "linear-gradient(180deg, #c9d6dc 0%, #7a8f9b 60%, #3a4b57 100%)",
                   }}>
-                    <BrandedTile pct={16} />
+                    <BrandedTile pct={10} />
                   </div>
                   <div className="arco-eyebrow" style={{ marginTop: 10 }}>Social og:image · 1200 × 630</div>
                 </div>
@@ -1207,8 +1214,8 @@ export default function DesignPage() {
             </div>
             <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6, marginBottom: 48 }}>
               <p className="arco-small-text">
-                Badge: fixed black tile, ~130px wide in production output, flush to bottom edge,
-                top corners rounded 12px, ~5% right inset. Same absolute pixel width across all
+                Badge: fixed black tile, ~100px wide in production output, flush to bottom edge,
+                top corners rounded 12px, ~5% left inset. Same absolute pixel width across all
                 three aspect ratios so the mark reads at consistent visual weight. Compositor:
                 <code> lib/pinterest/composeBrandedImage.ts</code> (jimp), output persisted to
                 <code> project-media/pins/type/{"{project_id}"}.jpg</code>,
@@ -1247,7 +1254,7 @@ export default function DesignPage() {
                       background: PHOTO_MOODS[p.grad],
                     }}
                   >
-                    <BrandedTile pct={22} />
+                    <BrandedTile pct={14} />
                   </div>
                 ))}
               </div>
@@ -1259,6 +1266,106 @@ export default function DesignPage() {
                 width. Masonry grid absorbs the mix — the bottom-anchored badge stays at consistent
                 geometry across formats so the board still reads as one cohesive Arco surface.
                 Every pin, regardless of aspect, links to the same <code>/projects/{"{slug}"}</code>.
+              </p>
+            </div>
+          </div>
+
+          {/* BOARD COVERS — the Pinterest board-cover template: hero of
+              the most recent pin with the Arco square above the board
+              name, the board's SERVICE MARK top-right, and the
+              runner-up photo below it. Rendered live by
+              /api/pinterest/board-cover/[boardId] (next/og); this block
+              is the reference for what that route draws. */}
+          <div style={{ marginBottom: 80 }}>
+            <h2 id="board-covers" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Board covers</h2>
+            <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
+              The Pinterest board-cover collage (1000 × 750, 4:3). Three cells: the hero photo
+              with the Arco square above the board name, the board&rsquo;s hand-drawn service
+              mark on the warm surface, and the runner-up project&rsquo;s photo. Generated per
+              board by <code> /api/pinterest/board-cover/[boardId]</code>.
+            </p>
+            <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 32, marginBottom: 16 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gap: 24 }}>
+                {([
+                  {
+                    name: "Gardens",
+                    Mark: GardenDesignIcon,
+                    hero: "https://ogvobdcrectqsegqrquz.supabase.co/storage/v1/object/public/project-photos/db403278-c36a-4fff-a6f8-cee33eac0e4f/a17706aa-f5de-4dbb-b9c9-6bc471b85bcc.jpg",
+                    second: "https://ogvobdcrectqsegqrquz.supabase.co/storage/v1/object/public/project-photos/2930c023-9105-4a9c-a6f8-855e35e7656e/e02f6077-7b59-4e97-a6b3-e92229411555.png",
+                  },
+                  {
+                    name: "Kitchens",
+                    badge: true,
+                    Mark: KitchenIcon,
+                    hero: "https://ogvobdcrectqsegqrquz.supabase.co/storage/v1/object/public/project-photos/737919c2-5b0d-44c4-833b-3d0bad6a70aa/7af30e4e-20d3-407c-b248-395d0c0f0f08.jpg",
+                    second: "https://ogvobdcrectqsegqrquz.supabase.co/storage/v1/object/public/project-photos/39c77a03-287c-4f60-a566-70bb1b66a321/30a9323b-a3ce-4651-9e17-36d897da088d.jpg",
+                  },
+                ] as const).map(({ name, Mark, hero, second, ...variant }) => (
+                  <div key={name} style={{ display: "flex", aspectRatio: "1000 / 750", background: "#e6e5e0", borderRadius: 6, overflow: "hidden" }}>
+                    {/* Hero ⅔ — photo + scrim + Arco square + board name + CTA */}
+                    <div style={{ flex: 2, position: "relative", display: "flex" }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={hero} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.5) 100%)" }} />
+                      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#fff", textAlign: "center", padding: 24 }}>
+                        {/* Arco square above the name — clean variant
+                            only; the badge variant carries the brand in
+                            the photo cell instead. */}
+                        {!("badge" in variant && variant.badge) && (
+                          <div style={{ width: 56, height: 56, background: "#000", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+                            <ArcoWordmark style={{ width: "72%", height: "auto" }} />
+                          </div>
+                        )}
+                        <div style={{ fontFamily: "var(--font-serif)", fontWeight: 300, fontSize: 74, lineHeight: 1, letterSpacing: "-1px", textShadow: "0 2px 20px rgba(0,0,0,.35)", marginBottom: 12 }}>{name}</div>
+                        <div style={{ fontSize: 16, letterSpacing: "3.5px", textTransform: "uppercase", fontWeight: 500, opacity: 0.92 }}>Visit arcolist.com</div>
+                      </div>
+                    </div>
+                    {/* Right column — the board's service mark + runner-up photo */}
+                    <div style={{ display: "flex", flexDirection: "column", flex: 1, gap: 3, marginLeft: 3 }}>
+                      {/* White mark on the mid grey — same figure/ground
+                          as the Arco square in the hero. */}
+                      <div style={{ flex: 1, background: "var(--arco-mid)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}>
+                        {/* Same RENDERED line weight as the service-mark
+                            lockup: that draws 0.45 at 72px ≈ 1.35px;
+                            at 150px the same 1.35px needs 0.22. */}
+                        <Mark size={150} strokeWidth={0.22} aria-hidden />
+                      </div>
+                      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={second} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                        {/* Same scrim as the hero so both photos share
+                            one tonal treatment. */}
+                        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.5) 100%)" }} />
+                        {/* Variant: the pin tile at 60% width, centred
+                            horizontally and flush to the bottom edge —
+                            the pins' own treatment (top corners only),
+                            just bigger and centred. */}
+                        {"badge" in variant && variant.badge && (
+                          <div style={{
+                            position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)",
+                            width: "60%", aspectRatio: "1 / 1", background: "#000", borderRadius: "12% 12% 0 0",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            filter: "drop-shadow(0 -2px 10px rgba(0,0,0,.22))",
+                          }}>
+                            <ArcoWordmark style={{ width: "78%", height: "auto" }} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
+              <p className="arco-small-text">
+                Cell 1 (⅔ width): hero photo of the board&rsquo;s most recently synced project,
+                gradient scrim, the Arco square (~88px) above the board name in the display
+                serif (~100px at full size) over &ldquo;VISIT ARCOLIST.COM&rdquo; (~25px). Cell 2: the
+                board&rsquo;s hand-drawn service mark, white on the mid grey (~190px) — the category
+                read at a glance; stroke runs slightly heavier than the site lockup so it survives
+                Pinterest&rsquo;s small board cards. Cell 3: the runner-up project&rsquo;s cover
+                photo. Empty boards fall back to Pinterest&rsquo;s own placeholder until their
+                first pin syncs.
               </p>
             </div>
           </div>

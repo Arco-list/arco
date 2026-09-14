@@ -25,6 +25,9 @@
   --arco-accent: #016D75;
   --arco-surface: #f5f5f4;
   --arco-mid: #6b6b68;
+  /* Widely referenced by components but was never defined — text using
+     it silently fell back to inherited black. */
+  --arco-mid-grey: #a1a1a0;
   --arco-light: #a1a1a0;
   --arco-rule: #e5e5e4;
   --arco-wash: #ECF3F3;
@@ -142,6 +145,7 @@
   --arco-accent: #018A95;
   --arco-surface: #2c2c2c;
   --arco-mid: #a0a0a0;
+  --arco-mid-grey: #8a8a88;
   --arco-light: #666666;
   --arco-rule: #404040;
   --arco-wash: #1c2b2c;
@@ -403,7 +407,7 @@ html, body {
 
 .arco-section-title {
   font-family: var(--font-serif);
-  font-size: 34px;
+  font-size: 36px;
   font-weight: 300;
   line-height: 1.2;
   letter-spacing: -0.3px;
@@ -412,7 +416,7 @@ html, body {
 
 .arco-subsection-title {
   font-family: var(--font-serif);
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 300;
   line-height: 1.3;
   letter-spacing: -0.2px;
@@ -763,11 +767,11 @@ footer .footer-heading {
   }
 
   .arco-section-title {
-    font-size: 28px;
+    font-size: 30px;
   }
 
   .arco-subsection-title {
-    font-size: 22px;
+    font-size: 24px;
   }
 }
 
@@ -777,11 +781,11 @@ footer .footer-heading {
   }
 
   .arco-section-title {
-    font-size: 24px;
+    font-size: 26px;
   }
 
   .arco-subsection-title {
-    font-size: 20px;
+    font-size: 22px;
   }
 }
 
@@ -1702,7 +1706,8 @@ footer .footer-heading {
   align-items: center;
   gap: 7px;
   font-family: var(--font-sans);
-  font-size: 13px;
+  /* Same size as the header Menu pill (text-sm) on every breakpoint. */
+  font-size: 14px;
   font-weight: 400;
   color: #fff;
   background: rgba(0, 0, 0, .45);
@@ -1725,7 +1730,6 @@ footer .footer-heading {
     height: 32px;
     padding: 0 12px;
     gap: 6px;
-    font-size: 14px;
     line-height: 1;
   }
   .hero-photos-btn svg { width: 14px; height: 14px; }
@@ -1739,8 +1743,12 @@ footer .footer-heading {
 .project-hero {
   margin-top: 60px;
   height: 70vh;
-  min-height: 500px;
-  max-height: 700px;
+  /* Wide screens: the height FLOOR scales with the viewport width
+     (42vw) so the hero keeps a photographic aspect instead of
+     collapsing into a strip — capped at 950px absolute. Typical
+     laptops are untouched (42vw < 70vh there). */
+  min-height: max(500px, min(42vw, 950px));
+  max-height: 950px;
   position: relative;
   overflow: hidden;
   background: #000;
@@ -2146,7 +2154,7 @@ footer .footer-heading {
 .ec::before {
   content: "";
   position: absolute;
-  inset: -6px -14px;
+  inset: -10px -14px;
   border: 1px solid transparent;
   border-radius: 5px;
   transition: border-color 0.18s;
@@ -2191,15 +2199,21 @@ footer .footer-heading {
 .ec.on   .ec-txt { color: var(--primary); }
 
 /* ── Inline chip variant ───────────────────────────────────────────────────
-   For rows where the EDIT chip should sit next to the label instead of
-   above it (e.g. service badge in the company hero). Chip is rendered
-   as an inline sibling — no absolute positioning, no top offset. */
+   For rows where the EDIT chip sits next to the label instead of above
+   it (service badge on company edit, email on the account page). The
+   chip hangs OUTSIDE the flow, absolutely to the right of the label,
+   so a centred label stays truly centred — the chip adds no width. */
 .ec-badge.ec-badge--inline {
-  position: static;
-  top: auto;
-  left: auto;
-  padding: 0;
-  background: transparent;
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  transform: translateY(-50%);
+  /* Straddles the outline's right border (content + 14px) with a white
+     ground, so the border reads as OPEN through the label — the same
+     break the top-left badges make in the top border. */
+  margin-left: 6px;
+  padding: 0 4px;
+  background: #ffffff;
 }
 
 /* ── Spec-bar variant ──────────────────────────────────────────────────────
@@ -6083,8 +6097,9 @@ body.no-scroll {
 }
 
 .status-pill-dot {
-  width: 5px;
-  height: 5px;
+  /* Same 7px as .arco-table-status-dot — one dot size across admin. */
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -7083,6 +7098,7 @@ body.no-scroll {
 }
 
 .arco-table-status-dot {
+  /* One dot size across admin — matches .status-pill-dot / funnel. */
   width: 7px;
   height: 7px;
   border-radius: 50%;
@@ -8151,3 +8167,66 @@ body.no-scroll {
   .arco-banner:has(.arco-banner-close) { padding-right: 48px; }
 }
 
+
+/* ═══ Dashboard team page — responsive member rows ═══ */
+.team-col-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0 0;
+}
+.team-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--arco-light-grey);
+}
+.team-row-info { flex: 1; min-width: 0; }
+.team-row-name {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--arco-black);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.team-row-email {
+  font-size: 13px;
+  color: var(--arco-mid-grey);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.team-row-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+/* Desktop: label lives in the column header above the switches. */
+.team-toggle-label { display: none; }
+.team-role-col { width: 90px; display: flex; justify-content: center; }
+
+@media (max-width: 640px) {
+  /* No room for a floating column header — the label moves inline
+     next to each switch instead. */
+  .team-col-header { display: none; }
+  .team-toggle-label {
+    display: inline;
+    font-size: 12px;
+    color: var(--arco-mid-grey);
+  }
+  /* Name + email keep the top line; toggle, role pill and menu wrap
+     to their own line, indented past the avatar (36px + 14px gap). */
+  .team-row { flex-wrap: wrap; row-gap: 10px; }
+  .team-row-controls {
+    flex-basis: 100%;
+    min-width: 0;
+    margin-left: 50px;
+  }
+  .team-role-col { width: auto; }
+  .team-row-controls .dropdown-menu,
+  .team-row-controls .team-menu-spacer { margin-left: auto; }
+}
