@@ -8,6 +8,7 @@ import { useTranslations, useLocale } from "next-intl"
 import { toast } from "sonner"
 import { AlertTriangle, ImageIcon, MoreHorizontal, ExternalLink } from "lucide-react"
 import { ImportProjectModal } from "@/components/import-project-modal"
+import { LinkInputRow } from "@/components/landing"
 
 import {
   updateCompanyProfileAction,
@@ -151,16 +152,19 @@ const STATUS_LABELS: Record<CompanyStatus, string> = {
 
 // ── Pencil icon (reused from project edit) ──
 
-const EditBadge = () => (
+const EditBadge = () => {
+  const t = useTranslations("common")
+  return (
   <span className="ec-badge">
     <span className="ec-ico">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5Z" />
       </svg>
     </span>
-    <span className="ec-txt">Edit</span>
+    <span className="ec-txt">{t("edit")}</span>
   </span>
-)
+  )
+}
 
 const TOUR_STEPS: TourStep[] = [
   { anchor: "logo",           titleKey: "logo_title",     bodyKey: "logo_body" },
@@ -176,6 +180,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   const isOwner = user?.id === company.owner_id
   const t = useTranslations("company_edit")
   const tc = useTranslations("common")
+  const tIP = useTranslations("import_project")
   const tNav = useTranslations("nav")
   const tStatus = useTranslations("project_status")
   const ownerStatusOptions = useMemo(() => buildOwnerStatusOptions((k) => tStatus(k)), [tStatus])
@@ -354,6 +359,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
 
   // ── Service popup state ──
   const [servicePopupOpen, setServicePopupOpen] = useState(false)
+  const [spQuery, setSpQuery] = useState("")
   // Manual tour replay (sub-nav "?" pill) — increments to force a run.
   const [tourForceRun, setTourForceRun] = useState(0)
   const dragItemRef = useRef<number | null>(null)
@@ -407,6 +413,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   useEffect(() => {
     if (!isSetupMode || servicesOffered.length > 0) return
     servicesSnapshotRef.current = [...servicesOffered]
+    setSpQuery("")
     setServicePopupOpen(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -1200,6 +1207,16 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         .sp-search::placeholder { color: #b0b0ae; }
         .sp-selected-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 24px; }
         .sp-selected-empty { font-size: 13px; color: #b0b0ae; text-align: center; padding: 8px 0; }
+        /* Search-to-add — the claim funnel's dashed "next one goes
+           here" row plus its results list, same metrics. */
+        .sp-add { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border: 1px dashed var(--arco-rule); border-radius: 6px; color: #b0b0ae; transition: border-color 0.15s; }
+        .sp-add:focus-within { border-color: #c8c8c6; }
+        .sp-add-input { flex: 1; min-width: 0; border: none; background: none; outline: none; padding: 0; font-size: 15px; color: #1c1c1a; }
+        .sp-add-input::placeholder { color: #b0b0ae; }
+        .sp-results { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
+        .sp-result { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border: none; background: none; border-radius: 6px; font-size: 14px; color: #1c1c1a; cursor: pointer; text-align: left; transition: background 0.12s; }
+        .sp-result:hover { background: var(--arco-surface); }
+        .sp-result-group { font-size: 12px; color: #b0b0ae; flex-shrink: 0; }
         .sp-selected-item { display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: var(--arco-surface); border: 1px solid #e8e8e6; border-radius: 6px; font-size: 15px; color: #1c1c1a; cursor: grab; transition: border-color .15s, box-shadow .15s; user-select: none; }
         .sp-selected-item:hover { border-color: #c8c8c6; }
         .sp-selected-item.dragging { opacity: 0.5; box-shadow: 0 2px 8px rgba(0,0,0,.1); }
@@ -1442,7 +1459,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
           ) : (
             <div
               className={`ec ec--inline${servicePopupOpen ? " on" : ""}`}
-              onClick={() => { servicesSnapshotRef.current = [...servicesOffered]; setServicePopupOpen(true) }}
+              onClick={() => { servicesSnapshotRef.current = [...servicesOffered]; setSpQuery(""); setServicePopupOpen(true) }}
               data-setup-highlight={highlightMissing && !setupComplete.services ? "true" : undefined}
               style={{ display: "inline-flex", alignItems: "center", gap: 8, marginTop: 12, marginBottom: 24 }}
             >
@@ -1462,7 +1479,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                     <path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5Z" />
                   </svg>
                 </span>
-                <span className="ec-txt">Edit</span>
+                <span className="ec-txt">{tc("edit")}</span>
               </span>
             </div>
           )}
@@ -2216,18 +2233,65 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                 )
               })()}
 
-              {firstProjectSegment === "new_publisher" && (
-                <input
-                  type="url"
-                  className="form-input"
-                  placeholder={tFP("url_placeholder")}
-                  value={firstProjectUrl}
-                  onChange={(e) => setFirstProjectUrl(e.target.value)}
-                  style={{ marginBottom: 16 }}
-                  autoFocus
-                />
-              )}
-
+              {firstProjectSegment === "new_publisher" ? (
+                <>
+                  {/* Same lockup as the import popup: inline URL row
+                      plus the no-website manual escape hatch. */}
+                  <LinkInputRow
+                    placeholder={tIP("placeholder")}
+                    buttonLabel={tIP("button")}
+                    onSubmit={async (url) => {
+                      setFirstProjectUrl(url)
+                      setIsCompletingSetup(true)
+                      await markSetupComplete()
+                      setFirstProjectPopupOpen(false)
+                      setImportInitialUrl(url)
+                      setImportModalOpen(true)
+                      setIsCompletingSetup(false)
+                    }}
+                  />
+                  <div className="import-popup-manual">
+                    <span>
+                      {tIP("no_website")}{" "}
+                      <button
+                        type="button"
+                        disabled={isCompletingSetup}
+                        className="import-popup-manual-link"
+                        onClick={async () => {
+                          setIsCompletingSetup(true)
+                          try {
+                            await markSetupComplete()
+                            const slug = `untitled-project-${Date.now()}`
+                            const { data: project, error } = await supabaseClient
+                              .from("projects")
+                              .insert({ title: "Untitled Project", client_id: userId, status: "draft" as const, slug })
+                              .select("id")
+                              .single()
+                            if (error || !project) throw error
+                            const { data: { user: authUser } } = await supabaseClient.auth.getUser()
+                            await supabaseClient.from("project_professionals").insert({
+                              project_id: project.id,
+                              professional_id: professionalId ?? null,
+                              company_id: company.id,
+                              is_project_owner: true,
+                              status: "live_on_page",
+                              invited_email: authUser?.email ?? "",
+                            })
+                            setFirstProjectPopupOpen(false)
+                            router.push(`/dashboard/edit/${project.id}`)
+                          } catch {
+                            toast.error(tIP("create_failed"))
+                          } finally {
+                            setIsCompletingSetup(false)
+                          }
+                        }}
+                      >
+                        {isCompletingSetup ? tIP("creating_blank") : tIP("fill_manually")}
+                      </button>
+                    </span>
+                  </div>
+                </>
+              ) : (
               <button
                 type="button"
                 className="btn-primary"
@@ -2237,19 +2301,8 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
               >
                 {tFP(`cta_${firstProjectSegment}`)}
               </button>
+              )}
 
-              <button
-                type="button"
-                onClick={handleLater}
-                disabled={isCompletingSetup}
-                style={{
-                  display: "block", margin: "16px auto 0", padding: 0,
-                  background: "none", border: "none", cursor: "pointer",
-                  fontSize: 13, color: "var(--arco-mid-grey)", textDecoration: "underline",
-                }}
-              >
-                {tFP("later")}
-              </button>
             </div>
           </div>
         )
@@ -2352,9 +2405,6 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
             <label className="form-label">{t("services_your")}</label>
             <p style={{ fontSize: 12, color: "#9a9a98", margin: "0 0 10px" }}>{t("services_drag_hint")}</p>
             <div className="sp-selected-list">
-              {servicesOffered.length === 0 && (
-                <div className="sp-selected-empty">{t("services_empty")}</div>
-              )}
               {servicesOffered.map((id, idx) => {
                 const svc = services.find((s) => s.id === id)
                 if (!svc) return null
@@ -2397,12 +2447,55 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                   </div>
                 )
               })}
+              {/* Search-to-add: a dashed version of the service row —
+                  "the next one goes here". Typing searches the whole
+                  taxonomy; the groups below stay as the browse path. */}
+              <div className="sp-add">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden>
+                  <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.4" />
+                  <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                </svg>
+                <input className="sp-add-input" type="text" value={spQuery}
+                  placeholder={t("services_search_placeholder")}
+                  onChange={(e) => setSpQuery(e.target.value)} />
+              </div>
+              {(() => {
+                const q = spQuery.trim().toLowerCase()
+                if (q.length < 2) return null
+                const matches = serviceCategories
+                  .flatMap((g) => g.services.map((s) => ({ service: s, group: g })))
+                  .filter(({ service: s }) => !servicesOffered.includes(s.id))
+                  .filter(({ service: s }) => {
+                    const label = translateProfessionalService(s.slug ?? s.name, locale) ?? s.name
+                    return label.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)
+                  })
+                  .slice(0, 8)
+                if (matches.length === 0) {
+                  return <div className="sp-selected-empty">{t("services_search_none")}</div>
+                }
+                const atMax = servicesOffered.length >= 12
+                return (
+                  <div className="sp-results">
+                    {matches.map(({ service: s, group: g }) => (
+                      <button key={s.id} type="button" className="sp-result"
+                        onClick={() => {
+                          if (!atMax) setServicesOffered((prev) => [...prev, s.id])
+                          setSpQuery("")
+                        }}>
+                        <span>{translateProfessionalService(s.slug ?? s.name, locale) ?? s.name}</span>
+                        <span className="sp-result-group">{translateProfessionalService(g.slug, locale) ?? g.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )
+              })()}
             </div>
 
             {/* Available services grouped by category */}
             {/* Categorieën als dropdowns — het funnel-ontwerp: eyebrow-label
                 met chevron erachter, teller-badge bij selecties, groep van
-                de primaire dienst open, geen zoekveld, geen lijnen. */}
+                de primaire dienst open, geen lijnen. Zoeken gebeurt in de
+                dashed rij hierboven, net als in de claim-funnel. */}
             <div className="sp-categories">
               {serviceCategories.map((group) => {
                 const filtered = group.services
