@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition, type FormEvent, type Dispatch, type SetStateAction, type RefObject } from "react";
 import Image from "next/image";
 import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services";
+import { PersonIcon } from "@/lib/icons/custom-service-icons"
 import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security";
 import { Link } from "@/i18n/navigation";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -243,7 +244,6 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
   const rawMenuLabel = derivedFirstName || fallbackName;
   const menuLabel = rawMenuLabel && rawMenuLabel.trim().length > 0 ? rawMenuLabel.trim() : "Menu";
   const avatarUrl = profile?.avatar_url ?? null;
-  const userInitial = (derivedFirstName ?? user?.email ?? "U").charAt(0).toUpperCase();
 
   // Company data for menu
   const [companies, setCompanies] = useState<Array<{ id: string; name: string; logo_url: string | null; serviceSlug?: string | null; role: "owner" | "member" }>>([]);
@@ -715,8 +715,8 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                     {avatarUrl ? (
                       <img src={avatarUrl} alt="" className="w-7 h-7 rounded-full object-cover" referrerPolicy="no-referrer" />
                     ) : (
-                      <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium" style={{ background: transparent && !isScrolled ? "rgba(255,255,255,.2)" : "#1c1c1a", color: "#fff" }}>
-                        {userInitial}
+                      <span className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: transparent && !isScrolled ? "rgba(255,255,255,.2)" : "#1c1c1a", color: "#fff" }}>
+                        <PersonIcon size={20} strokeWidth={1.2} />
                       </span>
                     )}
                     <span className="text-sm font-normal hidden sm:inline">{menuLabel}</span>

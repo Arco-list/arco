@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { PersonIcon } from "@/lib/icons/custom-service-icons"
 
 const AVATAR_ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"])
 const AVATAR_ALLOWED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"])
@@ -73,15 +74,6 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
     const providers = Array.isArray(user.app_metadata?.providers) ? user.app_metadata?.providers : []
     return provider === "email" || providers?.includes("email") || Boolean(user.email)
   }, [user])
-
-  const avatarFallback = useMemo(() => {
-    const firstInitial = profileForm.firstName?.trim().charAt(0) ?? ""
-    const lastInitial = profileForm.lastName?.trim().charAt(0) ?? ""
-    const initials = `${firstInitial}${lastInitial}`.toUpperCase()
-    if (initials) return initials
-    const emailInitial = profileForm.email?.trim().charAt(0)?.toUpperCase()
-    return emailInitial ?? "U"
-  }, [profileForm.email, profileForm.firstName, profileForm.lastName])
 
   const handleAvatarFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null
@@ -246,7 +238,7 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
         <div className="company-icon" onClick={() => fileInputRef.current?.click()} style={{ display: "inline-block", cursor: "pointer" }}>
           <Avatar style={{ width: 100, height: 100 }}>
             <AvatarImage src={avatarPreview ?? undefined} alt="Profile avatar" style={{ width: 100, height: 100 }} />
-            <AvatarFallback style={{ width: 100, height: 100, fontSize: 32, fontWeight: 300 }}>{avatarFallback}</AvatarFallback>
+            <AvatarFallback style={{ width: 100, height: 100, background: "var(--surface)", color: "var(--arco-mid)" }}><PersonIcon size={72} strokeWidth={0.45} /></AvatarFallback>
           </Avatar>
           <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleAvatarFileChange} />
         </div>

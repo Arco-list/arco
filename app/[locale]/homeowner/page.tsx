@@ -4,9 +4,10 @@ import { Suspense, useEffect, useMemo, useRef, useState, useCallback, type Chang
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { toast } from "sonner"
-import { AlertTriangle, Camera, ChevronLeft, ChevronRight } from "lucide-react"
+import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react"
 import { ShareModal } from "@/components/share-modal"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
+import { PersonIcon } from "@/lib/icons/custom-service-icons"
 
 import { useLocale, useTranslations } from "next-intl"
 import { useAuth } from "@/contexts/auth-context"
@@ -131,14 +132,6 @@ function HomeownerContent() {
     if (editSaveTimerRef.current) clearTimeout(editSaveTimerRef.current)
     editSaveTimerRef.current = setTimeout(() => setEditSaveStatus("idle"), 2000)
   }, [])
-
-  const getInitials = () => {
-    const f = firstName?.trim().charAt(0) ?? ""
-    const l = lastName?.trim().charAt(0) ?? ""
-    const initials = `${f}${l}`.toUpperCase()
-    if (initials) return initials
-    return email?.trim().charAt(0)?.toUpperCase() ?? "U"
-  }
 
   const displayName = [firstName, lastName].filter(Boolean).join(" ") || t("your_name")
   const memberSince = user?.created_at
@@ -473,46 +466,39 @@ function HomeownerContent() {
         <section className="professional-header" style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
           {/* Avatar */}
           <div
+            className="ec"
             onClick={() => fileInputRef.current?.click()}
-            style={{
-              width: 100, height: 100, borderRadius: "50%",
-              background: "var(--arco-off-white)", display: "flex",
-              alignItems: "center", justifyContent: "center",
-              overflow: "hidden", cursor: "pointer", position: "relative",
-              flexShrink: 0, marginBottom: 24,
-            }}
+            style={{ display: "inline-block", marginBottom: 24 }}
           >
-            {avatarPreview ? (
-              <img src={avatarPreview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            ) : (
-              <span style={{ fontSize: 28, fontWeight: 500, color: "var(--arco-mid-grey)" }}>
-                {getInitials()}
-              </span>
-            )}
+            <EditBadge />
             <div style={{
-              position: "absolute", inset: 0, background: "rgba(0,0,0,.3)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              opacity: 0, transition: "opacity .15s",
-            }}
-              onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
-              onMouseLeave={e => (e.currentTarget.style.opacity = "0")}
-            >
-              <Camera size={20} style={{ color: "#fff" }} />
+              width: 100, height: 100, borderRadius: "50%",
+              background: "var(--surface)", display: "flex",
+              alignItems: "center", justifyContent: "center",
+              overflow: "hidden", position: "relative", flexShrink: 0,
+            }}>
+              {avatarPreview ? (
+                <img src={avatarPreview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <span style={{ color: "var(--arco-mid)", display: "flex" }}>
+                  <PersonIcon size={72} strokeWidth={0.45} />
+                </span>
+              )}
+              {isUploadingAvatar && (
+                <div style={{
+                  position: "absolute", inset: 0, background: "rgba(255,255,255,.7)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 11, fontWeight: 500, color: "var(--arco-mid-grey)",
+                }}>
+                  {t("uploading")}
+                </div>
+              )}
             </div>
             <input ref={fileInputRef} type="file" hidden accept="image/jpeg,image/png,image/webp" onChange={handleAvatarFileChange} />
-            {isUploadingAvatar && (
-              <div style={{
-                position: "absolute", inset: 0, background: "rgba(255,255,255,.7)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 11, fontWeight: 500, color: "var(--arco-mid-grey)",
-              }}>
-                {t("uploading")}
-              </div>
-            )}
           </div>
 
           {/* Name (contentEditable) */}
-          <div className={`ec${activeEditField === "name" ? " on" : ""}`} style={{ marginBottom: 16 }}>
+          <div className={`ec${activeEditField === "name" ? " on" : ""}`} style={{ marginBottom: 16, alignSelf: "stretch" }}>
             <EditBadge />
             <h1
               className="arco-page-title"
@@ -527,14 +513,25 @@ function HomeownerContent() {
             </h1>
           </div>
 
-          {/* Email badge — click to open email change popup (like service selector) */}
-          <p
-            className="professional-badge service-popup-badge"
+          {/* Email — inline EDIT treatment, matching the company-edit
+              services line; click opens the email change popup. */}
+          <div
+            className={`ec ec--inline${emailModalOpen ? " on" : ""}`}
             onClick={() => { setEmailModalEmail(email); setEmailModalOpen(true) }}
-            style={{ cursor: "pointer" }}
+            style={{ display: "inline-flex", alignItems: "center", gap: 8, marginTop: 12, marginBottom: 24 }}
           >
-            {email || t("add_email")}
-          </p>
+            <p className="professional-badge service-popup-badge" style={{ cursor: "pointer", margin: 0 }}>
+              {email || t("add_email")}
+            </p>
+            <span className="ec-badge ec-badge--inline">
+              <span className="ec-ico">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5Z" />
+                </svg>
+              </span>
+              <span className="ec-txt">{t("edit")}</span>
+            </span>
+          </div>
         </section>
 
         {/* ── Details bar ── */}

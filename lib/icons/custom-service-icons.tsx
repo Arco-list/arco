@@ -493,3 +493,15 @@ export const ShedBuilderIcon = mark(
       <path d="M4.2 19.3c5.2.4 10.4.4 15.6 0" />
   </>,
 )
+
+/** Person — the family's avatar fallback (team page, account,
+ *  header pill): a tilted head loop that closes in a near-miss, and
+ *  ONE stroke for the bust — up over the left shoulder, down the
+ *  right, base line drawn only on the way back and stopping shy of
+ *  where it started. */
+export const PersonIcon = mark(
+  <>
+      <path d="M11.4 4.3 C9.8 4.6 9.1 6.6 10 7.9 C10.9 9.2 13.3 9.2 14.1 7.9 C14.9 6.5 14 4.5 12.5 4.4" />
+      <path d="M6.2 19.6 C6.5 15.1 9 12.5 12 12.5 C15 12.5 17.5 15.2 17.8 19.2 C13.9 19.6 10.3 19.6 7 19.4" />
+  </>,
+)
