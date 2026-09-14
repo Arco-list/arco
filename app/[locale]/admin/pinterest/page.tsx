@@ -300,13 +300,18 @@ function ConnectionPill({
   const relative = expiresAt ? formatRelative(expiresAt) : "unknown"
   return (
     <div className="flex items-center gap-2">
-      <span
-        className="status-pill"
+      {/* Clickable: re-runs the OAuth flow. Covers the reconnect
+          scenario the empty-state button can't reach (a stored token
+          that is "valid" but wrong — e.g. scoped to the sandbox). */}
+      <a
+        href={`/${locale}/admin/pinterest/oauth/start`}
+        className="status-pill cursor-pointer transition-colors hover:bg-[#f0fdf4]"
         style={{ borderColor: "#bbf7d0", color: "#166534" }}
+        title="Reconnect Pinterest"
       >
         <span className="status-pill-dot" style={{ background: "#10b981" }} />
         Connected
-      </span>
+      </a>
       <span className="text-[11px] text-[#a1a1a0]">
         arcolist · token refreshes {relative}
         {expiresAt && ` (${new Date(expiresAt).toLocaleDateString(locale)})`}
