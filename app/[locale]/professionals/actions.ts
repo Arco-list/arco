@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { sendTransactionalEmail } from "@/lib/email-service"
+import { getCompanyEmailRecipients } from "@/lib/companies/company-email-recipients"
 import { checkRateLimit } from "@/lib/rate-limit"
 
 export type SendIntroductionResult = {
@@ -61,16 +62,9 @@ export async function sendIntroductionRequestAction(input: {
 
   if (!company) return { success: false, error: "Company not found." }
 
-  // Determine recipient and email
+  // The in-app message still addresses the owner; the email fans out
+  // to every team contact with the company-mail toggle on.
   const recipientId = company.owner_id ?? user.id
-  let recipientEmail = company.email
-
-  if (company.owner_id) {
-    const { data: ownerData } = await serviceSupabase.auth.admin.getUserById(company.owner_id)
-    if (ownerData?.user?.email) {
-      recipientEmail = ownerData.user.email
-    }
-  }
 
   // Insert message using service role to bypass RLS
   const { error: insertError } = await serviceSupabase
@@ -92,11 +86,13 @@ export async function sendIntroductionRequestAction(input: {
     return { success: false, error: "Failed to send message." }
   }
 
-  // Send email notification to company
-  if (recipientEmail) {
+  // Send email notification to every company-mail receiver (team page
+  // toggle; falls back to the owner, then the company address).
+  const recipients = await getCompanyEmailRecipients(companyId)
+  for (const recipient of recipients) {
     try {
       await sendTransactionalEmail(
-        recipientEmail,
+        recipient.email,
         "introduction-request",
         {
           firstname: company.name,
@@ -105,9 +101,9 @@ export async function sendIntroductionRequestAction(input: {
           message_preview: message.trim().slice(0, 200),
           dashboard_link: `${process.env.NEXT_PUBLIC_SITE_URL || "https://www.arcolist.com"}/dashboard/inbox`,
         },
-        // Prefer the owner's preferred_language; fall back to the
-        // company country if the company has no claimed owner yet.
-        { userId: company.owner_id ?? null, companyId },
+        // Prefer the recipient's preferred_language; fall back to the
+        // company country for contacts without an account.
+        { userId: recipient.userId, companyId },
       )
     } catch (err) {
       console.error("Failed to send introduction email:", err)

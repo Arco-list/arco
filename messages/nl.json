@@ -374,7 +374,9 @@
     },
     "tour_replay": "Rondleiding bekijken",
     "add_project": "Project toevoegen",
-    "nav_team": "Team"
+    "nav_team": "Team",
+    "services_search_placeholder": "Zoek of selecteer hieronder",
+    "services_search_none": "Geen dienst gevonden"
   },
   "verify_domain": {
     "title": "Domein verifiëren",
@@ -982,6 +984,11 @@
     "you": "(jij)",
     "role_admin": "Admin",
     "role_member": "Lid",
+    "company_email": "Bedrijfsmail",
+    "company_email_hint": "Ontvangt bedrijfsmail: kennismakingsaanvragen en projectupdates",
+    "company_email_description": "Wie kennismakingsaanvragen en projectupdates ontvangt",
+    "company_email_updated": "Bedrijfsmail-instelling bijgewerkt",
+    "company_email_min_one": "Minstens één teamlid moet bedrijfsmail ontvangen",
     "change_to_member": "Wijzig naar Lid",
     "make_admin": "Maak Admin",
     "remove": "Verwijderen",

@@ -119,6 +119,7 @@ export default async function TeamPage({
       invited_by,
       joined_at,
       created_at,
+      receives_company_email,
       person:persons(id, first_name, last_name, email, auth_user_id)
     `)
     .eq("company_id", company.id)
@@ -152,6 +153,7 @@ export default async function TeamPage({
     invited_at: string
     invited_by: string | null
     joined_at: string | null
+    receives_company_email: boolean
     profiles: {
       first_name: string | null
       last_name: string | null
@@ -172,6 +174,7 @@ export default async function TeamPage({
     invited_at: c.invited_at ?? c.created_at,
     invited_by: c.invited_by,
     joined_at: c.joined_at,
+    receives_company_email: c.receives_company_email === true,
     profiles: c.person
       ? {
           first_name: c.person.first_name,

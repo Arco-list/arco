@@ -9,6 +9,7 @@ import { logger } from "@/lib/logger"
 import { generateUniqueSlug, isValidSlug } from "@/lib/seo-utils"
 import { getSiteUrl } from "@/lib/utils"
 import { sendProjectStatusEmail } from "@/lib/email-service"
+import { getCompanyEmailRecipients } from "@/lib/companies/company-email-recipients"
 import { 
   ActionResult, 
   createErrorResponse, 
@@ -429,36 +430,67 @@ export async function setProjectStatusAction(input: {
         }
       }
       
-      const ownerFirstName = project?.profiles?.first_name || ''
-      const ownerFullName = [project?.profiles?.first_name, project?.profiles?.last_name].filter(Boolean).join(' ') || ownerEmail || 'Project Owner'
+      // Fan out to the owning company's team: every contact with the
+      // company-mail toggle on (team page). Projects without a company
+      // keep the old owner-only behavior via the fallback below.
+      const { data: ownerCredit } = await serviceClient
+        .from("project_professionals")
+        .select("company_id")
+        .eq("project_id", idResult.data)
+        .eq("is_project_owner", true)
+        .not("company_id", "is", null)
+        .maybeSingle()
+      let recipients = ownerCredit?.company_id
+        ? await getCompanyEmailRecipients(ownerCredit.company_id)
+        : []
+      if (recipients.length === 0 && ownerEmail) {
+        recipients = [{ email: ownerEmail, userId: project?.client_id ?? null }]
+      }
+
+      // Greet each receiver by their own first name, not the owner's.
+      const firstNameByUserId = new Map<string, string>()
+      const recipientUserIds = recipients.map((r) => r.userId).filter((id): id is string => Boolean(id))
+      if (recipientUserIds.length > 0) {
+        const { data: recipientProfiles } = await serviceClient
+          .from("profiles")
+          .select("id, first_name")
+          .in("id", recipientUserIds)
+        for (const p of recipientProfiles ?? []) {
+          if (p.first_name) firstNameByUserId.set(p.id, p.first_name)
+        }
+      }
+      const firstnameFor = (r: { userId: string | null }) =>
+        (r.userId ? firstNameByUserId.get(r.userId) : undefined) ?? ''
       const baseUrl = getSiteUrl()
 
       if (statusResult.data === "rejected") {
-        // Send rejection email to project owner
-        if (ownerEmail) {
+        // Send rejection email to every company-mail receiver
+        if (recipients.length > 0) {
           try {
-            await sendProjectStatusEmail(
-              ownerEmail,
-              'rejected',
-              {
-                firstname: ownerFirstName,
-                project_title: project?.title || 'Your Project',
-                project_name: project?.title || 'Your Project',
-                project_image: projectPhoto?.url ?? undefined,
-                project_location: (project as any)?.address_city ?? (project as any)?.location ?? undefined,
-                project_type: projectTypeLabel,
-                dashboard_link: `${baseUrl}/dashboard/listings`,
-                rejection_reason: trimmedReason || 'No reason provided'
-              },
-              // Resolve the mail language from the owner's profile, not
-              // their email TLD.
-              { userId: project?.client_id ?? null }
-            )
-            
+            for (const recipient of recipients) {
+              await sendProjectStatusEmail(
+                recipient.email,
+                'rejected',
+                {
+                  firstname: firstnameFor(recipient),
+                  project_title: project?.title || 'Your Project',
+                  project_name: project?.title || 'Your Project',
+                  project_image: projectPhoto?.url ?? undefined,
+                  project_location: (project as any)?.address_city ?? (project as any)?.location ?? undefined,
+                  project_type: projectTypeLabel,
+                  dashboard_link: `${baseUrl}/dashboard/listings`,
+                  rejection_reason: trimmedReason || 'No reason provided'
+                },
+                // Resolve the mail language from the recipient's
+                // profile, not their email TLD.
+                { userId: recipient.userId }
+              )
+            }
+
             logger.info("Project rejection email sent", {
               scope: "admin-projects",
               projectId: idResult.data,
-              emailSent: true
+              recipients: recipients.length
             })
           } catch (emailError) {
             logger.error("Failed to send project rejection email", {
@@ -476,36 +508,39 @@ export async function setProjectStatusAction(input: {
           })
         }
       } else if (statusResult.data === "published") {
-        // Send project live email to owner — except when this publish
-        // just listed the company for the first time: the Company Live
-        // mail owns that moment (see the pre-update capture above).
-        if (ownerEmail && !ownerCompanyWasListed) {
+        // Send project live email to every company-mail receiver —
+        // except when this publish just listed the company for the
+        // first time: the Company Live mail owns that moment (see the
+        // pre-update capture above).
+        if (recipients.length > 0 && !ownerCompanyWasListed) {
           logger.info("Project live email suppressed — company-live covers the first listing", {
             scope: "admin-projects",
             projectId: idResult.data,
           })
-        } else if (ownerEmail) {
+        } else if (recipients.length > 0) {
           try {
-            await sendProjectStatusEmail(
-              ownerEmail,
-              'live',
-              {
-                firstname: ownerFirstName,
-                project_title: project?.title || 'Your Project',
-                project_name: project?.title || 'Your Project',
-                project_image: projectPhoto?.url ?? undefined,
-                project_location: (project as any)?.address_city ?? (project as any)?.location ?? undefined,
-                project_type: projectTypeLabel,
-                project_link: `${baseUrl}/projects/${(project as any)?.slug ?? idResult.data}`,
-                dashboard_link: `${baseUrl}/dashboard/listings`
-              },
-              { userId: project?.client_id ?? null }
-            )
-            
+            for (const recipient of recipients) {
+              await sendProjectStatusEmail(
+                recipient.email,
+                'live',
+                {
+                  firstname: firstnameFor(recipient),
+                  project_title: project?.title || 'Your Project',
+                  project_name: project?.title || 'Your Project',
+                  project_image: projectPhoto?.url ?? undefined,
+                  project_location: (project as any)?.address_city ?? (project as any)?.location ?? undefined,
+                  project_type: projectTypeLabel,
+                  project_link: `${baseUrl}/projects/${(project as any)?.slug ?? idResult.data}`,
+                  dashboard_link: `${baseUrl}/dashboard/listings`
+                },
+                { userId: recipient.userId }
+              )
+            }
+
             logger.info("Project live email sent", {
               scope: "admin-projects",
               projectId: idResult.data,
-              emailSent: true
+              recipients: recipients.length
             })
           } catch (emailError) {
             logger.error("Failed to send project live email", {

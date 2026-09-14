@@ -374,7 +374,9 @@
     },
     "tour_replay": "View tour",
     "add_project": "Add project",
-    "nav_team": "Team"
+    "nav_team": "Team",
+    "services_search_placeholder": "Search, or pick from the list below",
+    "services_search_none": "No service found"
   },
   "verify_domain": {
     "title": "Verify domain",
@@ -982,6 +984,11 @@
     "you": "(you)",
     "role_admin": "Admin",
     "role_member": "Member",
+    "company_email": "Company email",
+    "company_email_hint": "Receives company email: introduction requests and project updates",
+    "company_email_description": "Who receives introduction requests and project updates",
+    "company_email_updated": "Company email setting updated",
+    "company_email_min_one": "At least one team member must receive company email",
     "change_to_member": "Change to Member",
     "make_admin": "Make Admin",
     "remove": "Remove",

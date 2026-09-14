@@ -2,18 +2,22 @@
 
 import { useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Mail, MoreHorizontal, RotateCw, Trash2 } from "lucide-react"
+import { Info, Mail, MoreHorizontal, RotateCw, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { useTranslations } from "next-intl"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 
+import { ToggleSwitch } from "@/components/toggle-switch"
+import { PersonIcon } from "@/lib/icons/custom-service-icons"
+
 import {
   inviteTeamMemberAction,
   changeTeamMemberRoleAction,
   removeTeamMemberAction,
   resendTeamInviteAction,
+  setCompanyEmailAction,
 } from "./actions"
 
 type MemberRow = {
@@ -26,6 +30,7 @@ type MemberRow = {
   invited_at: string
   invited_by: string | null
   joined_at: string | null
+  receives_company_email: boolean
   profiles: {
     first_name: string | null
     last_name: string | null
@@ -49,20 +54,21 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteRole, setInviteRole] = useState<"member" | "admin">("member")
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [infoOpen, setInfoOpen] = useState(false)
 
   const canManage = isOwner || members.some(m => m.user_id === currentUserId && m.role === "admin")
 
-  // Close dropdown on outside click
+  // Close dropdown / info popover on outside click
   useEffect(() => {
-    if (!openMenuId) return
+    if (!openMenuId && !infoOpen) return
     const handleClickOutside = (e: MouseEvent) => {
-      if (!(e.target as Element).closest(".dropdown-menu")) {
-        setOpenMenuId(null)
-      }
+      const target = e.target as Element
+      if (openMenuId && !target.closest(".dropdown-menu")) setOpenMenuId(null)
+      if (infoOpen && !target.closest(".company-email-info")) setInfoOpen(false)
     }
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [openMenuId])
+  }, [openMenuId, infoOpen])
 
   const handleInvite = () => {
     if (!inviteEmail.trim() || isPending) return
@@ -117,6 +123,20 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
     })
   }
 
+  const handleCompanyEmail = (memberId: string, enabled: boolean) => {
+    startTransition(async () => {
+      const result = await setCompanyEmailAction({ memberId, enabled })
+      if (result.success) {
+        toast.success(t("company_email_updated"))
+        router.refresh()
+      } else if (result.error === "min_one_receiver") {
+        toast.error(t("company_email_min_one"))
+      } else {
+        toast.error(result.error ?? t("failed_update_role"))
+      }
+    })
+  }
+
   // Sort: admins first
   const sortedMembers = [...members].sort((a, b) => {
     if (a.role === "admin" && b.role !== "admin") return -1
@@ -132,15 +152,6 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
     const last = m.profiles?.last_name
     if (first || last) return [first, last].filter(Boolean).join(" ")
     return null
-  }
-
-  const getInitials = (m: MemberRow) => {
-    const name = getDisplayName(m)
-    if (name) {
-      const parts = name.split(" ").filter(Boolean)
-      return parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : parts[0].substring(0, 2).toUpperCase()
-    }
-    return m.email.substring(0, 2).toUpperCase()
   }
 
   return (
@@ -186,26 +197,52 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
 
             {/* Members table */}
             <div style={{ borderTop: "1px solid var(--arco-light-grey)" }}>
+              {/* Column header — label + info dot centred on the
+                  switch column (44px cell, overflow lets the text
+                  centre on the switch either side). */}
+              {activeMembers.length > 0 && (
+                <div className="team-col-header">
+                  <div style={{ flex: 1 }} />
+                  <span style={{ width: 44, display: "flex", justifyContent: "center", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
+                    <span className="text-xs" style={{ color: "var(--arco-mid-grey)" }}>{t("company_email")}</span>
+                    <span className="company-email-info" style={{ position: "relative", display: "flex" }}>
+                      <button
+                        type="button"
+                        onClick={() => setInfoOpen(o => !o)}
+                        aria-label={t("company_email_description")}
+                        style={{ display: "flex", background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--arco-mid-grey)" }}
+                      >
+                        <Info size={13} style={{ flexShrink: 0 }} />
+                      </button>
+                      {infoOpen && (
+                        <span style={{
+                          position: "absolute", top: "calc(100% + 8px)", right: -8, zIndex: 30,
+                          width: 230, padding: "8px 12px", background: "#fff",
+                          border: "1px solid var(--arco-light-grey)", borderRadius: 8,
+                          boxShadow: "0 4px 16px rgba(0,0,0,.08)",
+                          fontSize: 12, lineHeight: 1.5, color: "var(--arco-mid-grey)",
+                          whiteSpace: "normal", textAlign: "left",
+                        }}>
+                          {t("company_email_description")}
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                  <div style={{ width: 90 }} />
+                  {canManage && <div style={{ width: 32 }} />}
+                </div>
+              )}
               {activeMembers.map(m => {
                 const name = getDisplayName(m)
                 const isSelf = m.user_id === currentUserId
                 const isMenuOpen = openMenuId === m.id
 
                 return (
-                  <div
-                    key={m.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 14,
-                      padding: "14px 0",
-                      borderBottom: "1px solid var(--arco-light-grey)",
-                    }}
-                  >
+                  <div key={m.id} className="team-row">
                     {/* Avatar */}
                     <div style={{
                       width: 36, height: 36, borderRadius: "50%",
-                      background: "var(--arco-off-white)", display: "flex",
+                      background: "var(--surface)", display: "flex",
                       alignItems: "center", justifyContent: "center",
                       fontSize: 12, fontWeight: 500, color: "var(--arco-mid-grey)",
                       overflow: "hidden", flexShrink: 0,
@@ -213,32 +250,49 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
                       {m.profiles?.avatar_url ? (
                         <img src={m.profiles.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       ) : (
-                        getInitials(m)
+                        <PersonIcon size={26} strokeWidth={0.9} />
                       )}
                     </div>
 
                     {/* Info */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontSize: 14, fontWeight: 500, color: "var(--arco-black)" }}>
-                          {name ?? m.email}
-                        </span>
+                    <div className="team-row-info">
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                        <span className="team-row-name">{name ?? m.email}</span>
                         {isSelf && (
-                          <span style={{ fontSize: 11, color: "var(--arco-mid-grey)" }}>{t("you")}</span>
+                          <span style={{ fontSize: 11, color: "var(--arco-mid-grey)", flexShrink: 0 }}>{t("you")}</span>
                         )}
                       </div>
                       {name && (
-                        <p style={{ fontSize: 13, color: "var(--arco-mid-grey)", margin: 0 }}>{m.email}</p>
+                        <p className="team-row-email">{m.email}</p>
                       )}
                     </div>
 
-                    {/* Role pill */}
-                    <span className="filter-pill flex items-center gap-1.5" style={{ cursor: "default" }}>
-                      <span
-                        className="inline-block w-[7px] h-[7px] rounded-full shrink-0"
-                        style={{ background: m.role === "admin" ? "var(--arco-black)" : "#939393" }}
+                    {/* Toggle + role + menu: inline on desktop, their
+                        own indented line on mobile (see .team-row-*). */}
+                    <div className="team-row-controls">
+                    <span
+                      className="flex items-center justify-center gap-2"
+                      title={t("company_email_hint")}
+                      style={{ cursor: canManage ? undefined : "default" }}
+                    >
+                      <span className="team-toggle-label">{t("company_email")}</span>
+                      <ToggleSwitch
+                        checked={m.receives_company_email}
+                        disabled={!canManage || isPending}
+                        onChange={() => handleCompanyEmail(m.id, !m.receives_company_email)}
                       />
-                      <span className="text-xs font-medium">{m.role === "admin" ? t("role_admin") : t("role_member")}</span>
+                    </span>
+
+                    {/* Role pill — fixed column so the toggle column
+                        before it stays aligned across rows. */}
+                    <span className="team-role-col">
+                      <span className="filter-pill flex items-center gap-1.5" style={{ cursor: "default" }}>
+                        <span
+                          className="inline-block w-[7px] h-[7px] rounded-full shrink-0"
+                          style={{ background: m.role === "admin" ? "var(--arco-black)" : "#939393" }}
+                        />
+                        <span className="text-xs font-medium">{m.role === "admin" ? t("role_admin") : t("role_member")}</span>
+                      </span>
                     </span>
 
                     {/* 3-dot menu (or spacer for alignment) */}
@@ -281,41 +335,34 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
                         </div>
                       </div>
                     ) : canManage ? (
-                      <div style={{ width: 32 }} />
+                      <div className="team-menu-spacer" style={{ width: 32 }} />
                     ) : null}
+                    </div>
                   </div>
                 )
               })}
 
               {/* Pending invites */}
               {pendingInvites.map(m => (
-                <div
-                  key={m.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 14,
-                    padding: "14px 0",
-                    borderBottom: "1px solid var(--arco-light-grey)",
-                  }}
-                >
+                <div key={m.id} className="team-row">
                   {/* Icon */}
                   <div style={{
                     width: 36, height: 36, borderRadius: "50%",
-                    background: "var(--arco-off-white)", display: "flex",
+                    background: "var(--surface)", display: "flex",
                     alignItems: "center", justifyContent: "center", flexShrink: 0,
                   }}>
                     <Mail size={14} style={{ color: "var(--arco-mid-grey)" }} />
                   </div>
 
                   {/* Info */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ fontSize: 14, color: "var(--arco-black)" }}>{m.email}</span>
-                    <p style={{ fontSize: 13, color: "var(--arco-mid-grey)", margin: 0 }}>
+                  <div className="team-row-info">
+                    <span className="team-row-name" style={{ fontWeight: 400 }}>{m.email}</span>
+                    <p className="team-row-email">
                       {t("invited_date", { date: new Date(m.invited_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }) })}
                     </p>
                   </div>
 
+                  <div className="team-row-controls">
                   {/* Status pill */}
                   <span className="filter-pill flex items-center gap-1.5" style={{ cursor: "default" }}>
                     <span
@@ -361,6 +408,7 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
                       </div>
                     </div>
                   )}
+                  </div>
                 </div>
               ))}
             </div>

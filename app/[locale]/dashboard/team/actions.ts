@@ -160,7 +160,8 @@ export async function inviteTeamMemberAction(input: z.infer<typeof inviteSchema>
   if (existingContact) {
     const { error: upgradeError } = await serviceClient
       .from("company_contacts")
-      .update({ role, status, invited_at: new Date().toISOString(), invited_by: user.id })
+      // Admins receive company mail by default (team page toggle).
+      .update({ role, status, invited_at: new Date().toISOString(), invited_by: user.id, receives_company_email: role === "admin" })
       .eq("id", existingContact.id)
     if (upgradeError) {
       logger.db("update", "company_contacts", "Failed to promote contact to team", { contactId: existingContact.id }, upgradeError as any)
@@ -177,6 +178,8 @@ export async function inviteTeamMemberAction(input: z.infer<typeof inviteSchema>
         invited_at: new Date().toISOString(),
         invited_by: user.id,
         joined_at: personAuthUserId ? new Date().toISOString() : null,
+        // Admins receive company mail by default (team page toggle).
+        receives_company_email: role === "admin",
       })
     if (insertError) {
       logger.db("insert", "company_contacts", "Failed to invite team member", { email: emailLower }, insertError as any)
@@ -257,12 +260,73 @@ export async function changeTeamMemberRoleAction(input: z.infer<typeof changeRol
     return { success: false, error: "Cannot change owner role here — transfer ownership instead." }
   }
 
+  // Promotion to admin switches company mail on (predictable default);
+  // demotion leaves the toggle as the team set it.
+  const updatePayload: { role: "admin" | "member"; receives_company_email?: boolean } = { role }
+  if (role === "admin") updatePayload.receives_company_email = true
   const { error } = await serviceClient
     .from("company_contacts")
-    .update({ role })
+    .update(updatePayload)
     .eq("id", memberId)
     .eq("company_id", companyInfo.companyId)
   if (error) return { success: false, error: "Failed to update role." }
+
+  revalidatePath("/dashboard/team")
+  return { success: true }
+}
+
+const companyEmailSchema = z.object({
+  memberId: z.string().uuid(),
+  enabled: z.boolean(),
+})
+
+/**
+ * Toggle whether a team contact receives company transactional mail
+ * (introduction requests, project live/rejected). Guard: at least one
+ * ACTIVE team contact must stay on, so company mail never goes dark.
+ */
+export async function setCompanyEmailAction(input: z.infer<typeof companyEmailSchema>): Promise<ActionResult> {
+  const parseResult = companyEmailSchema.safeParse(input)
+  if (!parseResult.success) return { success: false, error: "Invalid input." }
+
+  const { memberId, enabled } = parseResult.data
+  const supabase = await createServerActionSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: "Not signed in." }
+
+  const serviceClient = createServiceRoleSupabaseClient()
+  const companyInfo = await getCompanyForUser(serviceClient, user.id)
+  if (!companyInfo || (!companyInfo.isOwner && companyInfo.role !== "admin")) {
+    return { success: false, error: "You don't have permission to change this." }
+  }
+
+  const { data: contact } = await serviceClient
+    .from("company_contacts")
+    .select("id, role, receives_company_email")
+    .eq("id", memberId)
+    .eq("company_id", companyInfo.companyId)
+    .single()
+  if (!contact) return { success: false, error: "Member not found." }
+
+  if (!enabled && (contact as any).receives_company_email) {
+    const { count } = await serviceClient
+      .from("company_contacts")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", companyInfo.companyId)
+      .eq("status", "active")
+      .eq("receives_company_email", true)
+      .in("role", ["owner", "admin", "member"])
+    if ((count ?? 0) <= 1) {
+      return { success: false, error: "min_one_receiver" }
+    }
+  }
+
+  const { error } = await serviceClient
+    .from("company_contacts")
+    .update({ receives_company_email: enabled })
+    .eq("id", memberId)
+    .eq("company_id", companyInfo.companyId)
+  if (error) return { success: false, error: "Failed to update." }
 
   revalidatePath("/dashboard/team")
   return { success: true }
