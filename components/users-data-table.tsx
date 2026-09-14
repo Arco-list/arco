@@ -59,10 +59,19 @@ export type AdminUserCompany = {
   projectCount: number
 }
 
+// Mirrors /admin/companies' STATUS_DOT exactly — one colour language
+// for company status across admin (listed = retention purple).
 const COMPANY_STATUS_DOT: Record<string, string> = {
-  listed: "bg-emerald-500",
-  unlisted: "bg-muted-foreground",
-  deactivated: "bg-red-500",
+  added: "bg-[#dc2626]",
+  unclaimed: "bg-[#dc2626]",
+  created: "bg-[#2563eb]",
+  verified: "bg-[#2563eb]",
+  owned: "bg-[#2563eb]",
+  listed: "bg-[#7c3aed]",
+  unlisted: "bg-[#a1a1a0]",
+  deactivated: "bg-[#dc2626]",
+  invited: "bg-[#f59e0b]",
+  prospected: "bg-[#f59e0b]",
 }
 
 export type AdminUserRow = {
@@ -593,8 +602,8 @@ export function UsersDataTable({ data }: AdminUsersTableProps) {
           if (!status) return <span className="text-xs text-[#a1a1a0]">—</span>
           return (
             <div className="flex items-center gap-1.5">
-              <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT[status])} />
-              <span className="text-xs font-medium text-[#1c1c1a]">{STATUS_LABEL[status]}</span>
+              <span className={cn("arco-table-status-dot", STATUS_DOT[status])} />
+              <span className="text-xs text-[#1c1c1a]">{STATUS_LABEL[status]}</span>
               {status === "saved" && (
                 <span className="text-[11px] text-[#a1a1a0]">· {row.original.savedCount}</span>
               )}
@@ -648,7 +657,7 @@ export function UsersDataTable({ data }: AdminUsersTableProps) {
             <DropdownMenu key={company.id}>
               <DropdownMenuTrigger asChild>
                 <button type="button" className="flex items-center gap-1.5 hover:text-[#016D75] transition-colors cursor-pointer text-left">
-                  <span className={`inline-block w-[6px] h-[6px] rounded-full shrink-0 ${COMPANY_STATUS_DOT[company.companyStatus] ?? "bg-muted-foreground"}`} />
+                  <span className={`arco-table-status-dot ${COMPANY_STATUS_DOT[company.companyStatus] ?? "bg-muted-foreground"}`} />
                   <span className="text-xs text-[#1c1c1a] truncate max-w-[150px]">{company.name}</span>
                 </button>
               </DropdownMenuTrigger>
@@ -698,7 +707,7 @@ export function UsersDataTable({ data }: AdminUsersTableProps) {
                     {companies.slice(1).map((company) => (
                       <DropdownMenuItem key={company.id} asChild>
                         <button type="button" className="flex items-center gap-1.5 text-xs cursor-pointer w-full text-left" onClick={() => {}}>
-                          <span className={`inline-block w-[6px] h-[6px] rounded-full shrink-0 ${COMPANY_STATUS_DOT[company.companyStatus] ?? "bg-muted-foreground"}`} />
+                          <span className={`arco-table-status-dot ${COMPANY_STATUS_DOT[company.companyStatus] ?? "bg-muted-foreground"}`} />
                           <span className="truncate">{company.name}</span>
                         </button>
                       </DropdownMenuItem>
@@ -729,8 +738,8 @@ export function UsersDataTable({ data }: AdminUsersTableProps) {
           return (
             <div className="flex flex-col gap-0.5">
               <div className="flex items-center gap-1.5">
-                <span className={cn("h-1.5 w-1.5 rounded-full", ACTIVITY_DOT[level])} />
-                <span className="text-xs font-medium text-[#1c1c1a]">{ACTIVITY_LABEL[level]}</span>
+                <span className={cn("arco-table-status-dot", ACTIVITY_DOT[level])} />
+                <span className="text-xs text-[#1c1c1a]">{ACTIVITY_LABEL[level]}</span>
               </div>
               <span className="text-[11px] text-[#a1a1a0] pl-3">
                 {lastActive ? `Last active ${lastActive}` : "No sign-ins yet"}

@@ -140,7 +140,7 @@ async function loadAdminCompaniesData() {
 
   // Contributors pulled in by each anchor: non-owner credits on projects
   // this company OWNS, split accepted (live/listed) vs still-invited —
-  // the per-anchor tagging metric. Photographer credits are documentation,
+  // the per-anchor partner metric. Photographer credits are documentation,
   // not trades — excluded from the counts.
   const photographerServiceIds = new Set(
     (servicesQuery.data ?? [])
@@ -159,8 +159,12 @@ async function loadAdminCompaniesData() {
       projectOwnerCompany.set(project.id, row.company_id as string)
     }
   }
-  const companyTeamAccepted = new Map<string, number>()
-  const companyTeamInvited = new Map<string, number>()
+  // UNIQUE partner companies per anchor, not credit rows — the same
+  // contributor invited on two of the anchor's projects is one partner.
+  // A partner with both an accepted and a pending credit counts as
+  // accepted only.
+  const companyTeamAcceptedSet = new Map<string, Set<string>>()
+  const companyTeamInvitedSet = new Map<string, Set<string>>()
   for (const row of projectProfessionalsQuery.data ?? []) {
     if (!row?.company_id || row.is_project_owner) continue
     if (photographerCompanyIds.has(row.company_id)) continue
@@ -168,10 +172,21 @@ async function loadAdminCompaniesData() {
     const ownerId = project?.id ? projectOwnerCompany.get(project.id) : undefined
     if (!ownerId) continue
     if (row.status === "listed" || row.status === "live_on_page") {
-      companyTeamAccepted.set(ownerId, (companyTeamAccepted.get(ownerId) ?? 0) + 1)
+      if (!companyTeamAcceptedSet.has(ownerId)) companyTeamAcceptedSet.set(ownerId, new Set())
+      companyTeamAcceptedSet.get(ownerId)!.add(row.company_id)
     } else if (row.status === "invited") {
-      companyTeamInvited.set(ownerId, (companyTeamInvited.get(ownerId) ?? 0) + 1)
+      if (!companyTeamInvitedSet.has(ownerId)) companyTeamInvitedSet.set(ownerId, new Set())
+      companyTeamInvitedSet.get(ownerId)!.add(row.company_id)
     }
+  }
+  const companyTeamAccepted = new Map<string, number>()
+  const companyTeamInvited = new Map<string, number>()
+  for (const [ownerId, set] of companyTeamAcceptedSet) companyTeamAccepted.set(ownerId, set.size)
+  for (const [ownerId, invited] of companyTeamInvitedSet) {
+    const accepted = companyTeamAcceptedSet.get(ownerId)
+    let count = 0
+    for (const id of invited) if (!accepted?.has(id)) count++
+    if (count > 0) companyTeamInvited.set(ownerId, count)
   }
 
   // Build per-company project counts, details, invite services, and invite emails

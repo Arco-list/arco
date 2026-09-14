@@ -85,7 +85,7 @@ const CONTRIBUTOR_STATUS_CONFIG: Record<string, { label: string; dotColor: strin
   unlisted: { label: "Unlisted", dotColor: "bg-muted-foreground" },
   listed: { label: "Listed", dotColor: "bg-emerald-500" },
   live_on_page: { label: "Featured", dotColor: "bg-teal-500" },
-  rejected: { label: "Declined", dotColor: "bg-red-500" },
+  rejected: { label: "Rejected", dotColor: "bg-red-500" },
   removed: { label: "Removed", dotColor: "bg-red-500" },
 }
 
@@ -124,9 +124,9 @@ const REJECTION_REASONS = [
 const STATUS_CONFIG: Record<ProjectStatus, { label: string; className: string; dotColor: string }> = {
   draft: { label: "In progress", className: "bg-amber-50 text-amber-800", dotColor: "bg-amber-500" },
   in_progress: { label: "In review", className: "bg-blue-50 text-blue-700", dotColor: "bg-blue-500" },
-  published: { label: "Listed", className: "bg-[#016D75]/10 text-[#016D75]", dotColor: "bg-emerald-500" },
+  published: { label: "Listed", className: "bg-[#7c3aed]/10 text-[#7c3aed]", dotColor: "bg-[#7c3aed]" },
   completed: { label: "Completed", className: "bg-[#016D75]/10 text-[#016D75]", dotColor: "bg-[#016D75]" },
-  archived: { label: "Unlisted", className: "bg-[#f5f5f4] text-[#6b6b68]", dotColor: "bg-muted-foreground" },
+  archived: { label: "Unlisted", className: "bg-[#f5f5f4] text-[#6b6b68]", dotColor: "bg-[#a1a1a0]" },
   rejected: { label: "Rejected", className: "bg-red-50 text-red-700", dotColor: "bg-red-500" },
 }
 
@@ -476,7 +476,7 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
           <DropdownMenu key={company.id}>
             <DropdownMenuTrigger asChild>
               <button type="button" className="flex items-center gap-1.5 hover:text-[#016D75] transition-colors cursor-pointer text-left">
-                <span className={`inline-block w-[6px] h-[6px] rounded-full shrink-0 ${COMPANY_STATUS_DOT[company.companyStatus] ?? "bg-muted-foreground"}`} />
+                <span className={`arco-table-status-dot ${COMPANY_STATUS_DOT[company.companyStatus] ?? "bg-muted-foreground"}`} />
                 <span className="text-xs text-[#1c1c1a] truncate max-w-[150px]">{company.name}</span>
                 {renderBadges(company)}
               </button>
@@ -561,7 +561,7 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
                   {others.map((company) => (
                     <DropdownMenuSub key={company.id}>
                       <DropdownMenuSubTrigger className="flex items-center gap-1.5 text-xs">
-                        <span className={`inline-block w-[6px] h-[6px] rounded-full shrink-0 ${COMPANY_STATUS_DOT[company.companyStatus] ?? "bg-muted-foreground"}`} />
+                        <span className={`arco-table-status-dot ${COMPANY_STATUS_DOT[company.companyStatus] ?? "bg-muted-foreground"}`} />
                         <span className="truncate">{company.name}</span>
                         {renderBadges(company)}
                       </DropdownMenuSubTrigger>

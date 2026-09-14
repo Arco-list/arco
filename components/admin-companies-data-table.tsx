@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { AdminAddCompanyModal } from "@/components/admin-add-company-modal"
+import { AdminAddClaimableCompanyModal } from "@/components/admin-add-claimable-company-modal"
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -97,6 +98,7 @@ const SOURCE_LABEL: Record<CompanySource, string> = {
   apollo: "Apollo",
   direct: "Direct",
   manual: "Manual",
+  admin: "Admin",
   invited: "Invited",
 }
 // One Channel dimension replaces the old Sources filter: acquisition
@@ -160,11 +162,13 @@ function ServiceDropdown({ services, extraCount }: { services: string[]; extraCo
   )
 }
 
+// Mirrors the /admin/projects status colours exactly: blue = In
+// review (in_progress), amber = In progress (draft).
 const PROJECT_STATUS_DOT: Record<string, string> = {
-  draft: "bg-[#a1a1a0]",
-  in_progress: "bg-amber-500",
-  published: "bg-emerald-500",
-  completed: "bg-emerald-500",
+  draft: "bg-amber-500",
+  in_progress: "bg-blue-500",
+  published: "bg-[#7c3aed]",
+  completed: "bg-[#7c3aed]",
   archived: "bg-[#a1a1a0]",
   rejected: "bg-red-500",
 }
@@ -173,12 +177,59 @@ const CONTRIBUTOR_STATUS_CONFIG: Record<string, { label: string; dotColor: strin
   invited: { label: "Invited", dotColor: "bg-amber-500" },
   unlisted: { label: "Unlisted", dotColor: "bg-[#a1a1a0]" },
   listed: { label: "Listed", dotColor: "bg-emerald-500" },
-  live_on_page: { label: "Featured", dotColor: "bg-teal-500" },
-  rejected: { label: "Declined", dotColor: "bg-red-500" },
+  live_on_page: { label: "Featured", dotColor: "bg-emerald-500" },
+  rejected: { label: "Rejected", dotColor: "bg-red-500" },
   removed: { label: "Removed", dotColor: "bg-red-500" },
 }
 
-const CONTRIBUTOR_STATUS_KEYS = ["invited", "live_on_page", "listed", "unlisted", "rejected", "removed"] as const
+/** ONE credit-status menu for owners and contributors alike. `write`
+ *  is the pp.status the item sets; Invited/Added are greyed out for
+ *  owners (an owner is never invited — those states belong to the
+ *  contributor path). Added and Invited share the 'invited' write: the
+ *  display splits on whether the project is live yet. */
+const PROJECT_CREDIT_OPTIONS: { key: string; label: string; dotColor: string; write: "live_on_page" | "listed" | "unlisted" | "invited"; ownerDisabled?: boolean }[] = [
+  { key: "featured", label: "Featured", dotColor: "bg-emerald-500", write: "live_on_page" },
+  { key: "listed",   label: "Listed",   dotColor: "bg-emerald-500", write: "listed" },
+  { key: "unlisted", label: "Unlisted", dotColor: "bg-[#a1a1a0]",   write: "unlisted" },
+  { key: "invited",  label: "Invited",  dotColor: "bg-amber-500",   write: "invited", ownerDisabled: true },
+  { key: "added",    label: "Added",    dotColor: "bg-[#dc2626]",   write: "invited", ownerDisabled: true },
+]
+
+/** Derived display key for the credit: 'invited' splits on project
+ *  liveness (Added before acceptance, Invited after); an accepted
+ *  credit (featured/listed) on a not-yet-live project reads Unlisted —
+ *  the project lifecycle itself lives in the DOT before the title. */
+function projectCreditKey(project: { projectStatus: string; inviteStatus: string }): string {
+  if (project.inviteStatus === "invited") {
+    return project.projectStatus === "published" ? "invited" : "added"
+  }
+  if ((project.inviteStatus === "live_on_page" || project.inviteStatus === "listed") && project.projectStatus !== "published") {
+    return "unlisted"
+  }
+  return project.inviteStatus === "live_on_page" ? "featured" : project.inviteStatus
+}
+
+/** Why a credit-menu option is disabled, or null when clickable.
+ *  Added is never a TARGET (derived starting state); before the
+ *  project is accepted nothing can move (Featured/Listed need a live
+ *  project, the invite only dispatches at publish); and owner credits
+ *  are never invited/added. */
+function creditDisabledReason(
+  project: { projectStatus: string; isProjectOwner: boolean },
+  option: { key: string; ownerDisabled?: boolean },
+): string | null {
+  if (project.isProjectOwner && option.ownerDisabled) return "Owner credits are never invited/added"
+  if (option.key === "added") return "Starting state — set by adding a company to a project"
+  if (project.projectStatus !== "published") return "Project must be accepted first (see /projects)"
+  return null
+}
+
+/** Pill next to a project title = the credit state (see above). */
+function projectPillFor(project: { projectStatus: string; inviteStatus: string }): { label: string; dotColor: string } | undefined {
+  const key = projectCreditKey(project)
+  return PROJECT_CREDIT_OPTIONS.find((o) => o.key === key)
+    ?? CONTRIBUTOR_STATUS_CONFIG[project.inviteStatus]
+}
 
 export type AdminLinkedProject = {
   id: string
@@ -304,6 +355,7 @@ function validateProspectEligibility(company: AdminCompanyRow): ProspectCandidat
 
 
 const STATUS_DOT: Record<string, string> = {
+  subscribed: "bg-[#0f766e]",
   added: "bg-[#dc2626]",
   unclaimed: "bg-[#dc2626]",
   created: "bg-[#2563eb]",
@@ -317,6 +369,7 @@ const STATUS_DOT: Record<string, string> = {
 }
 
 const STATUS_LABEL: Record<string, string> = {
+  subscribed: "Subscribed",
   added: "Added",
   unclaimed: "Unclaimed",
   created: "Created",
@@ -434,12 +487,6 @@ function ensureHttp(url: string | null): string | null {
 // more" dropdown each carrying its own sub-menu.
 // ────────────────────────────────────────────────────────────────────────
 
-const CONTACT_STATUS_DOT: Record<string, string> = {
-  active: "bg-green-500",
-  invited: "bg-amber-500",
-  inactive: "bg-gray-400",
-  deactivated: "bg-red-500",
-}
 const CONTACT_STATUS_LABEL: Record<string, string> = {
   active: "Active",
   invited: "Invited",
@@ -456,12 +503,9 @@ const CONTACT_ROLE_LABEL: Record<AdminCompanyContact["role"], string> = {
 
 function ContactInline({ contact }: { contact: AdminCompanyContact }) {
   const displayName = contact.name?.trim() || contact.email
-  const statusKey = contact.status ?? ""
-  const dotClass = CONTACT_STATUS_DOT[statusKey] ?? "bg-gray-300"
   return (
     <>
       <span className="arco-table-status">
-        <span className={`arco-table-status-dot ${dotClass}`} />
         <span className="truncate max-w-[180px]">{displayName}</span>
       </span>
       <span className="status-pill">{CONTACT_ROLE_LABEL[contact.role]}</span>
@@ -776,8 +820,18 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   // semantics as the previous "all" sentinel but enables OR'd multi-status
   // filtering. Funnel cards toggle in/out of the array; the dropdown uses
   // checkbox items.
-  type CompanyStatusFilterValue = CompanyStatus | "invited" | "prospected"
+  // "subscribed" matches nothing until subscription billing lands.
+  type CompanyStatusFilterValue = CompanyStatus | "invited" | "prospected" | "subscribed"
   const [statusFilter, setStatusFilter] = useState<CompanyStatusFilterValue[]>([])
+  // Parked groups — hidden from the default table, each behind its own
+  // toggle next to the Status guide link. Photographers are credits-only
+  // documentation; "manual" are the lean claimable shells the Add
+  // company button creates (source 'admin', still status 'added').
+  // Showcase companies (source 'manual' — the Add showcase button)
+  // always stay visible under Added. Searching reveals everything.
+  const [showPhotographers, setShowPhotographers] = useState(false)
+  const [showManual, setShowManual] = useState(false)
+  const [showAddClaimable, setShowAddClaimable] = useState(false)
   // Multi-select source filter. Same semantics as status: empty array =
   // no filter. Filters company-type rows by `source`; invite-type rows
   // (synthetic, no company) are excluded when any source is selected.
@@ -837,8 +891,20 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
     })
   }, [])
 
-  const filteredData = useMemo(() => {
+  // The parked-toggle baseline: what the table (and the "X companies"
+  // count) consider the current universe. Searching reveals everything.
+  const baseRows = useMemo(() => {
     let rows = data
+    const searching = searchTerm.trim().length > 0
+    if (!searching) {
+      if (!showPhotographers) rows = rows.filter((row) => !row.isPhotographer)
+      if (!showManual) rows = rows.filter((row) => !(row.source === "admin" && row.status === "added"))
+    }
+    return rows
+  }, [data, showPhotographers, showManual, searchTerm])
+
+  const filteredData = useMemo(() => {
+    let rows = baseRows
     if (channelFilter.length > 0) {
       rows = rows.filter((row) => channelFilter.includes(row.channel as CompanyChannel))
     }
@@ -850,7 +916,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
       })
     }
     return rows
-  }, [data, channelFilter, serviceFilter])
+  }, [baseRows, channelFilter, serviceFilter])
 
   /** Pushes the array into TanStack Table's column filter. Empty = clear. */
   const applyStatusFilter = useCallback((next: CompanyStatusFilterValue[]) => {
@@ -1256,7 +1322,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               }}
             >
               <span className={cn("arco-table-status-dot", STATUS_DOT[status] ?? "bg-gray-400")} />
-              <span style={{ fontWeight: 500 }}>{STATUS_LABEL[status] ?? status}</span>
+              <span>{STATUS_LABEL[status] ?? status}</span>
             </button>
           )
         },
@@ -1317,7 +1383,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           const overflow = projects.length - 1
           const renderProjectMenu = (project: AdminLinkedProject) => {
             const projDot = PROJECT_STATUS_DOT[project.projectStatus] ?? "bg-[#a1a1a0]"
-            const contribConfig = CONTRIBUTOR_STATUS_CONFIG[project.inviteStatus]
+            const contribConfig = projectPillFor(project)
             const companyId = row.original.id
             return (
               <DropdownMenu key={project.id}>
@@ -1355,31 +1421,33 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger className="text-xs">Update status</DropdownMenuSubTrigger>
                     <DropdownMenuSubContent className="min-w-[160px]">
-                      {CONTRIBUTOR_STATUS_KEYS.map((status) => {
-                        const config = CONTRIBUTOR_STATUS_CONFIG[status]
-                        if (!config) return null
-                        const isCurrent = project.inviteStatus === status
+                      {PROJECT_CREDIT_OPTIONS.map((option) => {
+                        const isCurrent = projectCreditKey(project) === option.key
+                        const disabledReason = creditDisabledReason(project, option)
+                        const disabled = Boolean(disabledReason) && !isCurrent
                         return (
                           <DropdownMenuItem
-                            key={status}
-                            className={cn("text-xs cursor-pointer flex items-center gap-1.5", isCurrent && "font-semibold bg-[#f5f5f4]")}
+                            key={option.key}
+                            disabled={disabled}
+                            title={disabledReason ?? undefined}
+                            className={cn("text-xs flex items-center gap-1.5", disabled ? "opacity-40" : "cursor-pointer", isCurrent && "font-semibold bg-[#f5f5f4]")}
                             onClick={async () => {
-                              if (isCurrent) return
+                              if (disabled || isCurrent) return
                               const result = await updateProjectProfessionalStatusAction({
                                 projectId: project.id,
                                 companyId,
-                                status,
+                                status: option.write,
                               })
                               if (result.success) {
-                                toast.success(`Status updated to ${config.label}`)
+                                toast.success(`Status updated to ${option.label}`)
                                 router.refresh()
                               } else {
                                 toast.error(result.error ?? "Failed to update status")
                               }
                             }}
                           >
-                            <span className={cn("inline-block h-1.5 w-1.5 rounded-full", config.dotColor)} />
-                            {config.label}
+                            <span className={cn("inline-block h-1.5 w-1.5 rounded-full", option.dotColor, disabled && "opacity-40")} />
+                            {option.label}
                           </DropdownMenuItem>
                         )
                       })}
@@ -1407,7 +1475,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   <DropdownMenuContent align="start" className="min-w-[200px]">
                     {projects.slice(1).map((project) => {
                       const pDot = PROJECT_STATUS_DOT[project.projectStatus] ?? "bg-[#a1a1a0]"
-                      const cConfig = CONTRIBUTOR_STATUS_CONFIG[project.inviteStatus]
+                      const cConfig = projectPillFor(project)
                       const companyId = row.original.id
                       return (
                         <DropdownMenuSub key={project.id}>
@@ -1441,31 +1509,33 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                             <DropdownMenuSub>
                               <DropdownMenuSubTrigger className="text-xs">Update status</DropdownMenuSubTrigger>
                               <DropdownMenuSubContent className="min-w-[160px]">
-                                {CONTRIBUTOR_STATUS_KEYS.map((status) => {
-                                  const config = CONTRIBUTOR_STATUS_CONFIG[status]
-                                  if (!config) return null
-                                  const isCurrent = project.inviteStatus === status
+{PROJECT_CREDIT_OPTIONS.map((option) => {
+                                  const isCurrent = projectCreditKey(project) === option.key
+                                  const disabledReason = creditDisabledReason(project, option)
+                        const disabled = Boolean(disabledReason) && !isCurrent
                                   return (
                                     <DropdownMenuItem
-                                      key={status}
-                                      className={cn("text-xs cursor-pointer flex items-center gap-1.5", isCurrent && "font-semibold bg-[#f5f5f4]")}
+                                      key={option.key}
+                                      disabled={disabled}
+                                      title={disabledReason ?? undefined}
+                                      className={cn("text-xs flex items-center gap-1.5", disabled ? "opacity-40" : "cursor-pointer", isCurrent && "font-semibold bg-[#f5f5f4]")}
                                       onClick={async () => {
-                                        if (isCurrent) return
+                                        if (disabled || isCurrent) return
                                         const result = await updateProjectProfessionalStatusAction({
                                           projectId: project.id,
                                           companyId,
-                                          status,
+                                          status: option.write,
                                         })
                                         if (result.success) {
-                                          toast.success(`Status updated to ${config.label}`)
+                                          toast.success(`Status updated to ${option.label}`)
                                           router.refresh()
                                         } else {
                                           toast.error(result.error ?? "Failed to update status")
                                         }
                                       }}
                                     >
-                                      <span className={cn("inline-block h-1.5 w-1.5 rounded-full", config.dotColor)} />
-                                      {config.label}
+                                      <span className={cn("inline-block h-1.5 w-1.5 rounded-full", option.dotColor, disabled && "opacity-40")} />
+                                      {option.label}
                                     </DropdownMenuItem>
                                   )
                                 })}
@@ -1632,8 +1702,8 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
     onRowSelectionChange: setRowSelection,
   })
 
-  const totalCompanies = data.filter((r) => r.status !== "invited").length
-  const totalInvites = data.filter((r) => r.status === "invited").length
+  const totalCompanies = baseRows.filter((r) => r.status !== "invited").length
+  const totalInvites = baseRows.filter((r) => r.status === "invited").length
   const filteredRows = table.getFilteredRowModel().rows
   const filteredCompanies = filteredRows.filter((r) => r.original.status !== "invited").length
   const filteredInvites = filteredRows.filter((r) => r.original.status === "invited").length
@@ -1665,29 +1735,40 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   for (const c of funnelData) {
     companyStatusCounts[c.status] = (companyStatusCounts[c.status] ?? 0) + 1
   }
-  type Driver = "prospect" | "acquisition" | "retention" | null
-  const COMPANY_FUNNEL: { status: CompanyStatus | "invited"; dotColor: string; driver: Driver }[] = [
+  type Driver = "prospect" | "acquisition" | "retention" | "monetization" | null
+  // Main row runs Added → … → Listed → Subscribed. Unlisted and
+  // Deactivated are NOT stages: unlisted parks under Listed, and
+  // deactivation is an off-ramp, not a destination — both render as
+  // small cards under the retention zone.
+  const COMPANY_FUNNEL: { status: CompanyStatus | "invited" | "subscribed"; dotColor: string; driver: Driver }[] = [
     { status: "added" as CompanyStatus,       dotColor: "#dc2626", driver: "prospect" },
     { status: "prospected" as CompanyStatus,  dotColor: "#f59e0b", driver: "prospect" },
     { status: "invited",                       dotColor: "#f59e0b", driver: "prospect" },
     { status: "verified" as CompanyStatus,     dotColor: "#2563eb", driver: "acquisition" },
     { status: "owned" as CompanyStatus,        dotColor: "#2563eb", driver: "acquisition" },
     { status: "listed",                        dotColor: "#7c3aed", driver: "retention" },
-    { status: "unlisted",                      dotColor: "#a1a1a0", driver: null },
-    { status: "deactivated",                   dotColor: "#dc2626", driver: null },
+    { status: "subscribed",                    dotColor: "#0f766e", driver: "monetization" },
   ]
   // Display label appears above the first card of each driver group.
   const DRIVER_LABEL_AT: Record<string, string> = {
-    prospect: "added",
+    // Prospect label sits on Showcased, not Added: Added is the parked
+    // pre-stage (shells, photographers) — the prospect WORK starts at
+    // the showcase.
+    prospect: "prospected",
     acquisition: "verified",
     retention: "listed",
+    monetization: "subscribed",
   }
   const DRIVER_COLORS: Record<string, string> = {
     prospect: "#f59e0b",
     acquisition: "#2563eb",
     retention: "#7c3aed",
+    // Same green as the dashboard's monetization driver.
+    monetization: "#0f766e",
   }
-  const companyCountAt = (status: string) => companyStatusCounts[status] ?? 0
+  // "subscribed" has no data source yet — subscription billing isn't
+  // wired. The card shows 0 until it is.
+  const companyCountAt = (status: string) => status === "subscribed" ? 0 : (companyStatusCounts[status] ?? 0)
   // Each cohort represents "everything currently in or past this stage on
   // the linear flow". Deactivated is a terminal leak so it doesn't
   // accumulate forward.
@@ -1804,7 +1885,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 Clear selection
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {(["listed", "unlisted", "owned", "verified", "invited", "prospected", "added", "deactivated"] as CompanyStatusFilterValue[]).map((s) => (
+              {(["subscribed", "listed", "unlisted", "owned", "verified", "invited", "prospected", "added", "deactivated"] as CompanyStatusFilterValue[]).map((s) => (
                 <DropdownMenuCheckboxItem
                   key={s}
                   checked={statusFilter.includes(s)}
@@ -1965,11 +2046,19 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
           </DropdownMenu>
           <button
             type="button"
+            className="btn-tertiary shrink-0"
+            style={{ fontSize: 13, padding: "6px 16px", borderRadius: 3 }}
+            onClick={() => setShowAddClaimable(true)}
+          >
+            Add company
+          </button>
+          <button
+            type="button"
             className="btn-primary shrink-0"
             style={{ fontSize: 13, padding: "6px 16px", borderRadius: 3 }}
             onClick={() => setShowAddModal(true)}
           >
-            Add company
+            Add showcase
           </button>
           </>
         }
@@ -1978,14 +2067,32 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
       {/* Status guide — floats in the gap under the sticky bar, same
           treatment as the tour-replay link on company edit. */}
       <div className="wrap" style={{ position: "relative", height: 0 }}>
-        <button
-          type="button"
-          onClick={() => setShowStatusGuide(true)}
-          className="arco-text-link arco-text-link--primary absolute right-5 md:right-[60px]"
-          style={{ top: 12, fontSize: 12 }}
-        >
-          Status guide
-        </button>
+        <div className="absolute right-5 md:right-[60px] flex items-center gap-4" style={{ top: 12 }}>
+          <button
+            type="button"
+            onClick={() => setShowPhotographers((v) => !v)}
+            className="arco-text-link"
+            style={{ fontSize: 12, color: "#a1a1a0" }}
+          >
+            {showPhotographers ? "Hide photographers" : "Show photographers"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowManual((v) => !v)}
+            className="arco-text-link"
+            style={{ fontSize: 12, color: "#a1a1a0" }}
+          >
+            {showManual ? "Hide manual" : "Show manual"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowStatusGuide(true)}
+            className="arco-text-link arco-text-link--primary"
+            style={{ fontSize: 12 }}
+          >
+            Status guide
+          </button>
+        </div>
       </div>
 
       <div className="wrap" style={{ paddingTop: 52, paddingBottom: 48 }}>
@@ -2032,6 +2139,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
       )}
 
       <AdminAddCompanyModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} />
+      <AdminAddClaimableCompanyModal isOpen={showAddClaimable} onClose={() => setShowAddClaimable(false)} />
 
       {/* Status funnel — same visual pattern as /admin/projects, plus a
           bypass line from Created → Listed (survival rate, skipping the
@@ -2068,18 +2176,66 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
             : ""
 
           // Grid columns (1-indexed, odd = card, even = connector):
-          //   1 unclaimed · 3 prospected · 5 invited · 7 draft · 9 listed ·
-          //   11 unlisted · 13 deactivated
+          //   1 added · 3 showcased · 5 invited · 7 verified · 9 owned ·
+          //   11 listed · 13 subscribed. Row 3: bypass arc (3→8) +
+          //   unsubscribe arc (11→14). Row 4: parked cards under Listed.
           return (
             <div
               style={{
                 display: "grid",
                 gridTemplateColumns: cols,
-                gridTemplateRows: "auto auto auto",
+                gridTemplateRows: "auto auto auto auto",
                 gap: 0,
                 alignItems: "start",
               }}
             >
+              {/* Unsubscribe arc — Subscribed back to Listed, onderlangs
+                  (row 3, cols 11 → 14). No billing data yet, so the
+                  label shows the metric name without a rate. */}
+              <div
+                style={{
+                  gridRow: 3,
+                  gridColumn: "11 / 14",
+                  position: "relative",
+                  height: 32,
+                }}
+              >
+                <div style={{ position: "absolute", left: CARD_WIDTH / 2, top: 0, height: "50%", borderLeft: "1px solid #d4d4d3" }} />
+                <div style={{ position: "absolute", right: CARD_WIDTH / 2, top: 0, height: "50%", borderLeft: "1px solid #d4d4d3" }} />
+                <div style={{ position: "absolute", left: CARD_WIDTH / 2, right: CARD_WIDTH / 2, top: "50%", borderTop: "1px solid #d4d4d3" }} />
+                <span
+                  className="absolute text-[10px] font-medium text-[#6b6b68]"
+                  style={{ bottom: 0, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap", background: "#fff", padding: "0 6px" }}
+                >
+                  Unsubscribed —
+                </span>
+              </div>
+
+              {/* Parked end-states (row 4): Unlisted under Listed;
+                  Deactivated far left under Added — both connector-less;
+                  they're parks/off-ramps, not steps. */}
+              {([
+                { status: "unlisted" as CompanyStatus, label: "Unlisted", dot: "#a1a1a0", col: 11 },
+                { status: "deactivated" as CompanyStatus, label: "Deactivated", dot: "#dc2626", col: 1 },
+              ]).map((sub) => {
+                const subActive = statusFilter.includes(sub.status as CompanyStatusFilterValue)
+                return (
+                  <div key={sub.status} style={{ gridRow: 4, gridColumn: sub.col, display: "flex", flexDirection: "column" }}>
+                    <div style={{ height: 6 }} />
+                    <button
+                      type="button"
+                      onClick={() => toggleStatus(sub.status as CompanyStatusFilterValue)}
+                      className={`rounded-[3px] border bg-white px-3 py-1.5 transition-colors hover:border-[#c4c4c2] flex items-center gap-[6px] ${subActive ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4]"}`}
+                      style={{ width: CARD_WIDTH }}
+                    >
+                      <span className="status-pill-dot shrink-0" style={{ background: sub.dot }} />
+                      <span style={{ fontFamily: "var(--font-sans)", fontSize: 11, fontWeight: 400, color: "var(--text-primary)", whiteSpace: "nowrap" }}>{sub.label}</span>
+                      <span className="text-xs ml-auto" style={{ color: "var(--text-primary)" }}>{companyCountAt(sub.status)}</span>
+                    </button>
+                  </div>
+                )
+              })}
+
               {/* Bypass arc — Prospected → Draft (row 3, below cards),
                   spans cols 3 → 8. */}
               <div
@@ -2129,7 +2285,9 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
               {/* Cards + inline connectors — row 2 */}
               {COMPANY_FUNNEL.map((stage, i) => {
                 const count = companyCountAt(stage.status)
-                const label = stage.status === "invited" ? "Invited" : companyStatusLabel(stage.status)
+                const label = stage.status === "invited" ? "Invited"
+                  : stage.status === "subscribed" ? "Subscribed"
+                  : companyStatusLabel(stage.status)
 
                 // Inline connector rate before this card. Sequential hops:
                 // Added→Prospected, Draft→Listed. Prospected→Invited is a
@@ -2158,7 +2316,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                   }
                 }
 
-                const isActive = statusFilter.includes(stage.status as CompanyStatusFilterValue)
+                const isActive = stage.status !== "subscribed" && statusFilter.includes(stage.status as CompanyStatusFilterValue)
                 return (
                   <Fragment key={stage.status}>
                     {i > 0 && (
@@ -2180,9 +2338,11 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                     <div style={{ gridRow: 2 }} className="flex flex-col">
                       <button
                         type="button"
-                        onClick={() => toggleStatus(stage.status as CompanyStatusFilterValue)}
+                        disabled={stage.status === "subscribed"}
+                        title={stage.status === "subscribed" ? "Subscription billing not live yet" : undefined}
+                        onClick={() => stage.status !== "subscribed" && toggleStatus(stage.status as CompanyStatusFilterValue)}
                         className={`rounded-[3px] border bg-white px-3 py-3 transition-colors hover:border-[#c4c4c2] ${isActive ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4]"}`}
-                        style={{ width: CARD_WIDTH }}
+                        style={{ width: CARD_WIDTH, cursor: stage.status === "subscribed" ? "default" : undefined }}
                       >
                         <div className="flex items-center gap-[6px] mb-1.5">
                           <span className="status-pill-dot shrink-0" style={{ background: stage.dotColor }} />

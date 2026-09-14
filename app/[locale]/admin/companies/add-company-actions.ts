@@ -201,3 +201,101 @@ export async function adminAddCompanyAction(input: GooglePlaceInput): Promise<Ad
   revalidatePath("/admin/companies")
   return { success: true, companyId: newCompany.id }
 }
+
+// ── Lean claimable shell ─────────────────────────────────────────────────
+// The "Add company" menu item (vs "Add showcase" above): creates ONLY a
+// companies row — status 'added', source 'admin', no person, no contact,
+// no page-build redirect. The company becomes findable in the claim
+// search and adoptable by the domain-dedupe in the claim flow, without
+// ever surfacing on /admin/sales (sales is contact-driven) and parked
+// out of the companies table's default view (the Show manual toggle).
+export async function adminAddClaimableCompanyAction(input: {
+  name: string
+  website: string
+  city?: string | null
+}): Promise<{ success: true; companyId: string; adopted: boolean } | { success: false; error: string }> {
+  const supabase = await createServerActionSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: "Not authenticated" }
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("user_types, admin_role")
+    .eq("id", user.id)
+    .maybeSingle()
+  if (!isAdminUser(profile?.user_types, profile?.admin_role)) {
+    return { success: false, error: "Unauthorized" }
+  }
+
+  const name = input.name.trim()
+  if (!name) return { success: false, error: "Company name is required." }
+  const rawSite = input.website.trim().toLowerCase()
+  const domain = rawSite
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .split(/[/?#]/)[0]
+  if (!domain || !domain.includes(".")) {
+    return { success: false, error: "A valid website is required — the domain is the claim proof." }
+  }
+  const website = `https://${domain}`
+
+  const serviceSupabase = createServiceRoleSupabaseClient()
+
+  // Domain dedupe: an ownerless row is adopted (patched, not duplicated);
+  // a claimed row is a hard stop.
+  const { data: domainMatch } = await serviceSupabase
+    .from("companies")
+    .select("id, owner_id, name, city")
+    .eq("domain", domain)
+    .maybeSingle()
+  if (domainMatch) {
+    if (domainMatch.owner_id) {
+      return { success: false, error: `${domain} already belongs to a claimed company.` }
+    }
+    const fill: Record<string, unknown> = {}
+    if (!domainMatch.city && input.city?.trim()) fill.city = input.city.trim()
+    if (Object.keys(fill).length > 0) {
+      await serviceSupabase.from("companies").update(fill as never).eq("id", domainMatch.id)
+    }
+    revalidatePath("/admin/companies")
+    return { success: true, companyId: domainMatch.id, adopted: true }
+  }
+
+  // Slug — same suffix-dedupe as the showcase path.
+  const baseSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+  const { data: takenSlugs } = await serviceSupabase
+    .from("companies")
+    .select("slug")
+    .like("slug", `${baseSlug}%`)
+  const takenSet = new Set((takenSlugs ?? []).map((r) => r.slug))
+  let slug = baseSlug
+  if (takenSet.has(slug)) {
+    let n = 2
+    while (takenSet.has(`${baseSlug}-${n}`)) n++
+    slug = `${baseSlug}-${n}`
+  }
+
+  const { data: created, error: insertError } = await serviceSupabase
+    .from("companies")
+    .insert({
+      name,
+      owner_id: null,
+      website,
+      domain,
+      city: input.city?.trim() || null,
+      country: "Netherlands",
+      is_verified: false,
+      status: "added",
+      source: "admin",
+      slug,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any)
+    .select("id")
+    .single()
+  if (insertError || !created) {
+    logger.db("insert", "companies", "Admin failed to add claimable company", { name }, insertError)
+    return { success: false, error: insertError?.message || "Failed to create company." }
+  }
+
+  revalidatePath("/admin/companies")
+  return { success: true, companyId: created.id, adopted: false }
+}

@@ -2092,20 +2092,18 @@ function CompanyRowView({
           would silently mutate one contact under an aggregate. Status
           moves through the real funnel events. */}
       <td>
-        <div className="flex items-center gap-1.5">
-          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${statusCfg.dot}`} />
-          <span className="arco-table-primary" style={{ whiteSpace: "nowrap" }}>{statusCfg.label}</span>
-        </div>
+        <span className="arco-table-status">
+          <span className={`arco-table-status-dot ${statusCfg.dot}`} />
+          {statusCfg.label}
+        </span>
       </td>
 
       {/* Sequence (aggregated single value, or suppression override) */}
       <td>
-        <div className="flex items-center gap-1.5">
-          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${suppression ? suppression.dot : sequenceCfg.dot}`} />
-          <span className="arco-table-primary" style={{ whiteSpace: "nowrap", fontWeight: 400 }}>
-            {suppression ? suppression.label : sequenceCfg.label}
-          </span>
-        </div>
+        <span className="arco-table-status">
+          <span className={`arco-table-status-dot ${suppression ? suppression.dot : sequenceCfg.dot}`} />
+          {suppression ? suppression.label : sequenceCfg.label}
+        </span>
       </td>
 
       {/* Source (multi-pill) — Outbound + Email are appended when the
@@ -2286,8 +2284,6 @@ function ContactsCell({
  *  here so the admin can still identify the channel at a glance. */
 function ContactInline({ contact, afterName, companyShowcased = false }: { contact: SalesContact; afterName?: React.ReactNode; companyShowcased?: boolean }) {
   const statusCfg = STATUS_CONFIG[contact.status] ?? STATUS_CONFIG.prospect
-  const sequenceCfg = SEQUENCE_CONFIG[contact.sequenceStatus] ?? SEQUENCE_CONFIG.not_started
-  const suppression = getSuppressionState(contact)
   const displayName = contact.resolvedContact.name?.trim() || contact.contactName?.trim() || contact.email
   // Showcase is an UPGRADE of the track: before any outreach touch the
   // source pill is simply replaced ("Showcase"); once outreach has
@@ -2299,7 +2295,6 @@ function ContactInline({ contact, afterName, companyShowcased = false }: { conta
   return (
     <>
       <span className="arco-table-status">
-        <span className={`arco-table-status-dot ${suppression ? suppression.dot : sequenceCfg.dot}`} />
         <span className="truncate max-w-[160px]">{displayName}</span>
       </span>
       {afterName}

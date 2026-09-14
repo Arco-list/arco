@@ -57,6 +57,11 @@ export type InboundEmailRow = {
   receivedAt: string
   status: InboundEmailStatus
   prospectId: string | null
+  /** Contact identity for DIRECT (sender-email) prospect matches —
+   *  null on domain-only fallbacks, so the From cell only renders the
+   *  sales-style contact chip for people actually in the funnel. */
+  prospectContactName: string | null
+  prospectPhone: string | null
   prospectCompanyName: string | null
   prospectStatus: string | null
   prospectSequence: string | null
@@ -138,6 +143,8 @@ export async function fetchInboundEmails(opts: FetchOpts = {}): Promise<FetchInb
   )
   type ProspectRow = {
     company_name: string | null
+    contact_name?: string | null
+    phone?: string | null
     status: string
     source: string
     sequence_status: string
@@ -147,13 +154,15 @@ export async function fetchInboundEmails(opts: FetchOpts = {}): Promise<FetchInb
   if (prospectIds.length > 0) {
     const { data: prospects } = await supabase
       .from("prospects")
-      .select("id, company_name, status, source, sequence_status, company_id")
+      .select("id, company_name, contact_name, phone, status, source, sequence_status, company_id")
       .in("id", prospectIds)
     for (const p of prospects ?? []) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const row = p as any
       prospectMap.set(row.id, {
         company_name: row.company_name,
+        contact_name: row.contact_name ?? null,
+        phone: row.phone ?? null,
         status: row.status,
         source: row.source,
         sequence_status: row.sequence_status,
@@ -338,6 +347,8 @@ export async function fetchInboundEmails(opts: FetchOpts = {}): Promise<FetchInb
       receivedAt: r.received_at,
       status: r.status,
       prospectId: r.prospect_id,
+      prospectContactName: p?.contact_name ?? null,
+      prospectPhone: p?.phone ?? null,
       prospectCompanyName: resolvedCompanyName,
       // Funnel context — direct prospect first, then domain-matched
       // prospect. companies-only matches stay null (no funnel context
@@ -387,6 +398,8 @@ export async function fetchInboundEmailDetail(id: string): Promise<InboundEmailD
   const row = data as any
   let prospect: {
     company_name: string | null
+    contact_name?: string | null
+    phone?: string | null
     status: string
     source: string
     sequence_status: string
@@ -396,7 +409,7 @@ export async function fetchInboundEmailDetail(id: string): Promise<InboundEmailD
   if (row.prospect_id) {
     const { data: p } = await supabase
       .from("prospects")
-      .select("id, company_name, status, source, sequence_status, company_id")
+      .select("id, company_name, contact_name, phone, status, source, sequence_status, company_id")
       .eq("id", row.prospect_id)
       .maybeSingle()
     if (p) {
@@ -404,6 +417,8 @@ export async function fetchInboundEmailDetail(id: string): Promise<InboundEmailD
       const pr = p as any
       prospect = {
         company_name: pr.company_name,
+        contact_name: pr.contact_name ?? null,
+        phone: pr.phone ?? null,
         status: pr.status,
         source: pr.source,
         sequence_status: pr.sequence_status,
@@ -516,6 +531,10 @@ export async function fetchInboundEmailDetail(id: string): Promise<InboundEmailD
     receivedAt: row.received_at,
     status: row.status === "unread" ? "read" : row.status,
     prospectId: row.prospect_id,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    prospectContactName: ((prospect as any)?.contact_name as string | undefined) ?? null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    prospectPhone: ((prospect as any)?.phone as string | undefined) ?? null,
     prospectCompanyName:
       resolvedCompany?.name
       ?? prospect?.company_name

@@ -36,9 +36,13 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { generateCompanyLoginLinkAction } from "@/app/admin/companies/actions"
+import { ContactCard } from "@/components/contact-card/contact-card"
+import { LogOutboundModal } from "@/app/admin/sales/log-outbound-modal"
+import { markProspectNotInterested, removeProspectFromFunnel } from "@/app/admin/sales/actions"
 
 // Mirrors the funnel-stage colours used on /admin/sales so the
 // prospect badge in the inbox row matches the same contact's pill in
@@ -230,6 +234,32 @@ export function InboxClient({
       toast.error(result.error ?? "Failed to move back")
     }
   }
+
+  // ── Contact machinery (mirrors /admin/sales' contact chip) ──
+  const [contactCard, setContactCard] = useState<{ email: string; prospectId: string | null } | null>(null)
+  const [logOutboundTarget, setLogOutboundTarget] = useState<{
+    prospectId: string
+    contactLabel: string
+    companyLabel: string | null
+    contactEmail: string
+    contactPhone: string | null
+  } | null>(null)
+
+  const handleNotInterested = useCallback(async (row: InboundEmailRow) => {
+    if (!row.prospectId) return
+    const r = await markProspectNotInterested(row.prospectId, true)
+    if (r.success) { toast.success("Marked not interested"); reload() }
+    else toast.error(r.error ?? "Failed")
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleRemoveFromFunnel = useCallback(async (row: InboundEmailRow) => {
+    if (!row.prospectId) return
+    const r = await removeProspectFromFunnel(row.prospectId)
+    if (r.success) { toast.success("Removed from funnel"); reload() }
+    else toast.error(r.error ?? "Failed")
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   /** Open the Respond popup for a row. Loads (or re-uses cached) AI
    *  draft from the server; user can edit before sending. Marks the
@@ -448,27 +478,87 @@ export function InboxClient({
                   style={{ cursor: "pointer" }}
                   className="hover:bg-[#fafaf9]"
                 >
-                  {/* From — sender's person identity, regardless of match */}
-                  <td>
-                    <div className="flex flex-col min-w-0">
-                      {personName && (
-                        <span
-                          className="arco-table-primary truncate max-w-[200px]"
-                          style={{ fontWeight: unread ? 600 : 400 }}
-                        >
-                          {personName}
-                        </span>
-                      )}
+                  {/* From — direct funnel contacts get the /sales chip
+                      (dot + name + status pill + channel pill) with the
+                      contact menu; unknown senders show just the name. */}
+                  <td onClick={(e) => { if (row.prospectId) e.stopPropagation() }}>
+                    {row.prospectId ? (
+                      <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              className="arco-table-status hover:text-[#016D75] transition-colors cursor-pointer text-left"
+                              style={{ fontWeight: unread ? 600 : undefined }}
+                            >
+                              <span className={`arco-table-status-dot ${statusDot}`} />
+                              <span className="truncate max-w-[160px]">
+                                {row.prospectContactName?.trim() || personName || row.fromEmail}
+                              </span>
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="min-w-[180px]">
+                            <DropdownMenuItem
+                              className="text-xs cursor-pointer"
+                              onClick={() => setContactCard({ email: row.fromEmail, prospectId: row.prospectId })}
+                            >
+                              Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-xs cursor-pointer"
+                              onClick={() => setLogOutboundTarget({
+                                prospectId: row.prospectId!,
+                                contactLabel: row.prospectContactName?.trim() || personName || row.fromEmail,
+                                companyLabel: row.prospectCompanyName,
+                                contactEmail: row.fromEmail,
+                                contactPhone: row.prospectPhone,
+                              })}
+                            >
+                              Log outbound
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => openRespond(row)}>
+                              Send email
+                            </DropdownMenuItem>
+                            {row.prospectPhone && (
+                              <DropdownMenuItem asChild>
+                                <a href={`tel:${row.prospectPhone.replace(/[^+\d]/g, "")}`} className="text-xs cursor-pointer">
+                                  Call
+                                </a>
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-xs cursor-pointer text-[#b45309] focus:text-[#b45309]"
+                              onClick={() => void handleNotInterested(row)}
+                            >
+                              Not interested
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-xs cursor-pointer text-red-600 focus:text-red-600"
+                              onClick={() => void handleRemoveFromFunnel(row)}
+                            >
+                              Remove from funnel
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        {row.prospectStatus && (
+                          <span className="status-pill">
+                            <span className={`status-pill-dot ${statusDot}`} />
+                            {PROSPECT_STATUS_LABEL[row.prospectStatus] ?? row.prospectStatus}
+                          </span>
+                        )}
+                        {row.prospectChannel && (
+                          <span className="status-pill">{channelLabel(row.prospectChannel)}</span>
+                        )}
+                      </div>
+                    ) : (
                       <span
-                        className={
-                          (personName ? "arco-table-secondary" : "arco-table-primary")
-                          + " truncate max-w-[200px]"
-                        }
-                        style={{ fontWeight: !personName && unread ? 600 : undefined }}
+                        className="arco-table-primary truncate max-w-[220px] block"
+                        style={{ fontWeight: unread ? 600 : 400 }}
                       >
-                        {row.fromEmail}
+                        {personName ?? row.fromEmail}
                       </span>
-                    </div>
+                    )}
                   </td>
 
                   {/* To — which of our mailboxes it landed in, local part
@@ -839,6 +929,31 @@ export function InboxClient({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Contact panel — same card as /admin/sales' Details. */}
+      {contactCard && (
+        <ContactCard
+          email={contactCard.email}
+          prospectId={contactCard.prospectId}
+          onEmailAssigned={(next) => setContactCard({ email: next, prospectId: contactCard.prospectId })}
+          onRemoved={() => { setContactCard(null); reload() }}
+          onChanged={() => reload()}
+          onClose={() => setContactCard(null)}
+        />
+      )}
+
+      {logOutboundTarget && (
+        <LogOutboundModal
+          open
+          onOpenChange={(open: boolean) => { if (!open) setLogOutboundTarget(null) }}
+          prospectId={logOutboundTarget.prospectId}
+          contactLabel={logOutboundTarget.contactLabel}
+          companyLabel={logOutboundTarget.companyLabel ?? ""}
+          contactEmail={logOutboundTarget.contactEmail}
+          contactPhone={logOutboundTarget.contactPhone}
+          onLogged={() => { setLogOutboundTarget(null); reload() }}
+        />
       )}
 
       </div>
