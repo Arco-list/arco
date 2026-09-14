@@ -377,6 +377,20 @@ async function queryPostHogPeriodicValues(
 // settings, so the two should agree (modulo identity-merge lag).
 const NOT_INTERNAL_TEAM = `(person.properties.email IS NULL OR person.properties.email NOT ILIKE '%@arcolist.com%')`
 
+// Mail-scanner filter. Enterprise mail security (Microsoft SafeLinks
+// et al.) detonates every link in an outbound mail from EU datacenters
+// — one pageview per link, a fresh person per click, geolocated
+// outside NL/BE. Week of Sep 7 that minted 51 fake "pro visitors" in
+// one week. A mailed token URL (claim t=, ref=, inviteEmail=) opened
+// from non-NL/BE geo is that signature; the audience is Dutch
+// companies, so the false-negative cost is a stray holiday click.
+const NOT_MAIL_SCANNER = `NOT (
+  (properties.$current_url ILIKE '%/claim%' OR properties.$current_url ILIKE '%/businesses%')
+  AND (properties.$current_url ILIKE '%?t=%' OR properties.$current_url ILIKE '%&t=%'
+       OR properties.$current_url ILIKE '%ref=%' OR properties.$current_url ILIKE '%inviteEmail=%')
+  AND coalesce(properties.$geoip_country_code, '') NOT IN ('NL', 'BE')
+)`
+
 // Self-referral filter — exclude pageviews whose referring domain is
 // one of our own surfaces. Internal navigation (clicking around on
 // arcolist.com) shows up in PostHog's Referrers panel as visits from
@@ -630,6 +644,7 @@ function uniqueVisitorsQuery(bucketExpr: string, sinceIso: string, urlPredicate:
       AND timestamp >= toDateTime('${sinceIso}')
       AND (${urlPredicate})
       AND ${NOT_INTERNAL_TEAM}
+        AND ${NOT_MAIL_SCANNER}
       AND ${NOT_SELF_REFERRAL}
     GROUP BY period
     ORDER BY period
@@ -644,6 +659,7 @@ function uniqueActorsQuery(bucketExpr: string, sinceIso: string, eventPredicate:
     WHERE ${eventPredicate}
       AND timestamp >= toDateTime('${sinceIso}')
       AND ${NOT_INTERNAL_TEAM}
+        AND ${NOT_MAIL_SCANNER}
     GROUP BY period
     ORDER BY period
   `
@@ -748,6 +764,7 @@ function proSessionChannelQuery(
       WHERE event = '$pageview'
         AND timestamp >= toDateTime('${sinceIso}')
         AND ${NOT_INTERNAL_TEAM}
+        AND ${NOT_MAIL_SCANNER}
       GROUP BY person_id, session_id
     )
     WHERE hit_pro = 1 ${channelFilter}
@@ -776,6 +793,7 @@ function firstTouchChannelQuery(
         AND timestamp >= toDateTime('${sinceIso}')
         ${extra}
         AND ${NOT_INTERNAL_TEAM}
+        AND ${NOT_MAIL_SCANNER}
         AND ${NOT_SELF_REFERRAL}
       GROUP BY period, person_id
     )
@@ -793,6 +811,7 @@ function totalEventsQuery(bucketExpr: string, sinceIso: string, eventPredicate: 
     WHERE ${eventPredicate}
       AND timestamp >= toDateTime('${sinceIso}')
       AND ${NOT_INTERNAL_TEAM}
+        AND ${NOT_MAIL_SCANNER}
     GROUP BY period
     ORDER BY period
   `
@@ -814,6 +833,7 @@ function proSignupQuery(bucketExpr: string, sinceIso: string, firstTouchPredicat
       AND person.properties.user_types LIKE '%professional%'
       AND (${firstTouchPredicate})
       AND ${NOT_INTERNAL_TEAM}
+        AND ${NOT_MAIL_SCANNER}
     GROUP BY period
     ORDER BY period
   `
