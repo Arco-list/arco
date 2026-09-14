@@ -91,7 +91,11 @@ export async function issueClaimToken(
   const body = `${id}:${input.companyId}:${email}:${expiry}`
   const token = `${base64url(body)}.${base64url(hmac(body))}`
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.arcolist.com"
-  return { token, url: `${siteUrl}/claim?t=${encodeURIComponent(token)}` }
+  // utm_source drives the growth dashboard's channel attribution: the
+  // claim landing replaced /businesses/architects?ref= as the mail
+  // destination, which silently reclassified Sales traffic as Direct.
+  const utm = `arco_claim_${input.channel ?? "invite"}`
+  return { token, url: `${siteUrl}/claim?t=${encodeURIComponent(token)}&utm_source=${utm}` }
 }
 
 export type ClaimTokenResult =

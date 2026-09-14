@@ -1419,7 +1419,7 @@ ${copy.bullets.map((b) => `<li style="margin:0 0 6px;">${b}</li>`).join('')}
       ${body(copy.howItStarts)}
       ${button(copy.button, refUrl)}
       <p style="margin:0 0 20px;font-size:14px;font-weight:300;line-height:1.6;color:#4a4a48;">
-        ${copy.secondaryLead} <a href="https://www.arcolist.com/businesses/architects" style="color:#016D75;text-decoration:underline;">${copy.secondary} &rarr;</a>
+        ${copy.secondaryLead} <a href="https://www.arcolist.com/businesses/architects?ref=outreach" style="color:#016D75;text-decoration:underline;">${copy.secondary} &rarr;</a>
       </p>
       <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
         Niek van Leeuwen<br/>
@@ -1480,7 +1480,7 @@ ${copy.steps.map((s) => `<li style="margin:0 0 6px;">${s}</li>`).join('')}
       ${stepsList}
       ${button(copy.button, refUrl)}
       <p style="margin:0 0 20px;font-size:14px;font-weight:300;line-height:1.6;color:#4a4a48;">
-        ${copy.secondaryLead} <a href="https://www.arcolist.com/businesses/architects" style="color:#016D75;text-decoration:underline;">${copy.secondary} &rarr;</a>
+        ${copy.secondaryLead} <a href="https://www.arcolist.com/businesses/architects?ref=outreach" style="color:#016D75;text-decoration:underline;">${copy.secondary} &rarr;</a>
       </p>
       <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
         Niek van Leeuwen<br/>
@@ -1526,7 +1526,7 @@ function renderOutreachFinal(vars: EmailVariables, locale: EmailLocale = 'nl'): 
       ${body(copy.howItStarts)}
       ${button(copy.button, refUrl)}
       <p style="margin:0 0 20px;font-size:14px;font-weight:300;line-height:1.6;color:#4a4a48;">
-        ${copy.secondaryLead} <a href="https://www.arcolist.com/businesses/architects" style="color:#016D75;text-decoration:underline;">${copy.secondary} &rarr;</a>
+        ${copy.secondaryLead} <a href="https://www.arcolist.com/businesses/architects?ref=outreach" style="color:#016D75;text-decoration:underline;">${copy.secondary} &rarr;</a>
       </p>
       ${body(copy.opt_out)}
       <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">

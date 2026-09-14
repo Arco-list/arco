@@ -682,6 +682,10 @@ const ENTRY_CHANNEL_EXPR = `
       AND (entry_url ILIKE '%ref=%' OR entry_url ILIKE '%inviteEmail=%'), 'sales',
     entry_url ILIKE '%/businesses/professionals%'
       AND entry_url ILIKE '%inviteEmail=%', 'invites',
+    entry_utm = 'arco_claim_invite', 'invites',
+    entry_utm ILIKE 'arco_claim_%', 'sales',
+    entry_url ILIKE '%/claim?t=%'
+      OR (entry_url ILIKE '%/claim%' AND entry_url ILIKE '%&t=%'), 'sales',
     entry_utm ILIKE 'arco_%'
       OR entry_ref ILIKE '%mail.%'
       OR entry_ref ILIKE '%outlook.%', 'email',
@@ -738,7 +742,8 @@ function proSessionChannelQuery(
              ), '') AS entry_ref,
              argMin(properties.$current_url, timestamp) AS entry_url,
              argMin(properties.utm_source, timestamp) AS entry_utm,
-             max(CASE WHEN properties.$current_url ILIKE '%/businesses%' THEN 1 ELSE 0 END) AS hit_pro
+             max(CASE WHEN properties.$current_url ILIKE '%/businesses%'
+                       OR properties.$current_url ILIKE '%/claim%' THEN 1 ELSE 0 END) AS hit_pro
       FROM events
       WHERE event = '$pageview'
         AND timestamp >= toDateTime('${sinceIso}')
