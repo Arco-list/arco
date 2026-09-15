@@ -21,8 +21,8 @@ const FEATURE_KEYS = [
   { labelKey: "pricing_feature_contributor", freeKey: "pricing_1_project", proKey: "pricing_unlimited", freeBool: true, proBool: true, tooltipKey: "pricing_feature_contributor_tooltip", tooltipTitleKey: null },
   { labelKey: "pricing_feature_company_page", freeKey: null, proKey: null, freeBool: true, proBool: true, tooltipKey: "pricing_feature_company_page_tooltip", tooltipTitleKey: null },
   { labelKey: "pricing_feature_team", freeKey: null, proKey: null, freeBool: false, proBool: true, tooltipKey: "pricing_feature_team_tooltip", tooltipTitleKey: null },
-  { labelKey: "pricing_feature_analytics", freeKey: null, proKey: null, freeBool: false, proBool: true, tooltipKey: "pricing_feature_analytics_tooltip", tooltipTitleKey: null },
-  { labelKey: "pricing_feature_arco_approved", freeKey: null, proKey: null, freeBool: false, proBool: true, tooltipKey: "pricing_feature_arco_approved_tooltip", tooltipTitleKey: "pricing_feature_arco_approved_tooltip_title" },
+  { labelKey: "pricing_feature_analytics", freeKey: null, proKey: null, freeBool: false, proBool: true, tooltipKey: "pricing_feature_analytics_tooltip", tooltipTitleKey: null, comingSoon: true },
+  { labelKey: "pricing_feature_arco_approved", freeKey: null, proKey: null, freeBool: false, proBool: true, tooltipKey: "pricing_feature_arco_approved_tooltip", tooltipTitleKey: "pricing_feature_arco_approved_tooltip_title", comingSoon: true },
 ] as const
 
 // One shared order on both cards so the rows align line-for-line —
@@ -263,6 +263,9 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
                   <Check size={16} style={{ color: "var(--primary)", flexShrink: 0 }} />
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                     {valueStr ? `${label}: ${valueStr}` : label}
+                    {"comingSoon" in f && f.comingSoon && (
+                      <span className="pricing-feature-soon">{t("pricing_feature_coming")}</span>
+                    )}
                     {f.tooltipKey && (
                       <Tooltip>
                         <TooltipTrigger asChild>

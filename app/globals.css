@@ -5611,6 +5611,21 @@ body.no-scroll {
   color: var(--arco-light);
 }
 
+/* "binnenkort" marker on a Pro feature that is sold but not shipped —
+   quiet enough that the row still reads as included, clear enough that
+   nobody expects it today. */
+.pricing-feature-soon {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--arco-mid-grey);
+  border: 1px solid var(--arco-light-grey);
+  border-radius: 10px;
+  padding: 1px 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .pricing-card-footer {
   margin-top: auto;
 }
