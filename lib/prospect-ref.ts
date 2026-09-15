@@ -33,14 +33,45 @@ function canAdvanceTo(
 }
 
 /**
+ * Request context for a landing visit, used to filter out corporate
+ * mail scanners (Microsoft SafeLinks etc.) that open every mailed link
+ * from a datacenter before the recipient ever sees the e-mail. Same
+ * rule as NOT_MAIL_SCANNER in lib/growth-metric-cache.ts: a token/ref
+ * hit from outside NL/BE is a scanner, not a prospect. A missing
+ * header (local dev, non-Vercel) never blocks.
+ */
+export interface ProspectVisitContext {
+  country?: string | null; // x-vercel-ip-country
+  userAgent?: string | null;
+}
+
+const SCANNER_UA = /bot|crawl|spider|preview|scan|headless|python|curl|wget/i;
+
+export function isLikelyMailScannerVisit(ctx: ProspectVisitContext): boolean {
+  if (ctx.country && !["NL", "BE"].includes(ctx.country.toUpperCase())) return true;
+  if (ctx.userAgent && SCANNER_UA.test(ctx.userAgent)) return true;
+  return false;
+}
+
+/**
  * Track when a prospect visits the landing page via their ref param.
  * Supports both ref_code and apollo_contact_id lookups.
  * Updates landing_visited_at (if not already set) and advances status
  * to 'landing_visited' if appropriate.
  */
 export async function trackProspectLandingVisit(
-  refCode: string
+  refCode: string,
+  ctx?: ProspectVisitContext
 ): Promise<void> {
+  if (ctx && isLikelyMailScannerVisit(ctx)) {
+    logger.debug("Ignoring likely mail-scanner landing visit", {
+      refCode,
+      country: ctx.country,
+      userAgent: ctx.userAgent?.slice(0, 120),
+    });
+    return;
+  }
+
   const supabase = createServiceRoleSupabaseClient();
 
   // Try email first (from Apollo {{email}} variable), then ref_code, then apollo_contact_id

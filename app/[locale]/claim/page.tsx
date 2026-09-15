@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server"
+import { headers } from "next/headers"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { verifyClaimToken } from "@/lib/claim/claim-token"
@@ -96,9 +97,13 @@ export default async function ClaimPage({
     // Funnel stage: a valid token opened = the e-mail link was clicked.
     // Advances the prospect to Visitor (forward-only, fire-and-forget —
     // rendering never waits on CRM bookkeeping).
+    // Geo + UA guard: SafeLinks-style scanners render this page too,
+    // from foreign datacenters — those must not stamp Visitor.
     const prospectEmail = parsed.email
+    const h = await headers()
+    const visitCtx = { country: h.get("x-vercel-ip-country"), userAgent: h.get("user-agent") }
     void import("@/lib/prospect-ref")
-      .then(({ trackProspectLandingVisit }) => trackProspectLandingVisit(prospectEmail))
+      .then(({ trackProspectLandingVisit }) => trackProspectLandingVisit(prospectEmail, visitCtx))
       .catch(() => {})
   } else {
     // A pick carried in the querystring (written by the client so a

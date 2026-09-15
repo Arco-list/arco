@@ -7,7 +7,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 400 })
   }
 
-  await trackProspectLandingVisit(ref)
+  await trackProspectLandingVisit(ref, {
+    country: request.headers.get("x-vercel-ip-country"),
+    userAgent: request.headers.get("user-agent"),
+  })
 
   // Set cookie so we can link this prospect on signup (even with a different email)
   const response = NextResponse.json({ ok: true })
