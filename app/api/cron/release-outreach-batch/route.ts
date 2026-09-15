@@ -166,8 +166,12 @@ export async function GET(request: NextRequest) {
   // Showcased companies are excluded from AUTO-release: their sequence
   // is the showcase pitch, started manually from the Sales table
   // (promote pauses/withholds outreach until the admin decides).
+  // Verified-and-beyond companies too: the firm already converted, so
+  // cold outreach to a colleague there (contact stage rightly still
+  // 'prospect') would pitch a company that's already on Arco.
+  const INELIGIBLE_COMPANY_STATUS = new Set(["prospected", "verified", "owned", "listed", "unlisted"])
   const eligible = (candidates ?? []).filter(
-    (p) => (p as { companies?: { status?: string | null } | null }).companies?.status !== "prospected",
+    (p) => !INELIGIBLE_COMPANY_STATUS.has((p as { companies?: { status?: string | null } | null }).companies?.status ?? ""),
   )
   if (eligible.length === 0) {
     return NextResponse.json({ ok: true, released: 0, reason: "no eligible prospects" })
