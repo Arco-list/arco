@@ -1,7 +1,7 @@
 'use server'
 
 import { buildUnsubscribeUrl } from './unsubscribe-token'
-import { REJECTION_REASON_KEYS } from './rejection-reasons'
+import { REJECTION_REASON_EMAIL_COPY, REJECTION_REASON_KEYS } from './rejection-reasons'
 
 // Lazy-initialize Resend to avoid crashing at module load if RESEND_API_KEY is missing
 let _resend: import('resend').Resend | null = null
@@ -694,46 +694,6 @@ function renderProjectLive(vars: EmailVariables, locale: EmailLocale = 'en'): { 
       ${vars.project_link ? button(copy.button, vars.project_link) : ''}
     `, locale),
   }
-}
-
-// Full-sentence email copy per rejection category: what was wrong plus
-// what the owner should do about it. The dashboard keeps showing the
-// short labels; only the mail spells it out. Keyed by the canonical keys
-// from lib/rejection-reasons.ts — a category without an entry here (or a
-// hand-typed admin note) falls back to the stored text verbatim.
-const REJECTION_REASON_EMAIL_COPY: Record<string, { en: string; nl: string }> = {
-  not_residential: {
-    en: 'This project falls outside Arco: for now we only list residential projects.',
-    nl: 'Dit project valt buiten Arco: we tonen nu nog alleen woonprojecten.',
-  },
-  insufficient_photos: {
-    en: 'The project has too few photos. Add more images and resubmit it.',
-    nl: 'Het project heeft te weinig foto’s. Voeg meer afbeeldingen toe en dien het opnieuw in.',
-  },
-  low_quality_images: {
-    en: 'The project photos do not meet our quality guidelines. Upload higher-resolution images and resubmit the project.',
-    nl: 'De projectfoto’s voldoen niet aan onze kwaliteitsrichtlijnen. Upload afbeeldingen in hogere resolutie en dien het project opnieuw in.',
-  },
-  no_real_photos: {
-    en: 'The project contains renders instead of photos of the built work. Replace them with real photos and resubmit it.',
-    nl: 'Het project bevat renders in plaats van foto’s van het gerealiseerde werk. Vervang ze door echte foto’s en dien het opnieuw in.',
-  },
-  missing_details: {
-    en: 'Some project details are missing. Complete the project and resubmit it.',
-    nl: 'Er ontbreken projectgegevens. Vul het project verder aan en dien het opnieuw in.',
-  },
-  duplicate: {
-    en: 'This project is already on Arco.',
-    nl: 'Dit project staat al op Arco.',
-  },
-  inappropriate: {
-    en: 'The project contains content that does not fit our guidelines.',
-    nl: 'Het project bevat inhoud die niet past binnen onze richtlijnen.',
-  },
-  not_architecture: {
-    en: 'The project does not show enough distinctive architecture or interior design work to be listed on Arco.',
-    nl: 'Het project laat niet genoeg onderscheidend architectuur- of interieurontwerp zien om op Arco getoond te worden.',
-  },
 }
 
 function renderProjectRejected(vars: EmailVariables, locale: EmailLocale = 'en'): { subject: string; html: string } {

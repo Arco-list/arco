@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
+import { REJECTION_REASON_OPTIONS } from "@/lib/rejection-reasons"
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -110,16 +111,9 @@ export type AdminProjectRow = {
   seoPosition28d: number | null
 }
 
-const REJECTION_REASONS = [
-  "Not a residential project",
-  "Insufficient photos",
-  "Low quality images",
-  "No real photos (renders)",
-  "Missing project details",
-  "Duplicate project",
-  "Inappropriate content",
-  "Not distinctive enough as architecture or interior design",
-]
+// Single source of truth with the reviewer dialog in the project
+// editor and with the email copy (lib/rejection-reasons.ts).
+const REJECTION_REASONS = REJECTION_REASON_OPTIONS.map((r) => r.label)
 
 const STATUS_CONFIG: Record<ProjectStatus, { label: string; className: string; dotColor: string }> = {
   draft: { label: "In progress", className: "bg-amber-50 text-amber-800", dotColor: "bg-amber-500" },

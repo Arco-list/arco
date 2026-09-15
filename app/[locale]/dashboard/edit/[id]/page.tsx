@@ -142,7 +142,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu"
-import { MailPlus, Pencil, XCircle } from "lucide-react"
+import { Info, MailPlus, Pencil, XCircle } from "lucide-react"
+import { REJECTION_REASON_EMAIL_COPY, REJECTION_REASON_OPTIONS } from "@/lib/rejection-reasons"
 
 type ProjectBudgetLevel = Enums<"project_budget_level">
 type ProjectStatus = Enums<"project_status">
@@ -479,16 +480,6 @@ const EditableTitle = memo(function EditableTitle({
   )
 })
 
-const REJECTION_REASON_KEYS = [
-  "reason_not_residential",
-  "reason_insufficient_photos",
-  "reason_low_quality_images",
-  "reason_missing_details",
-  "reason_duplicate",
-  "reason_inappropriate",
-  "reason_not_architecture",
-] as const
-
 export default function ListingEditorPage() {
   const params = useParams()
   const router = useRouter()
@@ -556,6 +547,17 @@ export default function ListingEditorPage() {
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [rejectionReason, setRejectionReason] = useState("")
   const [selectedRejectionReasons, setSelectedRejectionReasons] = useState<string[]>([])
+  // Which reason has its "this is what the email says" popover open.
+  const [openReasonInfo, setOpenReasonInfo] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!openReasonInfo) return
+    const close = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement)?.closest(".reject-reason-row")) setOpenReasonInfo(null)
+    }
+    document.addEventListener("click", close)
+    return () => document.removeEventListener("click", close)
+  }, [openReasonInfo])
   const [isRejecting, setIsRejecting] = useState(false)
   const [reviewQueue, setReviewQueue] = useState<string[]>([])
 
@@ -3971,6 +3973,7 @@ export default function ListingEditorPage() {
       setShowRejectModal(false)
       setRejectionReason("")
       setSelectedRejectionReasons([])
+      setOpenReasonInfo(null)
       navigateToNextReview()
     } catch {
       toast.error(tToast("reject_failed"))
@@ -7205,39 +7208,79 @@ export default function ListingEditorPage() {
               {tReject("description")}
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
-              {REJECTION_REASON_KEYS.map((reasonKey) => {
-                const reason = tReject(reasonKey)
-                const isSelected = selectedRejectionReasons.includes(reason)
+              {REJECTION_REASON_OPTIONS.map(({ key, label }) => {
+                // The canonical English label is what gets STORED — the
+                // email maps it back to a full sentence, and that lookup
+                // only works on the canonical phrase, never on the
+                // reviewer's translated label.
+                const shown = tReject(`reason_${key}`)
+                const isSelected = selectedRejectionReasons.includes(label)
+                const emailCopy = REJECTION_REASON_EMAIL_COPY[key]?.[locale === "nl" ? "nl" : "en"]
+                const infoOpen = openReasonInfo === key
                 return (
-                  <button
-                    key={reasonKey}
-                    type="button"
-                    onClick={() => setSelectedRejectionReasons((prev) =>
-                      isSelected ? prev.filter((r) => r !== reason) : [...prev, reason]
-                    )}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 10,
-                      padding: "10px 14px", borderRadius: 3, cursor: "pointer",
-                      fontSize: 13, fontWeight: 400, textAlign: "left",
-                      background: isSelected ? "var(--arco-surface)" : "#fff",
-                      border: isSelected ? "1px solid #1c1c1a" : "1px solid #e5e5e4",
-                      color: "#1c1c1a", transition: "border-color .15s, background .15s",
-                    }}
-                  >
-                    <span style={{
-                      width: 16, height: 16, borderRadius: 3, flexShrink: 0,
-                      border: isSelected ? "none" : "1.5px solid #d4d4d2",
-                      background: isSelected ? "#1c1c1a" : "transparent",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>
-                      {isSelected && (
-                        <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
-                          <path d="M3 8l4 4 6-7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
+                  <div key={key} className="reject-reason-row" style={{ position: "relative", display: "flex" }}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedRejectionReasons((prev) =>
+                        isSelected ? prev.filter((r) => r !== label) : [...prev, label]
                       )}
-                    </span>
-                    {reason}
-                  </button>
+                      style={{
+                        flex: 1,
+                        display: "flex", alignItems: "center", gap: 10,
+                        padding: "10px 38px 10px 14px", borderRadius: 3, cursor: "pointer",
+                        fontSize: 13, fontWeight: 400, textAlign: "left",
+                        background: isSelected ? "var(--arco-surface)" : "#fff",
+                        border: isSelected ? "1px solid #1c1c1a" : "1px solid #e5e5e4",
+                        color: "#1c1c1a", transition: "border-color .15s, background .15s",
+                      }}
+                    >
+                      <span style={{
+                        width: 16, height: 16, borderRadius: 3, flexShrink: 0,
+                        border: isSelected ? "none" : "1.5px solid #d4d4d2",
+                        background: isSelected ? "#1c1c1a" : "transparent",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        {isSelected && (
+                          <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+                            <path d="M3 8l4 4 6-7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </span>
+                      {shown}
+                    </button>
+                    {/* Sibling of the row button, not a child: a button
+                        inside a button is invalid and swallows the click. */}
+                    {emailCopy && (
+                      <button
+                        type="button"
+                        aria-label={emailCopy}
+                        onClick={() => setOpenReasonInfo((prev) => (prev === key ? null : key))}
+                        style={{
+                          position: "absolute", top: 0, right: 0, height: "100%", width: 34,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          background: "none", border: "none", padding: 0, cursor: "pointer",
+                          color: infoOpen ? "#1c1c1a" : "var(--arco-mid-grey)",
+                        }}
+                      >
+                        <Info size={13} style={{ flexShrink: 0 }} />
+                      </button>
+                    )}
+                    {infoOpen && emailCopy && (
+                      <span style={{
+                        position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 30,
+                        width: 300, padding: "10px 12px", background: "#fff",
+                        border: "1px solid var(--arco-light-grey)", borderRadius: 8,
+                        boxShadow: "0 4px 16px rgba(0,0,0,.08)",
+                        fontSize: 12, lineHeight: 1.5, color: "var(--arco-mid-grey)",
+                        textAlign: "left",
+                      }}>
+                        <span style={{ display: "block", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "#a1a1a0", marginBottom: 4 }}>
+                          {tReject("email_preview_label")}
+                        </span>
+                        {emailCopy}
+                      </span>
+                    )}
+                  </div>
                 )
               })}
 
