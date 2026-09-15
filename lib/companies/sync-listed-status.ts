@@ -65,9 +65,15 @@ export async function syncCompanyListedStatus(companyId: string) {
   const hasOwner = Boolean((company as { owner_id?: string | null }).owner_id)
   const targetStatus = hasOwner ? "listed" : "prospected"
   const AUTO_LIST_ELIGIBLE = new Set(["created", "owned", "verified", "unlisted", "prospected", "invited", "unclaimed", "added"])
+  // An OWNERLESS 'verified' company is mid-claim (the verify step is
+  // done, the commit isn't) — demoting it to 'prospected' because a
+  // credit went live would erase its funnel position. With an owner,
+  // verified→listed is the normal forward path and stays eligible.
+  const holdsVerifiedPosition = !hasOwner && company.status === "verified"
   if (
     hasActiveProjects
     && AUTO_LIST_ELIGIBLE.has(company.status as string)
+    && !holdsVerifiedPosition
     && company.status !== targetStatus
     && !company.manually_unlisted
   ) {

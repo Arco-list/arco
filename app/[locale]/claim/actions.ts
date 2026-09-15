@@ -104,7 +104,10 @@ export async function saveCompanyStepAction(
     .update({ status: "verified", is_verified: true })
     .eq("id", parsed.companyId)
     .is("owner_id", null)
-    .in("status", ["added", "prospected", "invited", "unclaimed"])
+    // 'unlisted' belongs here too: an OWNERLESS unlisted company (an
+    // invite/showcase page that went dark) is still pre-claim — the
+    // owner_id guard above keeps claimed-then-hidden companies out.
+    .in("status", ["added", "prospected", "invited", "unclaimed", "unlisted"])
   void import("@/lib/prospect-ref")
     .then(({ advanceProspectStage }) => advanceProspectStage({ email: parsed.email, companyId: parsed.companyId }, "verified"))
     .catch(() => {})
