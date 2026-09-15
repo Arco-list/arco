@@ -8,6 +8,7 @@ import { Grid3x3, Home } from "lucide-react"
 
 import type { Tables } from "@/lib/supabase/types"
 import { resolveFeatureIcon } from "@/lib/icons/project-features"
+import { downscaleForUpload } from "@/lib/image-downscale"
 import { isPhotoSelectableForFeature } from "@/lib/photo-filtering"
 import { SPACES } from "@/lib/spaces"
 
@@ -34,7 +35,12 @@ type ProjectFeatureRow = Tables<"project_features">
 type ProjectPhotoRow = Tables<"project_photos">
 
 export const MIN_PHOTOS_REQUIRED = 5
-const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024 // 15 MB
+// The project-photos bucket rejects anything over 10 MB, so validating
+// at 15 let files through that then died at the storage call with a raw
+// "Payload too large". Oversized files are downscaled in the browser
+// first (lib/image-downscale.ts); this is the floor for the ones that
+// cannot be re-encoded at all.
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB — bucket ceiling
 const MIN_IMAGE_WIDTH = 1200
 const MAX_FILES_PER_UPLOAD = 100
 const MAX_PHOTOS_PER_PROJECT = 80
@@ -841,9 +847,12 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
     setDragOver(false)
   }, [])
 
-  const validateFile = useCallback((file: File) => {
+  // `label` is the name the user sees (the original filename) — a file
+  // that was re-encoded on the way in carries a .jpg name the upload
+  // tracker never saw.
+  const validateFile = useCallback((file: File, label: string = file.name) => {
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      return `${file.name}: File is too large. Maximum size is 10MB.`
+      return `${label}: This photo is too large to upload, even after compressing it.`
     }
 
     const extension = file.name.split(".").pop()?.toLowerCase()
@@ -851,7 +860,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
     const normalizedExtension = mimeExtension ?? extension
 
     if (!normalizedExtension || !ALLOWED_EXTENSIONS.has(normalizedExtension)) {
-      return `${file.name}: Unsupported file type. Please use JPG or PNG.`
+      return `${label}: Unsupported file type. Please use JPG or PNG.`
     }
 
     return null
@@ -956,8 +965,16 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
             ? ADDITIONAL_FEATURE_ID
             : BUILDING_FEATURE_ID
 
-      for (const file of Array.from(files)) {
-        const validationError = validateFile(file)
+      for (const originalFile of Array.from(files)) {
+        // Anything over the bucket ceiling is re-encoded in the browser
+        // first (long edge clamped, JPEG quality stepped down) so a
+        // 20 MB camera file uploads instead of failing. Files that
+        // already fit come back untouched. The upload tracker keys on
+        // the ORIGINAL name, so every message below uses displayName.
+        const displayName = originalFile.name
+        const { file } = await downscaleForUpload(originalFile)
+
+        const validationError = validateFile(file, displayName)
         if (validationError) {
           errors.push(validationError)
           continue
@@ -965,7 +982,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
 
         const dimensions = await readImageDimensions(file)
         if (!dimensions) {
-          errors.push(`${file.name}: We couldn't read this image. Please try another file.`)
+          errors.push(`${displayName}: We couldn't read this image. Please try another file.`)
           continue
         }
 
@@ -989,7 +1006,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
           })
 
           if (error) {
-            errors.push(`${file.name}: ${error.message}`)
+            errors.push(`${displayName}: ${error.message}`)
             continue
           }
 
@@ -1034,7 +1051,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
 
           if (insertError || !insertedPhoto) {
             errors.push(
-              `${file.name}: ${insertError?.message ?? "We could not save this photo. Please try again."}`,
+              `${displayName}: ${insertError?.message ?? "We could not save this photo. Please try again."}`,
             )
             void supabase.storage.from("project-photos").remove([storagePath])
             continue
@@ -1054,7 +1071,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
           }
         } catch (error) {
           console.error(error)
-          errors.push(`${file.name}: We could not process this image.`)
+          errors.push(`${displayName}: We could not process this image.`)
         }
       }
 
