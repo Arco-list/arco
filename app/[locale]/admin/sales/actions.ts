@@ -1152,9 +1152,13 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     // instead of being stamped onto a colleague's contact row. Below
     // Verified (added/prospected/invited or no link) the row keeps the
     // furthest CONTACT stage: that part is outreach history.
+    // 'unlisted' only counts when the company is actually CLAIMED: an
+    // ownerless company can be unlisted too (a showcase/invite page
+    // that went dark), but that firm never converted — its Sales row
+    // keeps the contact stage instead of parking above Owned.
     const companyRowStatus: ProspectStatus | null =
       claimed?.status === "listed" ? "active"
-      : claimed?.status === "unlisted" ? "unlisted"
+      : claimed?.status === "unlisted" && claimed.ownerUserId ? "unlisted"
       : claimed?.status === "owned" ? "owned"
       : claimed?.status === "verified" ? "verified"
       : null
