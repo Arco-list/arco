@@ -7266,15 +7266,11 @@ export default function ListingEditorPage() {
                       </button>
                     )}
                     {infoOpen && emailCopy && (
-                      <span style={{
+                      <span className="arco-infobox" style={{
                         position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 30,
-                        width: 300, padding: "10px 12px", background: "#fff",
-                        border: "1px solid var(--arco-light-grey)", borderRadius: 8,
-                        boxShadow: "0 4px 16px rgba(0,0,0,.08)",
-                        fontSize: 12, lineHeight: 1.5, color: "var(--arco-mid-grey)",
-                        textAlign: "left",
+                        width: 300,
                       }}>
-                        <span style={{ display: "block", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "#a1a1a0", marginBottom: 4 }}>
+                        <span className="arco-infobox-label">
                           {tReject("email_preview_label")}
                         </span>
                         {emailCopy}

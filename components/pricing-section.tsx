@@ -202,10 +202,10 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
                           </button>
                         </TooltipTrigger>
                         <TooltipContent side="top" className="max-w-xs text-left">
-                          <div style={{ fontWeight: 500, marginBottom: 4 }}>
+                          <div className="arco-tooltip-title">
                             {t((f.tooltipTitleKey ?? f.labelKey) as any)}
                           </div>
-                          <div style={{ fontWeight: 300, lineHeight: 1.5 }}>{t(f.tooltipKey as any)}</div>
+                          <div>{t(f.tooltipKey as any)}</div>
                         </TooltipContent>
                       </Tooltip>
                     )}
@@ -274,10 +274,10 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
                           </button>
                         </TooltipTrigger>
                         <TooltipContent side="top" className="max-w-xs text-left">
-                          <div style={{ fontWeight: 500, marginBottom: 4 }}>
+                          <div className="arco-tooltip-title">
                             {t((f.tooltipTitleKey ?? f.labelKey) as any)}
                           </div>
-                          <div style={{ fontWeight: 300, lineHeight: 1.5 }}>{t(f.tooltipKey as any)}</div>
+                          <div>{t(f.tooltipKey as any)}</div>
                         </TooltipContent>
                       </Tooltip>
                     )}

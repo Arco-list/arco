@@ -30,6 +30,10 @@
   --arco-mid-grey: #a1a1a0;
   --arco-light: #a1a1a0;
   --arco-rule: #e5e5e4;
+  /* Same hairline as --arco-rule, under the name six components already
+     reference. Undefined until now, so every one of those borders fell
+     back to currentColor and drew in the text colour. */
+  --arco-light-grey: #e5e5e4;
   --arco-wash: #ECF3F3;
 
   /* Primary Colors */
@@ -148,6 +152,7 @@
   --arco-mid-grey: #8a8a88;
   --arco-light: #666666;
   --arco-rule: #404040;
+  --arco-light-grey: #404040;
   --arco-wash: #1c2b2c;
 
   /* Primary Colors - Dark Mode */
@@ -5609,6 +5614,66 @@ body.no-scroll {
 
 .pricing-feature.disabled {
   color: var(--arco-light);
+}
+
+/* ── Info boxes ───────────────────────────────────────────────────
+   One treatment for every explanatory overlay, hover tooltip and
+   click-open popover alike: a white panel on a hairline rule with a
+   soft shadow. Teal is the action colour here — passive information
+   wearing it reads as something to click. The two differ only in
+   tempo: a tooltip is glanced at (12px, tighter), a popover is read
+   (13px, roomier, dismissed by the reader).
+   Documented on /design → Info boxes. */
+.arco-tooltip {
+  background: #fff;
+  color: var(--text-secondary);
+  border: 1px solid var(--arco-light-grey);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 300;
+  line-height: 1.5;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .08);
+}
+
+/* The arrow is a rotated square, so it must repeat the panel's fill;
+   the panel's own shadow already reads behind it. */
+.arco-tooltip-arrow {
+  background: #fff;
+  fill: #fff;
+}
+
+/* Title line inside an info box — the term being explained. */
+.arco-tooltip-title {
+  color: var(--text-primary);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+/* Click-open variant: same skin, reading size. */
+.arco-infobox {
+  background: #fff;
+  color: var(--text-secondary);
+  border: 1px solid var(--arco-light-grey);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 300;
+  line-height: 1.55;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .08);
+  text-align: left;
+}
+
+/* Eyebrow above an info box's body, e.g. "IN DE E-MAIL". */
+.arco-infobox-label {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-disabled);
+  margin-bottom: 4px;
 }
 
 /* "binnenkort" marker on a Pro feature that is sold but not shipped —

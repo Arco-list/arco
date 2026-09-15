@@ -1,3 +1,4 @@
+import { Info } from "lucide-react"
 import { FAQPreview } from "./faq-preview"
 import { AdminTabs } from "@/components/admin/admin-tabs"
 import { DiscoverCardPreview } from "./discover-card-preview"
@@ -807,6 +808,69 @@ export default function DesignPage() {
               <p className="arco-small-text">
                 Uses <strong>XS</strong> typography. 4 variants: .arco-alert--info (blue), .arco-alert--warn (amber), .arco-alert--danger (red), .arco-alert--success (green).<br />
                 16px icon + text content. 12px 16px padding, 6px radius, 1px colored border.
+              </p>
+            </div>
+          </div>
+
+          {/* INFO BOXES */}
+          <div style={{ marginBottom: 80 }}>
+            <h2 id="info-boxes" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Info boxes</h2>
+            <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
+              Explanation on demand, behind an <em>i</em>. One skin for both kinds: a white
+              panel on a hairline rule with a soft shadow. Teal is the action colour on Arco,
+              so information wearing it reads as something to click — these stay neutral and
+              let the page keep its accent for what can actually be clicked.
+            </p>
+
+            <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 48, alignItems: "start" }}>
+                {/* Tooltip — hover, glanced at */}
+                <div>
+                  <h4 className="arco-label" style={{ marginBottom: 20 }}>Tooltip — hover</h4>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14 }}>
+                    <span style={{ fontSize: 14 }}>Bedrijfspagina met projectportfolio</span>
+                    <Info size={13} style={{ color: "var(--primary, #016D75)" }} />
+                  </div>
+                  <span className="arco-tooltip" style={{ display: "block", maxWidth: 280 }}>
+                    <span className="arco-tooltip-title">Bedrijfspagina met projectportfolio</span>
+                    Je openbare profiel op Arco — alle projecten waarvoor je gepubliceerd hebt
+                    of credit hebt gekregen, plus diensten, team en contactgegevens.
+                  </span>
+                  <p className="arco-small-text" style={{ marginTop: 14 }}>
+                    12px / 300, panel padding 8px 12px. Title line optional.
+                  </p>
+                </div>
+
+                {/* Popover — click, read */}
+                <div>
+                  <h4 className="arco-label" style={{ marginBottom: 20 }}>Popover — click</h4>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14 }}>
+                    <span style={{ fontSize: 14 }}>Lage resolutie</span>
+                    <Info size={13} style={{ color: "var(--arco-mid-grey)" }} />
+                  </div>
+                  <span className="arco-infobox" style={{ display: "block", maxWidth: 300 }}>
+                    <span className="arco-infobox-label">In de e-mail</span>
+                    De foto&rsquo;s hebben een te lage resolutie om scherp te tonen op Arco.
+                    Upload de originele bestanden (minimaal 1200 px breed) en dien het project
+                    opnieuw in.
+                  </span>
+                  <p className="arco-small-text" style={{ marginTop: 14 }}>
+                    13px / 300, padding 10px 12px. Optional uppercase eyebrow.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
+              <p className="arco-small-text">
+                <strong>.arco-tooltip</strong> (+ .arco-tooltip-title) is the skin of the shared
+                <code> components/ui/tooltip</code>, so every hover tooltip inherits it.
+                <strong> .arco-infobox</strong> (+ .arco-infobox-label) is the click-open variant:
+                one size up, dismissed by the reader rather than by the cursor leaving. Both are
+                white on <code>--arco-light-grey</code> with a 0 4px 16px rgba(0,0,0,.08) shadow
+                and an 8px radius; the tooltip arrow repeats the panel fill.
+                Trigger is a 13px <em>i</em> — the primary colour where the surrounding text is
+                interactive, mid-grey in dense admin rows.
               </p>
             </div>
           </div>

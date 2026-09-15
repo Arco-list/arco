@@ -215,13 +215,9 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
                         <Info size={13} style={{ flexShrink: 0 }} />
                       </button>
                       {infoOpen && (
-                        <span style={{
+                        <span className="arco-infobox" style={{
                           position: "absolute", top: "calc(100% + 8px)", right: -8, zIndex: 30,
-                          width: 230, padding: "8px 12px", background: "#fff",
-                          border: "1px solid var(--arco-light-grey)", borderRadius: 8,
-                          boxShadow: "0 4px 16px rgba(0,0,0,.08)",
-                          fontSize: 12, lineHeight: 1.5, color: "var(--arco-mid-grey)",
-                          whiteSpace: "normal", textAlign: "left",
+                          width: 230, whiteSpace: "normal",
                         }}>
                           {t("company_email_description")}
                         </span>
