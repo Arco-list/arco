@@ -2134,89 +2134,119 @@ export async function syncPlatformProspects() {
         .not("owner_id", "is", null)
         .not("domain", "is", null)
 
-      // From Verified on, the COMPANY is the source of truth and the
-      // prospect ladder mirrors it — both directions: listed→active,
-      // owned→owned, and unlisted→unlisted (the one demotion: a listed
-      // company whose page went dark must stop reading "Listed" on
-      // Sales). The mirror lands on the owner's row when we can match
-      // it, else on the furthest row — domain-mates keep their own
-      // stage; they get the company link, not the conversion.
-      const STATUS_ORDER: Record<string, number> = {
-        prospect: 0, contacted: 1, visitor: 2, verified: 3, owned: 4, unlisted: 5, active: 6,
-      }
-      const MIRROR_FLOOR = STATUS_ORDER.verified
-
-      const ownerIdsNeeded = new Set(
-        (claimedCompanies ?? [])
-          .map((c) => c.owner_id)
-          .filter((v): v is string => typeof v === "string" && v.length > 0),
-      )
-      const ownerEmailByUserId = new Map<string, string>()
-      if (ownerIdsNeeded.size > 0) {
-        const perPage = 200
-        let page = 1
-        while (ownerIdsNeeded.size > 0) {
-          const { data, error } = await supabase.auth.admin.listUsers({ page, perPage })
-          if (error) break
-          const users = data?.users ?? []
-          if (users.length === 0) break
-          for (const u of users) {
-            if (ownerIdsNeeded.has(u.id) && u.email) {
-              ownerEmailByUserId.set(u.id, u.email.toLowerCase())
-              ownerIdsNeeded.delete(u.id)
-            }
-          }
-          if (users.length < perPage) break
-          page++
-        }
-      }
-
+      // Link only — the status mirror runs in step 5 below, over ALL
+      // linked rows, not just the ones this tick happens to link.
       for (const company of claimedCompanies ?? []) {
         const dom = stripHost(company.domain)
         if (!dom) continue
         const prospectIds = domainToProspects.get(dom)
         if (!prospectIds?.length) continue
-
-        const targetStatus =
-          company.status === "listed" ? "active"
-          : company.status === "unlisted" ? "unlisted"
-          : "owned"
-        const targetRank = STATUS_ORDER[targetStatus]
-        const createdAt = company.created_at as string
-        const ownerEmail = company.owner_id ? ownerEmailByUserId.get(company.owner_id) ?? null : null
-
-        const { data: currentRows } = await supabase
-          .from("prospects")
-          .select("id, email, status, company_created_at, converted_at")
-          .in("id", prospectIds)
-
-        const rows = (currentRows ?? []).filter((r) => r.status !== "removed")
-        // The row that carries the conversion: the owner's own address
-        // when it matches a prospect row, else the furthest row (covers
-        // claims made from an address we never contacted — the company
-        // fact must land SOMEWHERE or Sales keeps reading "Prospect").
-        const mirrorRow =
-          rows.find((r) => ownerEmail && r.email && ownerEmail === r.email.toLowerCase())
-          ?? [...rows].sort((a, b) => (STATUS_ORDER[b.status ?? ""] ?? -1) - (STATUS_ORDER[a.status ?? ""] ?? -1))[0]
-
-        for (const row of rows) {
-          const currentRank = STATUS_ORDER[row.status ?? ""] ?? -1
-          const isMirror = row.id === mirrorRow?.id
-          const updates: Record<string, unknown> = {
-            company_id: company.id,
-            company_name: company.name,
-          }
-          // Promote toward the company stage; demote only within the
-          // mirror zone (≥ Verified) so pre-claim outreach stages are
-          // never touched by a company regression.
-          if (isMirror && targetRank > currentRank) updates.status = targetStatus
-          if (isMirror && currentRank >= MIRROR_FLOOR && currentRank > targetRank) updates.status = targetStatus
-          if (!row.company_created_at) updates.company_created_at = createdAt
-          if (isMirror && targetStatus === "active" && !row.converted_at) {
-            updates.converted_at = createdAt
-          }
-          await supabase.from("prospects").update(updates).eq("id", row.id)
+        for (const id of prospectIds) {
+          await supabase
+            .from("prospects")
+            .update({ company_id: company.id, company_name: company.name } as any)
+            .eq("id", id)
         }
+      }
+    }
+  }
+
+  // 5. Mirror company truth onto every linked contact row. From
+  // Verified on, the COMPANY is the source of truth and the prospect
+  // ladder mirrors it — both directions: listed→active, owned→owned,
+  // unlisted→unlisted (the one demotion: a listed company whose page
+  // went dark must stop reading "Listed" on Sales). The mirror lands
+  // on the owner's row when we can match it, else on the furthest row;
+  // domain-mates keep their own stage — they carry the company link,
+  // not the conversion. Runs on every cron tick over ALL linked rows,
+  // so drift from any source (claims from uncontacted addresses,
+  // DB-trigger status flips, admin edits) heals within the hour.
+  {
+    const STATUS_ORDER: Record<string, number> = {
+      prospect: 0, contacted: 1, visitor: 2, verified: 3, owned: 4, unlisted: 5, active: 6,
+    }
+    const MIRROR_FLOOR = STATUS_ORDER.verified
+
+    const { data: claimedCompanies } = await supabase
+      .from("companies")
+      .select("id, name, owner_id, status, created_at")
+      .not("owner_id", "is", null)
+      .in("status", ["owned", "listed", "unlisted"])
+    const companies = claimedCompanies ?? []
+    if (companies.length === 0) return
+
+    const { data: linkedRows } = await supabase
+      .from("prospects")
+      .select("id, email, status, company_id, company_created_at, converted_at")
+      .in("company_id", companies.map((c) => c.id))
+    const rowsByCompany = new Map<string, NonNullable<typeof linkedRows>>()
+    for (const r of linkedRows ?? []) {
+      if (!r.company_id || r.status === "removed") continue
+      const bucket = rowsByCompany.get(r.company_id) ?? []
+      bucket.push(r)
+      rowsByCompany.set(r.company_id, bucket)
+    }
+
+    const ownerIdsNeeded = new Set(
+      companies
+        .map((c) => c.owner_id)
+        .filter((v): v is string => typeof v === "string" && v.length > 0),
+    )
+    const ownerEmailByUserId = new Map<string, string>()
+    if (ownerIdsNeeded.size > 0) {
+      const perPage = 200
+      let page = 1
+      while (ownerIdsNeeded.size > 0) {
+        const { data, error } = await supabase.auth.admin.listUsers({ page, perPage })
+        if (error) break
+        const users = data?.users ?? []
+        if (users.length === 0) break
+        for (const u of users) {
+          if (ownerIdsNeeded.has(u.id) && u.email) {
+            ownerEmailByUserId.set(u.id, u.email.toLowerCase())
+            ownerIdsNeeded.delete(u.id)
+          }
+        }
+        if (users.length < perPage) break
+        page++
+      }
+    }
+
+    for (const company of companies) {
+      const rows = rowsByCompany.get(company.id) ?? []
+      if (rows.length === 0) continue
+
+      const targetStatus =
+        company.status === "listed" ? "active"
+        : company.status === "unlisted" ? "unlisted"
+        : "owned"
+      const targetRank = STATUS_ORDER[targetStatus]
+      const createdAt = company.created_at as string
+      const ownerEmail = company.owner_id ? ownerEmailByUserId.get(company.owner_id) ?? null : null
+
+      // The row that carries the conversion: the owner's own address
+      // when it matches a prospect row, else the furthest row (covers
+      // claims made from an address we never contacted — the company
+      // fact must land SOMEWHERE or Sales keeps reading "Prospect").
+      const mirrorRow =
+        rows.find((r) => ownerEmail && r.email && ownerEmail === r.email.toLowerCase())
+        ?? [...rows].sort((a, b) => (STATUS_ORDER[b.status ?? ""] ?? -1) - (STATUS_ORDER[a.status ?? ""] ?? -1))[0]
+
+      for (const row of rows) {
+        const currentRank = STATUS_ORDER[row.status ?? ""] ?? -1
+        const isMirror = row.id === mirrorRow?.id
+        const updates: Record<string, unknown> = {}
+        // Promote toward the company stage; demote only within the
+        // mirror zone (≥ Verified) so pre-claim outreach stages are
+        // never touched by a company regression.
+        if (isMirror && targetRank > currentRank) updates.status = targetStatus
+        if (isMirror && currentRank >= MIRROR_FLOOR && currentRank > targetRank) updates.status = targetStatus
+        if (!row.company_created_at) updates.company_created_at = createdAt
+        if (isMirror && targetStatus === "active" && !row.converted_at) {
+          updates.converted_at = createdAt
+        }
+        if (Object.keys(updates).length === 0) continue
+        await supabase.from("prospects").update(updates as any).eq("id", row.id)
       }
     }
   }
