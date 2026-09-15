@@ -483,7 +483,7 @@ export function InboxClient({
                       contact menu; unknown senders show just the name. */}
                   <td onClick={(e) => { if (row.prospectId) e.stopPropagation() }}>
                     {row.prospectId ? (
-                      <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                      <div className="flex flex-nowrap items-center gap-1.5 min-w-0">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button
@@ -542,13 +542,13 @@ export function InboxClient({
                           </DropdownMenuContent>
                         </DropdownMenu>
                         {row.prospectStatus && (
-                          <span className="status-pill">
+                          <span className="status-pill shrink-0">
                             <span className={`status-pill-dot ${statusDot}`} />
                             {PROSPECT_STATUS_LABEL[row.prospectStatus] ?? row.prospectStatus}
                           </span>
                         )}
                         {row.prospectChannel && (
-                          <span className="status-pill">{channelLabel(row.prospectChannel)}</span>
+                          <span className="status-pill shrink-0">{channelLabel(row.prospectChannel)}</span>
                         )}
                       </div>
                     ) : (
@@ -585,8 +585,8 @@ export function InboxClient({
                       domain-matched prospect). */}
                   <td>
                     {row.prospectCompanyName ? (
-                      <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-                        <span className="arco-table-status">
+                      <div className="flex flex-nowrap items-center gap-1.5 min-w-0">
+                        <span className="arco-table-status min-w-0">
                           <span className={`arco-table-status-dot ${statusDot}`} />
                           {(() => {
                             const titleText = row.prospectStatus
@@ -689,7 +689,7 @@ export function InboxClient({
                           ) : null
                         })()}
                         {row.prospectSequence && (
-                          <span className="status-pill">
+                          <span className="status-pill shrink-0">
                             <span
                               className={`status-pill-dot ${
                                 SEQUENCE_DOT[row.prospectSequence] ?? "bg-[#a1a1a0]"
@@ -697,9 +697,6 @@ export function InboxClient({
                             />
                             {SEQUENCE_LABEL[row.prospectSequence] ?? row.prospectSequence}
                           </span>
-                        )}
-                        {row.prospectChannel && (
-                          <span className="status-pill">{channelLabel(row.prospectChannel)}</span>
                         )}
                       </div>
                     ) : (
