@@ -4,6 +4,13 @@ const withNextIntl = createNextIntlPlugin('./i18n/request.ts')
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Two dev servers started from this directory share one .next and
+  // clobber each other's webpack chunks — which surfaces as
+  // "Cannot read properties of undefined (reading 'call')" inside
+  // __webpack_require__ on a route that is perfectly fine. A second
+  // server can set NEXT_DIST_DIR to keep its own build output; unset
+  // (every normal run, and every deploy) this is exactly ".next".
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   eslint: {
     ignoreDuringBuilds: true,
   },

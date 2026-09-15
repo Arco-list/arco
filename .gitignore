@@ -5,6 +5,8 @@
 
 # next.js
 /.next/
+# Alternate build output for a second dev server (NEXT_DIST_DIR)
+/.next-*/
 /out/
 
 # production
