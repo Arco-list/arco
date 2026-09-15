@@ -1403,14 +1403,11 @@ export function ProspectsClient({
                           <span className="absolute text-[10px] font-medium text-[#6b6b68]" style={{ top: -16, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap" }}>{rate}</span>
                         )}
                         {toListed && (
-                          // The word is what makes this wider than the 32px
-                          // connector it centres on, so on a phone it runs
-                          // under the status cards either side. Drop the
-                          // word, keep the number — the arrow and the teal
-                          // still read as "onward to Listed", and the title
-                          // spells it out for anyone who needs it.
-                          <span className="absolute text-[10px] font-medium" style={{ top: 4, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap", color: "var(--primary, #016D75)" }} title="Cumulative conversion to Listed from the stage on the left">
-                            {"→ "}<span className="hidden md:inline">{"Listed "}</span>{toListed}
+                          // Just "→ X%" in Listed's purple — the colour IS
+                          // the label (matches the Listed dot), and the
+                          // title spells it out for anyone who needs it.
+                          <span className="absolute text-[10px] font-medium" style={{ top: 4, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap", color: "#7c3aed" }} title="Cumulative conversion to Listed from the stage on the left">
+                            {"→ "}{toListed}
                           </span>
                         )}
                       </div>
