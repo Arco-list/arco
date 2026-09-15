@@ -2311,16 +2311,19 @@ export default function ListingEditorPage() {
 
     const allCompanyIds = companyIds
 
-    // Fetch company info for invites that have company_id but no professional_id
-    const companyOnlyIds = allCompanyIds.filter(id =>
-      (inviteRows ?? []).some(row => (row as any).company_id === id && !row.professional_id)
-    )
+    // Direct company lookup for every credited company, used whenever
+    // the summary view has no row. The view only carries companies with
+    // status listed / unlisted / prospected, so a freshly claimed
+    // company (status 'owned' — exactly the state it is in while its
+    // first project sits in review) is missing from it. Fetching only
+    // the professional_id-less invites left the owner's own row
+    // nameless, which rendered as the "Jouw bedrijf" placeholder.
     let companyMap = new Map<string, { name: string; logo_url: string | null }>()
-    if (companyOnlyIds.length) {
+    if (allCompanyIds.length) {
       const { data: companies } = await supabase
         .from("companies")
         .select("id, name, logo_url")
-        .in("id", companyOnlyIds)
+        .in("id", allCompanyIds)
       if (companies) {
         companyMap = new Map(companies.map(c => [c.id, { name: c.name, logo_url: c.logo_url }]))
       }
@@ -6059,7 +6062,11 @@ export default function ListingEditorPage() {
                         //     first name (a person, not a guess)
                         //   otherwise          → the invite address, a
                         //     guess the publisher can correct
-                        if (inv.isOwner) {
+                        // "Jij" only when the viewer really is the
+                        // publisher — an admin reviewing someone else's
+                        // project needs the owner's name, not their own
+                        // pronoun.
+                        if (inv.isOwner && !isAdminReview) {
                           return <span className="credit-contact-known">{tTeam("contact_you")}</span>
                         }
                         if (inv.ownerFirstName) {
