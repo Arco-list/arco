@@ -28,6 +28,7 @@ import {
 } from "@/app/dashboard/company/actions"
 import { syncCompanyListedStatus } from "@/app/admin/projects/actions"
 import { getCompanyTranslation } from "@/lib/company-translations"
+import { handlePlainTextPaste, handlePlainTextDrop } from "@/lib/plain-text-paste"
 import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services"
 import { translateProfessionalService } from "@/lib/project-translations"
 import { PHOTOGRAPHER_SPECIALTIES } from "@/lib/photographer-specialties"
@@ -1430,6 +1431,8 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
               className="arco-page-title"
               contentEditable
               suppressContentEditableWarning
+              onPaste={handlePlainTextPaste}
+              onDrop={handlePlainTextDrop}
               onFocus={() => setActiveEditField("name")}
               onBlur={handleNameBlur}
               data-placeholder="Company name"
@@ -1492,6 +1495,8 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
               className="arco-body-text"
               contentEditable
               suppressContentEditableWarning
+              onPaste={(e) => handlePlainTextPaste(e, { multiline: true })}
+              onDrop={(e) => handlePlainTextDrop(e, { multiline: true })}
               onFocus={() => setActiveEditField("desc")}
               onBlur={handleDescBlur}
               onInput={() => {

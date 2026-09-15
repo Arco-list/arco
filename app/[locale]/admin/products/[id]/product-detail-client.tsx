@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useEffect, useRef, useState } from "react"
+import { memo, useEffect, useRef, useState, type ClipboardEvent, type DragEvent } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
@@ -27,6 +27,7 @@ import {
   upsertProductFamily,
 } from "../../brands/actions"
 import { groupSpecs, specLabel, specGroup as defaultSpecGroup, matchKnownSpecs, type KnownSpec } from "@/lib/products/spec-groups"
+import { handlePlainTextPaste, handlePlainTextDrop } from "@/lib/plain-text-paste"
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
@@ -124,6 +125,11 @@ const EditableText = memo(function EditableText({
     className,
     contentEditable: true,
     suppressContentEditableWarning: true,
+    // Paste plain text only — pasted markup drags the source site's
+    // font and colour into the page (the value saved is textContent
+    // either way, so this is purely about what renders meanwhile).
+    onPaste: (e: ClipboardEvent<HTMLElement>) => handlePlainTextPaste(e, { multiline }),
+    onDrop: (e: DragEvent<HTMLElement>) => handlePlainTextDrop(e, { multiline }),
     onFocus: () => ecRef.current?.classList.add("on"),
     onBlur: () => {
       ecRef.current?.classList.remove("on")

@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { useTranslations } from "next-intl"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
+import { handlePlainTextPaste, handlePlainTextDrop } from "@/lib/plain-text-paste"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { PersonIcon } from "@/lib/icons/custom-service-icons"
 
@@ -249,6 +250,8 @@ export function AccountSettingsForm({ className }: AccountSettingsFormProps) {
             className="arco-page-title"
             contentEditable
             suppressContentEditableWarning
+            onPaste={handlePlainTextPaste}
+            onDrop={handlePlainTextDrop}
             onFocus={() => setActiveEditField("name")}
             onBlur={(e) => {
               const parts = (e.currentTarget.textContent ?? "").trim().split(/\s+/)

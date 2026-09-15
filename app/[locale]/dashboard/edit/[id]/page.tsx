@@ -119,6 +119,7 @@ import {
   type UploadedPhoto,
 } from "@/hooks/use-project-photo-tour"
 import { resolveFeatureIcon } from "@/lib/icons/project-features"
+import { handlePlainTextPaste, handlePlainTextDrop } from "@/lib/plain-text-paste"
 import { SUBTYPE_ICON_MAP } from "@/components/filter-icon-map"
 import { useCompanyEntitlements } from "@/hooks/use-company-entitlements"
 import {
@@ -460,6 +461,8 @@ const EditableTitle = memo(function EditableTitle({
         className="arco-page-title"
         contentEditable
         suppressContentEditableWarning
+        onPaste={handlePlainTextPaste}
+        onDrop={handlePlainTextDrop}
         onFocus={() => ecRef.current?.classList.add("on")}
         onBlur={() => {
           ecRef.current?.classList.remove("on")
@@ -5353,6 +5356,8 @@ export default function ListingEditorPage() {
               className="arco-body-text"
               contentEditable
               suppressContentEditableWarning
+              onPaste={(e) => handlePlainTextPaste(e, { multiline: true })}
+              onDrop={(e) => handlePlainTextDrop(e, { multiline: true })}
               onFocus={handleDescEditFocus}
               onBlur={handleDescEditBlur}
               onInput={() => {
@@ -5381,6 +5386,8 @@ export default function ListingEditorPage() {
               className="arco-body-text"
               contentEditable
               suppressContentEditableWarning
+              onPaste={(e) => handlePlainTextPaste(e, { multiline: true })}
+              onDrop={(e) => handlePlainTextDrop(e, { multiline: true })}
               onFocus={() => setBodyEditing(true)}
               onInput={(e) => setBodyCharCount(countWords(e.currentTarget.textContent ?? ""))}
               onBlur={(e) => {

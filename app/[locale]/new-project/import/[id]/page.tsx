@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { Check, CheckCircle2, ChevronRight, Plus, X } from "lucide-react"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
+import { handlePlainTextPaste, handlePlainTextDrop } from "@/lib/plain-text-paste"
 import { useAuth } from "@/contexts/auth-context"
 import { regenerateDescription } from "@/app/new-project/import/actions"
 
@@ -903,6 +904,8 @@ export default function ImportReviewPage() {
               className="arco-page-title"
               contentEditable
               suppressContentEditableWarning
+              onPaste={handlePlainTextPaste}
+              onDrop={handlePlainTextDrop}
               onFocus={() => setActiveField("title")}
               onBlur={handleTitleBlur}
               style={{ cursor: "text" }}
@@ -932,6 +935,8 @@ export default function ImportReviewPage() {
               className="arco-body-text proj-desc"
               contentEditable
               suppressContentEditableWarning
+              onPaste={(e) => handlePlainTextPaste(e, { multiline: true })}
+              onDrop={(e) => handlePlainTextDrop(e, { multiline: true })}
               onFocus={() => setActiveField("desc")}
               onBlur={handleDescBlur}
               style={{ cursor: "text", minHeight: "1.7em", textAlign: "center" }}

@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react"
 import { ShareModal } from "@/components/share-modal"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
+import { handlePlainTextPaste, handlePlainTextDrop } from "@/lib/plain-text-paste"
 import { PersonIcon } from "@/lib/icons/custom-service-icons"
 
 import { useLocale, useTranslations } from "next-intl"
@@ -504,6 +505,8 @@ function HomeownerContent() {
               className="arco-page-title"
               contentEditable
               suppressContentEditableWarning
+              onPaste={handlePlainTextPaste}
+              onDrop={handlePlainTextDrop}
               onFocus={() => setActiveEditField("name")}
               onBlur={handleNameBlur}
               data-placeholder={t("your_name")}
