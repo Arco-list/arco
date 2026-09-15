@@ -10,6 +10,10 @@ export type ProspectStatus =
   | "visitor"
   | "verified"
   | "owned"
+  // Mirror of companies.status 'unlisted' — claimed, page currently
+  // hidden. Written only by the company→prospect mirror in
+  // syncPlatformProspects; parked under Listed in the funnel.
+  | "unlisted"
   | "active"
   | "removed"
 
@@ -505,6 +509,7 @@ export type SalesFunnel = {
   visitor: number
   verified: number
   owned: number
+  unlisted: number
   active: number
 }
 
@@ -515,7 +520,8 @@ const PROSPECT_STATUS_RANK: Record<ProspectStatus, number> = {
   visitor: 2,
   verified: 3,
   owned: 4,
-  active: 5,
+  unlisted: 5,
+  active: 6,
 }
 
 const SEQUENCE_RANK: Record<SequenceStatus, number> = {
@@ -1335,7 +1341,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
 }
 
 const EMPTY_SALES_FUNNEL: SalesFunnel = {
-  total: 0, prospect: 0, contacted: 0, visitor: 0, verified: 0, owned: 0, active: 0,
+  total: 0, prospect: 0, contacted: 0, visitor: 0, verified: 0, owned: 0, unlisted: 0, active: 0,
 }
 
 /**
@@ -2128,13 +2134,17 @@ export async function syncPlatformProspects() {
         .not("owner_id", "is", null)
         .not("domain", "is", null)
 
-      // Status advances to 'active' when the company is Listed and 'company'
-      // when it's Draft — but ONLY for the prospect whose email is the
-      // owner's. Domain-mates (colleagues at the same firm) keep their own
-      // funnel stage; they get the company link, not the conversion.
+      // From Verified on, the COMPANY is the source of truth and the
+      // prospect ladder mirrors it — both directions: listed→active,
+      // owned→owned, and unlisted→unlisted (the one demotion: a listed
+      // company whose page went dark must stop reading "Listed" on
+      // Sales). The mirror lands on the owner's row when we can match
+      // it, else on the furthest row — domain-mates keep their own
+      // stage; they get the company link, not the conversion.
       const STATUS_ORDER: Record<string, number> = {
-        prospect: 0, contacted: 1, visitor: 2, verified: 3, owned: 4, active: 5,
+        prospect: 0, contacted: 1, visitor: 2, verified: 3, owned: 4, unlisted: 5, active: 6,
       }
+      const MIRROR_FLOOR = STATUS_ORDER.verified
 
       const ownerIdsNeeded = new Set(
         (claimedCompanies ?? [])
@@ -2167,7 +2177,10 @@ export async function syncPlatformProspects() {
         const prospectIds = domainToProspects.get(dom)
         if (!prospectIds?.length) continue
 
-        const targetStatus = company.status === "listed" ? "active" : "owned"
+        const targetStatus =
+          company.status === "listed" ? "active"
+          : company.status === "unlisted" ? "unlisted"
+          : "owned"
         const targetRank = STATUS_ORDER[targetStatus]
         const createdAt = company.created_at as string
         const ownerEmail = company.owner_id ? ownerEmailByUserId.get(company.owner_id) ?? null : null
@@ -2177,18 +2190,29 @@ export async function syncPlatformProspects() {
           .select("id, email, status, company_created_at, converted_at")
           .in("id", prospectIds)
 
-        for (const row of currentRows ?? []) {
+        const rows = (currentRows ?? []).filter((r) => r.status !== "removed")
+        // The row that carries the conversion: the owner's own address
+        // when it matches a prospect row, else the furthest row (covers
+        // claims made from an address we never contacted — the company
+        // fact must land SOMEWHERE or Sales keeps reading "Prospect").
+        const mirrorRow =
+          rows.find((r) => ownerEmail && r.email && ownerEmail === r.email.toLowerCase())
+          ?? [...rows].sort((a, b) => (STATUS_ORDER[b.status ?? ""] ?? -1) - (STATUS_ORDER[a.status ?? ""] ?? -1))[0]
+
+        for (const row of rows) {
           const currentRank = STATUS_ORDER[row.status ?? ""] ?? -1
-          const isOwnerProspect = Boolean(
-            ownerEmail && row.email && ownerEmail === row.email.toLowerCase(),
-          )
+          const isMirror = row.id === mirrorRow?.id
           const updates: Record<string, unknown> = {
             company_id: company.id,
             company_name: company.name,
           }
-          if (isOwnerProspect && targetRank > currentRank) updates.status = targetStatus
+          // Promote toward the company stage; demote only within the
+          // mirror zone (≥ Verified) so pre-claim outreach stages are
+          // never touched by a company regression.
+          if (isMirror && targetRank > currentRank) updates.status = targetStatus
+          if (isMirror && currentRank >= MIRROR_FLOOR && currentRank > targetRank) updates.status = targetStatus
           if (!row.company_created_at) updates.company_created_at = createdAt
-          if (isOwnerProspect && targetStatus === "active" && !row.converted_at) {
+          if (isMirror && targetStatus === "active" && !row.converted_at) {
             updates.converted_at = createdAt
           }
           await supabase.from("prospects").update(updates).eq("id", row.id)

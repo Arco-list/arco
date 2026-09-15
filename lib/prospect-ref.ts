@@ -14,6 +14,10 @@ const STATUS_ORDER = [
   "visitor",
   "verified",
   "owned",
+  // Mirror of companies.status 'unlisted': claimed, was (or could be)
+  // live, page currently hidden. Written only by the company→prospect
+  // mirror (syncPlatformProspects step 4), never by the claim paths.
+  "unlisted",
   "active",
 ] as const;
 
@@ -298,15 +302,29 @@ export async function advanceProspectStage(
   const supabase = createServiceRoleSupabaseClient();
   const fields = "id, email, company_name, status, apollo_contact_id, company_id";
   type ProspectRow = { id: string; status: string | null; apollo_contact_id: string | null; company_id: string | null };
-  let prospect: ProspectRow | null = null;
+  // Collect EVERY matching row. 400+ companies carry more than one
+  // contact row, and .maybeSingle() returns null on >1 match — which
+  // silently skipped the advance for exactly those companies (and for
+  // claims made from a different address than the contacted one). The
+  // stage is a company-level fact from Verified on, so every linked
+  // contact row mirrors it; the stage mails below still go only to the
+  // address the claim actually came from.
+  const rows: ProspectRow[] = [];
   if (identifier.companyId) {
-    prospect = (await supabase.from("prospects").select(fields).eq("company_id", identifier.companyId).maybeSingle()).data as ProspectRow | null;
+    const { data } = await supabase.from("prospects").select(fields).eq("company_id", identifier.companyId);
+    for (const r of (data ?? []) as ProspectRow[]) rows.push(r);
   }
-  if (!prospect && identifier.email) {
-    prospect = (await supabase.from("prospects").select(fields).eq("email", identifier.email.toLowerCase()).maybeSingle()).data as ProspectRow | null;
+  if (identifier.email) {
+    const { data } = await supabase.from("prospects").select(fields).ilike("email", identifier.email);
+    for (const r of (data ?? []) as ProspectRow[]) if (!rows.some((x) => x.id === r.id)) rows.push(r);
   }
-  if (!prospect) return;
-  if (!canAdvanceTo(prospect.status, stage)) return;
+  for (const prospect of rows) {
+  if (prospect.status === "removed") continue; // soft-deleted stays removed
+  if (!canAdvanceTo(prospect.status, stage)) continue;
+  const isClaimer = Boolean(
+    identifier.email && (prospect as any).email
+      && identifier.email.toLowerCase() === ((prospect as any).email as string).toLowerCase(),
+  );
 
   // Owned = the claim landed: the machine's series is over for this
   // contact (the stage mails from here — owned-reminder, Listed serie —
@@ -334,8 +352,9 @@ export async function advanceProspectStage(
   // Verified-reminder: cart-abandonment mail, +1 business day after the
   // company step was confirmed without a commit. One per address, ever;
   // the drip cron's stage gate cancels it if they reach Owned first,
-  // and mint-at-send gives it a fresh funnel token.
-  if (stage === "verified") {
+  // and mint-at-send gives it a fresh funnel token. Claimer only —
+  // domain-mates mirror the stage but never get the stage mail.
+  if (stage === "verified" && isClaimer) {
     try {
       const email = ((prospect as any).email as string | null) ?? identifier.email ?? null;
       if (email) {
@@ -367,7 +386,8 @@ export async function advanceProspectStage(
   // One per address, ever; the abstract template resolves at send time
   // into the publisher or contributor variant (lib/owned-welcome.ts),
   // and the cron's stage gate cancels it if they reach Active first.
-  if (stage === "owned") {
+  // Claimer only, same as the verified-reminder above.
+  if (stage === "owned" && isClaimer) {
     try {
       const email = ((prospect as any).email as string | null) ?? identifier.email ?? null;
       if (email) {
@@ -409,4 +429,5 @@ export async function advanceProspectStage(
       logger.error("Failed to sync Apollo account stage", { stage }, err as Error);
     }
   }
+  } // for (prospect of rows)
 }

@@ -256,7 +256,9 @@ async function sendOne(
   // send time (like the token mint), so rows enqueued days ago respect
   // today's stage. Intros are not gated: they CREATE the contacted
   // stage. Values are the highest ladder index the template may send at.
-  const STAGE_LADDER = ["prospect", "contacted", "visitor", "verified", "owned", "active"]
+  // 'unlisted' (claimed, page hidden — the company→prospect mirror
+  // writes it) sits above owned: every ceiling below still cancels.
+  const STAGE_LADDER = ["prospect", "contacted", "visitor", "verified", "owned", "unlisted", "active"]
   const STAGE_CEILING: Record<string, number> = {
     "prospect-followup": 1,
     "prospect-final": 1,

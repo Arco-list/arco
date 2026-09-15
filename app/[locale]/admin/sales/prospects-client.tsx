@@ -57,6 +57,8 @@ export const STATUS_CONFIG: Record<ProspectStatus, { label: string; cls: string;
   visitor: { label: "Visitor", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
   verified: { label: "Verified", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
   owned: { label: "Owned", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
+  // Mirror of companies 'unlisted' — claimed, page currently hidden.
+  unlisted: { label: "Unlisted", cls: "bg-gray-50 text-gray-600", dot: "bg-[#a1a1a0]" },
   active: { label: "Listed", cls: "bg-purple-50 text-purple-800 font-semibold", dot: "bg-[#7c3aed]" },
   // Removed never renders in the funnel — the row hides any contact with this
   // status, and the company row drops entirely if every contact is removed.
@@ -67,7 +69,7 @@ export const STATUS_CONFIG: Record<ProspectStatus, { label: string; cls: string;
 // Statuses surfaced in the multi-select status filter. 'removed' is a soft-
 // delete marker — admin doesn't filter for it, the row is just hidden.
 const ALL_STATUSES: ProspectStatus[] = [
-  "prospect", "contacted", "visitor", "verified", "owned", "active",
+  "prospect", "contacted", "visitor", "verified", "owned", "unlisted", "active",
 ]
 
 export const SEQUENCE_CONFIG: Record<SequenceStatus, { label: string; dot: string }> = {
@@ -134,8 +136,11 @@ function getSuppressionState(contact: { bouncedAt: string | null; complainedAt: 
   return null
 }
 
-// Funnel stages aligned with Growth lifecycle model
-const FUNNEL_STAGES: { status: ProspectStatus; label: string; driver: "prospect" | "acquisition" | "retention" }[] = [
+// Funnel stages aligned with Growth lifecycle model. 'subscribed' is a
+// forward-looking stage (no billing data yet — count stays 0, card
+// disabled), mirroring the companies funnel. 'unlisted' is NOT a chain
+// stage: it renders as a parked card under Listed, same as /companies.
+const FUNNEL_STAGES: { status: ProspectStatus | "subscribed"; label: string; driver: "prospect" | "acquisition" | "retention" | "monetization" }[] = [
   { status: "prospect", label: "Prospect", driver: "prospect" },
   { status: "contacted", label: "Contacted", driver: "prospect" },
   { status: "visitor", label: "Visitor", driver: "acquisition" },
@@ -145,6 +150,7 @@ const FUNNEL_STAGES: { status: ProspectStatus; label: string; driver: "prospect"
   { status: "verified", label: "Verified", driver: "acquisition" },
   { status: "owned", label: "Owned", driver: "acquisition" },
   { status: "active", label: "Listed", driver: "retention" },
+  { status: "subscribed", label: "Subscribed", driver: "monetization" },
 ]
 
 // First card where each driver label should appear
@@ -152,12 +158,15 @@ const DRIVER_LABEL_AT: Record<string, string> = {
   prospect: "prospect",
   acquisition: "visitor",
   retention: "active",
+  monetization: "subscribed",
 }
 
 const DRIVER_COLORS: Record<string, string> = {
   prospect: "#f59e0b",
   acquisition: "#2563eb",
   retention: "#7c3aed",
+  // Same green as the dashboard's monetization driver.
+  monetization: "#0f766e",
 }
 
 // Source labels shown in the multi-pill cell. The DB still stores the
@@ -1352,26 +1361,35 @@ export function ProspectsClient({
         {(() => {
           const cols = FUNNEL_STAGES.map((_, i) => i === 0 ? "auto" : "1fr auto").join(" ")
           const stageKeys = FUNNEL_STAGES.map((s) => s.status)
+          // Parked Unlisted rows count as "in or past" every stage up to
+          // and including Owned (they claimed — they left the track just
+          // before Listed), so the chain rates stay honest.
+          const unlistedCount = (funnel as any).unlisted ?? 0
+          const ownedIdx = stageKeys.indexOf("owned")
+          const listedIdx = stageKeys.indexOf("active")
           const cohorted = stageKeys.map((key, i) =>
             stageKeys.slice(i).reduce((sum, k) => sum + ((funnel as any)[k] ?? 0), 0)
+            + (i <= ownedIdx ? unlistedCount : 0)
           )
 
           return (
-            <div style={{ display: "grid", gridTemplateColumns: cols, gap: 0, alignItems: "start" }}>
+            <div style={{ display: "grid", gridTemplateColumns: cols, gridTemplateRows: "auto auto", gap: 0, alignItems: "start" }}>
               {FUNNEL_STAGES.map((stage, i) => {
                 const count = (funnel as any)[stage.status] ?? 0
                 const prevCohort = i > 0 ? cohorted[i - 1] : funnel.total
                 const thisCohort = cohorted[i]
-                const rate = i === 0 ? "" : conversionRate(prevCohort, thisCohort)
+                // No billing data yet: the connector into Subscribed shows
+                // the metric without a rate, same as /companies.
+                const rate = i === 0 ? "" : stage.status === "subscribed" ? "—" : conversionRate(prevCohort, thisCohort)
                 // Cumulative conversion from the connector's left stage all
                 // the way to Listed — rendered under the line, below the
                 // single-stage rate. One decimal below 10% (6/1000 would
                 // otherwise round to a misleading 1%). Skipped on the final
                 // connector, where it would duplicate the stage rate.
-                const listedCohort = cohorted[cohorted.length - 1]
+                const listedCohort = cohorted[listedIdx]
                 const listedPct = prevCohort > 0 ? (listedCohort / prevCohort) * 100 : 0
                 const toListed =
-                  i > 0 && i < FUNNEL_STAGES.length - 1 && listedCohort > 0 && prevCohort > 0
+                  i > 0 && i < listedIdx && listedCohort > 0 && prevCohort > 0
                     ? `${listedPct < 10 ? listedPct.toFixed(1) : Math.round(listedPct)}%`
                     : ""
                 const color = DRIVER_COLORS[stage.driver]
@@ -1404,8 +1422,9 @@ export function ProspectsClient({
                         <div style={{ height: 24 }} />
                       )}
                       <button
-                        onClick={() => toggleStatus(stage.status)}
-                        className={`rounded-[3px] border bg-white px-3 py-3 transition-colors hover:border-[#c4c4c2] ${statusFilter.includes(stage.status) ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4]"}`}
+                        onClick={stage.status === "subscribed" ? undefined : () => toggleStatus(stage.status as ProspectStatus)}
+                        disabled={stage.status === "subscribed"}
+                        className={`rounded-[3px] border bg-white px-3 py-3 transition-colors ${stage.status === "subscribed" ? "cursor-default opacity-60" : "hover:border-[#c4c4c2]"} ${statusFilter.includes(stage.status as ProspectStatus) ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4]"}`}
                         style={{ width: 132 }}
                       >
                         <div className="flex items-center gap-[6px] mb-1.5">
@@ -1418,6 +1437,22 @@ export function ProspectsClient({
                   </Fragment>
                 )
               })}
+              {/* Parked end-state (row 2): Unlisted under Listed — a
+                  park/off-ramp, not a step, so no connector. Mirrors the
+                  /companies funnel. Card column = 2·listedIdx+1. */}
+              <div style={{ gridRow: 2, gridColumn: 2 * listedIdx + 1, display: "flex", flexDirection: "column" }}>
+                <div style={{ height: 6 }} />
+                <button
+                  type="button"
+                  onClick={() => toggleStatus("unlisted")}
+                  className={`rounded-[3px] border bg-white px-3 py-1.5 transition-colors hover:border-[#c4c4c2] flex items-center gap-[6px] ${statusFilter.includes("unlisted") ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4]"}`}
+                  style={{ width: 132 }}
+                >
+                  <span className="status-pill-dot shrink-0" style={{ background: "#a1a1a0" }} />
+                  <span style={{ fontFamily: "var(--font-sans)", fontSize: 11, fontWeight: 400, color: "var(--text-primary)", whiteSpace: "nowrap" }}>Unlisted</span>
+                  <span className="text-xs ml-auto" style={{ color: "var(--text-primary)" }}>{unlistedCount}</span>
+                </button>
+              </div>
             </div>
           )
         })()}
