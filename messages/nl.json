@@ -1194,7 +1194,24 @@
     "credit_nudge_dismiss_hint": "Deze melding komt terug wanneer je een nieuw project publiceert zonder vermelde professionals.",
     "credit_growth_title": "Wil je meer projecten op je pagina?",
     "credit_growth_body": "Alleen de eigenaar van een project — meestal de architect — kan het publiceren. Vraag hen om jouw bedrijf op het project te vermelden; het verschijnt dan vanzelf hier.",
-    "close": "Sluiten"
+    "close": "Sluiten",
+    "billing": {
+      "title": "Abonnement",
+      "current_plan": "Huidig abonnement",
+      "plan_free": "Gratis",
+      "founding_badge": "Founding",
+      "founding_body": "{company} heeft founding-toegang: Pro is gratis tijdens de lanceringsperiode.",
+      "founding_next": "Zodra de facturatie live gaat, laten we je ruim van tevoren weten wat er verandert. Je behoudt het tarief van nu.",
+      "free_body": "Je gebruikt Arco gratis. Publiceren blijft altijd gratis en onbeperkt — Pro ontgrendelt de projecten waarop anderen je hebben vermeld.",
+      "renews_yearly": "Wordt jaarlijks verlengd op {date}.",
+      "renews_monthly": "Wordt maandelijks verlengd op {date}.",
+      "ends_on": "Loopt af op {date}. Tot die datum houd je alle Pro-functies.",
+      "status_past_due": "Betaling openstaand",
+      "past_due_help": "Een incasso kan enkele dagen onderweg zijn. Je houdt intussen volledige toegang; we nemen contact op als er iets misgaat.",
+      "view_plans": "Bekijk abonnementen",
+      "manage_billing": "Facturen en betaalgegevens",
+      "owner_only": "Alleen de eigenaar van het bedrijf kan het abonnement beheren."
+    }
   },
   "business": {
     "for_architects": "Voor Architecten",

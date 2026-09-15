@@ -1194,7 +1194,24 @@
     "credit_nudge_dismiss_hint": "This notice returns when you publish another project with no professionals credited.",
     "credit_growth_title": "Want more projects on your page?",
     "credit_growth_body": "Only the project's owner — usually the architect — can publish it. Ask them to credit your company on the project, and it appears here automatically.",
-    "close": "Close"
+    "close": "Close",
+    "billing": {
+      "title": "Subscription",
+      "current_plan": "Current plan",
+      "plan_free": "Free",
+      "founding_badge": "Founding",
+      "founding_body": "{company} has founding access: Pro is free during the launch period.",
+      "founding_next": "We'll tell you well in advance when billing goes live. You keep today's price.",
+      "free_body": "You're on the free plan. Publishing stays free and unlimited — Pro unlocks the projects others have credited you on.",
+      "renews_yearly": "Renews annually on {date}.",
+      "renews_monthly": "Renews monthly on {date}.",
+      "ends_on": "Ends on {date}. You keep every Pro feature until then.",
+      "status_past_due": "Payment outstanding",
+      "past_due_help": "A direct debit can take a few days to clear. You keep full access meanwhile; we'll be in touch if anything goes wrong.",
+      "view_plans": "View plans",
+      "manage_billing": "Invoices and payment details",
+      "owner_only": "Only the company owner can manage the subscription."
+    }
   },
   "business": {
     "for_architects": "For Architects",
