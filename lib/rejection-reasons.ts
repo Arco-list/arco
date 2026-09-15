@@ -21,7 +21,7 @@
 export const REJECTION_REASON_OPTIONS = [
   { key: "not_residential", label: "Not a residential project" },
   { key: "insufficient_photos", label: "Insufficient photos" },
-  { key: "low_quality_images", label: "Low quality images" },
+  { key: "not_professional_photos", label: "Not professionally photographed" },
   { key: "no_real_photos", label: "No real photos (renders)" },
   { key: "missing_details", label: "Missing project details" },
   { key: "duplicate", label: "Duplicate project" },
@@ -45,6 +45,12 @@ export const REJECTION_REASON_EMAIL_COPY: Record<string, { en: string; nl: strin
     en: 'The project has too few photos. Add more images and resubmit it.',
     nl: 'Het project heeft te weinig foto’s. Voeg meer afbeeldingen toe en dien het opnieuw in.',
   },
+  not_professional_photos: {
+    en: 'The photos do not appear to be taken by a professional photographer. Projects on Arco are shown with professional photography — add professional photos and resubmit the project.',
+    nl: 'De foto’s lijken niet door een professionele fotograaf gemaakt. Projecten op Arco worden getoond met professionele fotografie — voeg professionele foto’s toe en dien het project opnieuw in.',
+  },
+  // Retired in favour of not_professional_photos; kept so rejections
+  // sent before the change still render their full sentence.
   low_quality_images: {
     en: 'The project photos do not meet our quality guidelines. Upload higher-resolution images and resubmit the project.',
     nl: 'De projectfoto’s voldoen niet aan onze kwaliteitsrichtlijnen. Upload afbeeldingen in hogere resolutie en dien het project opnieuw in.',
@@ -75,6 +81,7 @@ export const REJECTION_REASON_EMAIL_COPY: Record<string, { en: string; nl: strin
 export const REJECTION_REASON_KEYS: Record<string, string> = {
   "not a residential project": "not_residential",
   "insufficient photos": "insufficient_photos",
+  "not professionally photographed": "not_professional_photos",
   "low quality images": "low_quality_images",
   "no real photos (renders)": "no_real_photos",
   "missing project details": "missing_details",
@@ -84,6 +91,15 @@ export const REJECTION_REASON_KEYS: Record<string, string> = {
   // historical rejections — both resolve to the same (updated) copy.
   "not distinctive enough as architecture or interior design": "not_architecture",
   "not architecture or interior design": "not_architecture",
+  // Dutch labels stored while the reviewer dialog saved its translated
+  // label rather than the canonical phrase (fixed in dc2e694).
+  "geen residentieel project": "not_residential",
+  "onvoldoende foto's": "insufficient_photos",
+  "afbeeldingen van lage kwaliteit": "low_quality_images",
+  "ontbrekende projectdetails": "missing_details",
+  "dubbel project": "duplicate",
+  "ongepaste inhoud": "inappropriate",
+  "geen architectuur of interieurontwerp": "not_architecture",
   // Written by the admin action when a status change carries no reason.
   "no reason provided": "none_given",
 }

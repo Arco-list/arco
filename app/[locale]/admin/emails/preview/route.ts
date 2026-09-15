@@ -24,7 +24,7 @@ const TEST_VARS = {
   // Real stored shape: the ". "-joined canonical labels the admin ticked
   // (two here, so the preview shows the bulleted multi-reason variant).
   // The template maps each label to its full sentence.
-  rejection_reason: 'Low quality images. No real photos (renders)',
+  rejection_reason: 'Not professionally photographed. No real photos (renders)',
   company_name: 'Marco van Veldhuizen',
   code: '847291',
   businessname: 'Studio Architectuur',
