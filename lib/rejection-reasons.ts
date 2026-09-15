@@ -22,6 +22,7 @@ export const REJECTION_REASON_OPTIONS = [
   { key: "not_residential", label: "Not a residential project" },
   { key: "insufficient_photos", label: "Insufficient photos" },
   { key: "not_professional_photos", label: "Not professionally photographed" },
+  { key: "low_resolution", label: "Low resolution images" },
   { key: "no_real_photos", label: "No real photos (renders)" },
   { key: "missing_details", label: "Missing project details" },
   { key: "duplicate", label: "Duplicate project" },
@@ -49,8 +50,13 @@ export const REJECTION_REASON_EMAIL_COPY: Record<string, { en: string; nl: strin
     en: 'The photos do not appear to be taken by a professional photographer. Projects on Arco are shown with professional photography — add professional photos and resubmit the project.',
     nl: 'De foto’s lijken niet door een professionele fotograaf gemaakt. Projecten op Arco worden getoond met professionele fotografie — voeg professionele foto’s toe en dien het project opnieuw in.',
   },
-  // Retired in favour of not_professional_photos; kept so rejections
-  // sent before the change still render their full sentence.
+  low_resolution: {
+    en: 'The photos are too low-resolution to display sharply on Arco. Upload the original files (at least 1200 px wide) and resubmit the project.',
+    nl: 'De foto’s hebben een te lage resolutie om scherp te tonen op Arco. Upload de originele bestanden (minimaal 1200 px breed) en dien het project opnieuw in.',
+  },
+  // Retired in favour of not_professional_photos and low_resolution;
+  // kept so rejections sent before the change still render their full
+  // sentence.
   low_quality_images: {
     en: 'The project photos do not meet our quality guidelines. Upload higher-resolution images and resubmit the project.',
     nl: 'De projectfoto’s voldoen niet aan onze kwaliteitsrichtlijnen. Upload afbeeldingen in hogere resolutie en dien het project opnieuw in.',
@@ -82,6 +88,7 @@ export const REJECTION_REASON_KEYS: Record<string, string> = {
   "not a residential project": "not_residential",
   "insufficient photos": "insufficient_photos",
   "not professionally photographed": "not_professional_photos",
+  "low resolution images": "low_resolution",
   "low quality images": "low_quality_images",
   "no real photos (renders)": "no_real_photos",
   "missing project details": "missing_details",
