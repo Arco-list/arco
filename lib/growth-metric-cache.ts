@@ -392,9 +392,9 @@ const INITIAL_CLAIM_TOKEN = `(person.properties.$initial_current_url ILIKE '%/cl
   AND (person.properties.$initial_current_url ILIKE '%?t=%' OR person.properties.$initial_current_url ILIKE '%&t=%'))`
 
 const NOT_MAIL_SCANNER = `NOT (
-  (properties.$current_url ILIKE '%/claim%' OR properties.$current_url ILIKE '%/businesses%')
-  AND (properties.$current_url ILIKE '%?t=%' OR properties.$current_url ILIKE '%&t=%'
-       OR properties.$current_url ILIKE '%ref=%' OR properties.$current_url ILIKE '%inviteEmail=%')
+  (coalesce(properties.$current_url, '') ILIKE '%/claim%' OR coalesce(properties.$current_url, '') ILIKE '%/businesses%')
+  AND (coalesce(properties.$current_url, '') ILIKE '%?t=%' OR coalesce(properties.$current_url, '') ILIKE '%&t=%'
+       OR coalesce(properties.$current_url, '') ILIKE '%ref=%' OR coalesce(properties.$current_url, '') ILIKE '%inviteEmail=%')
   AND coalesce(properties.$geoip_country_code, '') NOT IN ('NL', 'BE')
 )`
 
