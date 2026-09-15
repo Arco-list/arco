@@ -384,6 +384,13 @@ const NOT_INTERNAL_TEAM = `(person.properties.email IS NULL OR person.properties
 // one week. A mailed token URL (claim t=, ref=, inviteEmail=) opened
 // from non-NL/BE geo is that signature; the audience is Dutch
 // companies, so the false-negative cost is a stray holiday click.
+// First-touch equivalent of the claim-token session rules: the
+// person's FIRST pageview was a mailed claim link. Mirrors
+// ENTRY_CHANNEL_EXPR so the new-pros numerators stay consistent with
+// the pro-visitors denominators they're divided by.
+const INITIAL_CLAIM_TOKEN = `(person.properties.$initial_current_url ILIKE '%/claim%'
+  AND (person.properties.$initial_current_url ILIKE '%?t=%' OR person.properties.$initial_current_url ILIKE '%&t=%'))`
+
 const NOT_MAIL_SCANNER = `NOT (
   (properties.$current_url ILIKE '%/claim%' OR properties.$current_url ILIKE '%/businesses%')
   AND (properties.$current_url ILIKE '%?t=%' OR properties.$current_url ILIKE '%&t=%'
@@ -518,14 +525,16 @@ function buildHogQLQuery(metric: CachedMetricKey, bucketExpr: string, sinceIso: 
       return proSignupQuery(
         bucketExpr,
         sinceIso,
-        `person.properties.$initial_current_url ILIKE '%/businesses/architects%' AND (person.properties.$initial_current_url ILIKE '%ref=%' OR person.properties.$initial_current_url ILIKE '%inviteEmail=%')`,
+        `(person.properties.$initial_current_url ILIKE '%/businesses/architects%' AND (person.properties.$initial_current_url ILIKE '%ref=%' OR person.properties.$initial_current_url ILIKE '%inviteEmail=%'))
+         OR (${INITIAL_CLAIM_TOKEN} AND coalesce(person.properties.$initial_utm_source, '') != 'arco_claim_invite')`,
       )
     case "new_pros_invites":
       // First touched a project-invite landing.
       return proSignupQuery(
         bucketExpr,
         sinceIso,
-        `person.properties.$initial_current_url ILIKE '%/businesses/professionals%' AND person.properties.$initial_current_url ILIKE '%inviteEmail=%'`,
+        `(person.properties.$initial_current_url ILIKE '%/businesses/professionals%' AND person.properties.$initial_current_url ILIKE '%inviteEmail=%')
+         OR person.properties.$initial_utm_source = 'arco_claim_invite'`,
       )
     case "new_pros_email":
       // First touched an Arco pro transactional email (project-live,
@@ -536,7 +545,9 @@ function buildHogQLQuery(metric: CachedMetricKey, bucketExpr: string, sinceIso: 
         `person.properties.$initial_utm_source = 'arco_pro' AND person.properties.$initial_utm_medium = 'email'`,
       )
     case "new_pros_direct":
-      return proSignupQuery(bucketExpr, sinceIso, sourceCategoryPredicate("direct", "person.properties.$initial_referring_domain"))
+      // Mailed claim links arrive referrer-less and would land here —
+      // they belong to sales/invites above.
+      return proSignupQuery(bucketExpr, sinceIso, `(${sourceCategoryPredicate("direct", "person.properties.$initial_referring_domain")}) AND NOT ${INITIAL_CLAIM_TOKEN}`)
     case "new_pros_google":
       return proSignupQuery(bucketExpr, sinceIso, sourceCategoryPredicate("google", "person.properties.$initial_referring_domain"))
     case "new_pros_social":
