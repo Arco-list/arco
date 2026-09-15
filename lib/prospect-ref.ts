@@ -302,29 +302,20 @@ export async function advanceProspectStage(
   const supabase = createServiceRoleSupabaseClient();
   const fields = "id, email, company_name, status, apollo_contact_id, company_id";
   type ProspectRow = { id: string; status: string | null; apollo_contact_id: string | null; company_id: string | null };
-  // Collect EVERY matching row. 400+ companies carry more than one
-  // contact row, and .maybeSingle() returns null on >1 match — which
-  // silently skipped the advance for exactly those companies (and for
-  // claims made from a different address than the contacted one). The
-  // stage is a company-level fact from Verified on, so every linked
-  // contact row mirrors it; the stage mails below still go only to the
-  // address the claim actually came from.
-  const rows: ProspectRow[] = [];
-  if (identifier.companyId) {
-    const { data } = await supabase.from("prospects").select(fields).eq("company_id", identifier.companyId);
-    for (const r of (data ?? []) as ProspectRow[]) rows.push(r);
-  }
-  if (identifier.email) {
-    const { data } = await supabase.from("prospects").select(fields).ilike("email", identifier.email);
-    for (const r of (data ?? []) as ProspectRow[]) if (!rows.some((x) => x.id === r.id)) rows.push(r);
-  }
+  // Only the claimer's OWN rows advance: the stage is a fact about the
+  // person who verified/claimed. Colleagues keep their own outreach
+  // stage — the company-level truth reaches Sales via the company join
+  // (companyRowStatus), never by promoting an uninvolved contact. The
+  // email match is case-insensitive and takes every duplicate row
+  // (.maybeSingle() previously returned null on >1 match and silently
+  // skipped the advance).
+  if (!identifier.email) return;
+  const { data: matched } = await supabase.from("prospects").select(fields).ilike("email", identifier.email);
+  const rows = (matched ?? []) as ProspectRow[];
   for (const prospect of rows) {
   if (prospect.status === "removed") continue; // soft-deleted stays removed
   if (!canAdvanceTo(prospect.status, stage)) continue;
-  const isClaimer = Boolean(
-    identifier.email && (prospect as any).email
-      && identifier.email.toLowerCase() === ((prospect as any).email as string).toLowerCase(),
-  );
+  const isClaimer = true; // rows are email-matched — always the claimer
 
   // Owned = the claim landed: the machine's series is over for this
   // contact (the stage mails from here — owned-reminder, Listed serie —

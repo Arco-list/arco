@@ -279,7 +279,7 @@ async function sendOne(
     // so we fall back to email match for those.
     let lookup = supabase
       .from("prospects")
-      .select("email, status")
+      .select("email, status, company_id")
       .limit(1)
     lookup = row.company_id
       ? lookup.eq("company_id", row.company_id)
@@ -287,8 +287,33 @@ async function sendOne(
     const { data: prospect } = await lookup.maybeSingle()
     if (prospect?.email) recipient = prospect.email
 
+    // Company gate: from Verified on the COMPANY is the source of
+    // truth, so a verified/claimed company silences the series for
+    // every contact at the firm — including colleagues whose own row
+    // (rightly) still shows their outreach stage. The effective stage
+    // is whichever is further: the contact's own, or the company's.
+    const gateCompanyId = (prospect as { company_id?: string | null } | null)?.company_id ?? row.company_id ?? null
+    let companyIdx = -1
+    if (gateCompanyId) {
+      const { data: gateCompany } = await supabase
+        .from("companies")
+        .select("status")
+        .eq("id", gateCompanyId)
+        .maybeSingle()
+      const s = (gateCompany as { status?: string } | null)?.status
+      companyIdx =
+        s === "verified" ? STAGE_LADDER.indexOf("verified")
+        : s === "owned" ? STAGE_LADDER.indexOf("owned")
+        : s === "unlisted" ? STAGE_LADDER.indexOf("unlisted")
+        : s === "listed" ? STAGE_LADDER.indexOf("active")
+        : -1
+    }
+
     const ceiling = STAGE_CEILING[row.template]
-    const stageIdx = prospect?.status ? STAGE_LADDER.indexOf(prospect.status) : -1
+    const stageIdx = Math.max(
+      prospect?.status ? STAGE_LADDER.indexOf(prospect.status) : -1,
+      companyIdx,
+    )
     if (ceiling !== undefined && stageIdx > ceiling) {
       const { error } = await supabase
         .from("email_drip_queue")

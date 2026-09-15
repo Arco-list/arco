@@ -1147,6 +1147,17 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     const sortedContacts = sortContactsByRecency(g.contacts)
     const agg = aggregateContacts(sortedContacts)
     const claimed = g.companyId ? claimedById.get(g.companyId) ?? null : null
+    // From Verified on, the ROW follows the company — the company
+    // status is a fact about the firm, so it derives from the join
+    // instead of being stamped onto a colleague's contact row. Below
+    // Verified (added/prospected/invited or no link) the row keeps the
+    // furthest CONTACT stage: that part is outreach history.
+    const companyRowStatus: ProspectStatus | null =
+      claimed?.status === "listed" ? "active"
+      : claimed?.status === "unlisted" ? "unlisted"
+      : claimed?.status === "owned" ? "owned"
+      : claimed?.status === "verified" ? "verified"
+      : null
     const events = emailEventCounts.get(key)
     // Use email_events when present (any event_type seen) — otherwise
     // fall back to the prospect-derived counts so older rows still
@@ -1160,7 +1171,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
       primaryContact: sortedContacts[0],
       contacts: sortedContacts,
       claimedCompany: claimed,
-      status: agg.status,
+      status: companyRowStatus ?? agg.status,
       sequenceStatus: agg.sequenceStatus,
       sources: agg.sources,
       emailsSent: hasEventCoverage ? events.sent : agg.emailsSent,
@@ -2224,13 +2235,13 @@ export async function syncPlatformProspects() {
       const createdAt = company.created_at as string
       const ownerEmail = company.owner_id ? ownerEmailByUserId.get(company.owner_id) ?? null : null
 
-      // The row that carries the conversion: the owner's own address
-      // when it matches a prospect row, else the furthest row (covers
-      // claims made from an address we never contacted — the company
-      // fact must land SOMEWHERE or Sales keeps reading "Prospect").
-      const mirrorRow =
-        rows.find((r) => ownerEmail && r.email && ownerEmail === r.email.toLowerCase())
-        ?? [...rows].sort((a, b) => (STATUS_ORDER[b.status ?? ""] ?? -1) - (STATUS_ORDER[a.status ?? ""] ?? -1))[0]
+      // Only the owner's OWN row carries the conversion — their claim
+      // is a fact about them as a person. Colleagues keep their own
+      // outreach stage; the company-level truth reaches the Sales row
+      // via the claimedCompany join (companyRowStatus), not by
+      // promoting a contact who never converted. When the owner has no
+      // prospect row, no contact row moves at all.
+      const mirrorRow = rows.find((r) => ownerEmail && r.email && ownerEmail === r.email.toLowerCase()) ?? null
 
       for (const row of rows) {
         const currentRank = STATUS_ORDER[row.status ?? ""] ?? -1
