@@ -197,7 +197,10 @@ export function BillingClient({
                    matters right now. The quiet banner (.arco-banner) is
                    the system's "here is where you stand" surface —
                    exactly what a plan summary is. ─────────────────── */}
-            <div className="arco-banner" style={{ marginBottom: 32, alignItems: "flex-start" }}>
+            {/* No alignItems override: .arco-banner centres its children,
+                which is what keeps the buttons on the optical middle of a
+                two- or three-line body instead of hanging from the top. */}
+            <div className="arco-banner" style={{ marginBottom: 32 }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 5 }}>
                   <h3 className="arco-banner-title" style={{ margin: 0 }}>{planTitle}</h3>
