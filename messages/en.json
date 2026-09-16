@@ -1227,7 +1227,14 @@
       "action_fix_payment": "Update payment details",
       "pill_ends": "Ends {date}",
       "one_project": "1 project",
-      "unlimited": "Unlimited"
+      "unlimited": "Unlimited",
+      "opening": "Opening…",
+      "error_not_configured": "Stripe isn't connected yet. Add the test key to .env.local.",
+      "error_not_signed_in": "You're not signed in.",
+      "error_no_company": "You don't have a company yet.",
+      "error_not_owner": "Only the company owner can manage the subscription.",
+      "error_nothing_to_manage": "Nothing to manage yet — no subscription or invoices.",
+      "error_failed": "That didn't work. Try again in a moment."
     }
   },
   "business": {

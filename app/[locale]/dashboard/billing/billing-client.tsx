@@ -1,5 +1,7 @@
 "use client"
 
+import { useState, useTransition } from "react"
+import { toast } from "sonner"
 import { useLocale, useTranslations } from "next-intl"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
@@ -7,6 +9,7 @@ import { PricingSection } from "@/components/pricing-section"
 
 import type { CompanyBilling } from "@/lib/subscriptions/get-company-subscription"
 import { PREVIEW_LABELS, PREVIEW_STATES, type PreviewState } from "@/lib/subscriptions/preview-states"
+import { openPortalAction, startCheckoutAction } from "./actions"
 
 /**
  * Plan and billing for one company.
@@ -39,6 +42,26 @@ export function BillingClient({
         })
       : null
 
+  const [pending, startTransition] = useTransition()
+  const [busy, setBusy] = useState<"portal" | "primary" | null>(null)
+
+  // Every route out of this page ends at Stripe. The action returns a
+  // URL rather than redirecting itself, so a failure can surface here
+  // as a message instead of a blank page.
+  const go = (which: "portal" | "primary", run: () => Promise<{ url: string } | { error: string }>) => {
+    if (pending) return
+    setBusy(which)
+    startTransition(async () => {
+      const result = await run()
+      if ("url" in result) {
+        window.location.href = result.url
+        return
+      }
+      setBusy(null)
+      toast.error(tb(`error_${result.error}` as never))
+    })
+  }
+
   const renewal = formatDate(billing.currentPeriodEnd)
   const isPro = billing.plan === "pro"
 
@@ -68,6 +91,10 @@ export function BillingClient({
     : billing.cancelAtPeriodEnd ? tb("action_reactivate")
     : !isPro ? tb("action_upgrade")
     : null
+
+  // Reactivating and fixing a payment both happen inside Stripe's
+  // portal; only a new subscription needs Checkout.
+  const primaryGoesToPortal = billing.status === "past_due" || billing.cancelAtPeriodEnd
 
   // What the plan actually gives, mirroring the pricing page so the two
   // never drift. Price sits on the subscription row alone; the rest are
@@ -196,18 +223,32 @@ export function BillingClient({
                 <p className="arco-banner-body">{statusLine}</p>
               </div>
 
-              {isOwner && (primaryAction || billing.stripeCustomerId) && (
+              {isOwner && (
                 <div className="arco-banner-actions">
                   {/* Tertiary first, primary last — the eye lands on the
-                      action we want taken. */}
-                  {billing.stripeCustomerId && (
-                    <button type="button" className="btn-tertiary" style={{ fontSize: 14, padding: "10px 20px" }} disabled>
-                      {tb("manage_billing")}
-                    </button>
-                  )}
+                      action we want taken. Manage plan is always here:
+                      invoices and payment details are what a billing
+                      page is for, even between subscriptions. */}
+                  <button
+                    type="button"
+                    className="btn-tertiary"
+                    style={{ fontSize: 14, padding: "10px 20px", opacity: busy === "portal" ? 0.6 : 1 }}
+                    onClick={() => go("portal", openPortalAction)}
+                    disabled={pending}
+                  >
+                    {busy === "portal" ? tb("opening") : tb("manage_billing")}
+                  </button>
                   {primaryAction && (
-                    <button type="button" className="btn-primary" style={{ fontSize: 14, padding: "10px 20px" }} disabled>
-                      {primaryAction}
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      style={{ fontSize: 14, padding: "10px 20px", opacity: busy === "primary" ? 0.6 : 1 }}
+                      onClick={() => go("primary", primaryGoesToPortal
+                        ? openPortalAction
+                        : () => startCheckoutAction(billing.interval === "month" ? "month" : "year"))}
+                      disabled={pending}
+                    >
+                      {busy === "primary" ? tb("opening") : primaryAction}
                     </button>
                   )}
                 </div>

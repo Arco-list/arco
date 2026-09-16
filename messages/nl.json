@@ -1227,7 +1227,14 @@
       "action_fix_payment": "Betaalgegevens bijwerken",
       "pill_ends": "Loopt af op {date}",
       "one_project": "1 project",
-      "unlimited": "Onbeperkt"
+      "unlimited": "Onbeperkt",
+      "opening": "Openen…",
+      "error_not_configured": "Stripe is nog niet gekoppeld. Voeg de testsleutel toe aan .env.local.",
+      "error_not_signed_in": "Je bent niet ingelogd.",
+      "error_no_company": "Je hebt nog geen bedrijf.",
+      "error_not_owner": "Alleen de eigenaar van het bedrijf kan het abonnement beheren.",
+      "error_nothing_to_manage": "Er is nog niets te beheren — je hebt nog geen abonnement of facturen.",
+      "error_failed": "Dat lukte niet. Probeer het zo nog eens."
     }
   },
   "business": {
