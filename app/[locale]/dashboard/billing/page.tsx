@@ -17,10 +17,10 @@ const TEAM_ROLES: ("owner" | "admin" | "member")[] = ["owner", "admin", "member"
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ company_id?: string; preview?: string; view?: string }>
+  searchParams: Promise<{ company_id?: string; preview?: string }>
   params?: Promise<{ locale: string }>
 }) {
-  const { company_id: companyIdParam, preview, view } = await searchParams
+  const { company_id: companyIdParam, preview } = await searchParams
   const supabase = await createServerSupabaseClient()
 
   // A missing session is not an exception — it is a logged-out visitor.
@@ -128,7 +128,6 @@ export default async function BillingPage({
       companyName={company.name}
       usage={usage}
       details={details}
-      showPlans={view === "plans" || (billing.plan === "free" && view !== "billing")}
       isOwner={company.owner_id === user.id || Boolean(previewState)}
       billing={billing}
       previewState={previewState}

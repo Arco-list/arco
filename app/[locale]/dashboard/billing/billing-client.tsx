@@ -10,8 +10,8 @@ import type { CompanyBilling } from "@/lib/subscriptions/get-company-subscriptio
 import { FREE_CONTRIBUTOR_LIMIT, type ProjectUsage } from "@/lib/subscriptions/usage-types"
 import type { BillingDetails } from "@/lib/subscriptions/billing-details-types"
 import { PREVIEW_LABELS, PREVIEW_STATES, type PreviewState } from "@/lib/subscriptions/preview-states"
+import { PricingSection } from "@/components/pricing-section"
 import { openPortalAction, startCheckoutAction } from "./actions"
-import { PlanOptions } from "./plan-options"
 
 /**
  * Plan and billing for one company.
@@ -27,7 +27,6 @@ export function BillingClient({
   billing,
   usage,
   details,
-  showPlans = false,
   previewState = null,
 }: {
   companyName: string
@@ -35,8 +34,6 @@ export function BillingClient({
   billing: CompanyBilling
   usage: ProjectUsage
   details: BillingDetails
-  /** ?view=plans — the plan chooser instead of the billing detail. */
-  showPlans?: boolean
   /** Set only for an admin viewing a synthetic state. */
   previewState?: string | null
 }) {
@@ -198,12 +195,15 @@ export function BillingClient({
                   {/* Invoices and payment details have their own
                       section below, so the banner's slot goes to the one
                       thing that is not on this page: the plan chooser. */}
+                  {/* The plans sit further down this same page, so this
+                      is a jump rather than a route: nothing to load,
+                      nothing to come back from. */}
                   <a
-                    href={showPlans ? "/dashboard/billing" : "/dashboard/billing?view=plans"}
+                    href="#plans"
                     className="btn-tertiary"
                     style={{ fontSize: 14, padding: "10px 20px", textDecoration: "none" }}
                   >
-                    {showPlans ? tb("back_to_overview") : tb("manage_plan")}
+                    {tb("manage_plan")}
                   </a>
                   {primaryAction && (
                     <button
@@ -263,17 +263,6 @@ export function BillingClient({
               <p className="arco-small-text" style={{ marginBottom: 24 }}>{tb("owner_only")}</p>
             )}
 
-            {showPlans ? (
-              <PlanOptions
-                billing={billing}
-                busy={busy === "primary"}
-                pending={pending}
-                onChoose={(interval) => go("primary", interval === null
-                  ? openPortalAction
-                  : () => startCheckoutAction(interval))}
-              />
-            ) : (
-              <>
             {/* ── Payment ──────────────────────────────────────────── */}
             {isOwner && (billing.stripeCustomerId || details.paymentMethod) && (
               <div style={{ marginBottom: 36 }}>
@@ -349,8 +338,7 @@ export function BillingClient({
                 ))}
               </div>
             )}
-              </>
-            )}
+
 
             {/* Founding companies have no Stripe object yet — say what
                 happens next rather than leaving a dead page. */}
@@ -369,6 +357,13 @@ export function BillingClient({
           </div>
         </div>
 
+        {/* The plans themselves, on the page rather than behind a
+            link: this is a short page, and a plan you cannot see is a
+            plan you do not consider. The pricing cards are the ones the
+            public pricing page uses, so the two can never disagree. */}
+        <div id="plans" style={{ borderTop: "1px solid var(--arco-light-grey)", paddingTop: 8, scrollMarginTop: 80 }}>
+          <PricingSection />
+        </div>
       </main>
 
       <Footer />
