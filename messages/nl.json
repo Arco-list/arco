@@ -1234,7 +1234,10 @@
       "error_no_company": "Je hebt nog geen bedrijf.",
       "error_not_owner": "Alleen de eigenaar van het bedrijf kan het abonnement beheren.",
       "error_nothing_to_manage": "Er is nog niets te beheren — je hebt nog geen abonnement of facturen.",
-      "error_failed": "Dat lukte niet. Probeer het zo nog eens."
+      "error_failed": "Dat lukte niet. Probeer het zo nog eens.",
+      "projects_count": "{count, plural, =0 {Geen projecten} one {# project} other {# projecten}}",
+      "free_limit": "{count, plural, one {# zichtbaar op Gratis} other {# zichtbaar op Gratis}}",
+      "hidden_note": "{count, plural, one {# project staat klaar maar is niet zichtbaar op je bedrijfspagina. Upgrade naar Pro om het te tonen.} other {# projecten staan klaar maar zijn niet zichtbaar op je bedrijfspagina. Upgrade naar Pro om ze te tonen.}}"
     }
   },
   "business": {

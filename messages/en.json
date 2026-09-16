@@ -1234,7 +1234,10 @@
       "error_no_company": "You don't have a company yet.",
       "error_not_owner": "Only the company owner can manage the subscription.",
       "error_nothing_to_manage": "Nothing to manage yet — no subscription or invoices.",
-      "error_failed": "That didn't work. Try again in a moment."
+      "error_failed": "That didn't work. Try again in a moment.",
+      "projects_count": "{count, plural, =0 {No projects} one {# project} other {# projects}}",
+      "free_limit": "{count, plural, one {# visible on Free} other {# visible on Free}}",
+      "hidden_note": "{count, plural, one {# project is ready but not shown on your company page. Upgrade to Pro to show it.} other {# projects are ready but not shown on your company page. Upgrade to Pro to show them.}}"
     }
   },
   "business": {

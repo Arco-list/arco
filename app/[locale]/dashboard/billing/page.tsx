@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { getActiveCompanyId } from "@/lib/active-company"
 import { getCompanyBilling } from "@/lib/subscriptions/get-company-subscription"
+import { getProjectUsage } from "@/lib/subscriptions/get-project-usage"
 import { isPreviewState, previewBilling } from "@/lib/subscriptions/preview-states"
 import { isAdminUser } from "@/lib/auth-utils"
 import { BillingClient } from "./billing-client"
@@ -106,9 +107,15 @@ export default async function BillingPage({
     }
   }
 
+  // Usage is read against the plan the page is about to render — in a
+  // preview that is the synthetic plan, so the bars match the state
+  // being reviewed rather than the admin's own company.
+  const usage = await getProjectUsage(company.id, billing.plan === "pro")
+
   return (
     <BillingClient
       companyName={company.name}
+      usage={usage}
       isOwner={company.owner_id === user.id || Boolean(previewState)}
       billing={billing}
       previewState={previewState}

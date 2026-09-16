@@ -8,6 +8,7 @@ import { Footer } from "@/components/footer"
 import { PricingSection } from "@/components/pricing-section"
 
 import type { CompanyBilling } from "@/lib/subscriptions/get-company-subscription"
+import { FREE_CONTRIBUTOR_LIMIT, type ProjectUsage } from "@/lib/subscriptions/usage-types"
 import { PREVIEW_LABELS, PREVIEW_STATES, type PreviewState } from "@/lib/subscriptions/preview-states"
 import { openPortalAction, startCheckoutAction } from "./actions"
 
@@ -23,11 +24,13 @@ export function BillingClient({
   companyName,
   isOwner,
   billing,
+  usage,
   previewState = null,
 }: {
   companyName: string
   isOwner: boolean
   billing: CompanyBilling
+  usage: ProjectUsage
   /** Set only for an admin viewing a synthetic state. */
   previewState?: string | null
 }) {
@@ -258,6 +261,43 @@ export function BillingClient({
               )}
             </div>
 
+            {/* ── What is actually on Arco ───────────────────────
+                   Two meters, because the pricing model draws a line
+                   here: publishing is unlimited on every plan, credits
+                   are what Pro unlocks. A company that cannot publish
+                   (a photographer, say) gets only the second — an empty
+                   publisher meter would imply a limit that does not
+                   apply to them. */}
+            <div style={{ marginBottom: 36, display: "flex", flexDirection: "column", gap: 24 }}>
+              {usage.canPublish && (
+                <UsageBar
+                  label={t("pricing_feature_published")}
+                  count={usage.publishedCount}
+                  countLabel={tb("projects_count", { count: usage.publishedCount })}
+                  fillPct={100}
+                  right={tb("unlimited")}
+                />
+              )}
+
+              <UsageBar
+                label={t("pricing_feature_contributor")}
+                count={usage.contributorTotal}
+                countLabel={tb("projects_count", { count: usage.contributorTotal })}
+                // The bar's length is everything they have; the filled
+                // part is what the public actually sees.
+                fillPct={usage.contributorTotal === 0 ? 0 : (usage.contributorVisible / usage.contributorTotal) * 100}
+                // The dashed mark sits where Free stops. Past that point
+                // the bar is theirs but not visible.
+                markerPct={
+                  isPro || usage.contributorTotal <= FREE_CONTRIBUTOR_LIMIT
+                    ? null
+                    : (FREE_CONTRIBUTOR_LIMIT / usage.contributorTotal) * 100
+                }
+                right={isPro ? tb("unlimited") : tb("free_limit", { count: FREE_CONTRIBUTOR_LIMIT })}
+                note={usage.contributorHidden > 0 ? tb("hidden_note", { count: usage.contributorHidden }) : null}
+              />
+            </div>
+
             {!isOwner && (
               <p className="arco-small-text" style={{ marginBottom: 24 }}>{tb("owner_only")}</p>
             )}
@@ -318,6 +358,74 @@ export function BillingClient({
       </main>
 
       <Footer />
+    </div>
+  )
+}
+
+/**
+ * One usage meter: a label, a filled track with the count inside it,
+ * and a value on the right. The count sits in the bar rather than above
+ * it so the number and the thing it measures cannot drift apart when
+ * the bar is short.
+ */
+function UsageBar({
+  label,
+  count,
+  countLabel,
+  fillPct,
+  markerPct = null,
+  right,
+  note = null,
+}: {
+  label: string
+  count: number
+  countLabel: string
+  fillPct: number
+  markerPct?: number | null
+  right: string
+  note?: string | null
+}) {
+  const filled = Math.max(0, Math.min(100, fillPct))
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+        <span style={{ fontSize: 14 }}>{label}</span>
+        <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{right}</span>
+      </div>
+
+      <div style={{
+        position: "relative", height: 28, borderRadius: 14,
+        background: "var(--arco-surface)", overflow: "hidden",
+      }}>
+        <div style={{
+          position: "absolute", inset: 0, width: `${filled}%`,
+          background: "var(--primary, #016D75)", borderRadius: 14,
+          transition: "width .2s ease",
+        }} />
+        {/* Where Free stops. Drawn over the fill so it stays visible on
+            both sides of the boundary. */}
+        {markerPct != null && (
+          <div style={{
+            position: "absolute", top: 0, bottom: 0, left: `${Math.min(100, Math.max(0, markerPct))}%`,
+            borderLeft: "2px dashed rgba(255,255,255,.85)",
+          }} />
+        )}
+        {/* The count rides inside the bar, white on the fill while it
+            has room, and slides out to dark text when the fill is too
+            short to hold it. */}
+        <span style={{
+          position: "absolute", top: 0, bottom: 0, display: "flex", alignItems: "center",
+          left: filled > 22 ? 14 : `calc(${filled}% + 14px)`,
+          fontSize: 13, fontWeight: 400, whiteSpace: "nowrap",
+          color: filled > 22 ? "#fff" : "var(--text-secondary)",
+        }}>
+          {count === 0 ? countLabel : countLabel}
+        </span>
+      </div>
+
+      {note && (
+        <p className="arco-small-text" style={{ marginTop: 8, marginBottom: 0 }}>{note}</p>
+      )}
     </div>
   )
 }
