@@ -832,12 +832,13 @@ export default function DesignPage() {
                 </div>
 
                 <div>
-                  <h4 className="arco-label" style={{ marginBottom: 16 }}>Unlimited — dashed outline, fill dissolves</h4>
+                  <h4 className="arco-label" style={{ marginBottom: 16 }}>Unlimited — dashed outline, room to spare</h4>
                   <UsageBar label="Gepubliceerde projecten" countLabel="6 projecten" fillPct={100} right="Onbeperkt" unbounded />
                   <p className="arco-small-text" style={{ marginTop: 10 }}>
-                    Recommended. The dashed outline refuses to promise a distance, and the fill has
-                    no right-hand edge to read as &ldquo;full&rdquo;. The number says how many; the
-                    track only says it continues.
+                    Recommended. The dashed outline refuses to promise a distance, so the room
+                    beyond the fill reads as &ldquo;and onward&rdquo; rather than &ldquo;this much
+                    left&rdquo; — the same gap against a solid track would mean the opposite. Fill
+                    cut square on the right, because a rounded cap says &ldquo;ends here&rdquo;.
                   </p>
                 </div>
 

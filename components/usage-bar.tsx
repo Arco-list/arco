@@ -36,11 +36,12 @@ export function UsageBar({
   note?: string | null
   /**
    * No ceiling exists. The track becomes a dashed outline rather than a
-   * solid groove — a measured groove always reads as a distance to
-   * fill — and the fill dissolves toward the right instead of ending,
-   * so there is no edge to read as "full" and no empty remainder to
-   * read as "what is left". The count carries the information; the
-   * track only says the road continues.
+   * solid groove — a measured groove always reads as a distance to fill
+   * — and the fill stops well short of the end, leaving open room
+   * inside it. The dashed boundary is what makes that room readable:
+   * against a solid track the gap would mean "this much left", against
+   * a broken one it means "and onward". The count carries the number;
+   * the track only says the road continues.
    */
   unbounded?: boolean
 }) {
@@ -70,11 +71,10 @@ export function UsageBar({
         <div style={{
           position: "absolute", inset: 0, width: `${filled}%`,
           background: "var(--primary, #016D75)",
-          // Rounded on the left only when it dissolves: a cap on the
-          // right would reintroduce the edge the fade exists to remove.
+          // Rounded on the left, cut square on the right: a rounded cap
+          // says "ends here", a straight one says "carries on past the
+          // frame".
           borderRadius: unbounded ? "14px 0 0 14px" : 14,
-          maskImage: unbounded ? "linear-gradient(90deg, #000 0%, #000 55%, transparent 100%)" : undefined,
-          WebkitMaskImage: unbounded ? "linear-gradient(90deg, #000 0%, #000 55%, transparent 100%)" : undefined,
           transition: "width .2s ease",
         }} />
         {/* Where the plan stops. Drawn over the fill so it stays visible
