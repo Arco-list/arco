@@ -1250,7 +1250,20 @@
       "invoice_status_paid": "Betaald",
       "invoice_status_open": "Openstaand",
       "invoice_status_void": "Vervallen",
-      "invoice_status_uncollectible": "Oninbaar"
+      "invoice_status_uncollectible": "Oninbaar",
+      "manage_plan": "Beheer abonnement",
+      "back_to_overview": "Terug naar overzicht",
+      "current_plan_button": "Huidig abonnement",
+      "action_downgrade": "Terug naar Gratis",
+      "action_switch_yearly": "Overstappen naar jaarlijks",
+      "action_switch_monthly": "Overstappen naar maandelijks",
+      "action_start_paying": "Abonnement starten",
+      "free_tagline": "Publiceer je projecten en claim je eerste vermelding.",
+      "pro_tagline": "Word vermeld op elk project dat je hebt helpen realiseren.",
+      "forever": "voor altijd",
+      "per_month_suffix": "per maand, excl. btw",
+      "per_month_billed_yearly": "per maand · €{total} per jaar, excl. btw",
+      "everything_in_free": "Alles uit Gratis, plus:"
     }
   },
   "business": {

@@ -5,13 +5,13 @@ import { toast } from "sonner"
 import { useLocale, useTranslations } from "next-intl"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { PricingSection } from "@/components/pricing-section"
 
 import type { CompanyBilling } from "@/lib/subscriptions/get-company-subscription"
 import { FREE_CONTRIBUTOR_LIMIT, type ProjectUsage } from "@/lib/subscriptions/usage-types"
 import type { BillingDetails } from "@/lib/subscriptions/billing-details-types"
 import { PREVIEW_LABELS, PREVIEW_STATES, type PreviewState } from "@/lib/subscriptions/preview-states"
 import { openPortalAction, startCheckoutAction } from "./actions"
+import { PlanOptions } from "./plan-options"
 
 /**
  * Plan and billing for one company.
@@ -27,6 +27,7 @@ export function BillingClient({
   billing,
   usage,
   details,
+  showPlans = false,
   previewState = null,
 }: {
   companyName: string
@@ -34,6 +35,8 @@ export function BillingClient({
   billing: CompanyBilling
   usage: ProjectUsage
   details: BillingDetails
+  /** ?view=plans — the plan chooser instead of the billing detail. */
+  showPlans?: boolean
   /** Set only for an admin viewing a synthetic state. */
   previewState?: string | null
 }) {
@@ -192,15 +195,16 @@ export function BillingClient({
                       action we want taken. Manage plan is always here:
                       invoices and payment details are what a billing
                       page is for, even between subscriptions. */}
-                  <button
-                    type="button"
+                  {/* Invoices and payment details have their own
+                      section below, so the banner's slot goes to the one
+                      thing that is not on this page: the plan chooser. */}
+                  <a
+                    href={showPlans ? "/dashboard/billing" : "/dashboard/billing?view=plans"}
                     className="btn-tertiary"
-                    style={{ fontSize: 14, padding: "10px 20px", opacity: busy === "portal" ? 0.6 : 1 }}
-                    onClick={() => go("portal", openPortalAction)}
-                    disabled={pending}
+                    style={{ fontSize: 14, padding: "10px 20px", textDecoration: "none" }}
                   >
-                    {busy === "portal" ? tb("opening") : tb("manage_billing")}
-                  </button>
+                    {showPlans ? tb("back_to_overview") : tb("manage_plan")}
+                  </a>
                   {primaryAction && (
                     <button
                       type="button"
@@ -259,6 +263,17 @@ export function BillingClient({
               <p className="arco-small-text" style={{ marginBottom: 24 }}>{tb("owner_only")}</p>
             )}
 
+            {showPlans ? (
+              <PlanOptions
+                billing={billing}
+                busy={busy === "primary"}
+                pending={pending}
+                onChoose={(interval) => go("primary", interval === null
+                  ? openPortalAction
+                  : () => startCheckoutAction(interval))}
+              />
+            ) : (
+              <>
             {/* ── Payment ──────────────────────────────────────────── */}
             {isOwner && (billing.stripeCustomerId || details.paymentMethod) && (
               <div style={{ marginBottom: 36 }}>
@@ -334,6 +349,8 @@ export function BillingClient({
                 ))}
               </div>
             )}
+              </>
+            )}
 
             {/* Founding companies have no Stripe object yet — say what
                 happens next rather than leaving a dead page. */}
@@ -352,15 +369,6 @@ export function BillingClient({
           </div>
         </div>
 
-        {/* The plans themselves, for anyone without an active
-            subscription. A subscriber has nothing to choose here — they
-            change plan through the portal — so the sales cards would be
-            noise on their page. */}
-        {billing.plan === "free" && (
-          <div style={{ borderTop: "1px solid var(--arco-light-grey)", paddingTop: 8 }}>
-            <PricingSection />
-          </div>
-        )}
       </main>
 
       <Footer />
