@@ -3,8 +3,10 @@
 import { useLocale, useTranslations } from "next-intl"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
+import { PricingSection } from "@/components/pricing-section"
 
 import type { CompanyBilling } from "@/lib/subscriptions/get-company-subscription"
+import { PREVIEW_LABELS, PREVIEW_STATES, type PreviewState } from "@/lib/subscriptions/preview-states"
 
 /**
  * Plan and billing for one company.
@@ -18,10 +20,13 @@ export function BillingClient({
   companyName,
   isOwner,
   billing,
+  previewState = null,
 }: {
   companyName: string
   isOwner: boolean
   billing: CompanyBilling
+  /** Set only for an admin viewing a synthetic state. */
+  previewState?: string | null
 }) {
   const t = useTranslations("dashboard")
   const tb = useTranslations("dashboard.billing")
@@ -48,6 +53,33 @@ export function BillingClient({
         { href: "/dashboard/inbox", label: t("inbox") },
         { href: "/dashboard/billing", label: t("plans") },
       ]} />
+
+      {/* Admin-only switcher. Never rendered for a real visitor: the
+          server only sets previewState for an admin. */}
+      {previewState && (
+        <div style={{ background: "var(--surface)", borderBottom: "1px solid var(--arco-light-grey)", padding: "10px 0" }}>
+          <div className="wrap" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span className="arco-eyebrow" style={{ color: "var(--arco-mid-grey)" }}>Preview</span>
+            {PREVIEW_STATES.map((s) => (
+              <a
+                key={s}
+                href={`/dashboard/billing?preview=${s}`}
+                className="status-pill"
+                style={{
+                  textDecoration: "none",
+                  borderColor: s === previewState ? "#1c1c1a" : undefined,
+                  color: s === previewState ? "#1c1c1a" : "var(--arco-mid-grey)",
+                }}
+              >
+                {PREVIEW_LABELS[s as PreviewState]}
+              </a>
+            ))}
+            <a href="/dashboard/billing" className="arco-small-text" style={{ marginLeft: "auto" }}>
+              Exit preview
+            </a>
+          </div>
+        </div>
+      )}
 
       <div className="discover-page-title">
         <div className="wrap">
@@ -107,11 +139,6 @@ export function BillingClient({
             {/* ── Actions ───────────────────────────────────────── */}
             {isOwner ? (
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                {billing.plan === "free" && (
-                  <a href="/dashboard/pricing" className="btn-primary" style={{ fontSize: 14, padding: "12px 24px", textDecoration: "none" }}>
-                    {tb("view_plans")}
-                  </a>
-                )}
                 {billing.stripeCustomerId && (
                   <button type="button" className="btn-tertiary" style={{ fontSize: 14, padding: "12px 24px" }} disabled>
                     {tb("manage_billing")}
@@ -132,6 +159,16 @@ export function BillingClient({
 
           </div>
         </div>
+
+        {/* The plans themselves, for anyone without an active
+            subscription. A subscriber has nothing to choose here — they
+            change plan through the portal — so the sales cards would be
+            noise on their page. */}
+        {billing.plan === "free" && (
+          <div style={{ borderTop: "1px solid var(--arco-light-grey)", paddingTop: 8 }}>
+            <PricingSection />
+          </div>
+        )}
       </main>
 
       <Footer />

@@ -3,6 +3,8 @@ import { redirect } from "next/navigation"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { getActiveCompanyId } from "@/lib/active-company"
 import { getCompanyBilling } from "@/lib/subscriptions/get-company-subscription"
+import { isPreviewState, previewBilling } from "@/lib/subscriptions/preview-states"
+import { isAdminUser } from "@/lib/auth-utils"
 import { BillingClient } from "./billing-client"
 
 // Same team roles the team page uses — a company's own people may see
@@ -12,9 +14,9 @@ const TEAM_ROLES: ("owner" | "admin" | "member")[] = ["owner", "admin", "member"
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ company_id?: string }>
+  searchParams: Promise<{ company_id?: string; preview?: string }>
 }) {
-  const { company_id: companyIdParam } = await searchParams
+  const { company_id: companyIdParam, preview } = await searchParams
   const supabase = await createServerSupabaseClient()
 
   // A missing session is not an exception — it is a logged-out visitor.
@@ -80,13 +82,36 @@ export default async function BillingPage({
 
   if (!company) redirect("/create-company")
 
-  const billing = await getCompanyBilling(company.id)
+  // Admin preview: render a synthetic state through the real code path,
+  // so states that are slow (a year-old subscription), rare (a failed
+  // collection) or deliberately unreachable (a trial, ruled out in D2)
+  // can still be reviewed. Display only — nothing is written, and a
+  // non-admin asking for one simply gets their own real state.
+  let billing = await getCompanyBilling(company.id)
+  let previewState: string | null = null
+
+  if (preview) {
+    const { data: profile } = await serviceClient
+      .from("profiles")
+      .select("user_types, admin_role")
+      .eq("id", user.id)
+      .maybeSingle()
+    const admin = isAdminUser(
+      (profile as { user_types?: string[] | null } | null)?.user_types,
+      (profile as { admin_role?: string | null } | null)?.admin_role,
+    )
+    if (admin && isPreviewState(preview)) {
+      billing = previewBilling(preview)
+      previewState = preview
+    }
+  }
 
   return (
     <BillingClient
       companyName={company.name}
-      isOwner={company.owner_id === user.id}
+      isOwner={company.owner_id === user.id || Boolean(previewState)}
       billing={billing}
+      previewState={previewState}
     />
   )
 }
