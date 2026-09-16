@@ -5715,6 +5715,25 @@ body.no-scroll {
 }
 .service-menu--pills .service-pill-group:first-of-type { margin-top: 0; }
 
+/* ── Touch: no zoom on focus ──────────────────────────────────────
+   iOS Safari zooms the page in when a focused field's text is under
+   16px — and never zooms back out, so the reader is left panning a
+   page that no longer fits. The fix is the field, not the viewport:
+   locking maximum-scale would take pinch-zoom away from everyone,
+   which is an accessibility right, not a nuisance.
+
+   Coarse pointers get 16px; every other size on the platform stays
+   where it was. Element selectors rather than classes, because it is
+   the browser's rule and it applies to any field, however it was
+   dressed. */
+@media (hover: none) and (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
 /* ── Company lookup ───────────────────────────────────────────────
    Finding a company by name: a field, and under it the matches as rows
    you can press. Used by the claim funnel (where the match becomes the
