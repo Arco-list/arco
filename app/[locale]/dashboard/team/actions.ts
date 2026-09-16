@@ -373,6 +373,16 @@ export async function removeTeamMemberAction(input: z.infer<typeof removeMemberS
     .eq("company_id", companyInfo.companyId)
   if (error) return { success: false, error: "Failed to remove member." }
 
+  // Removing the member who held the company-mail flag would leave the
+  // company with nobody receiving it. The toggle's guard cannot catch
+  // this route, so repair it here.
+  try {
+    const { ensureCompanyEmailReceiver } = await import("@/lib/companies/ensure-company-email-receiver")
+    await ensureCompanyEmailReceiver(companyInfo.companyId)
+  } catch {
+    // Non-fatal: the send path still falls back to the owner.
+  }
+
   revalidatePath("/dashboard/team")
   return { success: true }
 }

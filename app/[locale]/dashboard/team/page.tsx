@@ -100,6 +100,16 @@ export default async function TeamPage({
 
   if (!company) redirect("/create-company")
 
+  // Self-heal before rendering: a company with no receiver would show
+  // every switch off, which reads as "nobody gets company mail" — while
+  // the send path quietly falls back to the owner. Repair, don't lie.
+  try {
+    const { ensureCompanyEmailReceiver } = await import("@/lib/companies/ensure-company-email-receiver")
+    await ensureCompanyEmailReceiver(company.id)
+  } catch {
+    // Non-fatal: the page still renders, the send path still resolves.
+  }
+
   if (!isOwner && company.owner_id === user.id) {
     isOwner = true
   }

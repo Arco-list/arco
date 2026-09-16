@@ -196,7 +196,10 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
             </div>
 
             {/* Members table */}
-            <div style={{ borderTop: "1px solid var(--arco-light-grey)" }}>
+            {/* No rule above the first row: the column header already
+                separates the count from the list, and two lines in a
+                row read as an empty band. */}
+            <div>
               {/* Column header — label + info dot centred on the
                   switch column (44px cell, overflow lets the text
                   centre on the switch either side). */}
