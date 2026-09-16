@@ -151,6 +151,19 @@ export const FlooringIcon = mark(
 /** Furniture — the sofa face on: one stroke over both rolled arms and
  *  around the base, the backrest an arc between them, a seat line and
  *  a cushion split making the front reading unmistakable, two feet. */
+/** Upholstery — the curtain: a rail with one finial curl, and two
+ *  panels each drawn in a single pen stroke that gathers across the
+ *  top, falls, waves along the hem and climbs back to a near-miss
+ *  closure. A curtain rather than a chair — the trade is the fabric,
+ *  and a chair would only read as Furniture again. */
+export const UpholsteryIcon = mark(
+  <>
+    <path d="M4.3 5.7C9 5.3 15 5.3 19.7 5.7c.4.1.5.5.3.8" />
+    <path d="M5.5 6.6c.9-.5 1.7.4 2.6-.1.8-.5 1.6.4 2.5-.1C10.4 10 10.3 14.6 10 18.6c-1 .6-1.7-.5-2.5-.1-.8.4-1.4.8-2.3.1C5 14.6 5.1 10 5.5 6.8" />
+    <path d="M18.6 6.6c-.9-.5-1.7.4-2.6-.1-.8-.5-1.6.4-2.5-.1C13.7 10 13.8 14.6 14.1 18.6c1 .6 1.7-.5 2.5-.1.8.4 1.4.8 2.3.1C19.1 14.6 19 10 18.6 6.8" />
+  </>,
+)
+
 export const FurnitureIcon = mark(
   <>
       <path d="M6.6 11.8C6.6 10.9 6.6 9.9 6.4 9.2C6.1 8.1 4.5 8.3 4.4 9.5C4.2 11.7 4.2 14.2 4.4 16.5C9.4 16.9 14.6 16.9 19.6 16.5C19.8 14.2 19.8 11.7 19.6 9.4C19.5 8.2 17.9 8.1 17.6 9.2C17.4 9.9 17.4 10.9 17.4 11.8" />

@@ -3,6 +3,9 @@ import { UsageBar } from "@/components/usage-bar"
 import { FAQPreview } from "./faq-preview"
 import { AdminTabs } from "@/components/admin/admin-tabs"
 import { DiscoverCardPreview } from "./discover-card-preview"
+import { ProfessionalCardPreview } from "./professional-card-preview"
+import { ServicePickerPreview } from "./service-picker-preview"
+import { CompanyLookupPreview } from "./company-lookup-preview"
 import { ServiceMarksPreview } from "./service-marks-preview"
 import { UiIconsPreview } from "./ui-icons-preview"
 import { CreditPreviews } from "./credit-previews"
@@ -437,45 +440,103 @@ export default function DesignPage() {
           {/* FORM ELEMENTS */}
           <div style={{ marginBottom: 80 }}>
             <h2 id="form-elements" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Form Elements</h2>
-            <div>
+            <div style={{ marginBottom: 48 }}>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Inputs</h4>
-              <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40 }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 500 }}>
-                  <div>
-                    <label className="arco-small-text" style={{ display: "block", marginBottom: 8 }}>Default Input</label>
-                    <input type="text" placeholder="Enter text..." className="input-base input-default" style={{ width: "100%" }} />
+              <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: "clamp(10px, 3vw, 40px)" }}>
+                <div style={{ maxWidth: 500 }}>
+                  <label className="form-label" htmlFor="d-name">Bedrijf</label>
+                  <input id="d-name" type="text" className="form-input" placeholder="Typ je bedrijfsnaam..." />
+
+                  <label className="form-label" htmlFor="d-focus">Focus</label>
+                  <input id="d-focus" type="text" className="form-input" defaultValue="Studio Vermeer" style={{ borderColor: "var(--arco-black)" }} />
+
+                  {/* The state the funnel leans on hardest: a value we
+                      resolved, shown in its place in the form with the
+                      line underneath saying what happens if it stands. */}
+                  <label className="form-label" htmlFor="d-address">Kantoorlocatie</label>
+                  <input id="d-address" type="text" className="form-input" placeholder="Typ je adres..." style={{ marginBottom: 0 }} />
+                  <p className="form-note">Behoud Keizersgracht 123, Amsterdam</p>
+
+                  <label className="form-label" htmlFor="d-readonly">Read-only</label>
+                  <input id="d-readonly" type="text" className="form-input" readOnly value="arcolist.com" />
+
+                  {/* Everything before the @ is a field; the domain is
+                      fact, so it sits outside the box. Shown in its error
+                      state, which is where both halves have to hold. */}
+                  <label className="form-label form-label--error" htmlFor="d-email">E-mail</label>
+                  <div className="form-email" style={{ marginBottom: 0 }}>
+                    <input id="d-email" type="text" className="form-input form-input--error" defaultValue="niek" />
+                    <span className="form-email-domain">@arcolist.com</span>
                   </div>
-                  <div>
-                    <label className="arco-small-text" style={{ display: "block", marginBottom: 8 }}>Focused Input</label>
-                    <input type="text" placeholder="Click to focus..." className="input-base" style={{ width: "100%", border: "1px solid var(--arco-black)" }} />
-                  </div>
-                  <div>
-                    <label className="arco-small-text" style={{ display: "block", marginBottom: 8, color: "var(--destructive)" }}>Error Input</label>
-                    <input type="text" placeholder="Invalid input..." className="input-base input-error" style={{ width: "100%" }} />
-                    <p className="arco-small-text" style={{ marginTop: 4, color: "var(--destructive)" }}>This field is required</p>
-                  </div>
-                  <div>
-                    <label className="arco-small-text" style={{ display: "block", marginBottom: 8 }}>Disabled Input</label>
-                    <input type="text" placeholder="Disabled..." disabled className="input-base input-disabled" style={{ width: "100%" }} />
-                  </div>
-                  <div>
-                    <label className="arco-small-text" style={{ display: "block", marginBottom: 8 }}>Textarea</label>
-                    <textarea placeholder="Enter your message..." rows={3} className="input-base input-default" style={{ width: "100%", resize: "vertical" }} />
-                  </div>
-                  <div>
-                    <label className="arco-small-text" style={{ display: "block", marginBottom: 8 }}>Select</label>
-                    <select className="input-base input-default" style={{ width: "100%", cursor: "pointer" }}>
-                      <option>Select a type...</option>
-                      <option>Villa</option>
-                      <option>Townhouse</option>
-                      <option>Apartment</option>
-                    </select>
-                  </div>
+                  <p className="form-note form-note--error">Vul een geldig e-mailadres in</p>
+
+                  <label className="form-label" htmlFor="d-disabled">Disabled</label>
+                  <input id="d-disabled" type="text" className="form-input" placeholder="Niet beschikbaar" disabled />
+
+                  <label className="form-label" htmlFor="d-textarea">Textarea</label>
+                  <textarea id="d-textarea" className="form-input" rows={3} placeholder="Vertel over je bedrijf..." style={{ resize: "vertical" }} />
+
+                  <label className="form-label" htmlFor="d-select">Select</label>
+                  <select id="d-select" className="form-input" style={{ cursor: "pointer", marginBottom: 0 }}>
+                    <option>Kies een type...</option>
+                    <option>Villa</option>
+                    <option>Herenhuis</option>
+                    <option>Appartement</option>
+                  </select>
                 </div>
               </div>
               <div style={{ marginTop: 16, background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
                 <p className="arco-small-text">
-                  Values use <strong>Body</strong>, labels use <strong>Small</strong>. States: default (gray border) → focused (black) → error (red) → disabled (surface bg, 50% opacity).
+                  The form the company signup funnel is built from: <code>.form-label</code> (13px, 500, 6px above the field) and <code>.form-input</code>
+                  (15px value, 12×16 padding, 3px radius, <code>--arco-rule</code> border going black on focus). The input carries its own 16px bottom margin,
+                  so fields stack without a wrapper.<br />
+                  States: <strong>read-only</strong> greys out on <code>--arco-surface</code> — a value we resolved rather than asked for, boxed so it keeps
+                  its place in the form; <strong>error</strong> puts the border and the note in <code>--destructive</code>; an address whose domain we already know
+                  splits into <code>.form-email</code> — local part in the field, <code>@domain</code> beside it as plain text, because it is not ours to
+                  retype; <strong>disabled</strong> greys the
+                  text as well, because nothing there is going to change.<br />
+                  <code>.form-note</code> is the line under a field: what happens if this value stands, or what went wrong. It sits 4px under the field, so
+                  give that field <code>marginBottom: 0</code>.<br />
+                  <strong>Errors live at the field, always.</strong> The label takes <code>.form-label--error</code> so the eye finds which field in a long
+                  form, the field takes <code>.form-input--error</code>, and the reason follows in <code>.form-note--error</code> — same size as the label,
+                  unbolded. Never collect them at the bottom of the form: by then the reader has to work out which field you mean.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 48 }}>
+              <h4 className="arco-label" style={{ marginBottom: 20 }}>Company lookup</h4>
+              <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: "clamp(10px, 3vw, 40px)", marginBottom: 16 }}>
+                <CompanyLookupPreview />
+              </div>
+              <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
+                <p className="arco-small-text">
+                  <code>components/company-lookup.tsx</code> — a field, then the matches as rows you can press. The claim funnel uses it to find the company
+                  you are claiming; the add-professional dialog on a project uses it to find the one you are crediting.<br />
+                  Rows, not a dropdown: the list is the point, it stays put while you read it, and a row has room for the two things that tell companies
+                  apart — whether Arco already knows them (<strong>Claim</strong> in teal, free to take; <strong>Op Arco</strong> in neutral, already
+                  managed) and where they sit. Results from Google Places follow under a hairline, same rows, different provenance.<br />
+                  The hint under the list is where a fruitless search lands, so it says what the boundary is rather than repeating that nothing matched.
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="arco-label" style={{ marginBottom: 20 }}>Services picker</h4>
+              <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: "clamp(10px, 3vw, 40px)", marginBottom: 16 }}>
+                <ServicePickerPreview />
+              </div>
+              <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
+                <p className="arco-small-text">
+                  How a company says what it does: the chosen services in order at the top, a dashed search row, then the taxonomy as collapsible groups of
+                  pills. Order carries meaning — the first one is the primary service, and it is what the professional card and every credit show, so the list
+                  is draggable rather than a set of checkboxes.<br />
+                  Each pill wears its own service mark at 22px, resolved through <code>resolveProfessionalServiceIcon</code> — the same marks the cards and
+                  credits use, so a service without one shows up here as a gap. The chosen rows carry the mark at 28px, where the choice is confirmed rather
+                  than made. Selection is border + tint + <code>aria-pressed</code>, not a tick: two glyphs left of the label read as clutter.<br />
+                  The pills are <code>components/service-pills.tsx</code>, the component the claim funnel, the company editor and the add-professional
+                  popover on a project all render — groups in, selection out, with an optional cap. It used to be three hand-drawn copies, which is how one
+                  of them ended up carrying its mark at 18px while the others shipped 24.
                 </p>
               </div>
             </div>
@@ -632,15 +693,31 @@ export default function DesignPage() {
           <div style={{ marginBottom: 80 }}>
             <h2 id="discover-cards" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Discover Cards</h2>
 
-            <div>
-              <h4 className="arco-label" style={{ marginBottom: 20 }}>Discover Grid</h4>
-              <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
+            <div style={{ marginBottom: 48 }}>
+              <h4 className="arco-label" style={{ marginBottom: 20 }}>Project card</h4>
+              <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: "clamp(10px, 3vw, 40px)", marginBottom: 16 }}>
                 <DiscoverCardPreview />
               </div>
               <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
                 <p className="arco-small-text">
                   Live render of <code>.discover-card</code> — hover any card to see the photo nav arrows + dots and the save / share buttons. Both arrows and the heart toggle are fully wired in the preview so the scroll UX is verifiable, not just visual.<br />
                   Spacing uses <code>--grid-gap</code> (20px desktop · 16px iPad · 12px mobile), matching <code>/projects</code> exactly. Title <strong>Standard</strong>, subtitle <strong>XS</strong>. Image 4:3, 3px radius. Save fills red on toggle.
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="arco-label" style={{ marginBottom: 20 }}>Professional card</h4>
+              <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: "clamp(10px, 3vw, 40px)", marginBottom: 16 }}>
+                <ProfessionalCardPreview />
+              </div>
+              <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
+                <p className="arco-small-text">
+                  The real <code>components/professional-card.tsx</code>, fed fixtures — not a copy of it. The claim funnel keeps a hand-drawn version of this
+                  lockup and it drifted (its service mark sat at 18px while the card shipped 24), which is the kind of thing this page exists to catch.<br />
+                  Same <code>.discover-card</code> shell as the project card above; what differs is the footer: a 34px disc with the company logo, or the
+                  service mark at 28px on <code>--arco-surface</code> when there is none. Never a bare initial — the mark says what the company does before the
+                  words do. A missing cover photo falls back to <code>/placeholder.svg</code>, not to an empty frame. Subtitle is <strong>service · city</strong>, with services past the first collapsed behind <strong>+N</strong>.
                 </p>
               </div>
             </div>
@@ -818,53 +895,70 @@ export default function DesignPage() {
             <h2 id="usage-bars" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Usage bars</h2>
             <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
               How much of something a company has, and how much of it counts. Used on the plan page
-              for the two kinds of project Arco distinguishes. The count rides <em>inside</em> the
-              track so the number and the thing it measures cannot drift apart when the bar is
-              short; below roughly a fifth of the width it slides out onto the empty track and
-              turns dark, because a label clipped by its own fill is worse than one beside it.
+              for the two kinds of project Arco distinguishes. The count line above the bar is the
+              one the discovery grids use — number in black, noun beside it — so the same question
+              gets the same answer everywhere it is asked. That leaves the bar itself free to say
+              only what a number cannot: how much of the total the plan is actually showing.
             </p>
 
-            <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
+            <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: "clamp(10px, 3vw, 40px)", marginBottom: 16 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
                 <div>
                   <h4 className="arco-label" style={{ marginBottom: 16 }}>Empty — nothing yet</h4>
-                  <UsageBar label="Bijdragerprojecten" countLabel="Geen projecten" fillPct={0} right="1 zichtbaar op Gratis" />
+                  <UsageBar
+                    label="bijdragerprojecten"
+                    count={0}
+                    fillPct={0}
+                    unbounded
+                    markerLabel="1 gratis"
+                    endLabel="Upgrade voor onbeperkt"
+                    endLabelHref="/dashboard/billing"
+                  />
                 </div>
 
                 <div>
                   <h4 className="arco-label" style={{ marginBottom: 16 }}>Unlimited — room to spare</h4>
-                  <UsageBar label="Gepubliceerde projecten" countLabel="6 projecten" fillPct={100} endLabel="Onbeperkt" unbounded />
+                  <UsageBar label="gepubliceerde projecten" count={6} fillPct={100} endLabel="Onbeperkt, inbegrepen in Gratis" unbounded />
                 </div>
 
                 <div>
                   <h4 className="arco-label" style={{ marginBottom: 16 }}>Limited — one of six visible</h4>
                   <UsageBar
-                    label="Bijdragerprojecten"
-                    countLabel="6 projecten"
+                    label="bijdragerprojecten"
+                    count={6}
                     fillPct={100}
                     unbounded
                     lockedFromPct={62 / 6}
-                    markerLabel="1 zichtbaar"
-                    endLabel="Upgrade naar Pro voor onbeperkt"
+                    lockedLabel="5 projecten niet zichtbaar"
+                    markerLabel="1 gratis"
+                    endLabel="Upgrade voor onbeperkt"
+                    endLabelHref="/dashboard/billing"
                   />
                 </div>
 
                 <div>
                   <h4 className="arco-label" style={{ marginBottom: 16 }}>Unlocked — the same company on Pro</h4>
-                  <UsageBar label="Bijdragerprojecten" countLabel="6 projecten" fillPct={100} endLabel="Onbeperkt" unbounded />
+                  <UsageBar label="bijdragerprojecten" count={6} fillPct={100} endLabel="Onbeperkt, inbegrepen in Pro" unbounded />
                 </div>
               </div>
             </div>
 
             <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
               <p className="arco-small-text">
-                <strong>components/usage-bar.tsx</strong>. Track 28px on <code>--arco-surface</code>,
-                fully rounded; fill in <code>--primary</code>. The dashed mark is where the plan
-                stops, drawn over the fill in white at 85% so it reads on both sides of the
-                boundary. Label 14px left, value 13px <code>--text-secondary</code> right, count
-                13px inside the track. An optional note sits under the bar in small text — on the
-                plan page that is the sentence that actually sells Pro, so it is part of the
-                component rather than an afterthought at the call site.
+                <strong>components/usage-bar.tsx</strong>. Track 34px, fully rounded — a solid
+                <code>--arco-surface</code> groove when there is a ceiling, a dashed
+                <code>--arco-light-grey</code> outline when there is not, since a measured groove
+                always reads as a distance left to fill. Fill in <code>--primary</code>, dimmed to
+                22% for what the plan withholds: those projects exist, an empty stretch would say
+                they do not. The withheld count sits at the end of the dimmed stretch it belongs
+                to, the only number the line above the bar cannot carry.
+                With nothing used yet the bar draws an outlined slot one project wide, laid over
+                the dashes so they stop at it and pick up past it, the same pill a used credit
+                gets — room for a project rather than a project. It sits exactly where a used bar puts its first one, which is
+                what makes the open road beside it legible as the thing Pro buys. Under the bar, two labels mark where free stops and where the
+                road runs out; the second is a text link when there is something to upgrade to,
+                pointed at the same
+                place as the plan&rsquo;s own button.
               </p>
             </div>
           </div>

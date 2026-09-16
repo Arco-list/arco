@@ -354,7 +354,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                 <div className="pro-card-info">
                   {sibling.brandLogoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={sibling.brandLogoUrl} alt="" className="pro-card-logo" width={34} height={34} loading="lazy" />
+                    <img src={sibling.brandLogoUrl} alt="" className="pro-card-logo" width={40} height={40} loading="lazy" />
                   ) : (
                     <div className="pro-card-logo pro-card-logo-placeholder">
                       {(sibling.brandName || "?").charAt(0).toUpperCase()}
@@ -394,7 +394,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                 <div className="pro-card-info">
                   {sibling.brandLogoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={sibling.brandLogoUrl} alt="" className="pro-card-logo" width={34} height={34} loading="lazy" />
+                    <img src={sibling.brandLogoUrl} alt="" className="pro-card-logo" width={40} height={40} loading="lazy" />
                   ) : (
                     <div className="pro-card-logo pro-card-logo-placeholder">
                       {(sibling.brandName || "?").charAt(0).toUpperCase()}

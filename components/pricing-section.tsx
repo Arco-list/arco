@@ -82,7 +82,36 @@ export function PricingSection({
    *  "Eenvoudige, transparante abonnementen" is a pitch for someone
    *  deciding whether to join — not for a company already inside. */
   showHeader = true,
-}: { embedded?: boolean; showHeader?: boolean }) {
+  sectionHeading = null,
+  currentPlan = null,
+  onUpgrade = null,
+  onDowngrade = null,
+  actionsBusy = false,
+}: {
+  embedded?: boolean
+  showHeader?: boolean
+  /**
+   * Turns the block into a section of a page the reader is already on:
+   * the heading and the billing toggle share one row, and the cards sit
+   * flush with the page's left edge instead of centred in their own
+   * column. Used on the plan page, where these are one section among
+   * several and must line up with the rest.
+   */
+  sectionHeading?: string | null
+  /**
+   * The plan this company is actually on. Setting it flips the cards
+   * from selling to managing: the badge marks where you are instead of
+   * what we recommend, the accent moves to the card you can act on, and
+   * the acquisition furniture (no-card-needed, the founding pitch)
+   * comes off — none of it is addressed to someone already inside.
+   */
+  currentPlan?: "free" | "pro" | null
+  /** Takes the cycle the reader has selected, so the card and the
+   *  checkout can never promise different prices. */
+  onUpgrade?: ((interval: "month" | "year") => void) | null
+  onDowngrade?: (() => void) | null
+  actionsBusy?: boolean
+}) {
   const t = useTranslations("dashboard")
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("yearly")
   const { user, profile } = useAuth()
@@ -133,9 +162,54 @@ export function PricingSection({
     handleStartFree()
   }
 
+  const managing = currentPlan != null
+
+  // The plan you are on says so quietly and offers nothing: a button
+  // that does nothing is worse than no button. Sized like one anyway,
+  // so both cards' footers keep the same baseline.
+  const currentPlanNote = (
+    <div style={{
+      width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)",
+      border: "1px solid transparent", borderRadius: 3, boxSizing: "border-box",
+      color: "var(--arco-light)", textAlign: "center",
+    }}>
+      {t("pricing_your_plan")}
+    </div>
+  )
+
+  const currentBadge = <span className="pricing-card-badge pricing-card-badge-quiet">{t("pricing_current_badge")}</span>
+
+  // Always centred under whatever heading the context supplies.
+  const cycleToggle = (
+    <div className="audience-toggle" style={{ marginBottom: 0 }}>
+      <button
+        onClick={() => setBillingCycle("monthly")}
+        className={`toggle-seg${billingCycle === "monthly" ? " active" : ""}`}
+      >
+        {t("pricing_monthly")}
+      </button>
+      <button
+        onClick={() => setBillingCycle("yearly")}
+        className={`toggle-seg${billingCycle === "yearly" ? " active" : ""}`}
+      >
+        {t("pricing_yearly")}
+        <span style={{ marginLeft: 6, fontSize: 11, color: "var(--primary)", fontWeight: 500 }}>{t("pricing_save_20")}</span>
+      </button>
+    </div>
+  )
+
   return (
     <>
-    <div className="wrap" style={{ maxWidth: 860 }}>
+    {/* Centred in the page rather than flush left: the cards are a
+        block to compare, not a row to scan across, and the page around
+        them is far wider than they should ever be. */}
+    <div className={sectionHeading ? undefined : "wrap"} style={{ maxWidth: 860, margin: sectionHeading ? "0 auto" : undefined }}>
+
+      {sectionHeading && (
+        <h3 className="arco-section-title" style={{ textAlign: "center", marginBottom: 20 }}>
+          {sectionHeading}
+        </h3>
+      )}
 
       {/* Header — page title on /pricing, section title when embedded
           in a landing page, nothing at all in the dashboard. */}
@@ -154,28 +228,15 @@ export function PricingSection({
 
       {/* Billing toggle */}
       <div style={{ display: "flex", justifyContent: "center", marginBottom: 32 }}>
-        <div className="audience-toggle" style={{ marginBottom: 0 }}>
-          <button
-            onClick={() => setBillingCycle("monthly")}
-            className={`toggle-seg${billingCycle === "monthly" ? " active" : ""}`}
-          >
-            {t("pricing_monthly")}
-          </button>
-          <button
-            onClick={() => setBillingCycle("yearly")}
-            className={`toggle-seg${billingCycle === "yearly" ? " active" : ""}`}
-          >
-            {t("pricing_yearly")}
-            <span style={{ marginLeft: 6, fontSize: 11, color: "var(--primary)", fontWeight: 500 }}>{t("pricing_save_20")}</span>
-          </button>
-        </div>
+        {cycleToggle}
       </div>
 
       {/* Pricing cards */}
       <div className="pricing-grid">
 
         {/* Free */}
-        <div className="pricing-card pricing-card-subgrid">
+        <div className={`pricing-card pricing-card-subgrid${managing && currentPlan === "pro" ? " pricing-card-featured" : ""}`}>
+          {managing && currentPlan === "free" && currentBadge}
           {/* Header mirrors the Pro card's exact stack (label / price /
               meta / desc) with matching heights, so the descriptions and
               everything below them line up across the two cards. */}
@@ -227,7 +288,23 @@ export function PricingSection({
             {/* Once Pro (founding) is claimed, Pro is the current plan —
                 the Free card flips to "Included in Pro" instead of
                 wrongly claiming to be the current plan. */}
-            {user && hasProfessionalRole ? (
+            {managing ? (
+              currentPlan === "free" ? currentPlanNote : (
+                <button
+                  type="button"
+                  onClick={() => onDowngrade?.()}
+                  disabled={!onDowngrade || actionsBusy}
+                  style={{
+                    width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)",
+                    background: "none", border: "1px solid var(--arco-rule)", borderRadius: 3,
+                    color: onDowngrade ? "var(--arco-black)" : "var(--arco-light)",
+                    cursor: onDowngrade ? "pointer" : "default",
+                  }}
+                >
+                  {t("pricing_switch_to_free")}
+                </button>
+              )
+            ) : user && hasProfessionalRole ? (
               <button disabled style={{ width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)", background: "none", border: "1px solid var(--arco-rule)", borderRadius: 3, color: "var(--arco-light)", cursor: "default" }}>
                 {foundingClaimed ? t("pricing_included_in_pro") : t("pricing_current_plan")}
               </button>
@@ -237,16 +314,23 @@ export function PricingSection({
               </button>
             )}
             {/* Same note height as the Pro footer (2 lines) so
-                margin-top:auto pins both buttons to the same y. */}
-            <p style={{ textAlign: "center", fontSize: 12, color: "var(--arco-light)", marginTop: 8, minHeight: 36 }}>
-              {t("pricing_no_card")}
-            </p>
+                margin-top:auto pins both buttons to the same y. Both
+                notes are pitches at someone still deciding to join, so
+                inside the product both come off — together, which keeps
+                the footers level. */}
+            {!managing && (
+              <p style={{ textAlign: "center", fontSize: 12, color: "var(--arco-light)", marginTop: 8, minHeight: 36 }}>
+                {t("pricing_no_card")}
+              </p>
+            )}
           </div>
         </div>
 
         {/* Pro */}
-        <div className="pricing-card pricing-card-featured pricing-card-subgrid">
-          <span className="pricing-card-badge">{t("pricing_recommended")}</span>
+        <div className={`pricing-card pricing-card-subgrid${!managing || currentPlan === "free" ? " pricing-card-featured" : ""}`}>
+          {managing
+            ? currentPlan === "pro" && currentBadge
+            : <span className="pricing-card-badge">{t("pricing_recommended")}</span>}
           <div className="pricing-card-header">
             <p className="pricing-card-label" style={{ color: "var(--primary)" }}>{t("pricing_pro")}</p>
             <div style={{ display: "flex", alignItems: "baseline", gap: 4, minHeight: 48 }}>
@@ -299,8 +383,27 @@ export function PricingSection({
             {/* Live CTA even though billing doesn't exist: clicks stamp an
                 upgrade_intent event (the pre-payments pay-rate signal) and
                 route into the same free claim flow. Once claimed, the
-                button flips to a quiet confirmed state. */}
-            {foundingClaimed ? (
+                button flips to a quiet confirmed state. Inside the
+                product none of that applies: billing does exist there,
+                so the button is the real one, in the same words the
+                plan banner uses. */}
+            {managing ? (
+              currentPlan === "pro" ? currentPlanNote : (
+                <button
+                  type="button"
+                  onClick={() => onUpgrade?.(billingCycle === "monthly" ? "month" : "year")}
+                  disabled={!onUpgrade || actionsBusy}
+                  style={{
+                    width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)",
+                    background: "var(--primary)", border: "1px solid var(--primary)", borderRadius: 3,
+                    color: "#ffffff", cursor: onUpgrade ? "pointer" : "default",
+                    opacity: onUpgrade ? (actionsBusy ? 0.6 : 1) : 0.5,
+                  }}
+                >
+                  {t("billing.action_upgrade")}
+                </button>
+              )
+            ) : foundingClaimed ? (
               <button disabled style={{ width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)", background: "#f0f7f6", border: "1px solid var(--primary)", borderRadius: 3, color: "var(--primary)", cursor: "default", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                 <Check size={16} />
                 {t("pricing_founding_claimed")}
@@ -310,9 +413,11 @@ export function PricingSection({
                 {t("pricing_claim_founding")}
               </button>
             )}
-            <p style={{ textAlign: "center", fontSize: 12, color: "var(--arco-light)", marginTop: 8, minHeight: 36 }}>
-              {t("pricing_coming_soon")}
-            </p>
+            {!managing && (
+              <p style={{ textAlign: "center", fontSize: 12, color: "var(--arco-light)", marginTop: 8, minHeight: 36 }}>
+                {t("pricing_coming_soon")}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -321,8 +426,12 @@ export function PricingSection({
           project; SHOW it, using the exact card design from the project
           detail page's "Vermelde professionals" section (credit-card /
           credit-icon classes). Left = a live (Pro) credit, right = the
-          locked state an unpaid second credit will get. */}
-      <div style={{ margin: "56px auto 0", maxWidth: 560 }}>
+          locked state an unpaid second credit will get.
+
+          Left out inside the product: it exists to explain what a credit
+          IS to someone who has never seen one. A company managing its
+          own plan has them on its own page already. */}
+      <div hidden={managing} style={{ margin: "56px auto 0", maxWidth: 560 }}>
         <h3 className="arco-section-title" style={{ textAlign: "center", marginBottom: 16 }}>{t("pricing_credit_example_title")}</h3>
         {/* Same copy treatment as the body under the page header. */}
         <p className="arco-body-text" style={{ textAlign: "center", maxWidth: 480, margin: "0 auto 32px" }}>{t("pricing_credit_example_caption")}</p>

@@ -19,7 +19,9 @@ import { SPACE_SLUGS, type SpaceSlug } from "@/lib/spaces"
 
 export type ScrapeResult =
   | { projectId: string; title: string }
-  | { error: string }
+  /** `code` lets the screen say it in the reader's own language; the
+   *  string is the fallback for callers that do not know the code. */
+  | { error: string; code?: "blocked" }
 
 interface ExtractedProject {
   /** Primary title — same string as title_en, kept for callers that
@@ -685,6 +687,41 @@ function extractWithJsdom(doc: Document): ExtractedProject {
 
 // ─── Main scrape action ──────────────────────────────────────────────────────
 
+/**
+ * Fetch one page, twice if we have to.
+ *
+ * We introduce ourselves honestly as ArcoBot, and a fair number of
+ * hosts reject an unknown bot UA on sight — before looking at what is
+ * being asked for, and including robots.txt. One retry as an ordinary
+ * browser is the difference between importing a site and not. This is
+ * a single public page a person just asked us to fetch on their behalf,
+ * not a crawl, so the plain UA is an accurate description of what is
+ * happening. Impersonating a search engine would not be, and we don't.
+ */
+const IMPORT_BOT_UA = "Mozilla/5.0 (compatible; ArcoBot/1.0; +https://arco.nl)"
+const IMPORT_BROWSER_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
+async function fetchImportPage(url: string, timeoutMs = 12000): Promise<Response> {
+  const asBot = await fetch(url, {
+    headers: { "User-Agent": IMPORT_BOT_UA },
+    signal: AbortSignal.timeout(timeoutMs),
+  })
+  // 401/403 is "not you", 429 is "not so fast" — the three answers that
+  // are about the caller rather than the page.
+  if (![401, 403, 429].includes(asBot.status)) return asBot
+
+  console.log(`[scrape] ${asBot.status} as ArcoBot — retrying as a browser`)
+  return fetch(url, {
+    headers: {
+      "User-Agent": IMPORT_BROWSER_UA,
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "nl-NL,nl;q=0.9,en;q=0.8",
+    },
+    signal: AbortSignal.timeout(timeoutMs),
+  })
+}
+
 export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: string): Promise<ScrapeResult> {
   // 1. Auth
   const supabase = await createServerActionSupabaseClient()
@@ -787,9 +824,17 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
   }
 
   // 4. Fetch and extract page content
-  let pageText: string
-  let imageUrls: string[]
-  let extracted: ExtractedProject
+  //
+  // Two ways in, and they are not equals. Firecrawl renders JavaScript
+  // and gets past bot protection, so it sees lazy-loaded galleries that
+  // a plain fetch never will — on our own imports that is four photos
+  // per project. It goes first, always. Our own fetch is the rescue for
+  // when Firecrawl itself is unavailable (no key, outage, credits), not
+  // an equivalent route.
+  let pageText!: string
+  let imageUrls!: string[]
+  let extracted!: ExtractedProject
+  let haveContent = false
 
   if (process.env.FIRECRAWL_API_KEY) {
     // ── Primary: Firecrawl (handles JS rendering, anti-bot, lazy images) ──
@@ -854,10 +899,7 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
       if (imageUrls.length < 10) {
         try {
           console.log(`[scrape] Firecrawl found only ${imageUrls.length} images — trying direct fetch fallback`)
-          const directRes = await fetch(url.toString(), {
-            headers: { "User-Agent": "Mozilla/5.0 (compatible; ArcoBot/1.0)" },
-            signal: AbortSignal.timeout(15000),
-          })
+          const directRes = await fetchImportPage(url.toString(), 15000)
           if (directRes.ok) {
             const directHtml = await directRes.text()
             const directImages = extractImagesFromRawHtml(directHtml, url.toString())
@@ -927,24 +969,35 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
           is_relevant_project: true,
         }
       }
+      haveContent = true
     } catch (err: any) {
       const msg = err?.message ?? String(err)
-      logger.error("Firecrawl scrape failed", { url: url.toString(), firecrawlError: msg }, err as Error)
-      // Surface the actual error for debugging — common issues: invalid API key, rate limit, unreachable URL
-      if (msg.includes("401") || msg.includes("Unauthorized")) {
-        return { error: "Scraping service authentication failed. Please check API key configuration." }
-      }
-      return { error: `Could not scrape that page: ${msg}` }
+      // Not fatal any more: a bad key, an outage or an exhausted plan
+      // used to end the import here, even for the many sites our own
+      // fetch handles perfectly well. Logged at error level because it
+      // still means the good path is down and someone should look.
+      logger.error("Firecrawl scrape failed — falling back to a direct fetch", { url: url.toString(), firecrawlError: msg }, err as Error)
+      console.log(`[scrape] Firecrawl failed (${msg}) — falling back to a direct fetch`)
     }
-  } else {
-    // ── Fallback: fetch + JSDOM (no JS rendering) ──
+  }
+
+  if (!haveContent) {
+    // ── Rescue: fetch + JSDOM (no JS rendering) ──
     let html: string
     try {
-      const res = await fetch(url.toString(), {
-        headers: { "User-Agent": "Mozilla/5.0 (compatible; ArcoBot/1.0; +https://arco.nl)" },
-        signal: AbortSignal.timeout(12000),
-      })
-      if (!res.ok) return { error: `Could not fetch that page (${res.status}).` }
+      const res = await fetchImportPage(url.toString())
+      if (!res.ok) {
+        // A refusal is not a failure to explain — it is an answer, and
+        // the reader's next move is the manual route, not another URL
+        // on the same blocked site.
+        if ([401, 403, 429].includes(res.status)) {
+          return {
+            error: "That site blocks automated visits — fill the project in manually.",
+            code: "blocked",
+          }
+        }
+        return { error: `Could not fetch that page (${res.status}).` }
+      }
       const ct = res.headers.get("content-type") ?? ""
       if (!ct.includes("text/html")) return { error: "That URL does not appear to be a web page." }
       html = await res.text()

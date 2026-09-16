@@ -30,6 +30,7 @@ import { syncCompanyListedStatus } from "@/app/admin/projects/actions"
 import { getCompanyTranslation } from "@/lib/company-translations"
 import { handlePlainTextPaste, handlePlainTextDrop } from "@/lib/plain-text-paste"
 import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services"
+import { ServicePills } from "@/components/service-pills"
 import { translateProfessionalService } from "@/lib/project-translations"
 import { PHOTOGRAPHER_SPECIALTIES } from "@/lib/photographer-specialties"
 import type { Database } from "@/lib/supabase/types"
@@ -1194,13 +1195,8 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         .service-popup-footer { display: flex; gap: 10px; justify-content: flex-end; padding: 16px 28px; border-top: 1px solid var(--arco-rule); background: var(--arco-off-white); border-radius: 0 0 12px 12px; flex-shrink: 0; }
         .sp-title { font-family: var(--font-serif); font-size: 18px; font-weight: 500; margin: 0; }
         .sp-categories { display: flex; flex-direction: column; }
-        .sp-category-group { }
-        .sp-category-label { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 9px 0; font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--arco-light); transition: color .15s; }
-        .sp-category-label::-webkit-details-marker { display: none; }
-        .sp-category-label:hover { color: var(--arco-black); }
-        .sp-chevron { display: inline-flex; color: var(--arco-light); transition: transform .15s; }
-        .sp-category-group[open] .sp-chevron { transform: rotate(180deg); }
-        .sp-category-group[open] .sp-available { padding: 4px 0 18px; }
+        /* Groups and pills come from .service-pill* in globals.css now
+           — see components/service-pills.tsx. */
         .service-popup-badge { cursor: pointer; transition: opacity .15s; }
         .service-popup-badge:hover { opacity: 0.7; }
         .sp-search { width: 100%; font-size: 14px; padding: 10px 14px; border: 1px solid var(--arco-rule); border-radius: 3px; outline: none; font-family: inherit; transition: border-color .15s; margin-bottom: 20px; background: white; color: var(--text-primary); }
@@ -1219,19 +1215,15 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         .sp-result:hover { background: var(--arco-surface); }
         .sp-result-group { font-size: 12px; color: #b0b0ae; flex-shrink: 0; }
         .sp-selected-item { display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: var(--arco-surface); border: 1px solid #e8e8e6; border-radius: 6px; font-size: 15px; color: #1c1c1a; cursor: grab; transition: border-color .15s, box-shadow .15s; user-select: none; }
+        .sp-item-mark { flex-shrink: 0; color: #a1a1a0; }
         .sp-selected-item:hover { border-color: #c8c8c6; }
         .sp-selected-item.dragging { opacity: 0.5; box-shadow: 0 2px 8px rgba(0,0,0,.1); }
         .sp-selected-item.drag-over { border-color: #016D75; }
         .sp-grip { color: #c8c8c6; flex-shrink: 0; display: flex; }
         .sp-primary-badge { font-size: 10px; font-weight: 500; letter-spacing: .03em; text-transform: uppercase; color: #016D75; background: rgba(1,109,117,.08); padding: 2px 6px; border-radius: 3px; flex-shrink: 0; }
-        .sp-item-name { flex: 1; }
-        .sp-remove { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border: none; background: none; cursor: pointer; color: #c8c8c6; border-radius: 4px; flex-shrink: 0; transition: color .15s, background .15s; }
+        .sp-item-name { flex: 0 1 auto; }
+        .sp-remove { margin-left: auto; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border: none; background: none; cursor: pointer; color: #c8c8c6; border-radius: 4px; flex-shrink: 0; transition: color .15s, background .15s; }
         .sp-remove:hover { color: #e53e3e; background: rgba(229,62,62,.06); }
-        .sp-available { display: flex; flex-wrap: wrap; gap: 8px; }
-        .sp-pill { font-size: 13px; padding: 6px 14px; border-radius: 20px; border: 1px solid #e8e8e6; background: #fff; color: #5c5c5a; cursor: pointer; transition: all .15s; user-select: none; }
-        .sp-pill:hover { border-color: #1c1c1a; color: #1c1c1a; }
-        .sp-pill.selected { border-color: #016D75; background: rgba(1,109,117,.06); color: #016D75; }
-        .sp-pill.disabled { opacity: 0.4; cursor: not-allowed; }
 
         /* Hero photo badge */
         .hero-badge { position: absolute; top: 8px; left: 8px; font-size: 10px; font-weight: 500; letter-spacing: .03em; text-transform: uppercase; color: #fff; background: #016D75; padding: 3px 10px; border-radius: 3px; z-index: 3; }
@@ -1255,7 +1247,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         // the nav order stays stable.
         ...(isPhotographer ? [] : [{ href: `/dashboard/team?company_id=${company.id}`, label: tNav("team") }]),
         { href: "/dashboard/inbox", label: tNav("inbox") },
-        { href: "/dashboard/pricing", label: tNav("plans") },
+        { href: "/dashboard/pricing", label: tNav("subscription") },
       ]} />
 
       <CompanyEditTour
@@ -2413,6 +2405,8 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
               {servicesOffered.map((id, idx) => {
                 const svc = services.find((s) => s.id === id)
                 if (!svc) return null
+                const group = serviceCategories.find((c) => c.services.some((x) => x.id === id))
+                const Mark = resolveProfessionalServiceIcon(svc.slug ?? svc.name, group?.slug ?? group?.name ?? null)
                 return (
                   <div
                     key={id}
@@ -2440,8 +2434,13 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                     <span className="sp-grip">
                       <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/><circle cx="5" cy="8" r="1.2"/><circle cx="11" cy="8" r="1.2"/><circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/></svg>
                     </span>
-                    {idx === 0 && <span className="sp-primary-badge">{t("services_primary")}</span>}
+                    {/* Straight after the grip, so the marks line up in a
+                        column — the PRIMAIR badge exists only on the first
+                        row and would push that one out of line. */}
+                    <Mark size={28} strokeWidth={1} className="sp-item-mark" aria-hidden />
+                    {/* The badge annotates the name, so it follows it. */}
                     <span className="sp-item-name">{translateProfessionalService(svc.slug ?? svc.name, locale) ?? svc.name}</span>
+                    {idx === 0 && <span className="sp-primary-badge">{t("services_primary")}</span>}
                     <button
                       className="sp-remove"
                       onClick={() => setServicesOffered((prev) => prev.filter((s) => s !== id))}
@@ -2502,47 +2501,29 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                 de primaire dienst open, geen lijnen. Zoeken gebeurt in de
                 dashed rij hierboven, net als in de claim-funnel. */}
             <div className="sp-categories">
-              {serviceCategories.map((group) => {
-                const filtered = group.services
-                if (filtered.length === 0) return null
-                const atMax = servicesOffered.length >= 12
-                const groupLabel = translateProfessionalService(group.slug, locale) ?? group.name
-                const selectedInGroup = group.services.filter((s) => servicesOffered.includes(s.id)).length
-                const containsPrimary = group.services.some((s) => s.id === servicesOffered[0])
-                return (
-                  <details key={group.slug} className="sp-category-group" open={containsPrimary}>
-                    <summary className="sp-category-label">
-                      <span>{groupLabel}</span>
-                      {selectedInGroup > 0 && <span className="filter-pill-badge">{selectedInGroup}</span>}
-                      <span className="sp-chevron" aria-hidden>
-                        <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                      </span>
-                    </summary>
-                    <div className="sp-available">
-                      {filtered.map((s) => {
-                        const isSelected = servicesOffered.includes(s.id)
-                        const label = translateProfessionalService(s.slug ?? s.name, locale) ?? s.name
-                        return (
-                          <button
-                            key={s.id}
-                            type="button"
-                            className={`sp-pill${isSelected ? " selected" : ""}${!isSelected && atMax ? " disabled" : ""}`}
-                            onClick={() => {
-                              if (isSelected) {
-                                setServicesOffered((prev) => prev.filter((id) => id !== s.id))
-                              } else if (!atMax) {
-                                setServicesOffered((prev) => [...prev, s.id])
-                              }
-                            }}
-                          >
-                            {isSelected ? "✓ " : ""}{label}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </details>
-                )
-              })}
+              {/* One control for "what does this company do", shared with
+                  the claim funnel and the add-professional popover. */}
+              <ServicePills
+                groups={serviceCategories
+                  .filter((group) => group.services.length > 0)
+                  .map((group) => ({
+                    id: group.slug,
+                    slug: group.slug,
+                    label: translateProfessionalService(group.slug, locale) ?? group.name,
+                    services: group.services.map((svc) => ({
+                      id: svc.id,
+                      slug: svc.slug ?? svc.name,
+                      label: translateProfessionalService(svc.slug ?? svc.name, locale) ?? svc.name,
+                    })),
+                  }))}
+                selectedIds={servicesOffered}
+                max={12}
+                onToggle={(id) =>
+                  setServicesOffered((prev) =>
+                    prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
+                  )
+                }
+              />
             </div>
 
             </div>{/* end service-popup-body */}

@@ -622,7 +622,7 @@ export function ProductsDiscoverClient({ initialProducts, brands, categories, in
                     <div className="pro-card-info">
                       {product.brandLogoUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={product.brandLogoUrl} alt="" className="pro-card-logo" width={34} height={34} loading="lazy" />
+                        <img src={product.brandLogoUrl} alt="" className="pro-card-logo" width={40} height={40} loading="lazy" />
                       ) : (
                         <div className="pro-card-logo pro-card-logo-placeholder">
                           {product.brandName.charAt(0).toUpperCase()}

@@ -5064,6 +5064,85 @@ body.no-scroll {
   border-color: var(--arco-black);
 }
 
+/* A value that is shown rather than asked for — a resolved address, a
+   verified domain. Boxed like an input so it keeps its place in the
+   form, greyed so it does not invite typing. */
+.form-input:read-only {
+  color: var(--arco-mid);
+  background: var(--arco-surface);
+}
+
+.form-input:disabled {
+  background: var(--arco-surface);
+  color: var(--arco-mid-grey);
+  cursor: not-allowed;
+}
+
+.form-input--error,
+.form-input--error:focus {
+  border-color: var(--destructive);
+}
+
+/* The line under a field: what will happen, or what went wrong. Same
+   size as the label and unbolded — it answers a question the field
+   raised rather than asking one. Sits 4px under the field, so give the
+   field it belongs to `margin-bottom: 0`. */
+.form-note {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--arco-mid);
+  margin: 4px 0 16px;
+}
+
+/* One error, said twice: the label goes red so the eye finds the field
+   in a long form, the note goes red so the reason is next to it. Always
+   at the field — never collected at the bottom of the form, where the
+   reader has to work out which one you mean. */
+.form-label--error {
+  color: var(--destructive);
+}
+
+.form-note--error {
+  color: var(--destructive);
+}
+
+/* An address whose domain we already know: the local part is a field,
+   the domain is a fact. One row, so the two read as one address — but
+   the domain sits outside the box, where it cannot be typed over. */
+.form-email {
+  display: flex;
+  /* One line for as long as it can be had: a domain that drops below the
+     field stops reading as part of the address. The domain shrinks with
+     an ellipsis first, and only a genuinely tiny field wraps. */
+  flex-wrap: nowrap;
+  align-items: center;
+  column-gap: 10px;
+  margin-bottom: 16px;
+}
+
+.form-email .form-input {
+  /* width:auto beats .form-input's own width:100%, which would make the
+     flex base a full row and bump the domain onto the next line — the
+     one thing this field exists to prevent. */
+  width: auto;
+  flex: 1 1 60px;
+  min-width: 60px;
+  margin-bottom: 0;
+}
+
+/* Keeps its place beside the field and gives way character by character:
+   "@koopmansinstallatietech…" still identifies the company, a domain on
+   its own line no longer looks like part of the address. */
+.form-email-domain {
+  font-size: 15px;
+  color: var(--arco-mid-grey);
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -5545,6 +5624,18 @@ body.no-scroll {
   position: relative;
 }
 
+/* Inside the product the badge stops recommending and starts
+   locating: this is where you are. Quiet, because the accent belongs
+   to the card you can still act on. */
+.pricing-card-badge-quiet {
+  background: var(--arco-surface);
+  color: var(--text-secondary);
+}
+
+.pricing-card {
+  position: relative;
+}
+
 .pricing-card-badge {
   position: absolute;
   top: -12px;
@@ -5614,6 +5705,240 @@ body.no-scroll {
 
 .pricing-feature.disabled {
   color: var(--arco-light);
+}
+
+/* The pills inside the add-professional popover: the menu is already a
+   scrollable panel, so the groups need no top margin of their own and
+   the row wants a little breathing room at the edges. */
+.service-menu--pills {
+  padding: 4px 14px 10px;
+}
+.service-menu--pills .service-pill-group:first-of-type { margin-top: 0; }
+
+/* ── Company lookup ───────────────────────────────────────────────
+   Finding a company by name: a field, and under it the matches as rows
+   you can press. Used by the claim funnel (where the match becomes the
+   page you are claiming) and by the add-professional dialog on a
+   project (where it becomes a credit).
+
+   Rows rather than a dropdown: the list is the point here, it stays put
+   while you read it, and a row has room for the two things that tell
+   companies apart — whether we already know them, and where they sit.
+   Documented on /design → Form Elements → Company lookup. */
+.company-lookup-field {
+  margin-bottom: 0;
+}
+
+.company-lookup-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.company-lookup-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 15px;
+  color: var(--arco-black);
+  /* True white, like .form-input above it — a result row is the same
+     material as the field it answers. --arco-white is a near-white
+     (#FAFAF9) and left the rows blending into the page on the funnel
+     while reading as grey boxes on a white card. */
+  background: #fff;
+  border: 1px solid var(--arco-rule);
+  border-radius: 3px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.company-lookup-row:hover { border-color: var(--arco-black); }
+.company-lookup-row:disabled { opacity: 0.5; cursor: default; }
+
+.company-lookup-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.company-lookup-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Where the company sits — the thing that separates two firms with
+   nearly the same name. */
+.company-lookup-meta {
+  font-size: 13px;
+  color: var(--arco-mid);
+  white-space: nowrap;
+}
+
+/* Status in the row. "Op Arco" is the loud one — solid primary, white
+   letters: in a list of twenty near-identical names, the fact that we
+   already know this company is what the reader is scanning for. "Claim"
+   is the quiet invitation beside it. */
+.company-lookup-badge {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  border-radius: 3px;
+  padding: 2px 6px;
+  flex-shrink: 0;
+  color: var(--arco-mid);
+  background: var(--arco-wash);
+}
+
+.company-lookup-badge--claim {
+  color: var(--primary);
+  background: rgba(1, 109, 117, 0.08);
+}
+
+.company-lookup-badge--on-arco {
+  color: #fff;
+  background: var(--primary);
+}
+
+/* Results that came from somewhere else (Google Places) sit under a
+   hairline: same rows, different provenance. */
+.company-lookup-row-group + .company-lookup-row-group {
+  border-top: 1px solid var(--arco-rule);
+  padding-top: 8px;
+  margin-top: 2px;
+}
+
+.company-lookup-hint {
+  font-size: 13px;
+  color: var(--arco-mid);
+  margin: 14px 0 0;
+}
+
+/* ── Service pills ────────────────────────────────────────────────
+   Choosing what a company does, wherever that question is asked: the
+   claim funnel, the company editor, the add-professional popover on a
+   project. One control, because it is one act — it lived as three
+   copies before, and the copies drifted (one carried its service mark
+   at 18px while the others shipped 24).
+
+   The mark rides inside the pill, so a service is recognisable before
+   it is read. Flex with a gap rather than an inline glyph: the spacing
+   survives a two-word label wrapping.
+   Documented on /design → Form Elements → Services picker. */
+.service-pill-group:first-of-type { margin-top: 16px; }
+
+/* Eyebrow-styled group labels with the chevron directly after the name
+   — no rules between groups, whitespace does the separating. */
+.service-pill-group-summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 11px 0;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--arco-light);
+  transition: color 0.15s;
+}
+.service-pill-group-summary::-webkit-details-marker { display: none; }
+.service-pill-group-summary:hover { color: var(--arco-black); }
+.service-pill-group-chevron {
+  display: inline-flex;
+  color: var(--arco-light);
+  transition: transform 0.15s;
+}
+.service-pill-group[open] .service-pill-group-chevron { transform: rotate(180deg); }
+
+.service-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.service-pill {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  padding: 7px 14px 7px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--arco-rule);
+  background: var(--arco-white);
+  color: var(--arco-mid);
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.service-pill:hover { border-color: var(--arco-black); color: var(--arco-black); }
+.service-pill-icon {
+  flex-shrink: 0;
+  color: var(--arco-mid-grey);
+  transition: color 0.15s;
+}
+.service-pill:hover .service-pill-icon { color: var(--arco-black); }
+
+.service-pill--on {
+  border-color: var(--primary);
+  background: rgba(1, 109, 117, 0.06);
+  color: var(--primary);
+}
+.service-pill--on .service-pill-icon { color: var(--primary); }
+.service-pill--on:hover { border-color: var(--primary); color: var(--primary); }
+.service-pill--on:hover .service-pill-icon { color: var(--primary); }
+
+/* Justified rows: every pill grows to share the line, so the block ends
+   on a straight right edge instead of a ragged one. For narrow panels
+   (the add-professional dialog) where the ragged edge is the widest
+   thing about the layout. The label centres, since the pill is no
+   longer the width of its own words. */
+.service-pills--fill .service-pill {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+/* At the cap, everything unchosen goes quiet rather than disappearing:
+   the limit is a fact about the plan, not about the service. */
+.service-pill--disabled,
+.service-pill--disabled:hover {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: var(--arco-rule);
+  color: var(--arco-mid);
+}
+
+/* ── Usage bars ───────────────────────────────────────────────────
+   Everything on the track is placed off --u-fill, so the open stretch
+   past the fill is a single number to tune. A bar with a real
+   proportion to show sets the variable inline; the unbounded one takes
+   it from here. On a phone the track is barely 300px: 38% of it held
+   open reads as a gap rather than as room onward, and it squeezes the
+   labels that live inside the fill. Past the fold the fill runs longer
+   and the open stretch just marks that the road continues.
+   Documented on /design → Usage bars. */
+.usage-bar { --u-fill: 0%; }
+.usage-bar--open { --u-fill: 62%; }
+/* The one free credit, drawn as an empty slot exactly one project wide:
+   the same stretch a bar holding six would give its first one, so the
+   two states line up and the room past the slot reads as what Pro
+   buys. The count cannot fit in something that narrow, so it sits
+   beside it — the component handles that on its own. */
+.usage-bar--slot { --u-fill: calc(62% / 6); }
+
+@media (max-width: 640px) {
+  .usage-bar--open { --u-fill: 84%; }
+  .usage-bar--slot { --u-fill: calc(84% / 6); }
 }
 
 /* ── Info boxes ───────────────────────────────────────────────────
@@ -7501,9 +7826,13 @@ body.no-scroll {
   gap: 10px;
 }
 
+/* 40px, not 34: on a card the disc is the company's face — its logo or
+   its service mark — and at 34 it read as a bookmark beside the name
+   rather than as part of the lockup. The mark inside stays 30px, which
+   at this size lands back on the set's own ratio (~72% of the disc). */
 .pro-card-logo {
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   object-fit: cover;
   background: var(--arco-surface);

@@ -48,7 +48,7 @@ import {
   removeCompanyContactAction,
   logOutboundForCompanyContactAction,
 } from "@/app/admin/companies/actions"
-import { updateProjectProfessionalStatusAction } from "@/app/admin/projects/actions"
+import { deleteProjectAction, updateProjectProfessionalStatusAction } from "@/app/admin/projects/actions"
 import { LogOutboundModal } from "@/app/admin/sales/log-outbound-modal"
 import { ContactCard } from "@/components/contact-card/contact-card"
 import { useContactParam } from "@/hooks/use-contact-param"
@@ -943,6 +943,12 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const [statusMenu, setStatusMenu] = useState<{ company: AdminCompanyRow; x: number; y: number } | null>(null)
   const [deleteCompany, setDeleteCompany] = useState<AdminCompanyRow | null>(null)
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
+  // Its own confirm field rather than sharing the company one: they are
+  // never open at once, but a half-typed DELETE surviving from one
+  // dialog into the other is exactly the kind of thing a type-to-confirm
+  // exists to prevent.
+  const [deleteProjectTarget, setDeleteProjectTarget] = useState<{ id: string; title: string } | null>(null)
+  const [deleteProjectConfirmText, setDeleteProjectConfirmText] = useState("")
   const [changeOwnerCompany, setChangeOwnerCompany] = useState<AdminCompanyRow | null>(null)
   const [changeOwnerEmail, setChangeOwnerEmail] = useState("")
   const [domainVerifyCompany, setDomainVerifyCompany] = useState<AdminCompanyRow | null>(null)
@@ -1034,6 +1040,28 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         toast.error("Failed to update status")
       } finally {
         setProspectConfirm(null)
+      }
+    })
+  }
+
+  const handleDeleteProject = () => {
+    if (!deleteProjectTarget) return
+    startTransition(async () => {
+      try {
+        const result = await deleteProjectAction({ projectId: deleteProjectTarget.id })
+        if (!result.success) {
+          const error = "error" in result ? result.error : null
+          toast.error("Delete failed", {
+            description: typeof error === "object" && error ? error.message : "Unknown error",
+          })
+          return
+        }
+        toast.success("Project deleted", { description: `${deleteProjectTarget.title} has been permanently removed.` })
+        setDeleteProjectTarget(null)
+        setDeleteProjectConfirmText("")
+        router.refresh()
+      } catch {
+        toast.error("Unexpected error while deleting project.")
       }
     })
   }
@@ -1453,6 +1481,22 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                       })}
                     </DropdownMenuSubContent>
                   </DropdownMenuSub>
+                  {/* Only for projects this company owns. On a row where the
+                      company is merely credited, deleting would destroy
+                      someone else's project from their neighbour's line —
+                      what you want there is to drop the credit, which
+                      Update status already does. */}
+                  {project.isProjectOwner && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-xs cursor-pointer text-red-600 focus:text-red-600"
+                        onClick={() => { setDeleteProjectTarget({ id: project.id, title: project.title }); setDeleteProjectConfirmText("") }}
+                      >
+                        Delete project
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )
@@ -1541,6 +1585,17 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                                 })}
                               </DropdownMenuSubContent>
                             </DropdownMenuSub>
+                            {project.isProjectOwner && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-xs cursor-pointer text-red-600 focus:text-red-600"
+                                  onClick={() => { setDeleteProjectTarget({ id: project.id, title: project.title }); setDeleteProjectConfirmText("") }}
+                                >
+                                  Delete project
+                                </DropdownMenuItem>
+                              </>
+                            )}
                           </DropdownMenuSubContent>
                         </DropdownMenuSub>
                       )
@@ -2785,6 +2840,73 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
                 style={{ flex: 1, backgroundColor: "#dc2626", borderColor: "#dc2626", color: "#fff" }}
               >
                 {isPending ? "Removing…" : "Remove owner"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete a project straight from the company row. Same
+          type-to-confirm as deleting a company: the cost of a slip is
+          the same, so the ceremony is too. */}
+      {deleteProjectTarget && (
+        <div className="popup-overlay" onClick={() => { if (!isPending) { setDeleteProjectTarget(null); setDeleteProjectConfirmText("") } }}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">Delete project</h3>
+              <button
+                type="button"
+                className="popup-close"
+                onClick={() => { if (!isPending) { setDeleteProjectTarget(null); setDeleteProjectConfirmText("") } }}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="pb-3">
+              <p className="text-sm font-medium text-[#1c1c1a] mb-0.5">{deleteProjectTarget.title}</p>
+
+              <div className="arco-alert arco-alert--warn">
+                <AlertTriangle className="arco-alert-icon" />
+                <div>
+                  <p>This will permanently delete <strong>{deleteProjectTarget.title}</strong> and all associated data (photos, contributors, taxonomy). This action cannot be undone.</p>
+                </div>
+              </div>
+
+              <div className="pt-1">
+                <label className="text-xs text-[#6b6b68] mb-1 block">
+                  Type <span className="font-medium text-[#1c1c1a]">DELETE</span> to confirm
+                </label>
+                <input
+                  type="text"
+                  value={deleteProjectConfirmText}
+                  onChange={(e) => setDeleteProjectConfirmText(e.target.value)}
+                  placeholder="DELETE"
+                  className="w-full px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors placeholder:text-[#a1a1a0]"
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+
+            <div className="popup-actions">
+              <button
+                type="button"
+                className="btn-tertiary"
+                onClick={() => { setDeleteProjectTarget(null); setDeleteProjectConfirmText("") }}
+                disabled={isPending}
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleDeleteProject}
+                disabled={isPending || deleteProjectConfirmText !== "DELETE"}
+                style={{ flex: 1, backgroundColor: deleteProjectConfirmText === "DELETE" ? "#dc2626" : undefined, borderColor: deleteProjectConfirmText === "DELETE" ? "#dc2626" : undefined, color: deleteProjectConfirmText === "DELETE" ? "#fff" : undefined }}
+              >
+                {isPending ? "Deleting…" : "Delete project"}
               </button>
             </div>
           </div>

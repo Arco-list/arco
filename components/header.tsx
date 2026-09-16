@@ -9,6 +9,7 @@ import { Link } from "@/i18n/navigation";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useTranslations, useLocale } from "next-intl";
+import { fetchAdminNavCounts } from "@/lib/admin/nav-counts";
 
 import { signOutAction } from "@/app/(auth)/actions";
 import { useAuth } from "@/contexts/auth-context";
@@ -351,6 +352,27 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
         if (child.badge && child.badge > 0) badgeByHref[child.href] = child.badge
       }
     }
+  }
+
+  // Off an /admin page the nav links are the dashboard's, so they carry
+  // no counts — and the admin menu in the account dropdown showed bare
+  // labels. Fetched when the menu opens rather than on every render:
+  // nobody needs the queue size until they look for it.
+  const [adminCounts, setAdminCounts] = useState<{ inbox: number; projects: number } | null>(null)
+  useEffect(() => {
+    if (!hasAdminRole || !isAccountMenuOpen || adminCounts) return
+    let cancelled = false
+    fetchAdminNavCounts()
+      .then((counts) => { if (!cancelled) setAdminCounts(counts) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [hasAdminRole, isAccountMenuOpen, adminCounts])
+
+  // The page's own nav wins where it has an opinion: on an admin page
+  // those counts were read in the same request as the page itself.
+  if (adminCounts) {
+    badgeByHref["/admin/inbox"] ??= adminCounts.inbox
+    badgeByHref["/admin/projects"] ??= adminCounts.projects
   }
 
   const [openGroup, setOpenGroup] = useState<string | null>(null);
@@ -843,7 +865,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                             </Link>
                             <Link href="/dashboard/pricing" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/dashboard/pricing" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>
-                              {t("plans")}
+                              {t("subscription")}
                             </Link>
                           </div>
                           <div className="border-t border-border mx-4" />
@@ -937,10 +959,10 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                                   { href: "/admin/model", label: t("admin_growth_model"), icon: adminIcons.growthModel },
                                 ]},
                                 { key: "platform", label: t("admin_platform"), items: [
-                                  { href: "/admin/billing", label: "Billing", icon: adminIcons.billing },
                                   { href: "/admin/categories", label: t("admin_categories"), icon: adminIcons.categories },
                                   { href: "/admin/pinterest", label: "Pinterest", icon: adminIcons.pinterest },
                                   { href: "/admin/design", label: t("admin_design"), icon: adminIcons.design },
+                                  { href: "/admin/subscriptions", label: "Subscriptions", icon: adminIcons.billing },
                                 ]},
                               ]
                               return (

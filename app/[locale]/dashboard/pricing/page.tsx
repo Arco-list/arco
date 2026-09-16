@@ -26,7 +26,7 @@ export default function PricingPage() {
           { href: "/dashboard/company", label: t("company") },
           { href: "/dashboard/team", label: t("team") },
           { href: "/dashboard/inbox", label: t("inbox") },
-          { href: "/dashboard/pricing", label: t("plans") },
+          { href: "/dashboard/pricing", label: t("subscription") },
         ]} />
       ) : (
         <Header />

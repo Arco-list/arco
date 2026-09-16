@@ -29,6 +29,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services"
+import { ServicePills } from "@/components/service-pills"
+import { CompanyLookup } from "@/components/company-lookup"
 import {
   DndContext,
   closestCenter,
@@ -2635,6 +2637,32 @@ export default function ListingEditorPage() {
     }))
   }, [supabase])
 
+  // The taxonomy itself, fetched when the dialog opens if the page has
+  // not loaded it yet. Without this the picker rendered an empty block
+  // until some other state change happened to re-render it — which in
+  // practice was the email lookup finishing, so a company whose address
+  // could not be found showed no services at all.
+  useEffect(() => {
+    if (!draftCard || professionalServices.length > 0) return
+    let cancelled = false
+    loadProfessionalServiceOptions()
+      .then((options) => { if (!cancelled && options.length) setProfessionalServices(options) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [draftCard, professionalServices.length, loadProfessionalServiceOptions])
+
+  // The staged company's own services, fetched the moment a company is
+  // staged rather than only on the search path. Opening the dialog on an
+  // existing credit, or landing here after a Google company became an
+  // Arco one, left the picker showing the whole taxonomy while the email
+  // was still being looked up — the reader waits on a list we could
+  // already have narrowed.
+  useEffect(() => {
+    const companyId = draftCard?.companyId
+    if (!companyId || inviteCompanyServices[companyId]?.length) return
+    void loadCompanyServices(companyId)
+  }, [draftCard?.companyId, inviteCompanyServices, loadCompanyServices])
+
   // Pre-select the credit's service so the publisher rarely opens the
   // dropdown: a company offering one service uses it; a company already
   // on the platform that offers several uses its primary service.
@@ -3808,6 +3836,10 @@ export default function ListingEditorPage() {
       : (editingCreditId && draftCard?.email?.includes("@") ? draftCard.email.split("@")[1] : null)
   const dialogEmailOk = (!editingCreditId && Boolean(dialogArcoCompany?.ownerId))
     || (dialogEmailDomain ? dialogEmailPrefix.trim().length > 0 : /\S+@\S+/.test(dialogEmailPrefix))
+  /** Which field the dialog is still missing, shown at that field once
+   *  someone has pressed the button — never as a standing complaint,
+   *  and never collected at the bottom of the form. */
+  const [dialogHint, setDialogHint] = useState<null | "service" | "email">(null)
   const canSubmitDialog = Boolean(
     draftCard && dialogCompanySelected && (draftCard.serviceIds.length > 0) && dialogEmailOk,
   )
@@ -4967,9 +4999,11 @@ export default function ListingEditorPage() {
            desktop, bottom sheet on mobile. Children restacked into a
            form — title, company search, email, service. */
         .add-pro-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); z-index: 480; }
-        .credits-grid .credit-card-edit.add-pro-modal { position: fixed; z-index: 490; top: 50%; left: 50%; transform: translate(-50%,-50%); width: min(480px, calc(100vw - 32px)); background: #fff; border-radius: 12px; border-bottom: none; box-shadow: 0 24px 80px rgba(0,0,0,.18); padding: 0; margin: 0; text-align: left; overflow: visible !important; display: flex !important; flex-direction: column; align-items: stretch !important; gap: 0; cursor: default; }
-        .add-pro-modal-head { order: -2; display: flex; align-items: center; justify-content: space-between; padding: 20px 28px; background: var(--arco-off-white); border-radius: 12px 12px 0 0; flex-shrink: 0; }
-        .add-pro-modal-hint { order: -1; color: var(--arco-mid-grey); margin: 12px 28px 16px !important; }
+        .credits-grid .credit-card-edit.add-pro-modal { position: fixed; z-index: 490; top: 50%; left: 50%; transform: translate(-50%,-50%); width: min(480px, calc(100vw - 32px)); background: #fff; border-radius: 12px; border-bottom: none; box-shadow: 0 24px 80px rgba(0,0,0,.18); padding: 0; margin: 0; text-align: left; max-height: calc(100vh - 64px); overflow: auto !important; display: flex !important; flex-direction: column; align-items: stretch !important; gap: 0; cursor: default; }
+        /* Sticky, because the form below it can run past the viewport
+           once every category is open — the title and the way out stay
+           where you left them. */
+        .add-pro-modal-head { order: -2; position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; padding: 20px 28px; background: var(--arco-off-white); border-radius: 12px 12px 0 0; flex-shrink: 0; }
         .credit-card-edit.add-pro-modal::before { display: none; }
         .add-pro-modal .ec-badge { display: none !important; }
         .add-pro-modal .credit-icon { display: none; }
@@ -4983,11 +5017,13 @@ export default function ListingEditorPage() {
         .add-pro-modal .credit-slot-name { display: none !important; }
         .add-pro-modal > .arco-card-subtitle { display: none !important; }
         .add-pro-search { order: 1; margin: 0 28px; }
+        /* Only the list scrolls. The dialog itself stays where it is —
+           on a phone a sheet that scrolls as a whole takes the field you
+           are typing in with it, and you lose sight of what you typed. */
+        .add-pro-search .company-lookup-rows { max-height: 42vh; overflow-y: auto; overscroll-behavior: contain; }
         .add-pro-search .form-input:focus { border-color: var(--arco-black); }
-        .add-pro-under-hint { font-size: 12px; color: var(--arco-mid-grey); margin: 8px 0 0; }
-        .add-pro-results { margin-top: 8px; border: 1px solid var(--arco-rule); border-radius: 3px; box-shadow: 0 8px 28px rgba(0,0,0,.14); max-height: 280px; overflow-y: auto; padding: 4px 0; background: #fff; }
-        .add-pro-result-row { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 9px 14px; font-size: 13px; font-weight: 300; color: var(--arco-black); cursor: pointer; gap: 8px; transition: background .1s; background: none; border: none; text-align: left; }
-        .add-pro-result-row:hover { background: var(--arco-off-white); }
+        /* The results list is .company-lookup* in globals.css now —
+           see components/company-lookup.tsx. */
         /* Selected state: the modal becomes a grid so the icon spans the
            name + service rows — one connected list item — with the email
            aligned to the same content column. display:contents lets the
@@ -5008,42 +5044,41 @@ export default function ListingEditorPage() {
         .add-pro-name { font-size: 15px; font-weight: 500; color: var(--arco-black); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .add-pro-change { background: none; border: none; padding: 0; font-size: 12px; color: #016D75; cursor: pointer; flex-shrink: 0; }
         .add-pro-change:hover { text-decoration: underline; }
+        /* The draft card's own service dropdown stays hidden here: in the
+           dialog the choice is made with pills further down, and the line
+           under the name is a subtitle, not a control. */
         .add-pro-modal .credit-slot-service { display: none; }
-        .credits-grid .add-pro-modal.add-pro-has-company .credit-slot-service { display: block; grid-column: 3; grid-row: 3; align-self: start; width: auto !important; margin: 0 !important; padding: 0; border: none; background: transparent; }
-        /* Service reads as the item's subtitle, with a dropdown caret. */
-        .add-pro-modal .credit-slot-service .arco-eyebrow { font-size: 13px; font-weight: 400; letter-spacing: 0; text-transform: none; }
-        .add-pro-modal .credit-slot-service .arco-eyebrow::after { content: ""; display: inline-block; margin-left: 7px; vertical-align: middle; border-left: 3.5px solid transparent; border-right: 3.5px solid transparent; border-top: 4px solid currentColor; opacity: .75; }
-        .add-pro-modal .credit-slot-service .arco-eyebrow:hover { text-decoration: underline; }
-        .credits-grid .add-pro-modal.add-pro-has-company .add-pro-email { grid-column: 3; margin: 14px 0 0 !important; }
-        .add-pro-email { order: 4; padding: 0; font-size: 14px; background: transparent; display: flex; align-items: center; border: none; }
-        .add-pro-email input { border: none; outline: none; font: inherit; padding: 0; background: transparent; min-width: 30px; color: var(--arco-black); }
-        /* Only the local part is a field; the domain sits outside the
-           box as plain text so it reads as fixed, not editable. */
-        .add-pro-email { flex-wrap: wrap; row-gap: 6px; column-gap: 10px; }
-        .add-pro-email input.add-pro-email-input { flex: 1 1 auto; min-width: 80px; border: 1px solid var(--arco-rule); border-radius: 3px; padding: 10px 14px; background: #fff; font: inherit; color: var(--arco-black); outline: none; }
-        .add-pro-email input.add-pro-email-input:focus { border-color: var(--arco-black); }
-        /* Spacing via the container's column-gap, not a margin, so the
-           domain lines up with the input's edge when it wraps below it
-           on narrow screens. */
-        .add-pro-email-domain { color: var(--arco-mid-grey); flex-shrink: 0; white-space: nowrap; }
+        .credits-grid .add-pro-modal.add-pro-has-company .add-pro-sub { grid-column: 3; grid-row: 3; align-self: start; font-size: 13px; color: var(--arco-mid-grey); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* Full width, under the icon + name block: a pill row indented to
+           the name column would wrap after three pills. Order 5 puts it
+           after the email (4) and before the footer (6) — company, then
+           how to reach them, then what they did. */
+        .add-pro-services { order: 5; }
+        /* The list of services is the only thing here that can run long,
+           so it is the only thing that scrolls. Everything the reader
+           needs to finish — the address above, the button below — stays
+           put. */
+        .add-pro-services-scroll { max-height: 38vh; overflow-y: auto; overscroll-behavior: contain; }
+        .credits-grid .add-pro-modal.add-pro-has-company .add-pro-services { grid-column: 1 / -1; margin-top: 18px; }
+        .add-pro-services .service-pill-group:first-of-type { margin-top: 4px; }
+        /* Full width, like the pills under it: indented to the name
+           column it was the only block in the form with its own left
+           edge. */
+        .credits-grid .add-pro-modal.add-pro-has-company .add-pro-email { grid-column: 1 / -1; margin: 18px 0 0 !important; }
+        /* Position only — the field itself is .form-email in globals.css,
+           the same split address field /design documents. */
+        .add-pro-email { order: 4; padding: 0; background: transparent; border: none; }
         .credits-grid .add-pro-modal.add-pro-has-company .add-pro-footer { grid-column: 1 / -1; margin: 20px 0 0 !important; }
         .add-pro-footer { order: 6; margin: 20px 28px 28px; display: flex; justify-content: flex-end; }
         .add-pro-modal .editable-hint { border-bottom: none; }
         .add-pro-modal .card-field-inp, .add-pro-modal .email-prefix-inp { border-bottom: none; text-align: left; font-size: 15px; }
         .add-pro-modal .service-menu { left: -1px; right: -1px; transform: none; min-width: 0; top: calc(100% + 8px); border: 1px solid var(--arco-rule); border-radius: 3px; box-shadow: 0 8px 28px rgba(0,0,0,.14); }
         @media (max-width: 768px) {
-          .credits-grid .credit-card-edit.add-pro-modal { top: auto; bottom: 0; left: 0; right: 0; transform: none; width: 100%; border-radius: 14px 14px 0 0; padding: 0 0 calc(16px + env(safe-area-inset-bottom)); max-height: 82vh; overflow: visible; animation: addProSheetUp .28s cubic-bezier(.16,1,.3,1); grid-template-columns: none; column-gap: 0; row-gap: 0; }
+          .credits-grid .credit-card-edit.add-pro-modal { top: auto; bottom: 0; left: 0; right: 0; transform: none; width: 100%; border-radius: 14px 14px 0 0; padding: 0 0 calc(16px + env(safe-area-inset-bottom)); max-height: 82vh; overflow: auto; animation: addProSheetUp .28s cubic-bezier(.16,1,.3,1); grid-template-columns: none; column-gap: 0; row-gap: 0; }
           .add-pro-modal-head { border-radius: 14px 14px 0 0; }
           .add-pro-modal .credit-slot-service { margin-left: 18px !important; margin-right: 18px !important; }
           .add-pro-search, .add-pro-email { margin-left: 18px !important; margin-right: 18px !important; }
           .add-pro-footer { margin: 16px 18px calc(16px + env(safe-area-inset-bottom)) !important; }
-          .add-pro-modal-hint { margin: 12px 18px 14px !important; }
-          /* Email on one line: full width (the content column alone is
-             too narrow for input + domain), input flexes, domain keeps
-             priority and only ellipsizes in the extreme. */
-          .credits-grid .add-pro-modal.add-pro-has-company .add-pro-email { grid-column: 1 / -1; flex-wrap: nowrap; }
-          .credits-grid .add-pro-modal.add-pro-has-company .add-pro-email input.add-pro-email-input { flex: 1 1 0; min-width: 72px; }
-          .credits-grid .add-pro-modal.add-pro-has-company .add-pro-email-domain { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
         }
         @keyframes addProSheetUp { from { transform: translateY(18%); opacity: .5; } to { transform: translateY(0); opacity: 1; } }
         @media (max-width: 768px) {
@@ -5081,6 +5116,23 @@ export default function ListingEditorPage() {
         .company-search-row:hover { background: #f5f5f3; }
         .company-search-row.sel { font-weight: 500; }
         .service-menu { position: absolute; left: 50%; transform: translateX(-50%); top: calc(100% + 10px); background: var(--background, #fff); border: 1px solid var(--arco-rule, #e8e8e6); border-radius: 4px; box-shadow: 0 8px 32px rgba(0,0,0,.09); min-width: 224px; padding: 8px 0; z-index: 30; max-height: 320px; overflow-y: auto; }
+        .service-menu-overlay { position: fixed; inset: 0; z-index: 10; }
+        /* On a phone a menu hung off a table cell is unreachable: it
+           opens half off-screen and scrolls the row out from under
+           itself. Same sheet as the add-professional dialog — up from
+           the bottom, full width, over a scrim. */
+        @media (max-width: 768px) {
+          .service-menu-overlay { z-index: 489; background: rgba(0, 0, 0, 0.4); }
+          .credits-rows .service-menu, .credits-grid .service-menu {
+            position: fixed; left: 0; right: 0; bottom: 0; top: auto; transform: none;
+            width: 100%; min-width: 0; max-width: none; max-height: 70vh;
+            border-radius: 14px 14px 0 0; border-left: none; border-right: none; border-bottom: none;
+            padding: 8px 0 calc(16px + env(safe-area-inset-bottom));
+            box-shadow: 0 -12px 40px rgba(0, 0, 0, .18);
+            animation: addProSheetUp .28s cubic-bezier(.16, 1, .3, 1);
+            z-index: 490;
+          }
+        }
         /* Rows mirror the discover filter dropdowns (filter-dropdown-option
            + filter-checkbox from globals.css); button reset on top. */
         .service-menu .filter-dropdown-option { width: 100%; border: none; background: transparent; font: inherit; text-align: left; }
@@ -5178,7 +5230,7 @@ export default function ListingEditorPage() {
         { href: projectOwnerInvite?.companyId ? `/dashboard/company?company_id=${projectOwnerInvite.companyId}` : "/dashboard/company", label: tNav("company") },
         { href: projectOwnerInvite?.companyId ? `/dashboard/team?company_id=${projectOwnerInvite.companyId}` : "/dashboard/team", label: tNav("team") },
         { href: "/dashboard/inbox", label: tNav("inbox") },
-        { href: "/dashboard/pricing", label: tNav("plans") },
+        { href: "/dashboard/pricing", label: tNav("subscription") },
       ]} />
 
       <div>
@@ -5757,11 +5809,14 @@ export default function ListingEditorPage() {
               const isConfirmingDelete = confirmDeleteInviteId === inv.id
               // Owner card: service dropdown uses company's services; non-owner uses all project services
               // Owner → owner company services; Arco company with services → that company's services; otherwise → all
-              const serviceDropdownOptions = inv.isOwner
+              const serviceDropdownOptions = (inv.isOwner
                 ? ownerCompanyServices
                 : (inv.companyId && inviteCompanyServices[inv.companyId]?.length)
                   ? inviteCompanyServices[inv.companyId]
                   : professionalServices
+              // Photographers are credited through their own cell on the
+              // photos tab, so they are never a service to pick here.
+              ).filter((svc) => ((svc as { slug?: string | null }).slug ?? "") !== "photographer")
               return (
                 <div
                   key={inv.id}
@@ -5824,7 +5879,7 @@ export default function ListingEditorPage() {
                       }
                       return (
                         <>
-                          <div style={{ position: "fixed", inset: 0, zIndex: 10 }} onClick={() => setEditingInviteField(null)} />
+                          <div className="service-menu-overlay" onClick={() => setEditingInviteField(null)} />
                           <div className="service-menu">
                             {groups.map((g, gi) => (
                               <div key={g.label}>
@@ -5856,7 +5911,10 @@ export default function ListingEditorPage() {
                                         }
                                         void supabase.from("project_professionals").update({ invited_service_category_ids: [...inv.serviceIds, s.id] } as any).eq("id", inv.id).then(() => refreshProfessionalSection())
                                       }
-                                      setEditingInviteField(null)
+                                      // Deliberately still open: up to
+                                      // three services go on one credit,
+                                      // and closing after each pick made
+                                      // the second one a second trip.
                                     }}
                                   >
                                     <div className="filter-dropdown-option-left">
@@ -6277,7 +6335,7 @@ export default function ListingEditorPage() {
                 {CREDITS_ADD_FLOW === "dialog" && (
                   <div
                     className="add-pro-overlay"
-                    onClick={() => { setDraftCard(null); setPendingTier23(null); setEditingInviteField(null); setCompanySearchQuery(""); setCompanySearchResults([]); setGoogleResults([]); setDialogArcoCompany(null); setDialogEmailPrefix(""); setDialogEmailLoading(false); setEditingCreditId(null) }}
+                    onClick={() => { setDraftCard(null); setPendingTier23(null); setEditingInviteField(null); setCompanySearchQuery(""); setCompanySearchResults([]); setGoogleResults([]); setDialogArcoCompany(null); setDialogEmailPrefix(""); setDialogEmailLoading(false); setEditingCreditId(null); setDialogHint(null) }}
                   />
                 )}
               <div className={CREDITS_ADD_FLOW === "dialog" ? `credit-card-edit popup-card add-pro-modal${dialogCompanySelected ? " add-pro-has-company" : ""}` : "credit-card-edit"}>
@@ -6290,102 +6348,132 @@ export default function ListingEditorPage() {
                         type="button"
                         className="popup-close"
                         aria-label={tActions("close")}
-                        onClick={() => { setDraftCard(null); setPendingTier23(null); setEditingInviteField(null); setCompanySearchQuery(""); setCompanySearchResults([]); setGoogleResults([]); setDialogArcoCompany(null); setDialogEmailPrefix(""); setDialogEmailLoading(false); setEditingCreditId(null) }}
+                        onClick={() => { setDraftCard(null); setPendingTier23(null); setEditingInviteField(null); setCompanySearchQuery(""); setCompanySearchResults([]); setGoogleResults([]); setDialogArcoCompany(null); setDialogEmailPrefix(""); setDialogEmailLoading(false); setEditingCreditId(null); setDialogHint(null) }}
                       >
                         ✕
                       </button>
                     </div>
-                    {!dialogCompanySelected && (
-                      <p className="arco-body-text add-pro-modal-hint" style={{ textAlign: "left", color: "var(--arco-mid-grey)", margin: "12px 28px 16px" }}>{tTeam("add_dialog_hint")}</p>
-                    )}
-
-                    {/* Company search — form-input with inline results */}
+                    {/* Company search — the same lookup the claim funnel
+                        uses: a field, then the matches as rows with their
+                        status and city. */}
                     {!dialogCompanySelected && (
                     <div className="add-pro-search" style={{ textAlign: "left", margin: "0 28px 28px" }}>
-                      <input
-                        className="form-input"
-                        style={{ width: "100%", marginBottom: 0 }}
-                        autoFocus
+                      <CompanyLookup
+                        label={tTeam("field_company")}
+                        inputId="add-pro-company"
                         value={companySearchQuery}
-                        onChange={e => {
+                        autoFocus
+                        disabled={dialogSaving}
+                        placeholder={tTeam("company_search_placeholder")}
+                        onChange={(v) => {
                           companySearchActive.current = true
                           if (dialogArcoCompany) setDialogArcoCompany(null)
                           if (pendingTier23) setPendingTier23(null)
-                          searchCompanies(e.target.value)
+                          searchCompanies(v)
                         }}
-                        placeholder={tTeam("company_search_placeholder")}
-                        disabled={dialogSaving}
+                        busyLabel={
+                          companySearchActive.current && !dialogCompanySelected && isSearchingCompanies
+                            ? tSpecs("searching")
+                            : null
+                        }
+                        // Nothing matched: the typed name becomes the way
+                        // out, as a link in the same quiet line the funnel
+                        // uses for "not listed". The company is created on
+                        // submit through the Google path minus the place
+                        // id — same dedupe on domain and name, same
+                        // unlisted-and-claimable state.
+                        hint={
+                          companySearchActive.current
+                          && !dialogCompanySelected
+                          && !isSearchingCompanies
+                          && companySearchQuery.trim().length >= 2
+                            ? tTeam.rich("add_company_manually", {
+                                company: companySearchQuery.trim(),
+                                add: (chunks) => (
+                                  <button
+                                    type="button"
+                                    className="arco-text-link arco-text-link--primary arco-text-link--inline"
+                                    onClick={() => {
+                                      const name = companySearchQuery.trim()
+                                      companySearchActive.current = false
+                                      setDialogArcoCompany(null)
+                                      setDialogEmailPrefix("")
+                                      setDraftCard(d => d ? { ...d, companyName: name, companyId: undefined, companyLogo: null } : d)
+                                      handleSelectTier23Company(dialogPendingKey, name, null, null)
+                                    }}
+                                  >
+                                    {chunks}
+                                  </button>
+                                ),
+                              })
+                            : null
+                        }
+                        results={
+                          companySearchActive.current && !dialogCompanySelected
+                            ? [
+                                ...companySearchResults.map((c) => ({
+                                  key: `arco:${c.id}`,
+                                  name: c.name,
+                                  city: c.city ?? null,
+                                  // Already managed by someone, or still free —
+                                  // the one thing worth knowing before you press.
+                                  badge: c.owner_id
+                                    ? { label: tTeam("tier_on_arco"), tone: "on-arco" as const }
+                                    : { label: tTeam("tier_claim"), tone: "claim" as const },
+                                })),
+                                ...googleResults.map((g, i) => ({
+                                  key: `place:${g.placeId}`,
+                                  name: g.name,
+                                  city: g.city ?? null,
+                                  separated: i === 0 && companySearchResults.length > 0,
+                                })),
+                              ]
+                            : []
+                        }
+                        onSelect={(key) => {
+                          if (key.startsWith("place:")) {
+                            const g = googleResults.find((r) => `place:${r.placeId}` === key)
+                            if (!g) return
+                            companySearchActive.current = false
+                            setDialogArcoCompany(null)
+                            setDialogEmailPrefix("")
+                            setDraftCard(d => d ? { ...d, companyName: g.name, companyLogo: null } : d)
+                            setCompanySearchQuery(g.name)
+                            handleSelectTier23Company(dialogPendingKey, g.name, g.placeId, g.city)
+                            return
+                          }
+                          const c = companySearchResults.find((r) => `arco:${r.id}` === key)
+                          if (!c) return
+                          companySearchActive.current = false
+                          setPendingTier23(null)
+                          setDialogArcoCompany({
+                            id: c.id, name: c.name, city: c.city ?? null,
+                            logoUrl: (c as { logo_url?: string | null }).logo_url ?? null,
+                            email: c.email ?? null, ownerId: c.owner_id ?? null,
+                            domain: (c as { domain?: string | null }).domain ?? null,
+                          })
+                          setDraftCard(d => d ? { ...d, companyName: c.name, companyId: c.id, companyLogo: (c as { logo_url?: string | null }).logo_url ?? null } : d)
+                          setDialogEmailPrefix(c.email?.includes("@") ? c.email.split("@")[0] : "")
+                          setCompanySearchQuery(c.name)
+                          void loadCompanyServices(c.id)
+                          // No address on file → scrape the company site for
+                          // one, same as the Places path. Skipped for
+                          // free-mail domains, where there's no site to read.
+                          const cDomain = ((c as { domain?: string | null }).domain ?? "")
+                            .replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].toLowerCase()
+                          if (!c.email && cDomain && !BLOCKED_EMAIL_DOMAINS.includes(cDomain)) {
+                            setDialogEmailLoading(true)
+                            fetch(`/api/scrape-email?domain=${encodeURIComponent(cDomain)}`)
+                              .then(r => (r.ok ? r.json() : null))
+                              .then(j => {
+                                const found = typeof j?.email === "string" ? j.email : null
+                                if (found) setDialogEmailPrefix(prev => prev.trim() ? prev : found.split("@")[0])
+                              })
+                              .catch(() => {})
+                              .finally(() => setDialogEmailLoading(false))
+                          }
+                        }}
                       />
-                      {!companySearchActive.current && (
-                        <p className="add-pro-under-hint" style={{ textAlign: "left", fontSize: 13, color: "var(--arco-mid-grey)", margin: "8px 0 0" }}>{tTeam("add_dialog_typing_hint")}</p>
-                      )}
-                      {companySearchActive.current && !dialogCompanySelected
-                        && (companySearchResults.length > 0 || googleResults.length > 0 || isSearchingCompanies) && (
-                        <div className="add-pro-results">
-                          {companySearchResults.map(c => (
-                            <button
-                              key={c.id}
-                              type="button"
-                              className="add-pro-result-row"
-                              onClick={() => {
-                                companySearchActive.current = false
-                                setPendingTier23(null)
-                                setDialogArcoCompany({
-                                  id: c.id, name: c.name, city: c.city ?? null,
-                                  logoUrl: (c as { logo_url?: string | null }).logo_url ?? null,
-                                  email: c.email ?? null, ownerId: c.owner_id ?? null,
-                                  domain: (c as { domain?: string | null }).domain ?? null,
-                                })
-                                setDraftCard(d => d ? { ...d, companyName: c.name, companyId: c.id, companyLogo: (c as { logo_url?: string | null }).logo_url ?? null } : d)
-                                setDialogEmailPrefix(c.email?.includes("@") ? c.email.split("@")[0] : "")
-                                setCompanySearchQuery(c.name)
-                                void loadCompanyServices(c.id)
-                                // No address on file → scrape the company
-                                // site for one, same as the Places path.
-                                // Skipped for free-mail domains, where
-                                // there's no site to read.
-                                const cDomain = ((c as { domain?: string | null }).domain ?? "")
-                                  .replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].toLowerCase()
-                                if (!c.email && cDomain && !BLOCKED_EMAIL_DOMAINS.includes(cDomain)) {
-                                  setDialogEmailLoading(true)
-                                  fetch(`/api/scrape-email?domain=${encodeURIComponent(cDomain)}`)
-                                    .then(r => (r.ok ? r.json() : null))
-                                    .then(j => {
-                                      const found = typeof j?.email === "string" ? j.email : null
-                                      if (found) setDialogEmailPrefix(prev => prev.trim() ? prev : found.split("@")[0])
-                                    })
-                                    .catch(() => {})
-                                    .finally(() => setDialogEmailLoading(false))
-                                }
-                              }}
-                            >
-                              <span>{c.name}{c.city ? ` · ${c.city}` : ""}</span>
-                              {c.owner_id && <span className="tier-badge arco">{tTeam("tier_on_arco")}</span>}
-                            </button>
-                          ))}
-                          {googleResults.length > 0 && companySearchResults.length > 0 && <div className="company-search-divider" />}
-                          {googleResults.map(g => (
-                            <button
-                              key={g.placeId}
-                              type="button"
-                              className="add-pro-result-row"
-                              onClick={() => {
-                                companySearchActive.current = false
-                                setDialogArcoCompany(null)
-                                setDialogEmailPrefix("")
-                                setDraftCard(d => d ? { ...d, companyName: g.name, companyLogo: null } : d)
-                                setCompanySearchQuery(g.name)
-                                handleSelectTier23Company(dialogPendingKey, g.name, g.placeId, g.city)
-                              }}
-                            >
-                              <span>{g.name}{g.city ? ` · ${g.city}` : ""}</span>
-                            </button>
-                          ))}
-                          {isSearchingCompanies && (
-                            <div className="add-pro-result-row" style={{ color: "var(--arco-mid-grey)", cursor: "default" }}>{tSpecs("searching")}</div>
-                          )}
-                        </div>
-                      )}
                     </div>
 
                     )}
@@ -6429,35 +6517,138 @@ export default function ListingEditorPage() {
                             {tTeam("add_dialog_change")}
                           </button>
                         </div>
+                        {/* Reads as the card's own subtitle — the same
+                            "service · city" line a professional card
+                            carries, so the staged credit looks like the
+                            thing it is about to become. */}
+                        <div className="add-pro-sub">
+                          {[draftCard.serviceName, dialogArcoCompany?.city ?? pendingTier23?.city ?? null]
+                            .filter(Boolean)
+                            .join(" · ") || tTeam("select_service")}
+                        </div>
                       </div>
                     )}
+
+                    {/* Service — pills, in the dialog itself rather than
+                        behind a dropdown: at most three, and the reader
+                        is choosing, not confirming. */}
+                    {dialogCompanySelected && (() => {
+                      const draftCompanyServices = draftCard.companyId && inviteCompanyServices[draftCard.companyId]?.length
+                        ? inviteCompanyServices[draftCard.companyId]
+                        : null
+                      // Photographers are credited through their own
+                      // cell on the photos tab, so they are not on offer
+                      // here — the claim funnel drops them for the same
+                      // reason (lib/claim/context.ts).
+                      const serviceOptions = (draftCompanyServices ?? professionalServices)
+                        .filter((svc) => (svc.slug ?? "") !== "photographer")
+                      const groups: { label: string; items: typeof serviceOptions }[] = []
+                      const seen = new Set<string>()
+                      for (const svc of serviceOptions) {
+                        const label = (svc as any).parentName ?? "Other"
+                        if (!seen.has(label)) { seen.add(label); groups.push({ label, items: [] }) }
+                        groups.find(g => g.label === label)!.items.push(svc)
+                      }
+                      return (
+                        <div className="add-pro-services">
+                          {/* .form-label — the same field label the signup
+                              funnel uses, so a label is a label everywhere. */}
+                          <span className={`form-label${dialogHint === "service" ? " form-label--error" : ""}`}>
+                            {tTeam("select_service")}
+                          </span>
+                          {/* Only this list scrolls, so the email above it
+                              and the button below stay on screen — the two
+                              things you need to finish. */}
+                          <div className="add-pro-services-scroll">
+                          <ServicePills
+                            groups={groups.map((g) => ({
+                              id: g.label,
+                              slug: g.label,
+                              label: translateProfessionalService(g.label, locale) ?? g.label,
+                              services: g.items.map((svc) => ({
+                                id: svc.id,
+                                slug: svc.slug ?? svc.name,
+                                label: translateProfessionalService(svc.slug ?? svc.name, locale) ?? svc.name,
+                              })),
+                            }))}
+                            selectedIds={draftCard.serviceIds}
+                            max={3}
+                            // Company-specific list: no categories to sort.
+                            groupLabels={!draftCompanyServices}
+                            onToggle={(id) => {
+                              setDialogHint(null)
+                              setDraftCard((d) => {
+                                if (!d) return d
+                                const isSelected = d.serviceIds.includes(id)
+                                if (!isSelected && d.serviceIds.length >= 3) {
+                                  toast.error(tToast("max_three_services"))
+                                  return d
+                                }
+                                const newIds = isSelected
+                                  ? d.serviceIds.filter((sid) => sid !== id)
+                                  : [...d.serviceIds, id]
+                                const serviceOrderMap = new Map(serviceOptions.map((ps, i) => [ps.id, i]))
+                                const sorted = newIds.slice().sort((a, b) => (serviceOrderMap.get(a) ?? 999) - (serviceOrderMap.get(b) ?? 999))
+                                const names = sorted
+                                  .map((sid) => {
+                                    const ps = serviceOptions.find((o) => o.id === sid)
+                                    if (!ps) return null
+                                    return translateProfessionalService(ps.slug ?? ps.name, locale) ?? ps.name
+                                  })
+                                  .filter(Boolean) as string[]
+                                const displayName = names.length <= 1 ? (names[0] ?? "") : `${names[0]} +${names.length - 1}`
+                                return { ...d, serviceIds: sorted, serviceName: displayName }
+                              })
+                            }}
+                          />
+                          </div>
+                          {dialogHint === "service" && (
+                            <p className="form-note form-note--error">{tTeam("missing_service")}</p>
+                          )}
+                        </div>
+                      )
+                    })()}
 
                     {/* Email — prefix editable before the fixed @domain.
                         Hidden for claimed companies (invite goes to the
                         account). */}
                     {dialogCompanySelected && !dialogArcoCompany?.ownerId && (
                       <div className="add-pro-email">
-                        {dialogEmailDomain ? (
-                          <>
+                        {/* Label, field + domain on one row, then the line
+                            that says what pressing the button will do —
+                            the same shape the signup funnel uses to ask
+                            for an address. */}
+                        <label className={`form-label${dialogHint === "email" ? " form-label--error" : ""}`} htmlFor="add-pro-email">
+                          {tTeam("email_label")}
+                        </label>
+                        <div className="form-email" style={{ marginBottom: 0 }}>
+                          {dialogEmailDomain ? (
+                            <>
+                              <input
+                                id="add-pro-email"
+                                className={`form-input${dialogHint === "email" ? " form-input--error" : ""}`}
+                                value={dialogEmailPrefix}
+                                onChange={e => { setDialogHint(null); setDialogEmailPrefix(e.target.value) }}
+                                placeholder={dialogEmailLoading ? "…" : tTeam("name_placeholder")}
+                                disabled={dialogSaving}
+                                autoComplete="off"
+                                spellCheck={false}
+                              />
+                              <span className="form-email-domain" title={`@${dialogEmailDomain}`}>@{dialogEmailDomain}</span>
+                            </>
+                          ) : (
                             <input
-                              className="add-pro-email-input"
+                              id="add-pro-email"
+                              className={`form-input${dialogHint === "email" ? " form-input--error" : ""}`}
                               value={dialogEmailPrefix}
-                              onChange={e => setDialogEmailPrefix(e.target.value)}
-                              placeholder={dialogEmailLoading ? "…" : tTeam("name_placeholder")}
+                              onChange={e => { setDialogHint(null); setDialogEmailPrefix(e.target.value) }}
+                              placeholder={tTeam("email_invite_placeholder")}
                               disabled={dialogSaving}
-                              autoComplete="off"
-                              spellCheck={false}
                             />
-                            <span className="add-pro-email-domain">@{dialogEmailDomain}</span>
-                          </>
-                        ) : (
-                          <input
-                            value={dialogEmailPrefix}
-                            onChange={e => setDialogEmailPrefix(e.target.value)}
-                            placeholder={tTeam("email_invite_placeholder")}
-                            disabled={dialogSaving}
-                            style={{ width: "100%" }}
-                          />
+                          )}
+                        </div>
+                        {dialogHint === "email" && (
+                          <p className="form-note form-note--error">{tTeam("missing_email")}</p>
                         )}
                       </div>
                     )}
@@ -6468,10 +6659,28 @@ export default function ListingEditorPage() {
                       <button
                         type="button"
                         className="btn-primary"
-                        disabled={!canSubmitDialog || dialogSaving}
-                        onClick={() => void submitAddDialog()}
+                        disabled={dialogSaving}
+                        /* Keeps its words while it works. Swapping the
+                           label for "…" shrank the button to a grey
+                           square, which reads as "gone" rather than
+                           "busy" — and the one thing you want at that
+                           moment is proof that you pressed the right
+                           thing. */
+                        style={{ flexShrink: 0, opacity: dialogSaving ? 0.6 : 1, cursor: dialogSaving ? "default" : undefined }}
+                        onClick={() => {
+                          if (!draftCard || draftCard.serviceIds.length === 0) {
+                            setDialogHint("service")
+                            return
+                          }
+                          if (!dialogEmailOk) {
+                            setDialogHint("email")
+                            return
+                          }
+                          setDialogHint(null)
+                          void submitAddDialog()
+                        }}
                       >
-                        {dialogSaving ? "…" : editingCreditId ? tTeam("change_professional") : tTeam("add_professional")}
+                        {editingCreditId ? tTeam("change_professional") : tTeam("add_professional")}
                       </button>
                     </div>
                     )}
@@ -6503,7 +6712,8 @@ export default function ListingEditorPage() {
                     const draftCompanyServices = draftCard.companyId && inviteCompanyServices[draftCard.companyId]?.length
                       ? inviteCompanyServices[draftCard.companyId]
                       : null
-                    const serviceOptions = draftCompanyServices ?? professionalServices
+                    const serviceOptions = (draftCompanyServices ?? professionalServices)
+                      .filter((svc) => ((svc as { slug?: string | null }).slug ?? "") !== "photographer")
                     const groups: { label: string; items: typeof serviceOptions }[] = []
                     const seen = new Set<string>()
                     for (const s of serviceOptions) {
@@ -6513,7 +6723,7 @@ export default function ListingEditorPage() {
                     }
                     return (
                       <>
-                        <div style={{ position: "fixed", inset: 0, zIndex: 10 }} onClick={() => setEditingInviteField(null)} />
+                        <div className="service-menu-overlay" onClick={() => setEditingInviteField(null)} />
                         <div className="service-menu">
                           {groups.map((g, gi) => (
                             <div key={g.label}>
@@ -6549,7 +6759,8 @@ export default function ListingEditorPage() {
                                       const displayName = names.length <= 1 ? (names[0] ?? tTeam("select_service")) : `${names[0]} +${names.length - 1}`
                                       return { ...d, serviceIds: newIds, serviceName: displayName }
                                     })
-                                    setEditingInviteField(null)
+                                    // Deliberately still open: up to three
+                                    // services go on one credit.
                                   }}
                                 >
                                   <div className="filter-dropdown-option-left">

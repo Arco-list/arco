@@ -23,6 +23,8 @@ import {
   type EstablishmentPrediction,
   type ResolvedEstablishment,
 } from "@/lib/places/resolve-address"
+import { ServicePills } from "@/components/service-pills"
+import { CompanyLookup } from "@/components/company-lookup"
 import styles from "./claim.module.css"
 
 /**
@@ -720,12 +722,15 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
       </div>
       <div className="pro-card-info">
         {ctx.company.logoUrl ? (
-          <img src={ctx.company.logoUrl} alt="" className="pro-card-logo" width={34} height={34} />
+          <img src={ctx.company.logoUrl} alt="" className="pro-card-logo" width={40} height={40} />
         ) : (
           /* No logo: the service mark (or the generic professional mark
              before a service is picked) — never a bare initial. */
           <div className="pro-card-logo pro-card-logo-placeholder" style={{ display: "grid", placeItems: "center" }}>
-            {HeroMark && <HeroMark style={{ width: 18, height: 18, color: "var(--arco-mid)" }} strokeWidth={1.5} />}
+            {/* 30px at stroke 0.85 — the discover card's own placeholder,
+                to the pixel. This preview only earns its keep if it is
+                the real card. */}
+            {HeroMark && <HeroMark style={{ width: 30, height: 30, color: "var(--arco-mid)" }} strokeWidth={0.85} />}
           </div>
         )}
         <div>
@@ -888,7 +893,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                    re-resolved — show the field as loading, never a
                    flash of the empty search. */
                 <div className={styles.field}>
-                  <span className={styles.label}>{t("field_company")}</span>
+                  <span className="form-label">{t("field_company")}</span>
                   <div className={styles.addrShown}>
                     <span className={styles.addrText} style={{ color: "var(--arco-light)" }}>{t("restoring_pick")}</span>
                   </div>
@@ -897,63 +902,56 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                 /* Merged step: the company field IS the search until a
                    pick lands; the rest of the form unfolds below it. */
                 <div className={styles.field}>
-                  <label className={styles.label} htmlFor="cl-find">{t("field_company")}</label>
-                  <input className={styles.input} id="cl-find" value={findQuery} autoFocus
-                    placeholder={t("find_placeholder")} autoComplete="off"
-                    onChange={(e) => searchCompanies(e.target.value)} />
-
-                  {findResults.length > 0 && (
-                    <div className={styles.findRows} style={{ marginTop: 10 }}>
-                      {findResults.map((r) => {
-                        const claimed = r.kind === "arco" && r.claimed
-                        const rowKey = r.kind === "arco" ? r.id : r.placeId
-                        return (
-                          <div key={rowKey}>
-                            <button
-                              type="button" className={styles.findRow}
-                              disabled={findBusy}
-                              onClick={() => {
-                                if (r.kind === "google") { pickGooglePlace({ placeId: r.placeId, name: r.name, city: r.city }); return }
-                                if (claimed) { setClaimedInfoId((prev) => (prev === r.id ? null : r.id)); return }
-                                pickArcoCompany(r.id)
-                              }}>
-                              <span style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</span>
-                                {r.kind === "arco" && (
-                                  <span className={claimed ? styles.findBadge : styles.findBadgeClaim}>
-                                    {claimed ? t("find_label_on_arco") : t("find_label_claim")}
-                                  </span>
-                                )}
-                              </span>
-                              <span className={styles.findMeta}>{r.city ?? ""}</span>
-                            </button>
-                            {claimed && claimedInfoId === r.id && (
-                              <p className={styles.note} style={{ margin: "8px 2px 4px" }}>
-                                {t("find_claimed_note", { company: r.name })}
-                              </p>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-
-                  {findSearching && findResults.length === 0 && (
-                    <p className={styles.note}>…</p>
-                  )}
-
-                  {error && <p className={styles.error}>{error}</p>}
-
-                  {/* Handmatig toevoegen staat bewust UIT: de zoeker is
-                      NL-only (Places country=nl + Arco-rows) en een vrij
-                      invoerpad zou buitenlandse rijen binnenlaten. De
-                      regel hieronder is de plek waar t.z.t. de
-                      interessepeiling voor andere landen komt. */}
-                  {findQuery.trim().length >= 2 && !findSearching && (
-                    <p className={styles.note} style={{ marginTop: 14 }}>
-                      {t("find_not_listed")} {t("find_nl_only")}
-                    </p>
-                  )}
+                  <CompanyLookup
+                    label={t("field_company")}
+                    inputId="cl-find"
+                    value={findQuery}
+                    autoFocus
+                    disabled={findBusy}
+                    placeholder={t("find_placeholder")}
+                    onChange={(v) => searchCompanies(v)}
+                    expandedKey={claimedInfoId ? `arco:${claimedInfoId}` : null}
+                    busyLabel={findSearching && findResults.length === 0 ? "…" : null}
+                    error={error}
+                    // Manual entry stays OFF: the search is NL-only
+                    // (Places country=nl + Arco rows) and a free-text path
+                    // would let foreign rows in. This line is where the
+                    // interest check for other countries will go.
+                    hint={
+                      findQuery.trim().length >= 2 && !findSearching
+                        ? `${t("find_not_listed")} ${t("find_nl_only")}`
+                        : null
+                    }
+                    results={findResults.map((r) =>
+                      r.kind === "arco"
+                        ? {
+                            key: `arco:${r.id}`,
+                            name: r.name,
+                            city: r.city ?? null,
+                            badge: r.claimed
+                              ? { label: t("find_label_on_arco"), tone: "on-arco" as const }
+                              : { label: t("find_label_claim"), tone: "claim" as const },
+                            note: r.claimed ? t("find_claimed_note", { company: r.name }) : null,
+                          }
+                        : { key: `place:${r.placeId}`, name: r.name, city: r.city ?? null },
+                    )}
+                    onSelect={(key) => {
+                      if (key.startsWith("place:")) {
+                        const r = findResults.find((x) => x.kind === "google" && `place:${x.placeId}` === key)
+                        if (r && r.kind === "google") pickGooglePlace({ placeId: r.placeId, name: r.name, city: r.city })
+                        return
+                      }
+                      const r = findResults.find((x) => x.kind === "arco" && `arco:${x.id}` === key)
+                      if (!r || r.kind !== "arco") return
+                      // A claimed company is not ours to hand over: the row
+                      // explains itself instead of proceeding.
+                      if (r.claimed) {
+                        setClaimedInfoId((prev) => (prev === r.id ? null : r.id))
+                        return
+                      }
+                      pickArcoCompany(r.id)
+                    }}
+                  />
                 </div>
               ) : isPlatform ? (
                 /* Picked: the name is a plain editable field (fixing the
@@ -961,8 +959,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                    separate line to swap the company — that reopens the
                    search. */
                 <div className={styles.field}>
-                  <label className={styles.label} htmlFor="cl-name"
-                    style={fieldErrors.name ? { color: "var(--destructive)" } : undefined}>
+                  <label className={`form-label${fieldErrors.name ? " form-label--error" : ""}`} htmlFor="cl-name">
                     {t("field_company")}
                   </label>
                   <div className={styles.inputWithAction}>
@@ -980,19 +977,18 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                     </button>
                   </div>
                   {fieldErrors.name && (
-                    <p className="arco-small-text" style={{ marginTop: 4, color: "var(--destructive)" }}>{t("required_name")}</p>
+                    <p className="form-note form-note--error">{t("required_name")}</p>
                   )}
                 </div>
               ) : (
                 <div className={styles.field}>
-                  <label className={styles.label} htmlFor="cl-name"
-                    style={fieldErrors.name ? { color: "var(--destructive)" } : undefined}>
+                  <label className={`form-label${fieldErrors.name ? " form-label--error" : ""}`} htmlFor="cl-name">
                     {t("field_company")}
                   </label>
                   <input className={`${styles.input}${fieldErrors.name ? " input-error" : ""}`} id="cl-name" value={name}
                     onChange={(e) => { setName(e.target.value); setFieldErrors((f) => ({ ...f, name: undefined })) }} />
                   {fieldErrors.name && (
-                    <p className="arco-small-text" style={{ marginTop: 4, color: "var(--destructive)" }}>{t("required_name")}</p>
+                    <p className="form-note form-note--error">{t("required_name")}</p>
                   )}
                   {/* The domain is the claim's proof anchor and the page's
                       external link — shown, never editable here. */}
@@ -1005,8 +1001,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
               {(!isPlatform || platformPicked) && (<>
                 {isPlatform && !ctx.company.domain && (
                   <div className={styles.field}>
-                    <label className={styles.label} htmlFor="cl-website"
-                      style={fieldErrors.website ? { color: "var(--destructive)" } : undefined}>
+                    <label className={`form-label${fieldErrors.website ? " form-label--error" : ""}`} htmlFor="cl-website">
                       {t("field_website")}
                     </label>
                     <input className={`${styles.input}${fieldErrors.website ? " input-error" : ""}`}
@@ -1014,7 +1009,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                       placeholder={t("website_placeholder")}
                       onChange={(e) => { setWebsite(e.target.value); setFieldErrors((f) => ({ ...f, website: undefined })) }} />
                     {fieldErrors.website && (
-                      <p className="arco-small-text" style={{ marginTop: 4, color: "var(--destructive)" }}>{t("required_website")}</p>
+                      <p className="form-note form-note--error">{t("required_website")}</p>
                     )}
                   </div>
                 )}
@@ -1025,7 +1020,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                     step 2 then runs codeless for this address. */}
                 {isPlatform && (
                   <div className={styles.field}>
-                    <label className={styles.label} htmlFor="cl-verify">{t("platform_verify_label")}</label>
+                    <label className="form-label" htmlFor="cl-verify">{t("platform_verify_label")}</label>
                     <div className={styles.emailOuter}>
                       <input className={styles.input} id="cl-verify" value={verifyLocal}
                         style={{ maxWidth: 240 }}
@@ -1036,7 +1031,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                     </div>
                     {platformCodeSent ? (
                       <>
-                        <span className={styles.label} style={{ marginTop: 16 }}>
+                        <span className="form-label" style={{ marginTop: 16 }}>
                           {t("platform_code_sent", { email: platformSentTo })}
                         </span>
                         {otpRow}
@@ -1055,8 +1050,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
 
                 {!isPlatform && (<>
                   <div className={styles.field}>
-                    <span className={styles.label}
-                      style={fieldErrors.address ? { color: "var(--destructive)" } : undefined}>
+                    <span className={`form-label${fieldErrors.address ? " form-label--error" : ""}`}>
                       {t("field_location")}
                     </span>
                     {!editingAddress ? (
@@ -1087,7 +1081,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                       </>
                     )}
                     {fieldErrors.address && (
-                      <p className="arco-small-text" style={{ marginTop: 4, color: "var(--destructive)" }}>{t("required_address")}</p>
+                      <p className="form-note form-note--error">{t("required_address")}</p>
                     )}
                   </div>
 
@@ -1095,8 +1089,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                       ordered selected list (first = primary, draggable),
                       search, then category pills. */}
                   <div className={styles.field}>
-                    <span className={styles.label}
-                      style={fieldErrors.service ? { color: "var(--destructive)" } : undefined}>
+                    <span className={`form-label${fieldErrors.service ? " form-label--error" : ""}`}>
                       {t("field_services")}
                     </span>
                     {/* The reorder hint only makes sense once there is
@@ -1109,6 +1102,8 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                       {serviceIds.map((id, idx) => {
                         const s = serviceById.get(id)
                         if (!s) return null
+                        const group = ctx.taxonomy.find((gr) => gr.services.some((x) => x.id === id))
+                        const Mark = resolveProfessionalServiceIcon(s.slug, group?.slug ?? group?.name ?? null)
                         return (
                           <div key={id}
                             className={`${styles.svcItem}${dragOver === idx ? ` ${styles.svcItemOver}` : ""}`}
@@ -1132,8 +1127,16 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                             <span className={styles.svcGrip}>
                               <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/><circle cx="5" cy="8" r="1.2"/><circle cx="11" cy="8" r="1.2"/><circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/></svg>
                             </span>
-                            {idx === 0 && <span className={styles.svcPrimaryBadge}>{t("primary")}</span>}
+                            {/* Straight after the grip, so the marks line up
+                                in a column down the list — the PRIMAIR badge
+                                only exists on the first row and would push
+                                that one out of line. */}
+                            <Mark size={28} strokeWidth={1} className={styles.svcItemMark} aria-hidden />
+                            {/* The badge annotates the name, so it follows
+                                it. Ahead of it, it pushed every first-row
+                                name out of line with the rest. */}
                             <span className={styles.svcItemName}>{svcLabel(s)}</span>
+                            {idx === 0 && <span className={styles.svcPrimaryBadge}>{t("primary")}</span>}
                             <button type="button" className={styles.svcRemove} aria-label={t("remove")}
                               onClick={() => toggleService(id)}>×</button>
                           </div>
@@ -1157,7 +1160,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                           }} />
                       </div>
                       {fieldErrors.service && (
-                        <p className="arco-small-text" style={{ marginTop: 4, color: "var(--destructive)" }}>
+                        <p className="form-note form-note--error">
                           {t("required_service")}
                         </p>
                       )}
@@ -1178,34 +1181,17 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                     </div>
                     {/* One dropdown per category; the primary service's own
                         category starts open, the rest are a click away. */}
-                    {ctx.taxonomy.map((g) => {
-                      const selectedInGroup = g.services.filter((s) => serviceIds.includes(s.id)).length
-                      return (
-                        <details key={g.id} className={styles.svcGroup} open={g.id === myGroup?.id}>
-                          <summary className={styles.svcGroupSummary}>
-                            <span>{groupLabel(g)}</span>
-                            {selectedInGroup > 0 && (
-                              <span className="filter-pill-badge">{selectedInGroup}</span>
-                            )}
-                            <span className={styles.svcGroupChevron} aria-hidden>
-                              <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                            </span>
-                          </summary>
-                          <div className={styles.pills} style={{ padding: "4px 0 11px" }}>
-                            {g.services.map((s) => {
-                              const on = serviceIds.includes(s.id)
-                              return (
-                                <button key={s.id} type="button"
-                                  className={`${styles.pill}${on ? ` ${styles.pillOn}` : ""}`}
-                                  onClick={() => toggleService(s.id)}>
-                                  {on ? "✓ " : ""}{svcLabel(s)}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </details>
-                      )
-                    })}
+                    <ServicePills
+                      groups={ctx.taxonomy.map((g) => ({
+                        id: g.id,
+                        label: groupLabel(g),
+                        slug: g.slug ?? null,
+                        services: g.services.map((s) => ({ id: s.id, label: svcLabel(s), slug: s.slug })),
+                      }))}
+                      selectedIds={serviceIds}
+                      onToggle={toggleService}
+                      openGroupIds={myGroup ? [myGroup.id] : undefined}
+                    />
                   </div>
 
                 </>)}
@@ -1278,7 +1264,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                  on the company domain — that match IS the proof. */
               <>
                 <div className={styles.field}>
-                  <span className={styles.label}>{t("claim_as")}</span>
+                  <span className="form-label">{t("claim_as")}</span>
                   <div className={styles.sessionCard}>
                     <span className={styles.sessionAvatar}>
                       {session.avatarUrl
@@ -1312,7 +1298,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                  needs no code; the rest routes through the modal. */
               <>
                 <div className={styles.field}>
-                  <label className={styles.label} htmlFor="cl-login">{t("email_label")}</label>
+                  <label className="form-label" htmlFor="cl-login">{t("email_label")}</label>
                   <div className={styles.inputWithAction}>
                     <input className={`${styles.input}${namesMode || otpSent ? ` ${styles.inputActionPadSm}` : ""}`}
                       id="cl-login" type="email" value={emailValue}
@@ -1341,13 +1327,13 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                 {namesMode && (
                   <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
                     <div className={styles.field} style={{ flex: "1 1 180px" }}>
-                      <label className={styles.label} htmlFor="cl-first">{t("first_name_label")}</label>
+                      <label className="form-label" htmlFor="cl-first">{t("first_name_label")}</label>
                       <input className={styles.input} id="cl-first" value={firstName} autoFocus
                         autoComplete="given-name" placeholder={t("first_name_placeholder")}
                         onChange={(e) => setFirstName(e.target.value)} />
                     </div>
                     <div className={styles.field} style={{ flex: "1 1 180px" }}>
-                      <label className={styles.label} htmlFor="cl-last">{t("last_name_label")}</label>
+                      <label className="form-label" htmlFor="cl-last">{t("last_name_label")}</label>
                       <input className={styles.input} id="cl-last" value={lastName}
                         autoComplete="family-name" placeholder={t("last_name_placeholder")}
                         onChange={(e) => setLastName(e.target.value)} />
@@ -1357,7 +1343,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
 
                 {otpSent && (
                   <div className={styles.field}>
-                    <span className={styles.label}>{t("platform_code_sent", { email: emailValue.trim() })}</span>
+                    <span className="form-label">{t("platform_code_sent", { email: emailValue.trim() })}</span>
                     {otpRow}
                   </div>
                 )}

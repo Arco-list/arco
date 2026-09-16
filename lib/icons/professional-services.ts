@@ -2,7 +2,6 @@
 
 import type { LucideIcon } from "lucide-react"
 import {
-  Briefcase,
   Cpu,
   Hammer,
   Leaf,
@@ -33,6 +32,7 @@ import {
   StairsIcon,
   SwimmingPoolIcon,
   TilesStonesIcon,
+  UpholsteryIcon,
   WindowsDoorsIcon,
   StructuralEngineerIcon,
   RoofingIcon,
@@ -45,9 +45,16 @@ import {
   PainterIcon,
   FencingIcon,
   ShedBuilderIcon,
+  PersonIcon,
 } from "./custom-service-icons"
 
-const DEFAULT_PROFESSIONAL_ICON: LucideIcon = Briefcase
+/* The mark for a professional whose trade we do not know yet — an
+   unassigned credit, a company still picking its services. A person,
+   not a briefcase: at that moment we know someone worked on the
+   project, not that there is a business behind it. And the briefcase
+   was the one lucide glyph left among the hand-drawn marks, so it read
+   as foreign wherever it appeared beside them. */
+const DEFAULT_PROFESSIONAL_ICON: LucideIcon = PersonIcon
 
 /**
  * Every service in the taxonomy now has a hand-drawn Arco mark; only
@@ -143,6 +150,8 @@ const SERVICE_ICON_MAP: Record<string, LucideIcon> = {
   interior_styling: InteriorStylingIcon,
   finishing_interior_styling: InteriorStylingIcon,
   furniture: FurnitureIcon,
+  upholstery: UpholsteryIcon,
+  finishing_upholstery: UpholsteryIcon,
   finishing_furniture: FurnitureIcon,
   art: ArtIcon,
   finishing_art: ArtIcon,

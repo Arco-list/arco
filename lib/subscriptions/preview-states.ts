@@ -1,5 +1,6 @@
 import type { CompanyBilling } from "@/lib/subscriptions/get-company-subscription"
 import type { BillingDetails } from "@/lib/subscriptions/billing-details-types"
+import { FREE_CONTRIBUTOR_LIMIT, type ProjectUsage } from "@/lib/subscriptions/usage-types"
 
 /**
  * Synthetic billing states for the admin preview.
@@ -14,38 +15,35 @@ import type { BillingDetails } from "@/lib/subscriptions/billing-details-types"
  */
 
 export const PREVIEW_STATES = [
-  "free",
-  "founding",
-  "trialing",
-  "active_year",
-  "active_month",
+  "free_publisher",
+  "free_both",
+  "free_contributor",
+  "pro_month",
+  "pro_year",
   "past_due",
   "canceling",
-  "canceled",
 ] as const
 
 export type PreviewState = (typeof PREVIEW_STATES)[number]
 
 export const PREVIEW_LABELS: Record<PreviewState, string> = {
-  free: "Free — no subscription",
-  founding: "Founding access",
-  trialing: "Trialing",
-  active_year: "Active — billed annually",
-  active_month: "Active — billed monthly",
-  past_due: "Past due — collection failed",
-  canceling: "Cancelling at period end",
-  canceled: "Canceled — back on Free",
+  free_publisher: "Free · publisher",
+  free_both: "Free · both",
+  free_contributor: "Free · contributor",
+  pro_month: "Pro · monthly",
+  pro_year: "Pro · yearly",
+  past_due: "Past due",
+  canceling: "Cancelling",
 }
 
 export const PREVIEW_NOTES: Record<PreviewState, string> = {
-  free: "The default for every company today. Shows the plans below.",
-  founding: "Pro without a Stripe object — the launch-period promise. 2 companies are in this state right now.",
-  trialing: "Not reachable in product: D2 decided against trials. Kept so the page never breaks if Stripe reports one.",
-  active_year: "The state we steer people to: €468 a year by direct debit.",
-  active_month: "€49 a month — the low-friction entry the pricing page already promises.",
+  free_publisher: "An architect on Free: publishes, is credited by nobody yet. One bar.",
+  free_both: "Both kinds of work, and the credit limit biting: 6 published, 2 credits, 1 of them held back.",
+  free_contributor: "A photographer or kitchen builder: cannot publish, lives entirely off credits. One bar, 5 of 6 locked.",
+  pro_month: "€49 a month. On Pro the split stops meaning anything, so the two bars become one.",
+  pro_year: "The state we steer people to: €468 a year by direct debit.",
   past_due: "A collection that failed. The company keeps access while dunning runs (D6).",
   canceling: "Cancelled but still inside the paid period. Access holds until the end date.",
-  canceled: "The period ran out. Pro is gone, the Stripe customer stays for invoice history.",
 }
 
 const daysFromNow = (days: number) =>
@@ -66,21 +64,13 @@ const base: CompanyBilling = {
 
 export function previewBilling(state: PreviewState): CompanyBilling {
   switch (state) {
-    case "founding":
-      return { ...base, plan: "pro", source: "founding", foundingClaimedAt: daysFromNow(-34) }
-    case "trialing":
-      return {
-        ...base, plan: "pro", source: "subscription", status: "trialing",
-        interval: "year", trialEnd: daysFromNow(9), currentPeriodEnd: daysFromNow(9),
-        stripeCustomerId: "cus_preview", stripeSubscriptionId: "sub_preview",
-      }
-    case "active_year":
+    case "pro_year":
       return {
         ...base, plan: "pro", source: "subscription", status: "active",
         interval: "year", currentPeriodEnd: daysFromNow(287),
         stripeCustomerId: "cus_preview", stripeSubscriptionId: "sub_preview",
       }
-    case "active_month":
+    case "pro_month":
       return {
         ...base, plan: "pro", source: "subscription", status: "active",
         interval: "month", currentPeriodEnd: daysFromNow(17),
@@ -98,12 +88,6 @@ export function previewBilling(state: PreviewState): CompanyBilling {
         interval: "year", currentPeriodEnd: daysFromNow(62), cancelAtPeriodEnd: true,
         stripeCustomerId: "cus_preview", stripeSubscriptionId: "sub_preview",
       }
-    case "canceled":
-      return {
-        ...base, status: "canceled", currentPeriodEnd: daysFromNow(-11),
-        stripeCustomerId: "cus_preview", stripeSubscriptionId: "sub_preview",
-      }
-    case "free":
     default:
       return base
   }
@@ -120,11 +104,11 @@ export function isPreviewState(value: string | undefined): value is PreviewState
  * thing a fresh sandbox can never show.
  */
 export function previewBillingDetails(state: PreviewState): BillingDetails {
-  if (state === "free" || state === "founding") {
+  if (state.startsWith("free")) {
     return { configured: true, paymentMethod: null, invoices: [] }
   }
 
-  const monthly = state === "active_month"
+  const monthly = state === "pro_month"
   const amount = monthly ? "€ 59,29" : "€ 566,28"
   const count = monthly ? 6 : 2
 
@@ -147,5 +131,43 @@ export function previewBillingDetails(state: PreviewState): BillingDetails {
     configured: true,
     paymentMethod: { type: "sepa_debit", label: "SEPA-incasso", last4: "5264", expiry: null },
     invoices,
+  }
+}
+
+/**
+ * A company with work on Arco, for the usage bars.
+ *
+ * The admin's own company is usually empty, which hides the only thing
+ * the bars exist to show: a plan holding projects back. Three shapes of
+ * company are worth reviewing, because the page renders a different
+ * number of meters for each — an architect who only publishes, a
+ * photographer who can only be credited, and one doing both.
+ */
+export function previewUsage(state: PreviewState): ProjectUsage {
+  // One company told three ways. The published count stays at 6 across
+  // every state that can publish, so clicking along the row shows the
+  // plan changing rather than the company changing.
+  const free = (usage: Omit<ProjectUsage, "contributorVisible" | "contributorHidden">): ProjectUsage => {
+    const visible = Math.min(FREE_CONTRIBUTOR_LIMIT, usage.contributorTotal)
+    return { ...usage, contributorVisible: visible, contributorHidden: usage.contributorTotal - visible }
+  }
+
+  switch (state) {
+    // An architect: publishes their own work, credited by nobody yet.
+    case "free_publisher":
+      return free({ canPublish: true, publishedCount: 6, contributorTotal: 0 })
+    // A photographer or kitchen builder: no publishing rights at all, so
+    // credits are the entire relationship with Arco.
+    case "free_contributor":
+      return free({ canPublish: false, publishedCount: 0, contributorTotal: 6 })
+    case "free_both":
+      return free({ canPublish: true, publishedCount: 6, contributorTotal: 2 })
+    // Pro: the same company as free_both, with nothing held back. The
+    // page merges the two bars there — see SubscriptionScreen.
+    default:
+      return {
+        canPublish: true, publishedCount: 6,
+        contributorTotal: 2, contributorVisible: 2, contributorHidden: 0,
+      }
   }
 }

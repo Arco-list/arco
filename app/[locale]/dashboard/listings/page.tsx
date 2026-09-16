@@ -1111,7 +1111,7 @@ export default function DashboardListingsPage() {
         { href: `/dashboard/company${companyId ? `?company_id=${companyId}` : ""}`, label: t("company") },
         { href: `/dashboard/team${companyId ? `?company_id=${companyId}` : ""}`, label: t("team") },
         { href: "/dashboard/inbox", label: t("inbox") },
-        { href: "/dashboard/pricing", label: t("plans") },
+        { href: "/dashboard/pricing", label: t("subscription") },
       ]} />
 
       {/* Page title — matches /projects layout */}

@@ -323,6 +323,7 @@ const PROFESSIONAL_SERVICE_LABELS: Record<string, Record<ScopeLocale, string>> =
   flooring: { en: "Flooring", nl: "Vloeren" },
   "cabinet-maker": { en: "Cabinet maker", nl: "Meubelmaker" },
   "interior-stylist": { en: "Interior stylist", nl: "Interieurstylist" },
+  upholstery: { en: "Upholstery", nl: "Stoffering" },
   fireplace: { en: "Fireplaces", nl: "Open haarden" },
   // `photographer` is the real categories.slug; `photgraphy` is a
   // misspelled legacy key kept so stored values still resolve.

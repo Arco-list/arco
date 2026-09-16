@@ -135,8 +135,8 @@ export const ProfessionalCard = memo(function ProfessionalCard({
               src={logoUrl}
               alt=""
               className="pro-card-logo"
-              width={34}
-              height={34}
+              width={40}
+              height={40}
               loading="lazy"
               decoding="async"
             />
@@ -150,7 +150,13 @@ export const ProfessionalCard = memo(function ProfessionalCard({
               )
               return (
                 <div className="pro-card-logo pro-card-logo-placeholder">
-                  <ServiceIcon size={24} strokeWidth={1} aria-hidden />
+                  {/* 30 in the 34px disc. Above the set's usual ratio
+                      (72px in 100px), on purpose: at this size the mark
+                      is an identifier in a card footer, not a portrait,
+                      and a wide ring made it read as an afterthought.
+                      Kept in step with the claim funnel's preview card,
+                      which draws this same lockup by hand. */}
+                  <ServiceIcon size={30} strokeWidth={0.85} aria-hidden />
                 </div>
               )
             })()

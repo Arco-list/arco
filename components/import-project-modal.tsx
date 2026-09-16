@@ -113,7 +113,10 @@ export function ImportProjectModal({
 
       if ("error" in result) {
         setStatuses(["error", "pending", "pending"])
-        setError(result.error)
+        // A site that refuses us is not a failure to describe in HTTP
+        // terms: it is a dead end with one way out, so the message says
+        // that in the reader's own language.
+        setError(result.code === "blocked" ? t("blocked") : result.error)
         setPhase("error")
       } else if ((result as any).duplicate) {
         // Project already exists — redirect to it

@@ -121,10 +121,8 @@
    .form-input in globals.css): boxed inputs, not underlines, so the
    claim flow matches the login modal and every other form. */
 .field { margin-bottom: 24px; }
-.label {
-  display: block; font-size: 13px; font-weight: 500;
-  color: var(--arco-black); margin-bottom: 6px;
-}
+/* .label lived here; it was byte-identical to .form-label in
+   globals.css, which now carries the error modifier too. */
 .input {
   width: 100%; font-family: var(--font-sans); font-size: 15px;
   color: var(--arco-black); background: var(--arco-white);
@@ -171,6 +169,9 @@
   font-size: 15px; color: var(--arco-black); cursor: grab; user-select: none;
   transition: border-color 0.15s;
 }
+/* Grey, not teal: every row here is already chosen, so colour would
+   only repeat what the list itself says. The name leads. */
+.svcItemMark { flex-shrink: 0; color: var(--arco-mid-grey); }
 .svcItem:hover { border-color: var(--arco-light); }
 .svcItemOver { border-color: var(--primary); }
 .svcGrip { color: var(--arco-light); flex-shrink: 0; display: flex; }
@@ -179,8 +180,12 @@
   color: var(--primary); background: rgba(1, 109, 117, 0.08);
   padding: 2px 6px; border-radius: 3px; flex-shrink: 0;
 }
-.svcItemName { flex: 1; }
+/* Not flex:1 — the name ends where the word ends, so the PRIMAIR badge
+   sits against it instead of being pushed to the far edge. The remove
+   button takes the slack instead. */
+.svcItemName { flex: 0 1 auto; }
 .svcRemove {
+  margin-left: auto;
   width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;
   border: none; background: none; cursor: pointer; color: var(--arco-light);
   border-radius: 4px; flex-shrink: 0; transition: color 0.15s;
@@ -208,22 +213,6 @@
 }
 .svcResult:hover { background: var(--arco-surface); }
 .svcResultGroup { font-size: 12px; color: var(--arco-light); flex-shrink: 0; }
-/* Extra lucht boven de eerste categorie, los van de dienstrijen. */
-.svcGroup:first-of-type { margin-top: 16px; }
-
-/* Per-category dropdowns: eyebrow-styled labels, chevron directly after
-   the name, no rules between groups — whitespace does the separating. */
-.svcGroupSummary {
-  list-style: none; cursor: pointer;
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 11px 0;
-  font-size: 11px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase;
-  color: var(--arco-light); transition: color 0.15s;
-}
-.svcGroupSummary::-webkit-details-marker { display: none; }
-.svcGroupSummary:hover { color: var(--arco-black); }
-.svcGroupChevron { display: inline-flex; color: var(--arco-light); transition: transform 0.15s; }
-.svcGroup[open] .svcGroupChevron { transform: rotate(180deg); }
 
 .showMore {
   font-family: var(--font-sans); font-size: 14px; font-weight: 400;
@@ -238,15 +227,9 @@
   font-size: 12px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase;
   color: var(--arco-mid); margin: 20px 0 10px;
 }
-.pills { display: flex; flex-wrap: wrap; gap: 8px; }
-.pill {
-  font-family: var(--font-sans); font-size: 13px; padding: 6px 14px;
-  border-radius: 20px; border: 1px solid var(--arco-rule);
-  background: var(--arco-white); color: var(--arco-mid); cursor: pointer;
-  transition: all 0.15s; user-select: none;
-}
-.pill:hover { border-color: var(--arco-black); color: var(--arco-black); }
-.pillOn { border-color: var(--primary); background: rgba(1, 109, 117, 0.06); color: var(--primary); }
+
+/* Groups and pills live in globals.css now (.service-pill*), behind
+   components/service-pills.tsx — one control for one act. */
 
 /* Credited professionals in the sidebar — same circles as the project
    detail section (.credit-icon in globals.css), no card chrome: serif
@@ -338,26 +321,9 @@
 
 /* Platform find screen — company search results, one boxed row per
    hit, same input family as the form fields. */
-.findRows { display: flex; flex-direction: column; gap: 8px; }
-.findRow {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  width: 100%; text-align: left; font: inherit; font-size: 15px;
-  color: var(--arco-black); background: var(--arco-white);
-  border: 1px solid var(--arco-rule); border-radius: 3px;
-  padding: 12px 16px; cursor: pointer; transition: border-color 0.15s;
-}
-.findRow:hover { border-color: var(--arco-black); }
-.findRow:disabled { opacity: 0.5; cursor: default; }
-.findMeta { font-size: 13px; color: var(--arco-mid); white-space: nowrap; }
-
-/* Status label in the result row: "Claim" (teal wash — pickable) vs
-   "Op Arco" (neutral — already managed). Same family as .youMark. */
-.findBadge, .findBadgeClaim {
-  font-size: 10px; font-weight: 500; letter-spacing: 0.03em; text-transform: uppercase;
-  border-radius: 3px; padding: 2px 6px; flex-shrink: 0;
-}
-.findBadge { color: var(--arco-mid); background: var(--arco-wash); }
-.findBadgeClaim { color: var(--primary); background: rgba(1, 109, 117, 0.08); }
+/* The lookup rows moved to .company-lookup* in globals.css, behind
+   components/company-lookup.tsx — the dialog on a project draws the
+   same list. */
 
 /* Editable input with an inline action on the right — the address
    field's "Wijzig" affordance, on a real input. */

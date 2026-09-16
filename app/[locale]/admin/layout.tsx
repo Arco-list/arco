@@ -53,6 +53,9 @@ const ICONS = {
   pinterest: (
     <svg {...iconProps}><circle cx="12" cy="12" r="10" /><path d="M8 20l4-12" /><path d="M8 12a4 4 0 118 0c0 2.5-1.5 4-3.5 4S9 15 9 13" /></svg>
   ),
+  subscriptions: (
+    <svg {...iconProps}><rect x="2" y="5" width="20" height="14" rx="2" /><line x1="2" y1="10" x2="22" y2="10" /></svg>
+  ),
 }
 
 function buildAdminNavLinks({
@@ -97,6 +100,7 @@ function buildAdminNavLinks({
         { href: "/admin/categories", label: "Categories", icon: ICONS.categories },
         { href: "/admin/pinterest", label: "Pinterest", icon: ICONS.pinterest },
         { href: "/admin/design", label: "Design", icon: ICONS.design },
+        { href: "/admin/subscriptions", label: "Subscriptions", icon: ICONS.subscriptions },
       ],
     },
   ]

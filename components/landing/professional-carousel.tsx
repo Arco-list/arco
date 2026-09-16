@@ -190,8 +190,8 @@ export function ProfessionalCarousel({
                     src={pro.logoUrl}
                     alt=""
                     className="pro-card-logo"
-                    width={34}
-                    height={34}
+                    width={40}
+                    height={40}
                     loading="lazy"
                     decoding="async"
                   />

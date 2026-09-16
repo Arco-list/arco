@@ -11,6 +11,7 @@
     "company": "Company",
     "team": "Team",
     "plans": "Plans",
+    "subscription": "Subscription",
     "account": "Account",
     "help": "Help & FAQ",
     "sign_out": "Sign out",
@@ -423,7 +424,8 @@
     "invalid_url": "Please enter a valid URL",
     "add_domain_first": "Add your website domain in company settings before importing projects.",
     "domain_mismatch": "This URL doesn't match your company domain ({domain}). Import a project from your own website.",
-    "create_failed": "Failed to create project. Please try again."
+    "create_failed": "Failed to create project. Please try again.",
+    "blocked": "We can't fetch this project. Please fill it in manually."
   },
   "project_detail": {
     "credited_professionals": "Credited professionals",
@@ -887,7 +889,7 @@
     "company": "Company",
     "team": "Team",
     "messages": "Inbox",
-    "plans": "Plans",
+    "subscription": "Subscription",
     "account": "Account",
     "admin": "Admin",
     "projects": "Projects",
@@ -1227,7 +1229,6 @@
       "action_fix_payment": "Update payment details",
       "pill_ends": "Ends {date}",
       "one_project": "1 project",
-      "unlimited": "Unlimited",
       "opening": "Opening…",
       "error_not_configured": "Stripe isn't connected yet. Add the test key to .env.local.",
       "error_not_signed_in": "You're not signed in.",
@@ -1235,9 +1236,6 @@
       "error_not_owner": "Only the company owner can manage the subscription.",
       "error_nothing_to_manage": "Nothing to manage yet — no subscription or invoices.",
       "error_failed": "That didn't work. Try again in a moment.",
-      "projects_count": "{count, plural, =0 {No projects} one {# project} other {# projects}}",
-      "free_limit": "{count, plural, one {# visible on Free} other {# visible on Free}}",
-      "hidden_note": "{count, plural, one {# project is ready but not shown on your company page. Upgrade to Pro to show it.} other {# projects are ready but not shown on your company page. Upgrade to Pro to show them.}}",
       "payment_heading": "Payment",
       "invoices_heading": "Invoices",
       "no_payment_method": "No payment method yet",
@@ -1264,9 +1262,19 @@
       "per_month_suffix": "per month, excl. VAT",
       "per_month_billed_yearly": "per month · €{total} a year, excl. VAT",
       "everything_in_free": "Everything in Free, plus:",
-      "visible_count": "{count, plural, one {# visible} other {# visible}}",
-      "upgrade_for_unlimited": "Upgrade to Pro for unlimited"
-    }
+      "upgrade_for_unlimited": "Upgrade for unlimited",
+      "free_count": "{count, plural, one {# free} other {# free}}",
+      "hidden_in_bar": "{count, plural, one {# project not shown} other {# projects not shown}}",
+      "unlimited_included": "Unlimited, included in {plan}",
+      "plans_heading": "Manage your plan",
+      "no_invoices": "No invoices yet",
+      "published_noun": "{count, plural, one {published project} other {published projects}}",
+      "contributor_noun": "{count, plural, one {contributor project} other {contributor projects}}",
+      "projects_noun": "{count, plural, one {project} other {projects}}"
+    },
+    "pricing_current_badge": "Current",
+    "pricing_your_plan": "Your current plan",
+    "pricing_switch_to_free": "Switch to Free"
   },
   "business": {
     "for_architects": "For Architects",
@@ -1522,6 +1530,7 @@
       "company": "Company",
       "team": "Team",
       "plans": "Plans",
+      "subscription": "Subscription",
       "inbox": "Inbox"
     },
     "tour": {
@@ -1647,7 +1656,7 @@
       "select_services_modal_title": "Select professional services",
       "services_unavailable": "Professional services are not available right now. Please try again later.",
       "company_name_placeholder": "Company name",
-      "company_search_placeholder": "Search company…",
+      "company_search_placeholder": "Company name",
       "add_company_quoted": "Add \"{name}\"",
       "manual_creation_unavailable": "Manual company creation is not available. Select a company from the search results.",
       "tier_on_arco": "On Arco",
@@ -1688,14 +1697,18 @@
       "col_service": "Service",
       "col_email": "Email",
       "col_status": "Status",
-      "add_dialog_hint": "Search for the company you want to credit",
-      "add_dialog_typing_hint": "Start typing to search for the company",
       "add_dialog_change": "change",
       "change_professional": "Change professional",
       "col_contact": "Contact",
       "contact_you": "You",
       "empty_title": "No professionals credited yet",
-      "empty_body": "Credit the people who worked on this project. They get invited and the project also appears on their company page."
+      "empty_body": "Credit the people who worked on this project. They get invited and the project also appears on their company page.",
+      "missing_service": "Pick at least one service",
+      "missing_email": "Enter an email address",
+      "email_label": "Email",
+      "field_company": "Company",
+      "tier_claim": "Claim",
+      "add_company_manually": "Add <add>{company}</add>"
     },
     "delete_project": {
       "trigger": "Delete project",
