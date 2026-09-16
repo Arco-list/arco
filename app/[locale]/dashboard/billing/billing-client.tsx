@@ -163,17 +163,13 @@ export function BillingClient({
           <div className="wrap" style={{ maxWidth: 820 }}>
 
             {/* ── Plan header: name, state, and the one action that
-                   matters right now ───────────────────────────────── */}
-            <div style={{
-              display: "flex", alignItems: "flex-start", justifyContent: "space-between",
-              gap: 20, flexWrap: "wrap", paddingBottom: 20,
-              borderBottom: "1px solid var(--arco-light-grey)", marginBottom: 28,
-            }}>
+                   matters right now. The quiet banner (.arco-banner) is
+                   the system's "here is where you stand" surface —
+                   exactly what a plan summary is. ─────────────────── */}
+            <div className="arco-banner" style={{ marginBottom: 32, alignItems: "flex-start" }}>
               <div style={{ minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-                  <h3 style={{ fontFamily: "var(--font-serif)", fontSize: 28, fontWeight: 300, lineHeight: 1.1, margin: 0 }}>
-                    {planTitle}
-                  </h3>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 5 }}>
+                  <h3 className="arco-banner-title" style={{ margin: 0 }}>{planTitle}</h3>
                   {billing.source === "founding" && (
                     <span className="status-pill shrink-0">
                       <span className="status-pill-dot" style={{ background: "#0f766e" }} />
@@ -193,13 +189,11 @@ export function BillingClient({
                     </span>
                   )}
                 </div>
-                <p className="arco-body-text" style={{ margin: 0, color: "var(--text-secondary)" }}>
-                  {statusLine}
-                </p>
+                <p className="arco-banner-body">{statusLine}</p>
               </div>
 
-              {isOwner && (
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", flexShrink: 0 }}>
+              {isOwner && (primaryAction || billing.stripeCustomerId) && (
+                <div className="arco-banner-actions">
                   {/* Tertiary first, primary last — the eye lands on the
                       action we want taken. */}
                   {billing.stripeCustomerId && (
