@@ -1263,7 +1263,9 @@
       "forever": "forever",
       "per_month_suffix": "per month, excl. VAT",
       "per_month_billed_yearly": "per month · €{total} a year, excl. VAT",
-      "everything_in_free": "Everything in Free, plus:"
+      "everything_in_free": "Everything in Free, plus:",
+      "visible_count": "{count, plural, one {# visible} other {# visible}}",
+      "upgrade_for_unlimited": "Upgrade to Pro for unlimited"
     }
   },
   "business": {

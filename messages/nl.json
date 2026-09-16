@@ -1263,7 +1263,9 @@
       "forever": "voor altijd",
       "per_month_suffix": "per maand, excl. btw",
       "per_month_billed_yearly": "per maand · €{total} per jaar, excl. btw",
-      "everything_in_free": "Alles uit Gratis, plus:"
+      "everything_in_free": "Alles uit Gratis, plus:",
+      "visible_count": "{count, plural, one {# zichtbaar} other {# zichtbaar}}",
+      "upgrade_for_unlimited": "Upgrade naar Pro voor onbeperkt"
     }
   },
   "business": {

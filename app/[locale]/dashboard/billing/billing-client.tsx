@@ -244,19 +244,22 @@ export function BillingClient({
               <UsageBar
                 label={t("pricing_feature_contributor")}
                 countLabel={tb("projects_count", { count: usage.contributorTotal })}
-                // The bar's length is everything they have; the filled
-                // part is what the public actually sees.
-                fillPct={usage.contributorTotal === 0 ? 0 : (usage.contributorVisible / usage.contributorTotal) * 100}
-                unbounded={isPro && usage.contributorTotal > 0}
-                // The dashed mark sits where Free stops. Past that point
-                // the bar is theirs but not visible.
-                markerPct={
-                  isPro || usage.contributorTotal <= FREE_CONTRIBUTOR_LIMIT
+                fillPct={usage.contributorTotal > 0 ? 100 : 0}
+                unbounded
+                // The dimmed stretch past this point is what the company
+                // has but the public cannot see.
+                lockedFromPct={
+                  isPro || usage.contributorTotal === 0
                     ? null
-                    : (FREE_CONTRIBUTOR_LIMIT / usage.contributorTotal) * 100
+                    : (62 * usage.contributorVisible) / usage.contributorTotal
                 }
+                markerLabel={
+                  isPro || usage.contributorHidden === 0
+                    ? null
+                    : tb("visible_count", { count: usage.contributorVisible })
+                }
+                endLabel={usage.contributorHidden > 0 ? tb("upgrade_for_unlimited") : null}
                 right={isPro ? tb("unlimited") : tb("free_limit", { count: FREE_CONTRIBUTOR_LIMIT })}
-                note={usage.contributorHidden > 0 ? tb("hidden_note", { count: usage.contributorHidden }) : null}
               />
             </div>
 

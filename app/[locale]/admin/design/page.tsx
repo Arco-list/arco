@@ -846,10 +846,12 @@ export default function DesignPage() {
                   <UsageBar
                     label="Bijdragerprojecten"
                     countLabel="6 projecten"
-                    fillPct={100 / 6}
-                    markerPct={100 / 6}
+                    fillPct={100}
+                    unbounded
+                    lockedFromPct={62 / 6}
+                    markerLabel="1 zichtbaar"
+                    endLabel="Upgrade naar Pro voor onbeperkt"
                     right="1 zichtbaar op Gratis"
-                    note="5 projecten staan klaar maar zijn niet zichtbaar op je bedrijfspagina. Upgrade naar Pro om ze te tonen."
                   />
                 </div>
 

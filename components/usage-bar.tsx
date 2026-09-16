@@ -9,11 +9,11 @@
  * it slides out onto the track, switching to dark text, when the fill
  * is too small to hold it.
  *
- * Two shapes on Arco: published projects (always full, "unlimited" on
- * the right, never reaching a limit is the point) and contributor
- * credits, where the track's length is everything the company has, the
- * fill is what the public actually sees, and the dashed mark shows
- * where the Free plan stops.
+ * Two shapes on Arco: published projects, where nothing is withheld,
+ * and contributor credits, where the fill splits — bright for what the
+ * public sees, dimmed for what the plan holds back. Dimmed rather than
+ * absent, because those projects do exist; an empty stretch would say
+ * the company has nothing there.
  *
  * See /admin/design → Usage bars.
  */
@@ -21,17 +21,17 @@ export function UsageBar({
   label,
   countLabel,
   fillPct,
-  markerPct = null,
   right,
   note = null,
   unbounded = false,
+  lockedFromPct = null,
+  markerLabel = null,
+  endLabel = null,
 }: {
   label: string
   /** Already-formatted, e.g. "6 projecten" or "Geen projecten". */
   countLabel: string
   fillPct: number
-  /** Percentage along the track where the plan's limit sits. */
-  markerPct?: number | null
   right: string
   note?: string | null
   /**
@@ -44,11 +44,24 @@ export function UsageBar({
    * the track only says the road continues.
    */
   unbounded?: boolean
+  /**
+   * Where the visible part ends and the withheld part begins. Past this
+   * point the fill is dimmed rather than absent: those projects exist,
+   * they are simply not on the public page. An empty track would say
+   * the opposite — that there is nothing there.
+   */
+  lockedFromPct?: number | null
+  /** Sits under the bar at lockedFromPct, e.g. "1 zichtbaar". */
+  markerLabel?: string | null
+  /** Sits under the far end of the fill — the way out of the limit. */
+  endLabel?: string | null
 }) {
   // An unbounded meter has no meaningful proportion to draw, so the
   // fill is a fixed stretch that fades out. Anything computed would
   // imply a denominator that does not exist.
   const filled = unbounded ? (fillPct > 0 ? 62 : 0) : Math.max(0, Math.min(100, fillPct))
+  const locked = lockedFromPct != null ? Math.max(0, Math.min(filled, lockedFromPct)) : null
+  const hasUnderLabels = Boolean(markerLabel || endLabel)
   // Below this the fill cannot hold its own label; the count moves out
   // onto the empty track instead of being clipped.
   const labelFitsInside = filled > 22
@@ -68,18 +81,18 @@ export function UsageBar({
         border: unbounded ? "1px dashed var(--arco-light-grey)" : undefined,
         overflow: "hidden",
       }}>
+        {/* The whole of what the company has. Dimmed when part of it is
+            withheld; the bright segment on top is what the public sees. */}
         <div style={{
           position: "absolute", inset: 0, width: `${filled}%`,
-          background: "var(--primary, #016D75)",
+          background: locked != null ? "rgba(1, 109, 117, .22)" : "var(--primary, #016D75)",
           borderRadius: 14,
           transition: "width .2s ease",
         }} />
-        {/* Where the plan stops. Drawn over the fill so it stays visible
-            on both sides of the boundary. */}
-        {markerPct != null && (
+        {locked != null && (
           <div style={{
-            position: "absolute", top: 0, bottom: 0, left: `${Math.min(100, Math.max(0, markerPct))}%`,
-            borderLeft: "2px dashed rgba(255,255,255,.85)",
+            position: "absolute", top: 0, bottom: 0, left: 0, width: `${locked}%`,
+            background: "var(--primary, #016D75)", borderRadius: 14,
           }} />
         )}
         <span style={{
@@ -91,6 +104,24 @@ export function UsageBar({
           {countLabel}
         </span>
       </div>
+
+      {/* Labels pinned under the two points that matter: where the
+          visible part stops, and where the whole of it does. Reading
+          left to right they state the limit and then the way past it. */}
+      {hasUnderLabels && (
+        <div style={{ position: "relative", height: 20, marginTop: 6 }}>
+          {markerLabel && locked != null && (
+            <span className="arco-small-text" style={{ position: "absolute", left: `${locked}%`, transform: "translateX(-50%)", whiteSpace: "nowrap" }}>
+              {markerLabel}
+            </span>
+          )}
+          {endLabel && (
+            <span className="arco-small-text" style={{ position: "absolute", left: `${filled}%`, transform: "translateX(-50%)", whiteSpace: "nowrap" }}>
+              {endLabel}
+            </span>
+          )}
+        </div>
+      )}
 
       {note && (
         <p className="arco-small-text" style={{ marginTop: 8, marginBottom: 0 }}>{note}</p>
