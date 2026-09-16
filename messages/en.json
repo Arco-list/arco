@@ -1210,7 +1210,24 @@
       "past_due_help": "A direct debit can take a few days to clear. You keep full access meanwhile; we'll be in touch if anything goes wrong.",
       "view_plans": "View plans",
       "manage_billing": "Invoices and payment details",
-      "owner_only": "Only the company owner can manage the subscription."
+      "owner_only": "Only the company owner can manage the subscription.",
+      "whats_included": "What's included",
+      "price_col": "Price",
+      "row_subscription": "Subscription",
+      "included_value": "Included",
+      "not_included": "Not included",
+      "per_month": "€{amount}/mo",
+      "per_year": "€{amount}/yr",
+      "billed_yearly": "Pro · billed annually",
+      "billed_monthly": "Pro · billed monthly",
+      "plan_free_row": "Free · forever",
+      "plan_founding_row": "Pro · free during the launch",
+      "action_upgrade": "Upgrade to Pro",
+      "action_reactivate": "Reactivate plan",
+      "action_fix_payment": "Update payment details",
+      "pill_ends": "Ends {date}",
+      "one_project": "1 project",
+      "unlimited": "Unlimited"
     }
   },
   "business": {

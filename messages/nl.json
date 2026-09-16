@@ -1210,7 +1210,24 @@
       "past_due_help": "Een incasso kan enkele dagen onderweg zijn. Je houdt intussen volledige toegang; we nemen contact op als er iets misgaat.",
       "view_plans": "Bekijk abonnementen",
       "manage_billing": "Facturen en betaalgegevens",
-      "owner_only": "Alleen de eigenaar van het bedrijf kan het abonnement beheren."
+      "owner_only": "Alleen de eigenaar van het bedrijf kan het abonnement beheren.",
+      "whats_included": "Wat is inbegrepen",
+      "price_col": "Prijs",
+      "row_subscription": "Abonnement",
+      "included_value": "Inbegrepen",
+      "not_included": "Niet inbegrepen",
+      "per_month": "€{amount}/mnd",
+      "per_year": "€{amount}/jaar",
+      "billed_yearly": "Pro · jaarlijks gefactureerd",
+      "billed_monthly": "Pro · maandelijks gefactureerd",
+      "plan_free_row": "Gratis · voor altijd",
+      "plan_founding_row": "Pro · gratis tijdens de lancering",
+      "action_upgrade": "Upgrade naar Pro",
+      "action_reactivate": "Abonnement hervatten",
+      "action_fix_payment": "Betaalgegevens bijwerken",
+      "pill_ends": "Loopt af op {date}",
+      "one_project": "1 project",
+      "unlimited": "Onbeperkt"
     }
   },
   "business": {

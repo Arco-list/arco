@@ -39,10 +39,81 @@ export function BillingClient({
         })
       : null
 
-  // One line describing where they stand, per source. Deliberately
-  // concrete: a date beats "active".
-  const planLabel = billing.plan === "pro" ? "Pro" : tb("plan_free")
   const renewal = formatDate(billing.currentPeriodEnd)
+  const isPro = billing.plan === "pro"
+
+  // Heading: the plan plus its billing cycle, because "Pro" alone
+  // leaves the reader wondering what they are actually paying.
+  const planTitle = !isPro
+    ? tb("plan_free")
+    : billing.interval === "month"
+      ? `Pro (${t("pricing_monthly")})`
+      : billing.interval === "year"
+        ? `Pro (${t("pricing_yearly")})`
+        : "Pro"
+
+  // One line describing where they stand. Deliberately concrete: a date
+  // beats the word "active".
+  const statusLine =
+    billing.source === "founding" ? tb("founding_body", { company: companyName })
+    : billing.source === "none" ? tb("free_body")
+    : billing.cancelAtPeriodEnd && renewal ? tb("ends_on", { date: renewal })
+    : renewal ? (billing.interval === "month" ? tb("renews_monthly", { date: renewal }) : tb("renews_yearly", { date: renewal }))
+    : ""
+
+  // Exactly one primary action, chosen by what the company should do
+  // next — not a row of equally-weighted buttons.
+  const primaryAction =
+    billing.status === "past_due" ? tb("action_fix_payment")
+    : billing.cancelAtPeriodEnd ? tb("action_reactivate")
+    : !isPro ? tb("action_upgrade")
+    : null
+
+  // What the plan actually gives, mirroring the pricing page so the two
+  // never drift. Price sits on the subscription row alone; the rest are
+  // part of it.
+  const priceLabel = !isPro
+    ? tb("per_month", { amount: "0" })
+    : billing.source === "founding"
+      ? tb("per_month", { amount: "0" })
+      : billing.interval === "month"
+        ? tb("per_month", { amount: "49" })
+        : tb("per_year", { amount: "468" })
+
+  const includedRows: { label: string; value: string; price: string; muted?: boolean; soon?: boolean }[] = [
+    {
+      label: tb("row_subscription"),
+      value: billing.source === "founding" ? tb("plan_founding_row")
+        : !isPro ? tb("plan_free_row")
+        : billing.interval === "month" ? tb("billed_monthly") : tb("billed_yearly"),
+      price: priceLabel,
+    },
+    {
+      label: t("pricing_feature_contributor"),
+      value: isPro ? tb("unlimited") : tb("one_project"),
+      price: tb("included_value"),
+    },
+    { label: t("pricing_feature_published"), value: tb("unlimited"), price: tb("included_value") },
+    { label: t("pricing_feature_company_page"), value: tb("included_value"), price: tb("included_value") },
+    {
+      label: t("pricing_feature_team"),
+      value: isPro ? tb("included_value") : tb("not_included"),
+      price: isPro ? tb("included_value") : "—",
+      muted: !isPro,
+    },
+    {
+      label: t("pricing_feature_analytics"),
+      value: isPro ? tb("included_value") : tb("not_included"),
+      price: isPro ? tb("included_value") : "—",
+      muted: !isPro, soon: true,
+    },
+    {
+      label: t("pricing_feature_arco_approved"),
+      value: isPro ? tb("included_value") : tb("not_included"),
+      price: isPro ? tb("included_value") : "—",
+      muted: !isPro, soon: true,
+    },
+  ]
 
   return (
     <div className="min-h-screen bg-white flex flex-col" style={{ paddingTop: 60 }}>
@@ -89,71 +160,104 @@ export function BillingClient({
 
       <main style={{ flex: 1 }}>
         <div className="discover-results">
-          <div className="wrap" style={{ maxWidth: 720 }}>
+          <div className="wrap" style={{ maxWidth: 820 }}>
 
-            {/* ── Current plan ──────────────────────────────────── */}
+            {/* ── Plan header: name, state, and the one action that
+                   matters right now ───────────────────────────────── */}
             <div style={{
-              border: "1px solid var(--arco-light-grey)", borderRadius: 6,
-              padding: "24px 28px", marginBottom: 24,
+              display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+              gap: 20, flexWrap: "wrap", paddingBottom: 20,
+              borderBottom: "1px solid var(--arco-light-grey)", marginBottom: 28,
             }}>
-              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-                <div>
-                  <p className="arco-eyebrow" style={{ marginBottom: 6 }}>{tb("current_plan")}</p>
-                  <h3 style={{ fontFamily: "var(--font-serif)", fontSize: 32, fontWeight: 300, lineHeight: 1, margin: 0 }}>
-                    {planLabel}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
+                  <h3 style={{ fontFamily: "var(--font-serif)", fontSize: 28, fontWeight: 300, lineHeight: 1.1, margin: 0 }}>
+                    {planTitle}
                   </h3>
+                  {billing.source === "founding" && (
+                    <span className="status-pill shrink-0">
+                      <span className="status-pill-dot" style={{ background: "#0f766e" }} />
+                      {tb("founding_badge")}
+                    </span>
+                  )}
+                  {billing.cancelAtPeriodEnd && renewal && (
+                    <span className="status-pill shrink-0">
+                      <span className="status-pill-dot" style={{ background: "#a1a1a0" }} />
+                      {tb("pill_ends", { date: renewal })}
+                    </span>
+                  )}
+                  {billing.status === "past_due" && (
+                    <span className="status-pill shrink-0">
+                      <span className="status-pill-dot" style={{ background: "#dc2626" }} />
+                      {tb("status_past_due")}
+                    </span>
+                  )}
                 </div>
-                {billing.source === "founding" && (
-                  <span className="status-pill shrink-0">
-                    <span className="status-pill-dot" style={{ background: "#0f766e" }} />
-                    {tb("founding_badge")}
-                  </span>
-                )}
-                {billing.source === "subscription" && billing.status === "past_due" && (
-                  <span className="status-pill shrink-0">
-                    <span className="status-pill-dot" style={{ background: "#dc2626" }} />
-                    {tb("status_past_due")}
-                  </span>
-                )}
+                <p className="arco-body-text" style={{ margin: 0, color: "var(--text-secondary)" }}>
+                  {statusLine}
+                </p>
               </div>
 
-              <p className="arco-body-text" style={{ marginTop: 14, marginBottom: 0, color: "var(--text-secondary)" }}>
-                {billing.source === "founding" && tb("founding_body", { company: companyName })}
-                {billing.source === "none" && tb("free_body")}
-                {billing.source === "subscription" && billing.cancelAtPeriodEnd && renewal
-                  && tb("ends_on", { date: renewal })}
-                {billing.source === "subscription" && !billing.cancelAtPeriodEnd && renewal
-                  && (billing.interval === "month" ? tb("renews_monthly", { date: renewal }) : tb("renews_yearly", { date: renewal }))}
-              </p>
-
-              {/* SEPA settles in days: a first payment can still be in
-                  flight while the subscription is already active. Saying
-                  so beats a customer wondering whether it worked. */}
-              {billing.source === "subscription" && billing.status === "past_due" && (
-                <p className="arco-small-text" style={{ marginTop: 10, marginBottom: 0 }}>
-                  {tb("past_due_help")}
-                </p>
+              {isOwner && (
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", flexShrink: 0 }}>
+                  {/* Tertiary first, primary last — the eye lands on the
+                      action we want taken. */}
+                  {billing.stripeCustomerId && (
+                    <button type="button" className="btn-tertiary" style={{ fontSize: 14, padding: "10px 20px" }} disabled>
+                      {tb("manage_billing")}
+                    </button>
+                  )}
+                  {primaryAction && (
+                    <button type="button" className="btn-primary" style={{ fontSize: 14, padding: "10px 20px" }} disabled>
+                      {primaryAction}
+                    </button>
+                  )}
+                </div>
               )}
             </div>
 
-            {/* ── Actions ───────────────────────────────────────── */}
-            {isOwner ? (
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                {billing.stripeCustomerId && (
-                  <button type="button" className="btn-tertiary" style={{ fontSize: 14, padding: "12px 24px" }} disabled>
-                    {tb("manage_billing")}
-                  </button>
-                )}
-              </div>
-            ) : (
-              <p className="arco-small-text">{tb("owner_only")}</p>
+            {!isOwner && (
+              <p className="arco-small-text" style={{ marginBottom: 24 }}>{tb("owner_only")}</p>
             )}
+
+            {/* ── What's included ──────────────────────────────────── */}
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+              <span className="arco-eyebrow">{tb("whats_included")}</span>
+              <span className="arco-eyebrow">{tb("price_col")}</span>
+            </div>
+
+            <div style={{ borderTop: "1px solid var(--arco-light-grey)" }}>
+              {includedRows.map((row) => (
+                <div
+                  key={row.label}
+                  style={{
+                    display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 16,
+                    alignItems: "baseline", padding: "14px 0",
+                    borderBottom: "1px solid var(--arco-light-grey)",
+                    color: row.muted ? "var(--text-disabled)" : undefined,
+                  }}
+                >
+                  <span style={{ fontSize: 14 }}>
+                    {row.label}
+                    {row.soon && <span className="pricing-feature-soon" style={{ marginLeft: 8 }}>{t("pricing_feature_coming")}</span>}
+                  </span>
+                  <span style={{ fontSize: 14, color: row.muted ? "inherit" : "var(--text-secondary)" }}>{row.value}</span>
+                  <span style={{ fontSize: 14, color: "var(--text-secondary)", whiteSpace: "nowrap", textAlign: "right" }}>{row.price}</span>
+                </div>
+              ))}
+            </div>
 
             {/* Founding companies have no Stripe object yet — say what
                 happens next rather than leaving a dead page. */}
             {billing.source === "founding" && (
               <p className="arco-small-text" style={{ marginTop: 20 }}>
                 {tb("founding_next")}
+              </p>
+            )}
+
+            {billing.status === "past_due" && (
+              <p className="arco-small-text" style={{ marginTop: 20 }}>
+                {tb("past_due_help")}
               </p>
             )}
 
