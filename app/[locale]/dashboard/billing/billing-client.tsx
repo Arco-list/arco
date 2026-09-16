@@ -11,6 +11,7 @@ import { FREE_CONTRIBUTOR_LIMIT, type ProjectUsage } from "@/lib/subscriptions/u
 import type { BillingDetails } from "@/lib/subscriptions/billing-details-types"
 import { PREVIEW_LABELS, PREVIEW_STATES, type PreviewState } from "@/lib/subscriptions/preview-states"
 import { PricingSection } from "@/components/pricing-section"
+import { UsageBar } from "@/components/usage-bar"
 import { openPortalAction, startCheckoutAction } from "./actions"
 
 /**
@@ -233,7 +234,6 @@ export function BillingClient({
               {usage.canPublish && (
                 <UsageBar
                   label={t("pricing_feature_published")}
-                  count={usage.publishedCount}
                   countLabel={tb("projects_count", { count: usage.publishedCount })}
                   fillPct={100}
                   right={tb("unlimited")}
@@ -242,7 +242,6 @@ export function BillingClient({
 
               <UsageBar
                 label={t("pricing_feature_contributor")}
-                count={usage.contributorTotal}
                 countLabel={tb("projects_count", { count: usage.contributorTotal })}
                 // The bar's length is everything they have; the filled
                 // part is what the public actually sees.
@@ -381,64 +380,3 @@ export function BillingClient({
  * it so the number and the thing it measures cannot drift apart when
  * the bar is short.
  */
-function UsageBar({
-  label,
-  count,
-  countLabel,
-  fillPct,
-  markerPct = null,
-  right,
-  note = null,
-}: {
-  label: string
-  count: number
-  countLabel: string
-  fillPct: number
-  markerPct?: number | null
-  right: string
-  note?: string | null
-}) {
-  const filled = Math.max(0, Math.min(100, fillPct))
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-        <span style={{ fontSize: 14 }}>{label}</span>
-        <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{right}</span>
-      </div>
-
-      <div style={{
-        position: "relative", height: 28, borderRadius: 14,
-        background: "var(--arco-surface)", overflow: "hidden",
-      }}>
-        <div style={{
-          position: "absolute", inset: 0, width: `${filled}%`,
-          background: "var(--primary, #016D75)", borderRadius: 14,
-          transition: "width .2s ease",
-        }} />
-        {/* Where Free stops. Drawn over the fill so it stays visible on
-            both sides of the boundary. */}
-        {markerPct != null && (
-          <div style={{
-            position: "absolute", top: 0, bottom: 0, left: `${Math.min(100, Math.max(0, markerPct))}%`,
-            borderLeft: "2px dashed rgba(255,255,255,.85)",
-          }} />
-        )}
-        {/* The count rides inside the bar, white on the fill while it
-            has room, and slides out to dark text when the fill is too
-            short to hold it. */}
-        <span style={{
-          position: "absolute", top: 0, bottom: 0, display: "flex", alignItems: "center",
-          left: filled > 22 ? 14 : `calc(${filled}% + 14px)`,
-          fontSize: 13, fontWeight: 400, whiteSpace: "nowrap",
-          color: filled > 22 ? "#fff" : "var(--text-secondary)",
-        }}>
-          {count === 0 ? countLabel : countLabel}
-        </span>
-      </div>
-
-      {note && (
-        <p className="arco-small-text" style={{ marginTop: 8, marginBottom: 0 }}>{note}</p>
-      )}
-    </div>
-  )
-}

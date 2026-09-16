@@ -1,4 +1,5 @@
 import { Info } from "lucide-react"
+import { UsageBar } from "@/components/usage-bar"
 import { FAQPreview } from "./faq-preview"
 import { AdminTabs } from "@/components/admin/admin-tabs"
 import { DiscoverCardPreview } from "./discover-card-preview"
@@ -808,6 +809,61 @@ export default function DesignPage() {
               <p className="arco-small-text">
                 Uses <strong>XS</strong> typography. 4 variants: .arco-alert--info (blue), .arco-alert--warn (amber), .arco-alert--danger (red), .arco-alert--success (green).<br />
                 16px icon + text content. 12px 16px padding, 6px radius, 1px colored border.
+              </p>
+            </div>
+          </div>
+
+          {/* USAGE BARS */}
+          <div style={{ marginBottom: 80 }}>
+            <h2 id="usage-bars" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Usage bars</h2>
+            <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
+              How much of something a company has, and how much of it counts. Used on the plan page
+              for the two kinds of project Arco distinguishes. The count rides <em>inside</em> the
+              track so the number and the thing it measures cannot drift apart when the bar is
+              short; below roughly a fifth of the width it slides out onto the empty track and
+              turns dark, because a label clipped by its own fill is worse than one beside it.
+            </p>
+
+            <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+                <div>
+                  <h4 className="arco-label" style={{ marginBottom: 16 }}>Empty — nothing yet</h4>
+                  <UsageBar label="Bijdragerprojecten" countLabel="Geen projecten" fillPct={0} right="1 zichtbaar op Gratis" />
+                </div>
+
+                <div>
+                  <h4 className="arco-label" style={{ marginBottom: 16 }}>Unlimited — published projects</h4>
+                  <UsageBar label="Gepubliceerde projecten" countLabel="6 projecten" fillPct={100} right="Onbeperkt" />
+                </div>
+
+                <div>
+                  <h4 className="arco-label" style={{ marginBottom: 16 }}>Limited — one of six visible</h4>
+                  <UsageBar
+                    label="Bijdragerprojecten"
+                    countLabel="6 projecten"
+                    fillPct={100 / 6}
+                    markerPct={100 / 6}
+                    right="1 zichtbaar op Gratis"
+                    note="5 projecten staan klaar maar zijn niet zichtbaar op je bedrijfspagina. Upgrade naar Pro om ze te tonen."
+                  />
+                </div>
+
+                <div>
+                  <h4 className="arco-label" style={{ marginBottom: 16 }}>Unlocked — the same company on Pro</h4>
+                  <UsageBar label="Bijdragerprojecten" countLabel="6 projecten" fillPct={100} right="Onbeperkt" />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
+              <p className="arco-small-text">
+                <strong>components/usage-bar.tsx</strong>. Track 28px on <code>--arco-surface</code>,
+                fully rounded; fill in <code>--primary</code>. The dashed mark is where the plan
+                stops, drawn over the fill in white at 85% so it reads on both sides of the
+                boundary. Label 14px left, value 13px <code>--text-secondary</code> right, count
+                13px inside the track. An optional note sits under the bar in small text — on the
+                plan page that is the sentence that actually sells Pro, so it is part of the
+                component rather than an afterthought at the call site.
               </p>
             </div>
           </div>
