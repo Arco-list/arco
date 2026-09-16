@@ -235,8 +235,9 @@ export function BillingClient({
                 <UsageBar
                   label={t("pricing_feature_published")}
                   countLabel={tb("projects_count", { count: usage.publishedCount })}
-                  fillPct={100}
+                  fillPct={usage.publishedCount > 0 ? 100 : 0}
                   right={tb("unlimited")}
+                  unbounded
                 />
               )}
 
@@ -246,6 +247,7 @@ export function BillingClient({
                 // The bar's length is everything they have; the filled
                 // part is what the public actually sees.
                 fillPct={usage.contributorTotal === 0 ? 0 : (usage.contributorVisible / usage.contributorTotal) * 100}
+                unbounded={isPro && usage.contributorTotal > 0}
                 // The dashed mark sits where Free stops. Past that point
                 // the bar is theirs but not visible.
                 markerPct={

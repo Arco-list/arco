@@ -24,6 +24,7 @@ export function UsageBar({
   markerPct = null,
   right,
   note = null,
+  unbounded = false,
 }: {
   label: string
   /** Already-formatted, e.g. "6 projecten" or "Geen projecten". */
@@ -33,8 +34,18 @@ export function UsageBar({
   markerPct?: number | null
   right: string
   note?: string | null
+  /**
+   * No ceiling exists. The fill dissolves toward the right instead of
+   * ending, so there is no edge to read as "full" and no empty
+   * remainder to read as "what is left". The count carries the
+   * information; the track only says the road continues.
+   */
+  unbounded?: boolean
 }) {
-  const filled = Math.max(0, Math.min(100, fillPct))
+  // An unbounded meter has no meaningful proportion to draw, so the
+  // fill is a fixed stretch that fades out. Anything computed would
+  // imply a denominator that does not exist.
+  const filled = unbounded ? (fillPct > 0 ? 62 : 0) : Math.max(0, Math.min(100, fillPct))
   // Below this the fill cannot hold its own label; the count moves out
   // onto the empty track instead of being clipped.
   const labelFitsInside = filled > 22
@@ -52,7 +63,12 @@ export function UsageBar({
       }}>
         <div style={{
           position: "absolute", inset: 0, width: `${filled}%`,
-          background: "var(--primary, #016D75)", borderRadius: 14,
+          background: "var(--primary, #016D75)",
+          // Rounded on the left only when it dissolves: a cap on the
+          // right would reintroduce the edge the fade exists to remove.
+          borderRadius: unbounded ? "14px 0 0 14px" : 14,
+          maskImage: unbounded ? "linear-gradient(90deg, #000 0%, #000 55%, transparent 100%)" : undefined,
+          WebkitMaskImage: unbounded ? "linear-gradient(90deg, #000 0%, #000 55%, transparent 100%)" : undefined,
           transition: "width .2s ease",
         }} />
         {/* Where the plan stops. Drawn over the fill so it stays visible

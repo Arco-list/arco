@@ -832,8 +832,29 @@ export default function DesignPage() {
                 </div>
 
                 <div>
-                  <h4 className="arco-label" style={{ marginBottom: 16 }}>Unlimited — published projects</h4>
+                  <h4 className="arco-label" style={{ marginBottom: 16 }}>Unlimited — the fill dissolves</h4>
+                  <UsageBar label="Gepubliceerde projecten" countLabel="6 projecten" fillPct={100} right="Onbeperkt" unbounded />
+                  <p className="arco-small-text" style={{ marginTop: 10 }}>
+                    Recommended. No edge to read as &ldquo;full&rdquo;, no empty remainder to read as
+                    &ldquo;what is left&rdquo;. The number says how many; the track only says it continues.
+                  </p>
+                </div>
+
+                <div>
+                  <h4 className="arco-label" style={{ marginBottom: 16 }}>Alternative A — full bar</h4>
                   <UsageBar label="Gepubliceerde projecten" countLabel="6 projecten" fillPct={100} right="Onbeperkt" />
+                  <p className="arco-small-text" style={{ marginTop: 10 }}>
+                    What we have now. Reads as &ldquo;you are at 100%&rdquo; — the opposite of the message.
+                  </p>
+                </div>
+
+                <div>
+                  <h4 className="arco-label" style={{ marginBottom: 16 }}>Alternative B — part left open</h4>
+                  <UsageBar label="Gepubliceerde projecten" countLabel="6 projecten" fillPct={62} right="Onbeperkt" />
+                  <p className="arco-small-text" style={{ marginTop: 10 }}>
+                    Invites the question the empty part cannot answer: room for how many more? The
+                    gap implies a ceiling that does not exist.
+                  </p>
                 </div>
 
                 <div>
