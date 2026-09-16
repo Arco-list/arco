@@ -2,7 +2,11 @@ import { redirect } from "next/navigation"
 
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { getActiveCompanyId } from "@/lib/active-company"
-import { isPreviewState } from "@/lib/subscriptions/preview-states"
+import { getCompanyBilling } from "@/lib/subscriptions/get-company-subscription"
+import { getProjectUsage } from "@/lib/subscriptions/get-project-usage"
+import { getBillingDetails } from "@/lib/subscriptions/get-billing-details"
+import { EMPTY_BILLING_DETAILS } from "@/lib/subscriptions/billing-details-types"
+import { isPreviewState, previewBilling, previewBillingDetails } from "@/lib/subscriptions/preview-states"
 import { isAdminUser } from "@/lib/auth-utils"
 import { BillingClient } from "./billing-client"
 
@@ -82,11 +86,15 @@ export default async function BillingPage({
 
   if (!company) redirect("/create-company")
 
-  // Admin preview: the page itself carries no per-company state any
-  // more, so this only unlocks the switcher bar. Honoured for admins
-  // alone; anyone else asking simply gets the plain page.
+  // Admin preview: render a synthetic state through the real code path,
+  // so states that are slow (a year-old subscription), rare (a failed
+  // collection) or deliberately unreachable (a trial, ruled out in D2)
+  // can still be reviewed. Display only — nothing is written, and a
+  // non-admin asking for one simply gets their own real state.
+  let billing = await getCompanyBilling(company.id)
   let previewState: string | null = null
-  if (preview && isPreviewState(preview)) {
+
+  if (preview) {
     const { data: profile } = await serviceClient
       .from("profiles")
       .select("user_types, admin_role")
@@ -96,8 +104,33 @@ export default async function BillingPage({
       (profile as { user_types?: string[] | null } | null)?.user_types,
       (profile as { admin_role?: string | null } | null)?.admin_role,
     )
-    if (admin) previewState = preview
+    if (admin && isPreviewState(preview)) {
+      billing = previewBilling(preview)
+      previewState = preview
+    }
   }
 
-  return <BillingClient previewState={previewState} />
+  // Usage is read against the plan the page is about to render — in a
+  // preview that is the synthetic plan, so the bars match the state
+  // being reviewed rather than the admin's own company.
+  const usage = await getProjectUsage(company.id, billing.plan === "pro")
+
+  // Invoices and payment method come straight from Stripe — not
+  // mirrored locally, because nothing in the product depends on them.
+  const details = previewState
+    ? previewBillingDetails(previewState as never)
+    : billing.stripeCustomerId
+      ? await getBillingDetails(billing.stripeCustomerId, "nl")
+      : EMPTY_BILLING_DETAILS
+
+  return (
+    <BillingClient
+      companyName={company.name}
+      usage={usage}
+      details={details}
+      isOwner={company.owner_id === user.id || Boolean(previewState)}
+      billing={billing}
+      previewState={previewState}
+    />
+  )
 }

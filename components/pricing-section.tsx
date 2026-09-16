@@ -76,7 +76,13 @@ export function PricingContributorCta({ showLandingLink = true }: { showLandingL
   )
 }
 
-export function PricingSection({ embedded = false }: { embedded?: boolean }) {
+export function PricingSection({
+  embedded = false,
+  /** Off inside the dashboard: the page already has a title, and
+   *  "Eenvoudige, transparante abonnementen" is a pitch for someone
+   *  deciding whether to join — not for a company already inside. */
+  showHeader = true,
+}: { embedded?: boolean; showHeader?: boolean }) {
   const t = useTranslations("dashboard")
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("yearly")
   const { user, profile } = useAuth()
@@ -132,17 +138,19 @@ export function PricingSection({ embedded = false }: { embedded?: boolean }) {
     <div className="wrap" style={{ maxWidth: 860 }}>
 
       {/* Header — page title on /pricing, section title when embedded
-          in a landing page. */}
-      <div style={{ textAlign: "center", marginBottom: embedded ? 40 : 56 }}>
-        {embedded ? (
-          <h2 className="arco-section-title" style={{ marginBottom: 16 }}>{t("pricing_title")}</h2>
-        ) : (
-          <h1 className="arco-page-title" style={{ marginBottom: 16 }}>{t("pricing_title")}</h1>
-        )}
-        <p className="arco-body-text" style={{ maxWidth: 480, margin: "0 auto" }}>
-          {t("pricing_subtitle")}
-        </p>
-      </div>
+          in a landing page, nothing at all in the dashboard. */}
+      {showHeader && (
+        <div style={{ textAlign: "center", marginBottom: embedded ? 40 : 56 }}>
+          {embedded ? (
+            <h2 className="arco-section-title" style={{ marginBottom: 16 }}>{t("pricing_title")}</h2>
+          ) : (
+            <h1 className="arco-page-title" style={{ marginBottom: 16 }}>{t("pricing_title")}</h1>
+          )}
+          <p className="arco-body-text" style={{ maxWidth: 480, margin: "0 auto" }}>
+            {t("pricing_subtitle")}
+          </p>
+        </div>
+      )}
 
       {/* Billing toggle */}
       <div style={{ display: "flex", justifyContent: "center", marginBottom: 32 }}>
