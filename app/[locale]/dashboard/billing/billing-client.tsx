@@ -236,7 +236,8 @@ export function BillingClient({
                   label={t("pricing_feature_published")}
                   countLabel={tb("projects_count", { count: usage.publishedCount })}
                   fillPct={usage.publishedCount > 0 ? 100 : 0}
-                  right={tb("unlimited")}
+                  endLabel={usage.publishedCount > 0 ? tb("unlimited") : null}
+                  right={usage.publishedCount === 0 ? tb("unlimited") : null}
                   unbounded
                 />
               )}
@@ -258,8 +259,12 @@ export function BillingClient({
                     ? null
                     : tb("visible_count", { count: usage.contributorVisible })
                 }
-                endLabel={usage.contributorHidden > 0 ? tb("upgrade_for_unlimited") : null}
-                right={isPro ? tb("unlimited") : tb("free_limit", { count: FREE_CONTRIBUTOR_LIMIT })}
+                endLabel={
+                  usage.contributorHidden > 0 ? tb("upgrade_for_unlimited")
+                  : usage.contributorTotal > 0 && isPro ? tb("unlimited")
+                  : null
+                }
+                right={usage.contributorTotal === 0 ? tb("free_limit", { count: FREE_CONTRIBUTOR_LIMIT }) : null}
               />
             </div>
 

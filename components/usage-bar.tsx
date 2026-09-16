@@ -21,7 +21,7 @@ export function UsageBar({
   label,
   countLabel,
   fillPct,
-  right,
+  right = null,
   note = null,
   unbounded = false,
   lockedFromPct = null,
@@ -32,7 +32,8 @@ export function UsageBar({
   /** Already-formatted, e.g. "6 projecten" or "Geen projecten". */
   countLabel: string
   fillPct: number
-  right: string
+  /** Optional value on the right of the label row. */
+  right?: string | null
   note?: string | null
   /**
    * No ceiling exists. The track becomes a dashed outline rather than a
@@ -70,7 +71,7 @@ export function UsageBar({
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
         <span style={{ fontSize: 14 }}>{label}</span>
-        <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{right}</span>
+        {right && <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{right}</span>}
       </div>
 
       <div style={{

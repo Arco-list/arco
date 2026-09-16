@@ -833,12 +833,7 @@ export default function DesignPage() {
 
                 <div>
                   <h4 className="arco-label" style={{ marginBottom: 16 }}>Unlimited — room to spare</h4>
-                  <UsageBar label="Gepubliceerde projecten" countLabel="6 projecten" fillPct={100} right="Onbeperkt" unbounded />
-                  <p className="arco-small-text" style={{ marginTop: 10 }}>
-                    The dashed outline refuses to promise a distance, so the room beyond the fill
-                    reads as &ldquo;and onward&rdquo; rather than &ldquo;this much left&rdquo; — the
-                    same gap against a solid track would mean the opposite.
-                  </p>
+                  <UsageBar label="Gepubliceerde projecten" countLabel="6 projecten" fillPct={100} endLabel="Onbeperkt" unbounded />
                 </div>
 
                 <div>
@@ -851,13 +846,12 @@ export default function DesignPage() {
                     lockedFromPct={62 / 6}
                     markerLabel="1 zichtbaar"
                     endLabel="Upgrade naar Pro voor onbeperkt"
-                    right="1 zichtbaar op Gratis"
                   />
                 </div>
 
                 <div>
                   <h4 className="arco-label" style={{ marginBottom: 16 }}>Unlocked — the same company on Pro</h4>
-                  <UsageBar label="Bijdragerprojecten" countLabel="6 projecten" fillPct={100} right="Onbeperkt" />
+                  <UsageBar label="Bijdragerprojecten" countLabel="6 projecten" fillPct={100} endLabel="Onbeperkt" unbounded />
                 </div>
               </div>
             </div>
