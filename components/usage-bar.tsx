@@ -35,10 +35,12 @@ export function UsageBar({
   right: string
   note?: string | null
   /**
-   * No ceiling exists. The fill dissolves toward the right instead of
-   * ending, so there is no edge to read as "full" and no empty
-   * remainder to read as "what is left". The count carries the
-   * information; the track only says the road continues.
+   * No ceiling exists. The track becomes a dashed outline rather than a
+   * solid groove — a measured groove always reads as a distance to
+   * fill — and the fill dissolves toward the right instead of ending,
+   * so there is no edge to read as "full" and no empty remainder to
+   * read as "what is left". The count carries the information; the
+   * track only says the road continues.
    */
   unbounded?: boolean
 }) {
@@ -58,8 +60,12 @@ export function UsageBar({
       </div>
 
       <div style={{
-        position: "relative", height: 28, borderRadius: 14,
-        background: "var(--arco-surface)", overflow: "hidden",
+        position: "relative", height: 28, borderRadius: 14, boxSizing: "border-box",
+        // Bounded: a solid groove, because there really is a distance to
+        // fill. Unbounded: a dashed outline, which does not promise one.
+        background: unbounded ? "transparent" : "var(--arco-surface)",
+        border: unbounded ? "1px dashed var(--arco-light-grey)" : undefined,
+        overflow: "hidden",
       }}>
         <div style={{
           position: "absolute", inset: 0, width: `${filled}%`,

@@ -832,11 +832,12 @@ export default function DesignPage() {
                 </div>
 
                 <div>
-                  <h4 className="arco-label" style={{ marginBottom: 16 }}>Unlimited — the fill dissolves</h4>
+                  <h4 className="arco-label" style={{ marginBottom: 16 }}>Unlimited — dashed outline, fill dissolves</h4>
                   <UsageBar label="Gepubliceerde projecten" countLabel="6 projecten" fillPct={100} right="Onbeperkt" unbounded />
                   <p className="arco-small-text" style={{ marginTop: 10 }}>
-                    Recommended. No edge to read as &ldquo;full&rdquo;, no empty remainder to read as
-                    &ldquo;what is left&rdquo;. The number says how many; the track only says it continues.
+                    Recommended. The dashed outline refuses to promise a distance, and the fill has
+                    no right-hand edge to read as &ldquo;full&rdquo;. The number says how many; the
+                    track only says it continues.
                   </p>
                 </div>
 
@@ -845,6 +846,28 @@ export default function DesignPage() {
                   <UsageBar label="Gepubliceerde projecten" countLabel="6 projecten" fillPct={100} right="Onbeperkt" />
                   <p className="arco-small-text" style={{ marginTop: 10 }}>
                     What we have now. Reads as &ldquo;you are at 100%&rdquo; — the opposite of the message.
+                  </p>
+                </div>
+
+                <div>
+                  <h4 className="arco-label" style={{ marginBottom: 16 }}>Alternative C — dashed outline, no fill</h4>
+                  <div style={{ position: "relative" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+                      <span style={{ fontSize: 14 }}>Gepubliceerde projecten</span>
+                      <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Onbeperkt</span>
+                    </div>
+                    <div style={{
+                      position: "relative", height: 28, borderRadius: 14, boxSizing: "border-box",
+                      border: "1px dashed var(--arco-light-grey)", display: "flex", alignItems: "center",
+                      paddingLeft: 14,
+                    }}>
+                      <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>6 projecten</span>
+                    </div>
+                  </div>
+                  <p className="arco-small-text" style={{ marginTop: 10 }}>
+                    The quietest reading: an open container with a number in it, no fill to
+                    interpret at all. Loses the visual rhyme with the bar above it, though — two
+                    meters side by side should look like a set.
                   </p>
                 </div>
 
