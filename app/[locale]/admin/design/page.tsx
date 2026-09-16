@@ -832,51 +832,12 @@ export default function DesignPage() {
                 </div>
 
                 <div>
-                  <h4 className="arco-label" style={{ marginBottom: 16 }}>Unlimited — dashed outline, room to spare</h4>
+                  <h4 className="arco-label" style={{ marginBottom: 16 }}>Unlimited — room to spare</h4>
                   <UsageBar label="Gepubliceerde projecten" countLabel="6 projecten" fillPct={100} right="Onbeperkt" unbounded />
                   <p className="arco-small-text" style={{ marginTop: 10 }}>
-                    Recommended. The dashed outline refuses to promise a distance, so the room
-                    beyond the fill reads as &ldquo;and onward&rdquo; rather than &ldquo;this much
-                    left&rdquo; — the same gap against a solid track would mean the opposite.
-                  </p>
-                </div>
-
-                <div>
-                  <h4 className="arco-label" style={{ marginBottom: 16 }}>Alternative A — full bar</h4>
-                  <UsageBar label="Gepubliceerde projecten" countLabel="6 projecten" fillPct={100} right="Onbeperkt" />
-                  <p className="arco-small-text" style={{ marginTop: 10 }}>
-                    What we have now. Reads as &ldquo;you are at 100%&rdquo; — the opposite of the message.
-                  </p>
-                </div>
-
-                <div>
-                  <h4 className="arco-label" style={{ marginBottom: 16 }}>Alternative C — dashed outline, no fill</h4>
-                  <div style={{ position: "relative" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-                      <span style={{ fontSize: 14 }}>Gepubliceerde projecten</span>
-                      <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Onbeperkt</span>
-                    </div>
-                    <div style={{
-                      position: "relative", height: 28, borderRadius: 14, boxSizing: "border-box",
-                      border: "1px dashed var(--arco-light-grey)", display: "flex", alignItems: "center",
-                      paddingLeft: 14,
-                    }}>
-                      <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>6 projecten</span>
-                    </div>
-                  </div>
-                  <p className="arco-small-text" style={{ marginTop: 10 }}>
-                    The quietest reading: an open container with a number in it, no fill to
-                    interpret at all. Loses the visual rhyme with the bar above it, though — two
-                    meters side by side should look like a set.
-                  </p>
-                </div>
-
-                <div>
-                  <h4 className="arco-label" style={{ marginBottom: 16 }}>Alternative B — part left open</h4>
-                  <UsageBar label="Gepubliceerde projecten" countLabel="6 projecten" fillPct={62} right="Onbeperkt" />
-                  <p className="arco-small-text" style={{ marginTop: 10 }}>
-                    Invites the question the empty part cannot answer: room for how many more? The
-                    gap implies a ceiling that does not exist.
+                    The dashed outline refuses to promise a distance, so the room beyond the fill
+                    reads as &ldquo;and onward&rdquo; rather than &ldquo;this much left&rdquo; — the
+                    same gap against a solid track would mean the opposite.
                   </p>
                 </div>
 
