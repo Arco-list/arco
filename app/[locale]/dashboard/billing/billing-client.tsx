@@ -160,7 +160,11 @@ export function BillingClient({
 
       <main style={{ flex: 1 }}>
         <div className="discover-results">
-          <div className="wrap" style={{ maxWidth: 820 }}>
+          {/* Full wrap width, like the rest of the dashboard: the
+              banner and the included table share one edge, and the
+              price column lands where the eye already expects a
+              right-hand value. */}
+          <div className="wrap">
 
             {/* ── Plan header: name, state, and the one action that
                    matters right now. The quiet banner (.arco-banner) is
