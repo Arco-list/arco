@@ -71,10 +71,7 @@ export function UsageBar({
         <div style={{
           position: "absolute", inset: 0, width: `${filled}%`,
           background: "var(--primary, #016D75)",
-          // Rounded on the left, cut square on the right: a rounded cap
-          // says "ends here", a straight one says "carries on past the
-          // frame".
-          borderRadius: unbounded ? "14px 0 0 14px" : 14,
+          borderRadius: 14,
           transition: "width .2s ease",
         }} />
         {/* Where the plan stops. Drawn over the fill so it stays visible

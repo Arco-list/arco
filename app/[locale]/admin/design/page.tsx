@@ -837,8 +837,7 @@ export default function DesignPage() {
                   <p className="arco-small-text" style={{ marginTop: 10 }}>
                     Recommended. The dashed outline refuses to promise a distance, so the room
                     beyond the fill reads as &ldquo;and onward&rdquo; rather than &ldquo;this much
-                    left&rdquo; — the same gap against a solid track would mean the opposite. Fill
-                    cut square on the right, because a rounded cap says &ldquo;ends here&rdquo;.
+                    left&rdquo; — the same gap against a solid track would mean the opposite.
                   </p>
                 </div>
 
