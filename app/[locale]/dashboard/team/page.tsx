@@ -16,12 +16,10 @@ export default async function TeamPage({
   const { company_id: companyIdParam } = await searchParams
   const supabase = await createServerSupabaseClient()
 
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
-
-  if (userError) throw new Error(userError.message)
+  // A missing session is a logged-out visitor, not an exception:
+  // throwing turned the sign-in redirect into a 500 for anyone
+  // arriving without a cookie.
+  const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login?redirectTo=/dashboard/team")
 
   const serviceClient = createServiceRoleSupabaseClient()
