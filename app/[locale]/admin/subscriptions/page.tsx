@@ -20,6 +20,9 @@ export default async function AdminSubscriptionsPage({
     companyIdParam,
     preview,
     path: "/admin/subscriptions",
+    // An admin without a company of their own still gets the screen,
+    // filled with the same fixtures the state switcher uses.
+    previewWithoutCompany: true,
   })
 
   return <SubscriptionScreen {...props} chrome="admin" />

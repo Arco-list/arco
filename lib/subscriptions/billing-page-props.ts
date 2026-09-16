@@ -8,7 +8,7 @@ import { getCompanyBilling } from "@/lib/subscriptions/get-company-subscription"
 import { getProjectUsage } from "@/lib/subscriptions/get-project-usage"
 import { getBillingDetails } from "@/lib/subscriptions/get-billing-details"
 import { EMPTY_BILLING_DETAILS } from "@/lib/subscriptions/billing-details-types"
-import { isPreviewState, previewBilling, previewBillingDetails, previewUsage } from "@/lib/subscriptions/preview-states"
+import { PREVIEW_STATES, isPreviewState, previewBilling, previewBillingDetails, previewUsage } from "@/lib/subscriptions/preview-states"
 import { isAdminUser } from "@/lib/auth-utils"
 import type { CompanyBilling } from "@/lib/subscriptions/get-company-subscription"
 import type { ProjectUsage } from "@/lib/subscriptions/usage-types"
@@ -34,17 +34,28 @@ export type BillingPageProps = {
   billing: CompanyBilling
   previewState: string | null
   isAdmin: boolean
+  /** False when the viewer has no company and the page is all fixtures
+   *  — the state switcher then has no "Live" to return to. */
+  hasCompany: boolean
 }
 
 export async function loadBillingPageProps({
   companyIdParam,
   preview,
   path,
+  previewWithoutCompany = false,
 }: {
   companyIdParam?: string
   preview?: string
   /** Where to send a logged-out visitor back to after signing in. */
   path: string
+  /**
+   * For the admin mount: an admin with no company of their own should
+   * still be able to read this screen. Rather than send them off to
+   * create one, the page renders a synthetic company in a preview
+   * state — the same fixtures the state switcher uses.
+   */
+  previewWithoutCompany?: boolean
 }): Promise<BillingPageProps> {
   const supabase = await createServerSupabaseClient()
 
@@ -109,19 +120,8 @@ export async function loadBillingPageProps({
     if (matched) company = matched
   }
 
-  if (!company) redirect("/create-company")
-
-  // Admin preview: render a synthetic state through the real code path,
-  // so states that are slow (a year-old subscription), rare (a failed
-  // collection) or deliberately unreachable (a trial, ruled out in D2)
-  // can still be reviewed. Display only — nothing is written, and a
-  // non-admin asking for one simply gets their own real state.
-  let billing = await getCompanyBilling(company.id)
-  let previewState: string | null = null
-
-  // Read once, not only when a preview is asked for: the switcher is
-  // how an admin ENTERS preview, so it has to be there before the first
-  // one is picked.
+  // Read before the redirect: whether someone may stay here without a
+  // company of their own depends on it.
   const { data: profile } = await serviceClient
     .from("profiles")
     .select("user_types, admin_role")
@@ -131,6 +131,34 @@ export async function loadBillingPageProps({
     (profile as { user_types?: string[] | null } | null)?.user_types,
     (profile as { admin_role?: string | null } | null)?.admin_role,
   )
+
+  if (!company) {
+    if (!(previewWithoutCompany && isAdmin)) redirect("/create-company")
+
+    // Nothing of their own to show, so the page is entirely fixtures —
+    // named as such, so nobody mistakes it for a real subscription.
+    // The first state, not an arbitrary one: with no company the tab bar
+    // drops "Live", so its first tab is what a bare URL must resolve to.
+    const state = isPreviewState(preview) ? preview : PREVIEW_STATES[0]
+    return {
+      companyName: "Voorbeeld Architecten",
+      usage: previewUsage(state),
+      details: previewBillingDetails(state),
+      isOwner: true,
+      billing: previewBilling(state),
+      previewState: state,
+      isAdmin: true,
+      hasCompany: false,
+    }
+  }
+
+  // Admin preview: render a synthetic state through the real code path,
+  // so states that are slow (a year-old subscription), rare (a failed
+  // collection) or deliberately unreachable (a trial, ruled out in D2)
+  // can still be reviewed. Display only — nothing is written, and a
+  // non-admin asking for one simply gets their own real state.
+  let billing = await getCompanyBilling(company.id)
+  let previewState: string | null = null
 
   if (preview && isAdmin && isPreviewState(preview)) {
     billing = previewBilling(preview)
@@ -161,5 +189,6 @@ export async function loadBillingPageProps({
     billing,
     previewState,
     isAdmin,
+    hasCompany: true,
   }
 }

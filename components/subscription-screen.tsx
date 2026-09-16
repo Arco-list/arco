@@ -32,6 +32,7 @@ export function SubscriptionScreen({
   details,
   previewState = null,
   isAdmin = false,
+  hasCompany = true,
   chrome = "dashboard",
 }: {
   companyName: string
@@ -43,6 +44,9 @@ export function SubscriptionScreen({
   previewState?: string | null
   /** Admins get the preview switcher on their own page too. */
   isAdmin?: boolean
+  /** False when the whole page is fixtures: there is no real
+   *  subscription to switch back to. */
+  hasCompany?: boolean
   /**
    * Which shell the page is mounted in. "admin" drops the dashboard
    * header and footer because the admin layout supplies its own — the
@@ -152,7 +156,9 @@ export function SubscriptionScreen({
           param="preview"
           title="Preview"
           tabs={[
-            { key: "live", label: "Live" },
+            // No company of their own: nothing to return to, so the tab
+            // that clears the preview would land on a redirect.
+            ...(hasCompany ? [{ key: "live", label: "Live" }] : []),
             ...PREVIEW_STATES.map((s) => ({ key: s, label: PREVIEW_LABELS[s] })),
           ]}
           active={previewState ?? "live"}
