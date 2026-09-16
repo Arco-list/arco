@@ -70,6 +70,26 @@ export async function stripePost<T = Record<string, unknown>>(
   return json
 }
 
+export async function stripeGet<T = Record<string, unknown>>(
+  path: string,
+  query: Record<string, string | number | undefined> = {},
+): Promise<T> {
+  const search = Object.entries(query)
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+    .join("&")
+
+  const res = await fetch(`${API}${path}${search ? `?${search}` : ""}`, {
+    headers: { Authorization: `Bearer ${secretKey()}` },
+    // Billing data changes on Stripe's schedule, not ours: never serve
+    // a cached invoice list.
+    cache: "no-store",
+  })
+  const json = (await res.json()) as T & { error?: { message?: string } }
+  if (!res.ok) throw new Error(json?.error?.message ?? `Stripe ${path} failed with ${res.status}`)
+  return json
+}
+
 /** True when the app has a key at all — lets the UI say something
  *  useful instead of throwing at a visitor. */
 export function isStripeConfigured(): boolean {

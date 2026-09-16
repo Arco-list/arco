@@ -1,4 +1,5 @@
 import type { CompanyBilling } from "@/lib/subscriptions/get-company-subscription"
+import type { BillingDetails } from "@/lib/subscriptions/billing-details-types"
 
 /**
  * Synthetic billing states for the admin preview.
@@ -110,4 +111,41 @@ export function previewBilling(state: PreviewState): CompanyBilling {
 
 export function isPreviewState(value: string | undefined): value is PreviewState {
   return Boolean(value && (PREVIEW_STATES as readonly string[]).includes(value))
+}
+
+/**
+ * Payment method and invoices for the preview. A year of history is
+ * exactly what the invoice table needs to be judged on — spacing,
+ * alignment, how a long list sits under the bars — and it is the one
+ * thing a fresh sandbox can never show.
+ */
+export function previewBillingDetails(state: PreviewState): BillingDetails {
+  if (state === "free" || state === "founding") {
+    return { configured: true, paymentMethod: null, invoices: [] }
+  }
+
+  const monthly = state === "active_month"
+  const amount = monthly ? "€ 59,29" : "€ 566,28"
+  const count = monthly ? 6 : 2
+
+  const invoices = Array.from({ length: count }, (_, i) => {
+    const d = new Date()
+    d.setMonth(d.getMonth() - (monthly ? i : i * 12))
+    return {
+      id: `in_preview_${i}`,
+      number: `A919F631-${String(1000 + i).slice(1)}`,
+      created: d.toISOString(),
+      total: amount,
+      // The most recent one carries the state being previewed; the rest
+      // are settled history.
+      status: i === 0 && state === "past_due" ? "open" : "paid",
+      url: "https://invoice.stripe.com/",
+    }
+  })
+
+  return {
+    configured: true,
+    paymentMethod: { type: "sepa_debit", label: "SEPA-incasso", last4: "5264", expiry: null },
+    invoices,
+  }
 }

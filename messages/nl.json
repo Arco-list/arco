@@ -1237,7 +1237,20 @@
       "error_failed": "Dat lukte niet. Probeer het zo nog eens.",
       "projects_count": "{count, plural, =0 {Geen projecten} one {# project} other {# projecten}}",
       "free_limit": "{count, plural, one {# zichtbaar op Gratis} other {# zichtbaar op Gratis}}",
-      "hidden_note": "{count, plural, one {# project staat klaar maar is niet zichtbaar op je bedrijfspagina. Upgrade naar Pro om het te tonen.} other {# projecten staan klaar maar zijn niet zichtbaar op je bedrijfspagina. Upgrade naar Pro om ze te tonen.}}"
+      "hidden_note": "{count, plural, one {# project staat klaar maar is niet zichtbaar op je bedrijfspagina. Upgrade naar Pro om het te tonen.} other {# projecten staan klaar maar zijn niet zichtbaar op je bedrijfspagina. Upgrade naar Pro om ze te tonen.}}",
+      "payment_heading": "Betaling",
+      "invoices_heading": "Facturen",
+      "no_payment_method": "Nog geen betaalmethode",
+      "update": "Wijzigen",
+      "col_date": "Datum",
+      "col_total": "Totaal",
+      "col_status": "Status",
+      "col_actions": "Actie",
+      "view_invoice": "Bekijk",
+      "invoice_status_paid": "Betaald",
+      "invoice_status_open": "Openstaand",
+      "invoice_status_void": "Vervallen",
+      "invoice_status_uncollectible": "Oninbaar"
     }
   },
   "business": {

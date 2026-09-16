@@ -9,6 +9,7 @@ import { PricingSection } from "@/components/pricing-section"
 
 import type { CompanyBilling } from "@/lib/subscriptions/get-company-subscription"
 import { FREE_CONTRIBUTOR_LIMIT, type ProjectUsage } from "@/lib/subscriptions/usage-types"
+import type { BillingDetails } from "@/lib/subscriptions/billing-details-types"
 import { PREVIEW_LABELS, PREVIEW_STATES, type PreviewState } from "@/lib/subscriptions/preview-states"
 import { openPortalAction, startCheckoutAction } from "./actions"
 
@@ -25,12 +26,14 @@ export function BillingClient({
   isOwner,
   billing,
   usage,
+  details,
   previewState = null,
 }: {
   companyName: string
   isOwner: boolean
   billing: CompanyBilling
   usage: ProjectUsage
+  details: BillingDetails
   /** Set only for an admin viewing a synthetic state. */
   previewState?: string | null
 }) {
@@ -98,52 +101,6 @@ export function BillingClient({
   // Reactivating and fixing a payment both happen inside Stripe's
   // portal; only a new subscription needs Checkout.
   const primaryGoesToPortal = billing.status === "past_due" || billing.cancelAtPeriodEnd
-
-  // What the plan actually gives, mirroring the pricing page so the two
-  // never drift. Price sits on the subscription row alone; the rest are
-  // part of it.
-  const priceLabel = !isPro
-    ? tb("per_month", { amount: "0" })
-    : billing.source === "founding"
-      ? tb("per_month", { amount: "0" })
-      : billing.interval === "month"
-        ? tb("per_month", { amount: "49" })
-        : tb("per_year", { amount: "468" })
-
-  const includedRows: { label: string; value: string; price: string; muted?: boolean; soon?: boolean }[] = [
-    {
-      label: tb("row_subscription"),
-      value: billing.source === "founding" ? tb("plan_founding_row")
-        : !isPro ? tb("plan_free_row")
-        : billing.interval === "month" ? tb("billed_monthly") : tb("billed_yearly"),
-      price: priceLabel,
-    },
-    {
-      label: t("pricing_feature_contributor"),
-      value: isPro ? tb("unlimited") : tb("one_project"),
-      price: tb("included_value"),
-    },
-    { label: t("pricing_feature_published"), value: tb("unlimited"), price: tb("included_value") },
-    { label: t("pricing_feature_company_page"), value: tb("included_value"), price: tb("included_value") },
-    {
-      label: t("pricing_feature_team"),
-      value: isPro ? tb("included_value") : tb("not_included"),
-      price: isPro ? tb("included_value") : "—",
-      muted: !isPro,
-    },
-    {
-      label: t("pricing_feature_analytics"),
-      value: isPro ? tb("included_value") : tb("not_included"),
-      price: isPro ? tb("included_value") : "—",
-      muted: !isPro, soon: true,
-    },
-    {
-      label: t("pricing_feature_arco_approved"),
-      value: isPro ? tb("included_value") : tb("not_included"),
-      price: isPro ? tb("included_value") : "—",
-      muted: !isPro, soon: true,
-    },
-  ]
 
   return (
     <div className="min-h-screen bg-white flex flex-col" style={{ paddingTop: 60 }}>
@@ -302,32 +259,81 @@ export function BillingClient({
               <p className="arco-small-text" style={{ marginBottom: 24 }}>{tb("owner_only")}</p>
             )}
 
-            {/* ── What's included ──────────────────────────────────── */}
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-              <span className="arco-eyebrow">{tb("whats_included")}</span>
-              <span className="arco-eyebrow">{tb("price_col")}</span>
-            </div>
-
-            <div style={{ borderTop: "1px solid var(--arco-light-grey)" }}>
-              {includedRows.map((row) => (
-                <div
-                  key={row.label}
-                  style={{
-                    display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 16,
-                    alignItems: "baseline", padding: "14px 0",
-                    borderBottom: "1px solid var(--arco-light-grey)",
-                    color: row.muted ? "var(--text-disabled)" : undefined,
-                  }}
-                >
+            {/* ── Payment ──────────────────────────────────────────── */}
+            {isOwner && (billing.stripeCustomerId || details.paymentMethod) && (
+              <div style={{ marginBottom: 36 }}>
+                <h4 className="arco-label" style={{ marginBottom: 14 }}>{tb("payment_heading")}</h4>
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  gap: 16, padding: "14px 0", borderTop: "1px solid var(--arco-light-grey)",
+                  borderBottom: "1px solid var(--arco-light-grey)",
+                }}>
                   <span style={{ fontSize: 14 }}>
-                    {row.label}
-                    {row.soon && <span className="pricing-feature-soon" style={{ marginLeft: 8 }}>{t("pricing_feature_coming")}</span>}
+                    {details.paymentMethod ? (
+                      <>
+                        {details.paymentMethod.label}
+                        {details.paymentMethod.last4 && (
+                          <span style={{ color: "var(--text-secondary)" }}>{` ···· ${details.paymentMethod.last4}`}</span>
+                        )}
+                        {details.paymentMethod.expiry && (
+                          <span style={{ color: "var(--text-secondary)" }}>{` · ${details.paymentMethod.expiry}`}</span>
+                        )}
+                      </>
+                    ) : (
+                      <span style={{ color: "var(--text-secondary)" }}>{tb("no_payment_method")}</span>
+                    )}
                   </span>
-                  <span style={{ fontSize: 14, color: row.muted ? "inherit" : "var(--text-secondary)" }}>{row.value}</span>
-                  <span style={{ fontSize: 14, color: "var(--text-secondary)", whiteSpace: "nowrap", textAlign: "right" }}>{row.price}</span>
+                  <button
+                    type="button"
+                    className="btn-tertiary"
+                    style={{ fontSize: 13, padding: "8px 16px" }}
+                    onClick={() => go("portal", openPortalAction)}
+                    disabled={pending}
+                  >
+                    {tb("update")}
+                  </button>
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
+
+            {/* ── Invoices ─────────────────────────────────────────── */}
+            {isOwner && details.invoices.length > 0 && (
+              <div style={{ marginBottom: 36 }}>
+                <h4 className="arco-label" style={{ marginBottom: 14 }}>{tb("invoices_heading")}</h4>
+                <div style={{
+                  display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 16,
+                  paddingBottom: 10, borderBottom: "1px solid var(--arco-light-grey)",
+                }}>
+                  <span className="arco-eyebrow">{tb("col_date")}</span>
+                  <span className="arco-eyebrow">{tb("col_total")}</span>
+                  <span className="arco-eyebrow">{tb("col_status")}</span>
+                  <span className="arco-eyebrow" style={{ textAlign: "right" }}>{tb("col_actions")}</span>
+                </div>
+                {details.invoices.map((inv) => (
+                  <div
+                    key={inv.id}
+                    style={{
+                      display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 16,
+                      alignItems: "baseline", padding: "14px 0",
+                      borderBottom: "1px solid var(--arco-light-grey)", fontSize: 14,
+                    }}
+                  >
+                    <span>{formatDate(inv.created)}</span>
+                    <span style={{ fontVariantNumeric: "tabular-nums" }}>{inv.total}</span>
+                    <span style={{ color: inv.status === "paid" ? "var(--text-secondary)" : "#b45309" }}>
+                      {tb(`invoice_status_${inv.status}` as never)}
+                    </span>
+                    <span style={{ textAlign: "right" }}>
+                      {inv.url ? (
+                        <a href={inv.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary, #016D75)" }}>
+                          {tb("view_invoice")}
+                        </a>
+                      ) : "—"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Founding companies have no Stripe object yet — say what
                 happens next rather than leaving a dead page. */}

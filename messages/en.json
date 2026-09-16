@@ -1237,7 +1237,20 @@
       "error_failed": "That didn't work. Try again in a moment.",
       "projects_count": "{count, plural, =0 {No projects} one {# project} other {# projects}}",
       "free_limit": "{count, plural, one {# visible on Free} other {# visible on Free}}",
-      "hidden_note": "{count, plural, one {# project is ready but not shown on your company page. Upgrade to Pro to show it.} other {# projects are ready but not shown on your company page. Upgrade to Pro to show them.}}"
+      "hidden_note": "{count, plural, one {# project is ready but not shown on your company page. Upgrade to Pro to show it.} other {# projects are ready but not shown on your company page. Upgrade to Pro to show them.}}",
+      "payment_heading": "Payment",
+      "invoices_heading": "Invoices",
+      "no_payment_method": "No payment method yet",
+      "update": "Update",
+      "col_date": "Date",
+      "col_total": "Total",
+      "col_status": "Status",
+      "col_actions": "Actions",
+      "view_invoice": "View",
+      "invoice_status_paid": "Paid",
+      "invoice_status_open": "Open",
+      "invoice_status_void": "Void",
+      "invoice_status_uncollectible": "Uncollectible"
     }
   },
   "business": {

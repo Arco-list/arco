@@ -4,7 +4,9 @@ import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/l
 import { getActiveCompanyId } from "@/lib/active-company"
 import { getCompanyBilling } from "@/lib/subscriptions/get-company-subscription"
 import { getProjectUsage } from "@/lib/subscriptions/get-project-usage"
-import { isPreviewState, previewBilling } from "@/lib/subscriptions/preview-states"
+import { getBillingDetails } from "@/lib/subscriptions/get-billing-details"
+import { EMPTY_BILLING_DETAILS } from "@/lib/subscriptions/billing-details-types"
+import { isPreviewState, previewBilling, previewBillingDetails } from "@/lib/subscriptions/preview-states"
 import { isAdminUser } from "@/lib/auth-utils"
 import { BillingClient } from "./billing-client"
 
@@ -16,6 +18,7 @@ export default async function BillingPage({
   searchParams,
 }: {
   searchParams: Promise<{ company_id?: string; preview?: string }>
+  params?: Promise<{ locale: string }>
 }) {
   const { company_id: companyIdParam, preview } = await searchParams
   const supabase = await createServerSupabaseClient()
@@ -112,10 +115,19 @@ export default async function BillingPage({
   // being reviewed rather than the admin's own company.
   const usage = await getProjectUsage(company.id, billing.plan === "pro")
 
+  // Invoices and payment method come straight from Stripe — not
+  // mirrored locally, because nothing in the product depends on them.
+  const details = previewState
+    ? previewBillingDetails(previewState as never)
+    : billing.stripeCustomerId
+      ? await getBillingDetails(billing.stripeCustomerId, "nl")
+      : EMPTY_BILLING_DETAILS
+
   return (
     <BillingClient
       companyName={company.name}
       usage={usage}
+      details={details}
       isOwner={company.owner_id === user.id || Boolean(previewState)}
       billing={billing}
       previewState={previewState}
