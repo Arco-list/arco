@@ -17,3 +17,14 @@ export type PhotographerSpecialty = (typeof PHOTOGRAPHER_SPECIALTIES)[number]
 
 export const isPhotographerSpecialty = (value: string): value is PhotographerSpecialty =>
   (PHOTOGRAPHER_SPECIALTIES as readonly string[]).includes(value)
+
+/**
+ * The service a photographer is credited under.
+ *
+ * Photographers reach a project through the detail bar only — that flow
+ * looks the company up, locks the category and fills a single slot. The
+ * "Vermelde professionals" section must therefore never offer it: a
+ * credit made there would carry the right category with none of the
+ * rules around it.
+ */
+export const PHOTOGRAPHER_SERVICE_SLUG = "photographer"

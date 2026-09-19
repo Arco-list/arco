@@ -1,6 +1,7 @@
 "use client"
 
 import { AlertTriangle } from "lucide-react"
+import type { ReactNode } from "react"
 import { useTranslations } from "next-intl"
 
 import { translateRejectionReason } from "@/lib/rejection-reasons"
@@ -36,6 +37,12 @@ type ListingStatusModalProps<TStatus extends string> = {
   limitReachedForNewActivation?: boolean
   activeStatusValues?: ReadonlyArray<TStatus>
   role?: "owner" | "contributor"
+  /** Offered below the main choice, behind a rule: acts of a different
+   *  kind that should not sit among the everyday ones. */
+  secondaryOptions?: ReadonlyArray<ListingStatusModalOption<TStatus>>
+  /** A consequence the reader cannot see for themselves — which other
+   *  project loses its place, for instance. */
+  note?: ReactNode
 }
 
 export function ListingStatusModal<TStatus extends string>({
@@ -53,6 +60,8 @@ export function ListingStatusModal<TStatus extends string>({
   isDraft = false,
   onSubmitForReview,
   isSubmittingForReview = false,
+  secondaryOptions,
+  note,
 }: ListingStatusModalProps<TStatus>) {
   const t = useTranslations("dashboard")
   const tReason = useTranslations("project_status.rejection_reasons")
@@ -129,6 +138,48 @@ export function ListingStatusModal<TStatus extends string>({
             )
           })}
         </div>
+
+        {note && (
+          <p className="form-note" style={{ margin: "-10px 0 16px" }}>{note}</p>
+        )}
+
+        {secondaryOptions && secondaryOptions.length > 0 && (
+          <div style={{ borderTop: "1px solid var(--arco-light-grey)", paddingTop: 16, marginBottom: 20 }}>
+            {/* One line until it is chosen. A full card here competed
+                with the two real choices above it, and its warning —
+                your name comes off someone else's project — is only
+                worth reading at the moment you are about to accept it,
+                which is exactly when it appears. */}
+            <div className="status-modal-options" style={{ margin: 0 }}>
+              {secondaryOptions.map((option) => {
+                const isSelected = selectedStatus === option.value
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`status-modal-option${isSelected ? " selected" : ""}`}
+                    style={isSelected ? undefined : { border: "none", background: "none", padding: "4px 0" }}
+                    disabled={isPendingAdminReview || isDraft || isRejected}
+                    onClick={() => onStatusChange(option.value)}
+                  >
+                    <span className={`status-modal-dot ${option.colorClass}`} />
+                    <div className="status-modal-option-text">
+                      <span
+                        className="status-modal-option-label"
+                        style={isSelected ? undefined : { fontWeight: 400, color: "var(--arco-mid)" }}
+                      >
+                        {option.label}
+                      </span>
+                      {isSelected && (
+                        <span className="status-modal-option-desc">{option.description}</span>
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="popup-actions">
           {isDraft && onSubmitForReview ? (

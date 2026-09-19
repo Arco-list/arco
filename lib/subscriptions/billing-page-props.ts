@@ -16,7 +16,7 @@ import type { BillingDetails } from "@/lib/subscriptions/billing-details-types"
 
 /**
  * Everything the subscription screen needs, for either of the two
- * places it is mounted: a company's own /dashboard/billing and the
+ * places it is mounted: a company's own /dashboard/subscription and the
  * admin's /admin/subscriptions. Identical data, identical code path —
  * the only difference is the chrome around it, which is the point: an
  * admin reviewing the page must be looking at the real thing.
@@ -33,6 +33,10 @@ export type BillingPageProps = {
   isOwner: boolean
   billing: CompanyBilling
   previewState: string | null
+  /** Previewing is a thing you are doing, not a thing you are.
+   *  The switcher rides on the parameter so an admin's own
+   *  subscription page is the page, not a page with a toolbar. */
+  previewMode: boolean
   isAdmin: boolean
   /** False when the viewer has no company and the page is all fixtures
    *  — the state switcher then has no "Live" to return to. */
@@ -147,6 +151,7 @@ export async function loadBillingPageProps({
       isOwner: true,
       billing: previewBilling(state),
       previewState: state,
+      previewMode: true,
       isAdmin: true,
       hasCompany: false,
     }
@@ -188,6 +193,7 @@ export async function loadBillingPageProps({
     isOwner: company.owner_id === user.id || Boolean(previewState),
     billing,
     previewState,
+    previewMode: Boolean(preview) && isAdmin,
     isAdmin,
     hasCompany: true,
   }

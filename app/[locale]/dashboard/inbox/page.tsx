@@ -144,7 +144,7 @@ export default function CompanyMessagesPage() {
     { href: `/dashboard/company${cq}`, label: tDash("company") },
     { href: `/dashboard/team${cq}`, label: tDash("team") },
     { href: "/dashboard/inbox", label: tDash("inbox") },
-    { href: "/dashboard/pricing", label: tDash("subscription") },
+    { href: "/dashboard/subscription", label: tDash("subscription") },
   ]
 
   return (

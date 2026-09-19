@@ -53,7 +53,16 @@ async function placesLib(): Promise<any | null> {
 }
 
 /** Debounce-free prediction fetch — callers own their debounce. */
-export async function searchAddressPredictions(query: string): Promise<AddressPrediction[]> {
+/**
+ * @param country Optional ISO 3166-1 alpha-2 code ("nl", "be") to
+ *   restrict results to. Where a form already asks which country an
+ *   address is in, the answer should narrow the search — otherwise
+ *   "Kerkstraat 1" offers a street in every country that has one.
+ */
+export async function searchAddressPredictions(
+  query: string,
+  country?: string,
+): Promise<AddressPrediction[]> {
   const q = query.trim()
   if (q.length < 2) return []
   try {
@@ -64,7 +73,11 @@ export async function searchAddressPredictions(query: string): Promise<AddressPr
     }
     const predictions = await new Promise<any[]>((resolve) => {
       autocompleteService.getPlacePredictions(
-        { input: q, types: ["address"] },
+        {
+          input: q,
+          types: ["address"],
+          ...(country ? { componentRestrictions: { country: country.toLowerCase() } } : {}),
+        },
         (preds: any, status: string) => resolve(status === "OK" && preds ? preds : []),
       )
     })

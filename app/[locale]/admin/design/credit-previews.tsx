@@ -1,6 +1,7 @@
 "use client"
 
 import { ArrowRight } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services"
 
@@ -27,10 +28,14 @@ type Row = {
   statusLabel: string
 }
 
-const ROWS: Row[] = [
-  { slug: "architect", company: "Bongers Architecten", service: "Architect", contact: "Jij", status: "owner", statusLabel: "Eigenaar" },
-  { slug: "tiles-stones", company: "Lucen", service: "Tegels & Natuursteen", contact: "Niek", status: "featured", statusLabel: "Uitgelicht" },
-  { slug: "interior-designer", company: "Versteegh-Design", service: "Interieurontwerper", contact: "stephen@versteegh-design.com", status: "invited", statusLabel: "Uitgenodigd" },
+// Labels come from the table's own namespace, never typed here. Typed
+// here, this row still said "Uitgelicht" after the status it names had
+// been renamed to "Geaccepteerd" — a preview showing a word the product
+// no longer uses.
+const buildRows = (t: (key: string) => string): Row[] => [
+  { slug: "architect", company: "Bongers Architecten", service: "Architect", contact: "Jij", status: "owner", statusLabel: t("status_owner") },
+  { slug: "tiles-stones", company: "Lucen", service: "Tegels & Natuursteen", contact: "Niek", status: "featured", statusLabel: t("status_accepted") },
+  { slug: "interior-designer", company: "Versteegh-Design", service: "Interieurontwerper", contact: "stephen@versteegh-design.com", status: "invited", statusLabel: t("status_invited") },
 ]
 
 const CARDS = [
@@ -40,6 +45,9 @@ const CARDS = [
 ]
 
 export function CreditPreviews() {
+  const tTeam = useTranslations("project_edit.team")
+  const ROWS = buildRows((k) => tTeam(k))
+
   return (
     <>
       <style>{`

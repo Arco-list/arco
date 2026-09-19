@@ -3,7 +3,7 @@
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import Link from "next/link"
-import { MoreHorizontal, Check, AlertTriangle, Info, X } from "lucide-react"
+import { AlertTriangle, Info, X } from "lucide-react"
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import { useLocale, useTranslations } from "next-intl"
@@ -20,6 +20,11 @@ import { DashboardListingsFilter, type FilterState } from "@/components/dashboar
 import { toast } from "sonner"
 import { useTableRLSValidation } from "@/hooks/useRLSValidation"
 import { useCompanyEntitlements } from "@/hooks/use-company-entitlements"
+import { getCompanyIsProAction } from "@/lib/subscriptions/plan-actions"
+import { setContributorStatusAction } from "@/lib/subscriptions/credit-actions"
+import { leaveProjectAction } from "@/lib/subscriptions/leave-project-action"
+import { ConfirmDeleteModal } from "@/components/confirm-delete-modal"
+import { ListingCard } from "@/components/listing-card"
 import {
   ListingStatusModal,
   type ListingStatusModalProject,
@@ -107,6 +112,9 @@ type ListingProject = {
   photos: ListingProjectPhoto[]
   createdAt: string
   role: "owner" | "contributor"
+  /** Credited, but not on the company page: the free allowance is
+   *  already spent on another project. */
+  hiddenFromPage: boolean
   projectType: string
   projectYear: number | null
   hasMetadataError?: boolean
@@ -160,6 +168,8 @@ export default function DashboardListingsPage() {
   const [isSavingStatus, setIsSavingStatus] = useState(false)
   const [pendingDeleteProject, setPendingDeleteProject] = useState<ListingProject | null>(null)
   const [projects, setProjects] = useState<ListingProject[]>([])
+
+
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [metadataError, setMetadataError] = useState<string | null>(null)
@@ -194,6 +204,81 @@ export default function DashboardListingsPage() {
   const { canPublishProjects, loading: entitlementsLoading, error: entitlementsError } = useCompanyEntitlements()
   const [userId, setUserId] = useState<string | null>(null)
   const [companyId, setCompanyId] = useState<string | null>(null)
+
+  // Only to explain a limit, never to enforce one — the free allowance
+  // is applied where the credits are written, not here.
+  // Leaving a project, or deleting one. Kept together because the
+  // dialog is the same gesture either way; only the consequence differs.
+  const [deleting, setDeleting] = useState<{ project: ListingProject; mode: "owner" | "leave" } | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const confirmDelete = async () => {
+    if (!deleting) return
+    setIsDeleting(true)
+    try {
+      if (deleting.mode === "leave") {
+        if (!deleting.project.projectProfessionalId) throw new Error("not_found")
+        const result = await leaveProjectAction(deleting.project.projectProfessionalId)
+        if ("error" in result) throw new Error(result.error)
+        toast.success(t("delete_modal_done_leave"))
+      } else {
+        const { error } = await supabase.from("projects").delete().eq("id", deleting.project.id)
+        if (error) throw error
+        toast.success(t("delete_modal_done_owner"))
+      }
+      // Gone from the list either way: one because it no longer exists,
+      // the other because it is no longer yours to show.
+      setProjects((prev) => prev.filter((p) => p.id !== deleting.project.id))
+      setDeleting(null)
+    } catch {
+      toast.error(t("table_delete_failed"))
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const [isPro, setIsPro] = useState(false)
+  useEffect(() => {
+    if (!companyId) return
+    let cancelled = false
+    getCompanyIsProAction(companyId)
+      .then((r) => { if (!cancelled) setIsPro(r.isPro) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [companyId])
+
+  /**
+   * "Not on your page" has two causes, and only one of them is ours to
+   * sell against: the plan, or the reader's own choice. Free with the
+   * single place already taken by another credit is the first; anything
+   * else — Pro, or a free place still open — is the second, and locking
+   * that would be telling someone off for a decision they were allowed
+   * to make.
+   */
+  const blockedByPlan = useCallback(
+    (project: ListingProject) =>
+      !isPro
+      && project.role === "contributor"
+      && project.status === "listed"
+      && projects.some((p) => p.role === "contributor" && p.status === "live_on_page"),
+    [isPro, projects],
+  )
+  /**
+   * Credits held back by the plan, counted for the banner.
+   *
+   * The same rule the lock on the card draws, asked of the whole list
+   * rather than one project: on Free, one credit sits on the company
+   * page and the rest wait. Nothing to sell when nothing is waiting.
+   */
+  const heldBack = useMemo(
+    () => projects.filter((p) => blockedByPlan(p)).length,
+    [projects, blockedByPlan],
+  )
+  const creditedTotal = useMemo(
+    () => projects.filter((p) => p.role === "contributor" && (p.status === "listed" || p.status === "live_on_page")).length,
+    [projects],
+  )
+
   // Dismissal survives reloads per browser+company; the banner explains
   // a standing rule, so once read it may stay away.
   const [creditGrowthDismissed, setCreditGrowthDismissed] = useState(true)
@@ -346,7 +431,11 @@ export default function DashboardListingsPage() {
           )
         `)
         .eq("company_id", resolvedCompanyId!)
-        .neq("status", "rejected")
+        // Credits that ended. Leaving a project took it off the screen
+        // at once — that was local state — and the next load brought it
+        // back, labelled "Verwijderd", on the page of the very person
+        // who had just walked away from it.
+        .not("status", "in", "(rejected,removed)")
         .order("created_at", { ascending: false })
 
       // RACE CONDITION CHECK: After async operation
@@ -484,6 +573,7 @@ export default function DashboardListingsPage() {
           statusLabel = tStatus(`labels.${ppStatus === "rejected" ? "contributor_rejected" : ppStatus}`)
           statusChipClass = CONTRIBUTOR_STATUS_CHIP_CLASS[ppStatus] ?? "bg-surface text-text-secondary"
           statusDotClass = CONTRIBUTOR_STATUS_DOT_CLASS[ppStatus] ?? "bg-muted-foreground"
+
         } else {
           statusKey = projectStatus
           statusLabel = tStatus(`labels.${projectStatus}`)
@@ -553,6 +643,7 @@ export default function DashboardListingsPage() {
           title: project.title,
           creditedCount,
           acceptedCount,
+          hiddenFromPage: ppStatus === "listed",
           creditKeys,
           acceptedKeys,
           status: statusKey,
@@ -873,16 +964,36 @@ export default function DashboardListingsPage() {
     setIsSavingStatus(true)
 
     try {
-      const { error } = await supabase
-        .from("project_professionals")
-        .update({
-          status: selectedContributorStatus,
-          responded_at: new Date().toISOString()
-        })
-        .eq("id", selectedProject.projectProfessionalId)
+      // Through the server, not straight at the table: putting a credit
+      // on the page has to take the free allowance into account, and
+      // that means demoting whatever is there — two writes that must
+      // not half-happen, and a rule the browser should not be trusted
+      // to apply to itself.
+      const result = await setContributorStatusAction(
+        selectedProject.projectProfessionalId,
+        selectedContributorStatus as "live_on_page" | "listed" | "unlisted",
+      )
 
-      if (error) {
-        throw error
+      if ("error" in result) {
+        throw new Error(result.error)
+      }
+
+      // Whatever gave up its place follows the same path on screen.
+      if (result.demoted.length > 0) {
+        const demotedLabel = tStatus("labels.listed")
+        setProjects((prev) =>
+          prev.map((p) =>
+            p.projectProfessionalId && result.demoted.includes(p.projectProfessionalId)
+              ? {
+                  ...p,
+                  status: "listed" as ContributorStatus,
+                  statusLabel: demotedLabel,
+                  statusChipClass: CONTRIBUTOR_STATUS_CHIP_CLASS.listed,
+                  statusDotClass: CONTRIBUTOR_STATUS_DOT_CLASS.listed,
+                }
+              : p,
+          ),
+        )
       }
 
       // Update local state with new contributor status and derived display fields
@@ -1111,7 +1222,7 @@ export default function DashboardListingsPage() {
         { href: `/dashboard/company${companyId ? `?company_id=${companyId}` : ""}`, label: t("company") },
         { href: `/dashboard/team${companyId ? `?company_id=${companyId}` : ""}`, label: t("team") },
         { href: "/dashboard/inbox", label: t("inbox") },
-        { href: "/dashboard/pricing", label: t("subscription") },
+        { href: "/dashboard/subscription", label: t("subscription") },
       ]} />
 
       {/* Page title — matches /projects layout */}
@@ -1136,7 +1247,30 @@ export default function DashboardListingsPage() {
                 page, the empty-state that explains this never shows, so
                 say it here. Gated on entitlements having loaded, or it
                 flashes for every publisher too. */}
-            {!entitlementsLoading && !canPublishProjects && hasProjects && !creditGrowthDismissed && (
+            {/* Projects are being held back right now, and one button
+                fixes it. Placed above the standing explanation below and
+                suppressing it: two banners about the same page, one of
+                them actionable, is one banner too many. */}
+            {heldBack > 0 && (
+              <div className="arco-banner arco-banner--highlight" style={{ marginBottom: 22 }}>
+                <div style={{ minWidth: 0 }}>
+                  <p className="arco-banner-title">{t("plan_limit_title")}</p>
+                  <p className="arco-banner-body">
+                    {t("plan_limit_body", { count: creditedTotal })}
+                  </p>
+                </div>
+                <div className="arco-banner-actions">
+                  <Link
+                    href="/dashboard/subscription/checkout?interval=year&return=/dashboard/listings"
+                    className="btn-primary"
+                    style={{ whiteSpace: "nowrap", padding: "9px 18px", fontSize: 14, fontWeight: 500 }}
+                  >
+                    {t("plan_limit_cta")}
+                  </Link>
+                </div>
+              </div>
+            )}
+            {heldBack === 0 && !entitlementsLoading && !canPublishProjects && hasProjects && !creditGrowthDismissed && (
               <div className="arco-banner arco-banner--highlight" style={{ marginBottom: 22 }}>
                 <div style={{ minWidth: 0 }}>
                   <p className="arco-banner-title">{t("credit_growth_title")}</p>
@@ -1239,12 +1373,20 @@ export default function DashboardListingsPage() {
                     // something to say.
                     const credited = new Set(projects.flatMap(p => p.creditKeys)).size
                     const accepted = new Set(projects.flatMap(p => p.acceptedKeys)).size
-                    if (credited === 0) return null
+                    // A credit you accepted that is not on your company
+                    // page. Counted separately from the two above, which
+                    // are about professionals on projects you own — a
+                    // contributor has none of those, so until now the
+                    // line said only "2 projecten" and the one number
+                    // they might act on was missing.
+                    const offPage = projects.filter(p => p.role === "contributor" && p.status === "listed").length
+                    if (credited === 0 && offPage === 0) return null
                     const num = (n: number) => <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{n.toLocaleString()}</strong>
                     return (
                       <>
-                        {" · "}{num(credited)} {t("credited_label", { count: credited })}
-                        {accepted > 0 && <>{" · "}{num(accepted)} {t("accepted_label", { count: accepted })}</>}
+                        {credited > 0 && <>{" · "}{num(credited)} {t("credited_label", { count: credited })}</>}
+                        {credited > 0 && accepted > 0 && <>{" · "}{num(accepted)} {t("accepted_label", { count: accepted })}</>}
+                        {offPage > 0 && <>{" · "}{num(offPage)} {t("off_page_label")}</>}
                       </>
                     )
                   })()}
@@ -1268,243 +1410,67 @@ export default function DashboardListingsPage() {
                 {displayedProjects.map((project, index) => {
                   const cardKey = `${project.id}-${index}`
                   return (
-                    <div
+                    <ListingCard
                       key={cardKey}
-                      className="discover-card"
-                      style={{ position: "relative", cursor: "pointer" }}
-                      onClick={(e) => {
-                        if (!(e.target as Element).closest(".dropdown-menu")) {
-                          handleCardClick(project)
-                        }
-                      }}
-                    >
-                      {/* Image — 4:3 matching /projects */}
-                      <div
-                        className="discover-card-image-wrap"
-                        style={{ position: "relative" }}
-                        onMouseEnter={(e) => {
-                          const overlay = e.currentTarget.querySelector<HTMLElement>(".listing-card-hover-overlay")
-                          const pill = e.currentTarget.querySelector<HTMLElement>(".listing-card-hover-pill")
-                          if (overlay) overlay.style.background = "rgba(0,0,0,.35)"
-                          if (pill) pill.style.opacity = "1"
-                        }}
-                        onMouseLeave={(e) => {
-                          const overlay = e.currentTarget.querySelector<HTMLElement>(".listing-card-hover-overlay")
-                          const pill = e.currentTarget.querySelector<HTMLElement>(".listing-card-hover-pill")
-                          if (overlay) overlay.style.background = "transparent"
-                          if (pill) pill.style.opacity = "0"
-                        }}
-                      >
-                        <div className="discover-card-image-layer">
-                          <img src={project.coverImageUrl} alt={project.title} />
-                        </div>
-
-                        {/* Accept button for invited contributors — on image only */}
-                        {project.role === "contributor" && project.status === "invited" && (
-                          <button
-                            style={{
-                              position: "absolute", inset: 0, zIndex: 2,
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                              background: "transparent", border: "none", cursor: "pointer",
-                              transition: "background .2s",
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.background = "rgba(0,0,0,.35)"
-                              const pill = e.currentTarget.querySelector<HTMLElement>("[data-accept-pill]")
-                              if (pill) { pill.style.opacity = "1"; pill.style.background = "rgba(0,0,0,.6)"; pill.style.borderColor = "rgba(255,255,255,.4)" }
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.background = "transparent"
-                              const pill = e.currentTarget.querySelector<HTMLElement>("[data-accept-pill]")
-                              if (pill) { pill.style.opacity = "0.7"; pill.style.background = "rgba(0,0,0,.45)"; pill.style.borderColor = "rgba(255,255,255,.25)" }
-                            }}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleUpdateContributorStatus(project)
-                            }}
-                          >
-                            <span
-                              data-accept-pill=""
-                              style={{
-                                display: "inline-flex", alignItems: "center", gap: 7,
-                                fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 400,
-                                color: "#fff", background: "rgba(0,0,0,.45)",
-                                border: "1px solid rgba(255,255,255,.25)", borderRadius: 100,
-                                padding: "8px 18px",
-                                backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-                                opacity: 0.7, transition: "opacity .2s, background .2s, border-color .2s",
-                              }}
-                            >
-                              <Check size={14} />
-                              {t("accept")}
-                            </span>
-                          </button>
-                        )}
-
-                        {/* Hover action pill — Edit project (owner) / Update cover (contributor) */}
-                        {!(project.role === "contributor" && project.status === "invited") && (
-                          <div
-                            style={{
-                              position: "absolute", inset: 0, zIndex: 1,
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                              background: "transparent", transition: "background .2s",
-                              pointerEvents: "none",
-                            }}
-                            className="listing-card-hover-overlay"
-                          >
-                            <span
-                              style={{
-                                display: "inline-flex", alignItems: "center", gap: 7,
-                                fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 400,
-                                color: "#fff", background: "rgba(0,0,0,.6)",
-                                border: "1px solid rgba(255,255,255,.25)", borderRadius: 100,
-                                padding: "8px 18px",
-                                backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-                                opacity: 0, transition: "opacity .2s",
-                              }}
-                              className="listing-card-hover-pill"
-                            >
-                              {project.role === "owner" ? t("edit_project") : t("update_cover")}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Owner pill — bottom-left of image */}
-                        {project.role === "owner" && (
-                          <span
-                            style={{
-                              position: "absolute", bottom: 10, left: 10, zIndex: 2,
-                              display: "inline-flex", alignItems: "center",
-                              fontSize: 11, fontWeight: 500, color: "#fff",
-                              background: "rgba(0,0,0,.45)", borderRadius: 100,
-                              padding: "4px 10px", letterSpacing: ".02em",
-                              backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-                            }}
-                          >
-                            {t("owner")}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Status pill — overlaid on image, always clickable */}
-                      <div style={{ position: "absolute", top: 12, left: 12, zIndex: 2, display: "flex", gap: 6 }}>
-                        <button
-                          className="filter-pill flex items-center gap-1.5"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            if (project.role === "owner") {
-                              handleUpdateStatus(project)
-                            } else {
-                              handleUpdateContributorStatus(project)
-                            }
-                          }}
-                        >
-                          <span className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${project.statusDotClass}`} />
-                          <span className="text-xs font-medium">{project.statusLabel}</span>
-                        </button>
-                      </div>
-
-                      {/* Dropdown — top-right, aligned with filter-pill / filter-dropdown CSS */}
-                      <div
-                        className="dropdown-menu"
-                        style={{ position: "absolute", top: 12, right: 12, zIndex: 2 }}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <button
-                          className="filter-pill"
-                          onClick={() => setOpenDropdown(openDropdown === cardKey ? null : cardKey)}
-                          data-open={openDropdown === cardKey ? "true" : undefined}
-                          aria-label="Project options"
-                          style={{ padding: "6px 8px", gap: 0 }}
-                        >
-                          <MoreHorizontal style={{ width: 16, height: 16 }} />
-                        </button>
-                        <div
-                          className="filter-dropdown"
-                          data-open={openDropdown === cardKey ? "true" : undefined}
-                          data-align="right"
-                          style={{ minWidth: 180, top: "calc(100% + 6px)" }}
-                        >
-                          {project.role === "owner" ? (
-                            <>
-                              {([
-                                { label: t("edit_listing"), action: () => handleEditListing(project) },
-                                { label: t("update_status"), action: () => handleUpdateStatus(project) },
-                                { label: t("change_cover"), action: () => handleEditCoverImage(project) },
-                                ...(getProjectUrl(project) ? [{ label: t("view_project"), action: () => { setOpenDropdown(null); window.open(getProjectUrl(project)!, "_blank", "noopener,noreferrer") } }] : []),
-                              ] as const).map(({ label, action }) => (
-                                <div
-                                  key={label}
-                                  className="filter-dropdown-option"
-                                  onClick={action}
-                                  role="menuitem"
-                                >
-                                  <span className="filter-dropdown-label">{label}</span>
-                                </div>
-                              ))}
-                            </>
-                          ) : (
-                            <>
-                              {([
-                                { label: t("update_status"), action: () => handleUpdateContributorStatus(project) },
-                                { label: t("change_cover"), action: () => handleEditCoverImage(project) },
-                                ...(getProjectUrl(project) ? [{ label: t("view_project"), action: () => { setOpenDropdown(null); window.open(getProjectUrl(project)!, "_blank", "noopener,noreferrer") } }] : []),
-                              ] as const).map(({ label, action }) => (
-                                <div
-                                  key={label}
-                                  className="filter-dropdown-option"
-                                  onClick={action}
-                                  role="menuitem"
-                                >
-                                  <span className="filter-dropdown-label">{label}</span>
-                                </div>
-                              ))}
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Card text — same as /projects */}
-                      <h3 className="discover-card-title">{project.title}</h3>
-                      {project.status === "rejected" && project.rejectionReason ? (
-                        <p className="discover-card-sub" style={{ color: "#dc2626" }}>
-                          {translateRejectionReason(project.rejectionReason, tReason)}
-                        </p>
-                      ) : (
-                        <>
-                          {/* One line: type · city · either the credit
-                              count or, when there is none, the action
-                              that fixes it. */}
-                          <p className="discover-card-sub">
-                            {project.subtitle}
-                            {project.role === "owner" && project.creditedCount > 0 && (
-                              <>
-                                {project.subtitle ? " · " : ""}
-                                <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{project.creditedCount}</strong>
-                                {" "}{t("credited_label", { count: project.creditedCount })}
-                              </>
-                            )}
-                            {project.role === "owner" && project.creditedCount === 0 && (
-                              <>
-                                {project.subtitle ? " · " : ""}
-                                <Link
-                                  href={`/dashboard/edit/${project.id}?focus=professionals`}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="arco-text-link arco-text-link--primary arco-text-link--inline"
-                                >
-                                  {t("card_add_professional")}
-                                </Link>
-                              </>
-                            )}
+                      title={project.title}
+                      coverImageUrl={project.coverImageUrl}
+                      statusLabel={project.statusLabel}
+                      statusDotClass={project.statusDotClass}
+                      role={project.role}
+                      invited={project.role === "contributor" && project.status === "invited"}
+                      locked={blockedByPlan(project)}
+                      menuOpen={openDropdown === cardKey}
+                      onMenuOpenChange={(open) => setOpenDropdown(open ? cardKey : null)}
+                      onOpen={() => handleCardClick(project)}
+                      onStatusClick={() => (project.role === "owner" ? handleUpdateStatus(project) : handleUpdateContributorStatus(project))}
+                      onAccept={() => handleUpdateContributorStatus(project)}
+                      onUpgrade={() => router.push("/dashboard/subscription/checkout?interval=year&return=/dashboard/listings")}
+                      onEditListing={project.role === "owner" ? () => handleEditListing(project) : undefined}
+                      onUpdateStatus={() => (project.role === "owner" ? handleUpdateStatus(project) : handleUpdateContributorStatus(project))}
+                      onChangeCover={() => handleEditCoverImage(project)}
+                      viewUrl={getProjectUrl(project)}
+                      onDelete={() => setDeleting({ project, mode: project.role === "owner" ? "owner" : "leave" })}
+                      meta={
+                        project.status === "rejected" && project.rejectionReason ? (
+                          <p className="discover-card-sub" style={{ color: "#dc2626" }}>
+                            {translateRejectionReason(project.rejectionReason, tReason)}
                           </p>
-                          {project.invitedServiceCategory && project.role === "contributor" && (
-                            <p className="discover-card-sub" style={{ color: "var(--primary)" }}>
-                              {project.invitedServiceCategory}
+                        ) : (
+                          <>
+                            {/* One line: type · city · either the credit
+                                count or, when there is none, the action
+                                that fixes it. */}
+                            <p className="discover-card-sub">
+                              {project.subtitle}
+                              {project.role === "owner" && project.creditedCount > 0 && (
+                                <>
+                                  {project.subtitle ? " · " : ""}
+                                  <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{project.creditedCount}</strong>
+                                  {" "}{t("credited_label", { count: project.creditedCount })}
+                                </>
+                              )}
+                              {project.role === "owner" && project.creditedCount === 0 && (
+                                <>
+                                  {project.subtitle ? " · " : ""}
+                                  <Link
+                                    href={`/dashboard/edit/${project.id}?focus=professionals`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="arco-text-link arco-text-link--primary arco-text-link--inline"
+                                  >
+                                    {t("card_add_professional")}
+                                  </Link>
+                                </>
+                              )}
                             </p>
-                          )}
-                        </>
-                      )}
-                    </div>
+                            {project.invitedServiceCategory && project.role === "contributor" && (
+                              <p className="discover-card-sub" style={{ color: "var(--primary)" }}>
+                                {project.invitedServiceCategory}
+                              </p>
+                            )}
+                          </>
+                        )
+                      }
+                    />
                   )
                 })}
               </div>
@@ -1647,6 +1613,15 @@ export default function DashboardListingsPage() {
         </div>
       )}
 
+      <ConfirmDeleteModal
+        open={Boolean(deleting)}
+        onClose={() => !isDeleting && setDeleting(null)}
+        onConfirm={confirmDelete}
+        projectTitle={deleting?.project.title ?? ""}
+        mode={deleting?.mode ?? "leave"}
+        busy={isDeleting}
+      />
+
       <ListingStatusModal
         open={contributorStatusModalOpen}
         onClose={() => {
@@ -1666,6 +1641,18 @@ export default function DashboardListingsPage() {
         selectedStatus={selectedContributorStatus}
         onStatusChange={setSelectedContributorStatus}
         statusOptions={selectedProject?.role === "owner" ? ownerStatusOptions : contributorStatusOptions}
+        // The credit that holds the one free place today. Choosing a
+        // different project moves it, and nothing on the card in front
+        // of the reader says so.
+        note={
+          selectedProject?.role === "contributor"
+            && (() => {
+              const onPage = projects.find((p) => p.role === "contributor" && p.status === "live_on_page")
+              return onPage && onPage.id !== selectedProject.id
+                ? t("status_modal_swap_note", { title: onPage.title })
+                : undefined
+            })()
+        }
         saveDisabled={!selectedContributorStatus || selectedContributorStatus === "invited"}
         isPendingAdminReview={selectedProject?.rawProjectStatus === "in_progress"}
         isRejected={selectedProject?.rawProjectStatus === "rejected"}

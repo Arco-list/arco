@@ -25,12 +25,16 @@ export function AddressLookup({
   onResolved,
   onError,
   inputClassName,
+  country,
 }: {
   placeholder: string
   autoFocus?: boolean
   onResolved: (r: ResolvedAddress) => void
   onError?: () => void
   inputClassName?: string
+  /** ISO 3166-1 alpha-2, from a country field the form already has.
+   *  Omitted, the search stays worldwide as before. */
+  country?: string
 }) {
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<AddressPrediction[]>([])
@@ -53,7 +57,7 @@ export function AddressLookup({
     if (q.trim().length < 2) { setResults([]); return }
     timer.current = setTimeout(async () => {
       setSearching(true)
-      setResults(await searchAddressPredictions(q))
+      setResults(await searchAddressPredictions(q, country))
       setSearching(false)
     }, 300)
   }

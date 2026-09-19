@@ -8,7 +8,7 @@ import { FAQSection } from "@/components/landing"
 import { PricingContributorCta, PricingSection } from "@/components/pricing-section"
 import { useAuth } from "@/contexts/auth-context"
 
-export default function PricingPage() {
+export function PricingClient() {
   const t = useTranslations("dashboard")
   const { user, profile } = useAuth()
 
@@ -17,16 +17,16 @@ export default function PricingPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-white">
-      {/* Dashboard nav for logged-in professionals; public marketing nav
-          otherwise — the same page also serves the public /pricing route,
-          where an invited contributor evaluates the price before signup. */}
+      {/* Dashboard nav for a signed-in professional, public marketing nav
+          otherwise: one page serves the member comparing plans and the
+          invited contributor weighing the price before signing up. */}
       {user && hasProfessionalRole ? (
         <Header navLinks={[
           { href: "/dashboard/listings", label: t("listings") },
           { href: "/dashboard/company", label: t("company") },
           { href: "/dashboard/team", label: t("team") },
           { href: "/dashboard/inbox", label: t("inbox") },
-          { href: "/dashboard/pricing", label: t("subscription") },
+          { href: "/dashboard/subscription", label: t("subscription") },
         ]} />
       ) : (
         <Header />

@@ -1453,6 +1453,16 @@ footer .footer-heading {
    the text holds its colour. */
 .arco-text-link--primary { color: var(--primary-ink); }
 
+/* Inside running text, where the border of a row is not there to say
+   where the link begins. A grey word with no underline at the end of a
+   grey sentence is not a link, it is more sentence. At the edge of a
+   row, leave this off — the row already does the work. */
+.arco-text-link--inline {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
 .arco-text-link--primary:hover {
   color: var(--primary-ink);
   text-decoration-color: var(--primary-ink);
@@ -5078,6 +5088,41 @@ body.no-scroll {
   cursor: not-allowed;
 }
 
+/* A <select> keeps the platform's own control unless it is told
+   otherwise: on macOS that is a grey gradient and a chevron jammed
+   against the border, in the middle of a form that is ours everywhere
+   else. Stripping it is only half the job — the arrow that says
+   "this opens" has to come back, and it does as a real element in
+   <FormSelect>, never as an encoded background image that can fail
+   without saying so. */
+.form-select-wrap {
+  position: relative;
+  /* The field's own bottom margin moves up here, so the wrapper is
+     exactly as tall as the control and the chevron can centre on it. */
+  margin-bottom: 16px;
+}
+
+.form-select-wrap .form-input { margin-bottom: 0; }
+
+.form-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 42px;
+  background-color: #fff;
+  cursor: pointer;
+}
+
+.form-select-chevron {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  color: var(--arco-mid);
+  /* The arrow is part of the control, not something you click past. */
+  pointer-events: none;
+}
+
+
 .form-input--error,
 .form-input--error:focus {
   border-color: var(--destructive);
@@ -5094,13 +5139,13 @@ body.no-scroll {
   margin: 4px 0 16px;
 }
 
-/* One error, said twice: the label goes red so the eye finds the field
-   in a long form, the note goes red so the reason is next to it. Always
-   at the field — never collected at the bottom of the form, where the
-   reader has to work out which one you mean. */
-.form-label--error {
-  color: var(--destructive);
-}
+/* The label stays black. A red border already says which field, and a
+   red label says it a second time while reading as though the wording
+   above the field were the thing at fault. It also doubled the red on
+   a form that can fail in four places at once, which made the page
+   look broken rather than helpful. The reason, in words, is enough —
+   and being words rather than colour, it survives being unable to see
+   red at all. */
 
 .form-note--error {
   color: var(--destructive);
@@ -5624,12 +5669,11 @@ body.no-scroll {
   position: relative;
 }
 
-/* Inside the product the badge stops recommending and starts
-   locating: this is where you are. Quiet, because the accent belongs
-   to the card you can still act on. */
-.pricing-card-badge-quiet {
-  background: var(--arco-surface);
-  color: var(--text-secondary);
+/* The intro above the Pro card's list: what it stacks on top of. */
+.pricing-feature-intro {
+  font-size: 13px;
+  color: var(--arco-mid);
+  margin: 0 0 10px;
 }
 
 .pricing-card {
@@ -5937,6 +5981,20 @@ body.no-scroll {
   color: var(--arco-mid);
 }
 
+/* ── /admin/design rhythm ─────────────────────────────────────────
+   One gap, set by the section rather than by each block inside it.
+   The old way — a bottom margin on every block except the last —
+   produced the same bug three times in a row: append something, and
+   the block that used to be last suddenly needs a margin it never had.
+   A container that owns the spacing cannot forget. */
+.design-section {
+  margin-bottom: 80px;
+}
+
+.design-section > div + div {
+  margin-top: 48px;
+}
+
 /* ── Usage bars ───────────────────────────────────────────────────
    Everything on the track is placed off --u-fill, so the open stretch
    past the fill is a single number to tune. A bar with a real
@@ -5947,7 +6005,11 @@ body.no-scroll {
    and the open stretch just marks that the road continues.
    Documented on /design → Usage bars. */
 .usage-bar { --u-fill: 0%; }
-.usage-bar--open { --u-fill: 62%; }
+/* --u-open is how far an unbounded fill runs; --u-fill is what this
+   bar actually uses. They differ when two bars sit together and have to
+   share one scale — the component then sets --u-fill to a fraction of
+   --u-open inline, and the media query below still moves both. */
+.usage-bar--open { --u-open: 62%; --u-fill: var(--u-open); }
 /* The one free credit, drawn as an empty slot exactly one project wide:
    the same stretch a bar holding six would give its first one, so the
    two states line up and the room past the slot reads as what Pro
@@ -5956,7 +6018,7 @@ body.no-scroll {
 .usage-bar--slot { --u-fill: calc(62% / 6); }
 
 @media (max-width: 640px) {
-  .usage-bar--open { --u-fill: 84%; }
+  .usage-bar--open { --u-open: 84%; }
   .usage-bar--slot { --u-fill: calc(84% / 6); }
 }
 
@@ -6330,12 +6392,15 @@ body.no-scroll {
 /* â”€â”€â”€ Page title section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .discover-page-title {
-  padding: 36px 0 10px;
+  /* The gap under a page title used to be tighter than the one between
+     any two things below it, which made the title read as a label on
+     whatever happened to follow rather than as the name of the page. */
+  padding: 36px 0 20px;
 }
 
 @media (max-width: 768px) {
   .discover-page-title {
-    padding: 28px 0 8px;
+    padding: 28px 0 14px;
   }
 }
 
@@ -6520,6 +6585,28 @@ body.no-scroll {
   background: #f0f7f6;
 }
 
+/* Filled variants — for a pill that carries a state rather than labels
+   a row: a scheduled end, a failed collection. The tint does the work a
+   dot does elsewhere, so they take no dot, and they sit a size up
+   (12px) because they are read as part of a sentence rather than
+   scanned down a column. */
+.status-pill--tinted {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-color: transparent;
+  font-weight: 400;
+}
+
+.status-pill--ending {
+  background: rgba(220, 38, 38, 0.08);
+  color: #b91c1c;
+}
+
+.status-pill--info {
+  background: rgba(1, 109, 117, 0.08);
+  color: var(--primary);
+}
+
 .status-pill-dot {
   /* Same 7px as .arco-table-status-dot — one dot size across admin. */
   width: 7px;
@@ -6701,6 +6788,19 @@ body.no-scroll {
 .filter-dropdown-option[data-checked="true"] .filter-dropdown-label {
   color: var(--arco-black);
   font-weight: 500;
+}
+
+/* The one item in a menu that cannot be undone: a rule above it, and
+   the destructive colour. The colour has to sit on the label — the
+   label declares its own, so a colour set on the row was inherited by
+   nothing and the item rendered as grey as the rest. */
+.filter-dropdown-option--destructive {
+  border-top: 1px solid var(--arco-light-grey);
+  margin-top: 4px;
+  padding-top: 10px;
+}
+.filter-dropdown-option--destructive .filter-dropdown-label {
+  color: var(--destructive);
 }
 
 .filter-dropdown-icon {
@@ -8657,4 +8757,547 @@ body.no-scroll {
   .team-role-col { width: auto; }
   .team-row-controls .dropdown-menu,
   .team-row-controls .team-menu-spacer { margin-left: auto; }
+}
+
+/* ── Checkout ─────────────────────────────────────────────────────
+   The page behind "Upgrade naar Pro", built on Elements rather than
+   Stripe's own form. Full-screen like the /claim funnel: its own bar,
+   no site nav, nothing to wander off to. Two columns — what you hand
+   over on the left, what you get on the right — and the billing cycle
+   lives in the summary, because it is part of what you are buying
+   rather than a setting on how you pay for it.
+   ──────────────────────────────────────────────────────────────── */
+
+.checkout-page {
+  /* White, not the site's off-white ground: a payment screen is a
+     sheet you fill in, and the cards on it need a ground to sit on. */
+  background: #fff;
+  min-height: 100vh;
+}
+
+.checkout-bar { border-bottom: 1px solid var(--arco-rule); }
+
+.checkout-bar-inner,
+.checkout-wrap {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+
+.checkout-bar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 32px;
+}
+
+.checkout-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+/* Said once, quietly, where it answers the question it raises: whose
+   form am I typing my IBAN into. */
+.checkout-secure {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--arco-mid-grey);
+}
+
+.checkout-secure svg { flex-shrink: 0; margin-top: 3px; }
+
+.checkout-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-right: -6px;
+  border: none;
+  background: none;
+  color: var(--arco-mid);
+  cursor: pointer;
+  transition: color .15s;
+}
+
+.checkout-close:hover { color: var(--arco-black); }
+
+.checkout-grid {
+  display: grid;
+  /* The summary is the wider half on purpose: it carries the decision
+     (cycle, price, what you get) and the form only carries data entry. */
+  grid-template-columns: minmax(0, 1fr) 440px;
+  gap: 56px;
+  align-items: start;
+}
+
+/* Nothing to fill in means nothing to fill a second column with, so
+   the page narrows to the one card that still has something to say. */
+.checkout-grid--single {
+  grid-template-columns: minmax(0, 460px);
+}
+
+/* One column, and the summary falls to the bottom, where the button
+   is. The cycle sits in it, which once argued for putting it first —
+   but the cycle is already chosen on the plan cards and arrives in the
+   URL, so here it is a correction, not the decision. What belongs at
+   the end of a form is what you press. */
+@media (max-width: 980px) {
+  .checkout-grid { display: flex; flex-direction: column; gap: 32px; }
+  .checkout-summary { position: static; }
+}
+
+@media (max-width: 768px) {
+  .checkout-bar-inner,
+  .checkout-wrap { padding-left: 20px; padding-right: 20px; }
+}
+
+.checkout-legend {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--arco-black);
+  margin: 0 0 12px;
+}
+
+.checkout-section + .checkout-section { margin-top: 36px; }
+
+/* The payment methods are status cards — same box, same selected
+   state — with a mark where the dot goes. A method is recognised by
+   its symbol long before its name, and a coloured dot says nothing
+   about how the money moves.
+
+   Three abreast rather than stacked: they are alternatives, and a
+   column reads as a sequence of steps. It costs the descriptions their
+   length, so what survives the trim has to earn it — under iDEAL that
+   is the mandate, which is a disclosure rather than a selling point:
+   the method looks like a one-off payment and is not. */
+.checkout-methods {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0 0 20px;
+}
+
+/* In a third of the column an icon on the left eats the width the name
+   needs, so the mark moves above it. */
+.checkout-methods .status-modal-option {
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Narrow: the three still fit abreast at ~100px each, so they stay
+   visible rather than scrolling sideways with one of them cut off the
+   edge. What does not fit is the descriptions, and a name plus a mark
+   is enough to recognise a payment method by. */
+@media (max-width: 560px) {
+  .checkout-methods { gap: 6px; }
+  .checkout-methods .status-modal-option { padding: 12px 10px; }
+  .checkout-methods .status-modal-option-desc { display: none; }
+  .checkout-methods .status-modal-option-label { line-height: 1.25; }
+}
+
+/* The mandate we already hold, set apart from the three that ask for a
+   new one: full width, above them, and outlined in the accent so it
+   reads as the way through rather than as a fourth equal option. The
+   border stays accent whether or not it is selected — it is marking a
+   recommendation, not a state. */
+.checkout-method-saved {
+  margin-bottom: 8px;
+  border-color: var(--primary);
+}
+
+.checkout-method-saved.selected {
+  border-color: var(--primary);
+  background: var(--arco-wash);
+}
+
+.checkout-method-saved .checkout-method-icon { color: var(--primary); }
+
+.checkout-method-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--arco-black);
+}
+
+.checkout-summary {
+  position: sticky;
+  top: 24px;
+  background: #fff;
+  border: 1px solid var(--arco-rule);
+  /* The popup's radius, not the form's: this is a panel you read,
+     not a control you operate. */
+  border-radius: 12px;
+  padding: 28px;
+}
+
+.checkout-promo-form {
+  display: flex;
+  gap: 8px;
+  padding: 6px 0 2px;
+}
+
+/* Sized to the Wijzigen button in the payment row, which is the
+   platform's measure for a control that sits beside a value rather
+   than carrying a form: 13px on 8px of padding. Full-size inputs
+   belong in the form column, not in a summary card where everything
+   around them is 12 and 14. */
+.checkout-promo-form .form-input {
+  margin-bottom: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  text-transform: uppercase;
+}
+
+.checkout-promo-remove {
+  margin-left: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--arco-mid-grey);
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.checkout-promo-remove:hover { color: var(--arco-black); }
+
+/* A discount is the one row on the bill that is good news. */
+.checkout-price-row--discount { color: var(--primary); }
+
+.checkout-price-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 5px 0;
+  font-size: 14px;
+  color: var(--arco-mid);
+  font-variant-numeric: tabular-nums;
+}
+
+.checkout-price-row--total {
+  margin-top: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--arco-rule);
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--arco-black);
+}
+
+.checkout-legal {
+  margin: 14px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--arco-mid-grey);
+}
+
+.checkout-legal a { color: var(--arco-mid); text-decoration: underline; }
+
+/* ── The Stripe-rendered view ─────────────────────────────────────
+   A field whose insides belong to Stripe. We draw the box — border,
+   radius, padding, ground — and the appearance API dresses the text
+   within it, so the two can be brought very close. What we cannot
+   reach is the rest of what Stripe puts in there: brand marks, the
+   country flag on an IBAN, the caret, autofill.
+   ──────────────────────────────────────────────────────────────── */
+.checkout-stripe-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  /* Deliberately the same box as .form-input: in the real page this
+     div IS the field, with Stripe's iframe laid inside it. */
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border: 1px solid var(--arco-rule);
+  border-radius: 3px;
+  background: #fff;
+  font-size: 15px;
+}
+
+/* What Stripe's placeholder looks like once the appearance API has
+   been given our font and colour. */
+.checkout-stripe-value {
+  flex: 1;
+  min-width: 0;
+  color: var(--arco-mid-grey);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Stripe's own trim inside the field: brand marks, a flag, a chevron.
+   Rendered as plain chips here — the point is that something of theirs
+   sits there, not what its logo looks like. */
+.checkout-stripe-trim {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  color: var(--arco-mid-grey);
+}
+
+.checkout-stripe-chip {
+  padding: 2px 5px;
+  border: 1px solid var(--arco-rule);
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--arco-mid-grey);
+}
+
+/* The overlay that says "this bit is not ours". Off by default: with
+   it on the page stops looking like the thing it is showing. */
+.checkout-stripe-field--marked {
+  position: relative;
+  outline: 1px dashed var(--primary);
+  outline-offset: 3px;
+}
+
+.checkout-stripe-field--marked::after {
+  content: "Stripe";
+  position: absolute;
+  top: -9px;
+  right: 6px;
+  padding: 0 5px;
+  background: #fff;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+/* The admin strip doubles as the switch between the two views. */
+.checkout-strip {
+  background: var(--arco-black);
+  color: var(--background);
+  font-size: 12px;
+}
+
+.checkout-strip-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+.checkout-strip-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.checkout-strip-controls button {
+  padding: 3px 10px;
+  border: none;
+  border-radius: 3px;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: #a1a1a0;
+  cursor: pointer;
+}
+
+.checkout-strip-controls button.active {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--background);
+}
+
+.checkout-strip-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 10px;
+  color: #a1a1a0;
+  cursor: pointer;
+}
+
+.checkout-strip-controls input { width: 13px; height: 13px; accent-color: var(--primary); }
+
+/* The box a Stripe element is mounted into. Deliberately the same
+   shape as .form-input — border, radius, padding, ground — because in
+   the real page this div IS the field, with Stripe's iframe laid
+   inside it. The type within is dressed through the element's own
+   style object, which is as close as the two worlds get. */
+.checkout-element {
+  width: 100%;
+  /* Exactly as tall as .form-input, whether or not Stripe's iframe has
+     arrived: the content is centred rather than padded from the top, so
+     an empty box and a mounted one measure the same and the form does
+     not jolt a third of a second after it appears.
+
+     The height is spelled out rather than guessed at — .form-input is
+     15px text at the body's 1.5 line-height (22.5px), plus 12px of
+     padding top and bottom and a 1px border either side. Writing it as
+     a sum keeps it true if any of those change. */
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: calc(1.5em + 26px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 16px;
+  margin-bottom: 16px;
+  border: 1px solid var(--arco-rule);
+  border-radius: 3px;
+  background: #fff;
+  transition: border-color 0.15s;
+}
+
+.checkout-element.StripeElement--focus { border-color: var(--arco-black); }
+
+/* Two ways a box goes red: Stripe marks what is wrong, we mark what is
+   missing. An untouched field is not invalid by Stripe's reckoning, so
+   without the second one an empty card number kept a grey border while
+   the sentence under it turned red. */
+.checkout-element.StripeElement--invalid,
+.checkout-element--error { border-color: var(--destructive); }
+
+/* An address we already hold: boxed like the field it replaces, but
+   plainly a value rather than an invitation to type. */
+.checkout-address {
+  /* The same 16px every .form-input carries beneath it. Without this
+     the row sat outside the form's rhythm and whatever followed it
+     stuck to its edge. */
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--arco-rule);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.checkout-address-line {
+  display: block;
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--arco-black);
+}
+
+.checkout-address-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-disabled);
+}
+
+/* A checkbox that reads as a sentence rather than a field. */
+.checkout-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--arco-black);
+  cursor: pointer;
+}
+
+.checkout-check input {
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  accent-color: var(--primary);
+  flex-shrink: 0;
+}
+
+/* The mandate, in the words the bank requires. Quiet, but present —
+   an authorisation nobody was shown is not an authorisation. */
+.checkout-mandate {
+  /* Always followed by the name and email that belong to the mandate
+     it describes — near enough to read as one block, far enough not to
+     look like a caption on the field below. */
+  margin: 0 0 26px;
+  padding: 12px 14px;
+  background: var(--arco-surface);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--arco-mid);
+}
+
+
+
+/* ── Locked credit card ───────────────────────────────────────────
+   A credit the plan is withholding. Everything lives in CSS rather
+   than inline style, because inline wins every specificity fight and
+   the badge has to change shape on hover.
+
+   The dark ground is always on: the state is true whether or not a
+   mouse is near, and a card that only admits it on hover leaves the
+   reader to find out by accident. Hover adds the words and the zoom,
+   not the darkness.
+   ──────────────────────────────────────────────────────────────── */
+
+.listing-card-locked-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* A white veil, not a dark one: this card is switched off, not
+     spotlit. Greying reads as "unavailable" where darkening reads as
+     "selected", which is the opposite of what is true here. */
+  background: rgba(250, 250, 249, .62);
+  backdrop-filter: saturate(.45);
+  -webkit-backdrop-filter: saturate(.45);
+  pointer-events: none;
+}
+
+.listing-card-lock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  /* A fixed round box rather than padding around a 13px icon: the
+     label needs a full line box or its descenders fall outside the
+     span that clips it for the width animation, and p and g lose
+     their tails. Sizing the circle instead of the line keeps both. */
+  justify-content: center;
+  min-width: 38px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, .25);
+  border-radius: 100px;
+  background: rgba(0, 0, 0, .6);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: gap .2s ease, padding .2s ease;
+}
+
+.listing-card-lock-badge .listing-card-lock-label {
+  display: inline-block;
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width .25s ease, opacity .2s ease;
+}
+
+.discover-card-image-wrap:hover .listing-card-lock-badge {
+  gap: 7px;
+  padding: 0 18px;
+}
+
+.discover-card-image-wrap:hover .listing-card-lock-badge .listing-card-lock-label {
+  max-width: 220px;
+  opacity: 1;
 }

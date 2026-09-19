@@ -209,8 +209,17 @@ export default async function CompanySettingsPage({
   // by the photographer flow (details bar), fixes the page format, and
   // is locked once set — see the isPhotographer badge lock below.
   const cats = (allCategories ?? []).filter((c) => c.slug !== "photographer")
+  // Whether a service lets its company publish projects travels with the
+  // service. The page used to compute "can this company publish" once,
+  // here, and hand down the answer — which then froze while the reader
+  // went on editing their services.
   const serviceOptions = cats
-    .map((item) => ({ id: item.id, name: item.name, slug: item.slug }))
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      slug: item.slug,
+      canPublishProjects: item.can_publish_projects === true,
+    }))
     .sort((a, b) => a.name.localeCompare(b.name))
 
   // Group child categories under their parent (only parents that have children = service categories)
@@ -235,8 +244,23 @@ export default async function CompanySettingsPage({
   ].filter(Boolean) as string[]
   const canPublishProjects = companyServiceIds.some((id) => publishableCategoryIds.has(id))
 
+  // A company can hold more than one link to the same project — the
+  // owner's own link, plus a credit someone added for them as a
+  // professional. One project, one card, and the owner link wins:
+  // without this the page rendered whichever row the database happened
+  // to return first, so the same project showed as "Eigenaar" on
+  // Listings (which has always deduplicated) and as a plain credit
+  // here. Two cards sharing a React key was the other half of it.
+  const linkByProject = new Map<string, any>()
+  for (const link of (projectLinks ?? []) as any[]) {
+    const existing = linkByProject.get(link.project_id)
+    if (!existing || (link.is_project_owner && !existing.is_project_owner)) {
+      linkByProject.set(link.project_id, link)
+    }
+  }
+
   // Transform project data
-  const projects = (projectLinks ?? [])
+  const projects = Array.from(linkByProject.values())
     .map((link: any) => {
       const p = link.projects
       if (!p) return null

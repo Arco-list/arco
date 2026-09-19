@@ -3,8 +3,10 @@ import { UsageBar } from "@/components/usage-bar"
 import { FAQPreview } from "./faq-preview"
 import { AdminTabs } from "@/components/admin/admin-tabs"
 import { DiscoverCardPreview } from "./discover-card-preview"
+import { ListingCardPreview } from "./listing-card-preview"
 import { ProfessionalCardPreview } from "./professional-card-preview"
 import { ServicePickerPreview } from "./service-picker-preview"
+import { FormSelect } from "@/components/form-select"
 import { CompanyLookupPreview } from "./company-lookup-preview"
 import { ServiceMarksPreview } from "./service-marks-preview"
 import { UiIconsPreview } from "./ui-icons-preview"
@@ -203,7 +205,7 @@ export default function DesignPage() {
             <p className="arco-eyebrow" style={{ color: "var(--primary, #016D75)" }}>Foundations</p>
           </div>
           {/* COLORS */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="color-palette" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Color Palette</h2>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 20 }}>
               {colors.map((c) => (
@@ -218,7 +220,7 @@ export default function DesignPage() {
           </div>
 
           {/* TYPOGRAPHY */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="typography" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Typography</h2>
             <div>
               {typography.map((t, i) => (
@@ -243,10 +245,10 @@ export default function DesignPage() {
             <p className="arco-eyebrow" style={{ color: "var(--primary, #016D75)" }}>Controls</p>
           </div>
           {/* BUTTONS & LINKS */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="buttons-links" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Buttons &amp; Links</h2>
 
-            <div style={{ marginBottom: 48 }}>
+            <div>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Buttons</h4>
               <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center", marginBottom: 24 }}>
@@ -270,7 +272,7 @@ export default function DesignPage() {
               </div>
             </div>
 
-            <div style={{ marginBottom: 48 }}>
+            <div>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Links</h4>
               <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 30 }}>
@@ -438,9 +440,9 @@ export default function DesignPage() {
           </div>
 
           {/* FORM ELEMENTS */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="form-elements" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Form Elements</h2>
-            <div style={{ marginBottom: 48 }}>
+            <div>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Inputs</h4>
               <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: "clamp(10px, 3vw, 40px)" }}>
                 <div style={{ maxWidth: 500 }}>
@@ -463,7 +465,7 @@ export default function DesignPage() {
                   {/* Everything before the @ is a field; the domain is
                       fact, so it sits outside the box. Shown in its error
                       state, which is where both halves have to hold. */}
-                  <label className="form-label form-label--error" htmlFor="d-email">E-mail</label>
+                  <label className="form-label" htmlFor="d-email">E-mail</label>
                   <div className="form-email" style={{ marginBottom: 0 }}>
                     <input id="d-email" type="text" className="form-input form-input--error" defaultValue="niek" />
                     <span className="form-email-domain">@arcolist.com</span>
@@ -477,12 +479,12 @@ export default function DesignPage() {
                   <textarea id="d-textarea" className="form-input" rows={3} placeholder="Vertel over je bedrijf..." style={{ resize: "vertical" }} />
 
                   <label className="form-label" htmlFor="d-select">Select</label>
-                  <select id="d-select" className="form-input" style={{ cursor: "pointer", marginBottom: 0 }}>
+                  <FormSelect id="d-select" wrapStyle={{ marginBottom: 0 }}>
                     <option>Kies een type...</option>
                     <option>Villa</option>
                     <option>Herenhuis</option>
                     <option>Appartement</option>
-                  </select>
+                  </FormSelect>
                 </div>
               </div>
               <div style={{ marginTop: 16, background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
@@ -497,14 +499,16 @@ export default function DesignPage() {
                   text as well, because nothing there is going to change.<br />
                   <code>.form-note</code> is the line under a field: what happens if this value stands, or what went wrong. It sits 4px under the field, so
                   give that field <code>marginBottom: 0</code>.<br />
-                  <strong>Errors live at the field, always.</strong> The label takes <code>.form-label--error</code> so the eye finds which field in a long
-                  form, the field takes <code>.form-input--error</code>, and the reason follows in <code>.form-note--error</code> — same size as the label,
-                  unbolded. Never collect them at the bottom of the form: by then the reader has to work out which field you mean.
+                  <strong>Errors live at the field, always.</strong> The field takes <code>.form-input--error</code> and the reason follows in{" "}
+                  <code>.form-note--error</code> — same size as the label, unbolded. <strong>The label stays black:</strong> a red border already says which
+                  field, and colouring the label says it again while reading as though the wording above the field were at fault. On a form that can fail in
+                  four places at once it simply doubles the red. Never collect errors at the bottom of the form: by then the reader has to work out which
+                  field you mean. And one reason per problem, not per input — an empty card is one message, not three.
                 </p>
               </div>
             </div>
 
-            <div style={{ marginBottom: 48 }}>
+            <div>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Company lookup</h4>
               <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: "clamp(10px, 3vw, 40px)", marginBottom: 16 }}>
                 <CompanyLookupPreview />
@@ -543,76 +547,25 @@ export default function DesignPage() {
           </div>
 
           {/* PILLS & TAGS */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="pills-tags" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Pills &amp; Tags</h2>
 
-            <div style={{ marginBottom: 48 }}>
-              <h4 className="arco-label" style={{ marginBottom: 20 }}>Status Pills</h4>
-              <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-                  <span className="status-pill"><span className="status-pill-dot status-pill-dot--owner" />Owner</span>
-                  <span className="status-pill"><span className="status-pill-dot status-pill-dot--featured" />Featured</span>
-                  <span className="status-pill"><span className="status-pill-dot status-pill-dot--listed" />Listed</span>
-                  <span className="status-pill"><span className="status-pill-dot status-pill-dot--invited" />Invited</span>
-                  <span className="status-pill"><span className="status-pill-dot status-pill-dot--unlisted" />Unlisted</span>
-                  <span className="status-pill"><span className="status-pill-dot status-pill-dot--pending" />Pending</span>
-                  <span className="status-pill"><span className="status-pill-dot status-pill-dot--draft" />Draft</span>
-                  <span className="status-pill"><span className="status-pill-dot status-pill-dot--removed" />Removed</span>
-                  <span className="status-pill"><span className="status-pill-dot status-pill-dot--rejected" />Rejected</span>
-                </div>
-              </div>
-              <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
-                <p className="arco-small-text">Uses <strong>Micro</strong> typography. 7px dot, rule border, 24px radius. Dot color varies by variant.</p>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 48 }}>
-              <h4 className="arco-label" style={{ marginBottom: 20 }}>Inline Pills</h4>
-              <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
-                {/* Three groups: the standard status-pill variants (with /
-                    without a dot, default grey outline), and the four
-                    semantic colour variants (blue / green / orange / red).
-                    Mirrors how inline pills render in /admin/companies,
-                    /admin/sales, etc. */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-                  {/* Status pills — pair the label with one or more pills. */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    <span className="arco-eyebrow" style={{ color: "#a1a1a0" }}>Status pills</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span className="arco-table-primary">Cloud Nine</span>
-                      <span className="status-pill"><span className="status-pill-dot status-pill-dot--featured" />Featured</span>
-                      <span className="status-pill">Owner</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span className="arco-table-primary">Welcome</span>
-                      <span className="status-pill"><span className="status-pill-dot status-pill-dot--draft" />Draft</span>
-                      <span className="status-pill">Day 0</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span className="arco-table-primary">Wolterinck</span>
-                      <span className="status-pill"><span className="status-pill-dot status-pill-dot--listed" />Listed</span>
-                      <span className="status-pill"><span className="status-pill-dot status-pill-dot--invited" />Invited</span>
-                      <span className="status-pill"><span className="status-pill-dot status-pill-dot--unlisted" />Unlisted</span>
-                    </div>
-                  </div>
-
-                  {/* Coloured pills — tags, not status. */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    <span className="arco-eyebrow" style={{ color: "#a1a1a0" }}>Coloured pills</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <span className="status-pill status-pill--blue">Day 0</span>
-                      <span className="status-pill status-pill--blue">Day 1</span>
-                      <span className="status-pill status-pill--blue">Day 7</span>
-                      <span className="status-pill status-pill--green">Sent</span>
-                      <span className="status-pill status-pill--orange">Beta</span>
-                      <span className="status-pill status-pill--red">New</span>
-                    </div>
-                  </div>
+            <div>
+              <h4 className="arco-label" style={{ marginBottom: 20 }}>Tinted pills</h4>
+              <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: "clamp(10px, 3vw, 40px)", marginBottom: 16 }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+                  <span className="status-pill status-pill--tinted status-pill--ending">Loopt af op 17 november 2026</span>
+                  <span className="status-pill status-pill--tinted status-pill--ending">Betaling mislukt</span>
+                  <span className="status-pill status-pill--tinted status-pill--info">Founding</span>
                 </div>
               </div>
               <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
                 <p className="arco-small-text">
-                  All variants share the <code>.status-pill</code> base — 10px / 2-8 padding / 12px radius, transparent background. <strong>Status pills</strong> use a <code>.status-pill-dot</code> + a <code>--state</code> modifier inside (Featured, Listed, Invited, Draft, Unlisted, Owner) — these represent a state. <strong>Coloured pills</strong> use a <code>.status-pill--colour</code> modifier (<code>blue</code> / <code>green</code> / <code>orange</code> / <code>red</code>) for a coloured border + matching text — use these for tags / markers (Day 1, Day 7, Sent count, etc.), not for status. Sit immediately after the label they annotate (8px gap, no tab).
+                  For a pill that carries a state rather than labels a row — a scheduled end, a failed collection, founding access. Used on the subscription
+                  page, in the banner and in the cancellation section.<br />
+                  <code>.status-pill--tinted</code> sets the shape: 12px rather than the table pills&rsquo; 10px, no border, a little more padding. It is read
+                  as part of a sentence beside a plan name, not scanned down a column. <code>--ending</code> and <code>--info</code> supply the colour, and
+                  they take <strong>no dot</strong>: the tint already does what a dot does elsewhere, and two signals for one state is one too many.
                 </p>
               </div>
             </div>
@@ -636,10 +589,10 @@ export default function DesignPage() {
           </div>
 
           {/* FILTERS */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="filters" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Filters</h2>
 
-            <div style={{ marginBottom: 48 }}>
+            <div>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Filter Pills</h4>
               <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 24 }}>
@@ -690,10 +643,10 @@ export default function DesignPage() {
             <p className="arco-eyebrow" style={{ color: "var(--primary, #016D75)" }}>Components</p>
           </div>
           {/* DISCOVER CARDS */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="discover-cards" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Discover Cards</h2>
 
-            <div style={{ marginBottom: 48 }}>
+            <div>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Project card</h4>
               <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: "clamp(10px, 3vw, 40px)", marginBottom: 16 }}>
                 <DiscoverCardPreview />
@@ -702,6 +655,19 @@ export default function DesignPage() {
                 <p className="arco-small-text">
                   Live render of <code>.discover-card</code> — hover any card to see the photo nav arrows + dots and the save / share buttons. Both arrows and the heart toggle are fully wired in the preview so the scroll UX is verifiable, not just visual.<br />
                   Spacing uses <code>--grid-gap</code> (20px desktop · 16px iPad · 12px mobile), matching <code>/projects</code> exactly. Title <strong>Standard</strong>, subtitle <strong>XS</strong>. Image 4:3, 3px radius. Save fills red on toggle.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 40 }}>
+              <h4 id="listing-card" className="arco-label" style={{ marginBottom: 20, scrollMarginTop: 140 }}>Listing card</h4>
+              <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: "clamp(10px, 3vw, 40px)", marginBottom: 16 }}>
+                <ListingCardPreview />
+              </div>
+              <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
+                <p className="arco-small-text">
+                  Live render of <code>&lt;ListingCard&gt;</code> — the same component <code>/dashboard/listings</code> and the company edit page render, with inert callbacks. Hover for the action pill, open the ⋯ menu, click the lock.<br />
+                  The discover card above is what the public sees; this is what its company sees. Same frame and 4:3 image, plus the things only an owner or a credited professional may do: the status pill, the menu, the owner badge, and the lock when the free allowance is spent.
                 </p>
               </div>
             </div>
@@ -724,7 +690,7 @@ export default function DesignPage() {
           </div>
 
           {/* SECTION HEADERS */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="section-headers" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Section Headers</h2>
             <div>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Header with View All</h4>
@@ -741,10 +707,10 @@ export default function DesignPage() {
           </div>
 
           {/* LAYOUT COMPONENTS */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="layout-components" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Layout Components</h2>
 
-            <div style={{ marginBottom: 48 }}>
+            <div>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>How It Works Grid</h4>
               <div style={{ background: "var(--surface)", padding: 40, borderRadius: 6, marginBottom: 16 }}>
                 <div className="how-grid">
@@ -774,7 +740,7 @@ export default function DesignPage() {
           </div>
 
           {/* FAQ */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="faq" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>FAQ</h2>
             <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
               <FAQPreview />
@@ -787,10 +753,10 @@ export default function DesignPage() {
           </div>
 
           {/* POPUPS */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="popups" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Popups</h2>
 
-            <div style={{ marginBottom: 48 }}>
+            <div>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Popup Card</h4>
               <div style={{ background: "rgba(0,0,0,0.08)", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, display: "flex", justifyContent: "center", marginBottom: 16 }}>
                 <div className="popup-card" style={{ position: "relative", maxWidth: 380, width: "100%" }}>
@@ -849,7 +815,7 @@ export default function DesignPage() {
           </div>
 
           {/* ALERTS */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="alerts" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Alerts</h2>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
@@ -891,7 +857,7 @@ export default function DesignPage() {
           </div>
 
           {/* USAGE BARS */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="usage-bars" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Usage bars</h2>
             <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
               How much of something a company has, and how much of it counts. Used on the plan page
@@ -912,7 +878,7 @@ export default function DesignPage() {
                     unbounded
                     markerLabel="1 gratis"
                     endLabel="Upgrade voor onbeperkt"
-                    endLabelHref="/dashboard/billing"
+                    endLabelHref="/dashboard/subscription"
                   />
                 </div>
 
@@ -932,7 +898,7 @@ export default function DesignPage() {
                     lockedLabel="5 projecten niet zichtbaar"
                     markerLabel="1 gratis"
                     endLabel="Upgrade voor onbeperkt"
-                    endLabelHref="/dashboard/billing"
+                    endLabelHref="/dashboard/subscription"
                   />
                 </div>
 
@@ -964,7 +930,7 @@ export default function DesignPage() {
           </div>
 
           {/* INFO BOXES */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="info-boxes" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Info boxes</h2>
             <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
               Explanation on demand, behind an <em>i</em>. One skin for both kinds: a white
@@ -1031,10 +997,10 @@ export default function DesignPage() {
             <p className="arco-eyebrow" style={{ color: "var(--primary, #016D75)" }}>Tables</p>
           </div>
           {/* DATA TABLE */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="data-table" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Data Table</h2>
 
-            <div style={{ marginBottom: 48 }}>
+            <div>
               <h4 className="arco-label" style={{ marginBottom: 20 }}>Table</h4>
               <div className="arco-table-wrap" style={{ marginBottom: 16 }}>
                 <table className="arco-table">
@@ -1111,7 +1077,7 @@ export default function DesignPage() {
                       <td>niek@arcolist.com</td>
                       <td>
                         {/* Three inline-pill variants, as they render in the live
-                            /admin/companies table. See Pills & Tags → Inline Pills
+                            /admin/companies table. See Inline Pills below
                             for the canonical examples. */}
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap" }}>
                           <span className="arco-table-status">
@@ -1220,10 +1186,81 @@ export default function DesignPage() {
                 </p>
               </div>
             </div>
+
+            <div>
+              <h4 className="arco-label" style={{ marginBottom: 20 }}>Status Pills</h4>
+              <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                  <span className="status-pill"><span className="status-pill-dot status-pill-dot--owner" />Owner</span>
+                  <span className="status-pill"><span className="status-pill-dot status-pill-dot--featured" />Featured</span>
+                  <span className="status-pill"><span className="status-pill-dot status-pill-dot--listed" />Listed</span>
+                  <span className="status-pill"><span className="status-pill-dot status-pill-dot--invited" />Invited</span>
+                  <span className="status-pill"><span className="status-pill-dot status-pill-dot--unlisted" />Unlisted</span>
+                  <span className="status-pill"><span className="status-pill-dot status-pill-dot--pending" />Pending</span>
+                  <span className="status-pill"><span className="status-pill-dot status-pill-dot--draft" />Draft</span>
+                  <span className="status-pill"><span className="status-pill-dot status-pill-dot--removed" />Removed</span>
+                  <span className="status-pill"><span className="status-pill-dot status-pill-dot--rejected" />Rejected</span>
+                </div>
+              </div>
+              <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
+                <p className="arco-small-text">Uses <strong>Micro</strong> typography. 7px dot, rule border, 24px radius. Dot color varies by variant.</p>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="arco-label" style={{ marginBottom: 20 }}>Inline Pills</h4>
+              <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
+                {/* Three groups: the standard status-pill variants (with /
+                    without a dot, default grey outline), and the four
+                    semantic colour variants (blue / green / orange / red).
+                    Mirrors how inline pills render in /admin/companies,
+                    /admin/sales, etc. */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                  {/* Status pills — pair the label with one or more pills. */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <span className="arco-eyebrow" style={{ color: "#a1a1a0" }}>Status pills</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span className="arco-table-primary">Cloud Nine</span>
+                      <span className="status-pill"><span className="status-pill-dot status-pill-dot--featured" />Featured</span>
+                      <span className="status-pill">Owner</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span className="arco-table-primary">Welcome</span>
+                      <span className="status-pill"><span className="status-pill-dot status-pill-dot--draft" />Draft</span>
+                      <span className="status-pill">Day 0</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span className="arco-table-primary">Wolterinck</span>
+                      <span className="status-pill"><span className="status-pill-dot status-pill-dot--listed" />Listed</span>
+                      <span className="status-pill"><span className="status-pill-dot status-pill-dot--invited" />Invited</span>
+                      <span className="status-pill"><span className="status-pill-dot status-pill-dot--unlisted" />Unlisted</span>
+                    </div>
+                  </div>
+
+                  {/* Coloured pills — tags, not status. */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <span className="arco-eyebrow" style={{ color: "#a1a1a0" }}>Coloured pills</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span className="status-pill status-pill--blue">Day 0</span>
+                      <span className="status-pill status-pill--blue">Day 1</span>
+                      <span className="status-pill status-pill--blue">Day 7</span>
+                      <span className="status-pill status-pill--green">Sent</span>
+                      <span className="status-pill status-pill--orange">Beta</span>
+                      <span className="status-pill status-pill--red">New</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
+                <p className="arco-small-text">
+                  All variants share the <code>.status-pill</code> base — 10px / 2-8 padding / 12px radius, transparent background. <strong>Status pills</strong> use a <code>.status-pill-dot</code> + a <code>--state</code> modifier inside (Featured, Listed, Invited, Draft, Unlisted, Owner) — these represent a state. <strong>Coloured pills</strong> use a <code>.status-pill--colour</code> modifier (<code>blue</code> / <code>green</code> / <code>orange</code> / <code>red</code>) for a coloured border + matching text — use these for tags / markers (Day 1, Day 7, Sent count, etc.), not for status. Sit immediately after the label they annotate (8px gap, no tab).
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* INLINE EDIT — `.spec-item-edit` */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="inline-edit-cells" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Inline edit cells</h2>
             <p className="arco-body-text" style={{ marginBottom: 24, maxWidth: 720 }}>
               Used inside <code>.specifications-bar</code> on detail bars (project edit, account, company settings).
@@ -1285,7 +1322,7 @@ export default function DesignPage() {
             <p className="arco-eyebrow" style={{ color: "var(--primary, #016D75)" }}>Media</p>
           </div>
           {/* ICONS (UI) */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="ui-icons" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Icons</h2>
             <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
               The interface icons (nav, account menu, cards) redrawn in the same
@@ -1300,7 +1337,7 @@ export default function DesignPage() {
           </div>
 
           {/* SERVICE MARKS */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="service-marks" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Service marks</h2>
             <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
               One hand-drawn mark per service, drawn as a single family in the flowing
@@ -1325,7 +1362,7 @@ export default function DesignPage() {
           </div>
 
           {/* CREDITED PROFESSIONALS */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="credited-professionals" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Credited professionals</h2>
             <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
               The same credit renders twice: as an editable row while the owner is building
@@ -1338,7 +1375,7 @@ export default function DesignPage() {
           </div>
 
           {/* PHOTO GALLERY LAYOUTS */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="photo-gallery-layouts" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Photo gallery layouts</h2>
             <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
               The project photo tour assigns grid spans based on photo orientation —
@@ -1375,7 +1412,7 @@ export default function DesignPage() {
 
           {/* ═══ Responsive ═══ */}
           {/* BRANDED IMAGES */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="branded-images" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Branded images</h2>
             <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
               Composite images produced once on project publish and reused across channels.
@@ -1427,7 +1464,7 @@ export default function DesignPage() {
                 </div>
               </div>
             </div>
-            <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6, marginBottom: 48 }}>
+            <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
               <p className="arco-small-text">
                 Badge: fixed black tile, ~100px wide in production output, flush to bottom edge,
                 top corners rounded 12px, ~5% left inset. Same absolute pixel width across all
@@ -1491,7 +1528,7 @@ export default function DesignPage() {
               runner-up photo below it. Rendered live by
               /api/pinterest/board-cover/[boardId] (next/og); this block
               is the reference for what that route draws. */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="board-covers" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Board covers</h2>
             <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
               The Pinterest board-cover collage (1000 × 750, 4:3). Three cells: the hero photo
@@ -1589,7 +1626,7 @@ export default function DesignPage() {
               own site, next to their Facebook / Instagram / Pinterest
               icons. Glyph-only (the wordmark's "a"): the full wordmark is
               unreadable at social-row size. Files live in /public/badges. */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="badges" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Badges</h2>
             <p className="arco-body-text" style={{ marginBottom: 32, maxWidth: 720 }}>
               The linking-program icon: professionals add Arco next to their social icons
@@ -1651,7 +1688,7 @@ export default function DesignPage() {
             <p className="arco-eyebrow" style={{ color: "var(--primary, #016D75)" }}>Responsive</p>
           </div>
           {/* BREAKPOINTS */}
-          <div style={{ marginBottom: 80 }}>
+          <div className="design-section">
             <h2 id="responsive-breakpoints" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Responsive Breakpoints</h2>
             <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40 }}>
               <div style={{ display: "grid", gap: 16 }}>

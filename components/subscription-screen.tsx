@@ -5,6 +5,9 @@ import { toast } from "sonner"
 import { useLocale, useTranslations } from "next-intl"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
+import { CalendarClock, CreditCard, Landmark, Repeat } from "lucide-react"
+
+import { Link, usePathname, useRouter } from "@/i18n/navigation"
 
 import type { CompanyBilling } from "@/lib/subscriptions/get-company-subscription"
 import { FREE_CONTRIBUTOR_LIMIT, type ProjectUsage } from "@/lib/subscriptions/usage-types"
@@ -13,16 +16,23 @@ import { PREVIEW_LABELS, PREVIEW_STATES } from "@/lib/subscriptions/preview-stat
 import { AdminTabs } from "@/components/admin/admin-tabs"
 import { PricingSection } from "@/components/pricing-section"
 import { UsageBar } from "@/components/usage-bar"
-import { openPortalAction, startCheckoutAction } from "@/lib/subscriptions/actions"
+import { openPortalAction, setCancelAtPeriodEndAction } from "@/lib/subscriptions/actions"
+import {
+  previewIntervalSwitchAction,
+  switchIntervalAction,
+  type SwitchPreview,
+} from "@/lib/subscriptions/elements-actions"
 
 /**
  * The subscription screen for one company: which plan, what it shows,
  * what it costs, what was paid.
  *
- * Reads only — every state-changing route (upgrade, payment method,
- * cancellation, invoices) hands off to Stripe's own hosted pages.
- * Building those screens ourselves would mean re-implementing PCI-shaped
- * flows for no gain.
+ * What changes state stays here where it can: upgrading goes to our
+ * own checkout, cancelling and resuming are one field on the
+ * subscription and are flipped from this page. Only changing a payment
+ * method still hands off to Stripe's portal — that one genuinely needs
+ * a card form we should not be hosting. Invoices link to Stripe's
+ * hosted copy, which is the customer's legal document.
  */
 export function SubscriptionScreen({
   companyName,
@@ -31,6 +41,7 @@ export function SubscriptionScreen({
   usage,
   details,
   previewState = null,
+  previewMode = false,
   isAdmin = false,
   hasCompany = true,
   chrome = "dashboard",
@@ -42,6 +53,7 @@ export function SubscriptionScreen({
   details: BillingDetails
   /** Set only for an admin viewing a synthetic state. */
   previewState?: string | null
+  previewMode?: boolean
   /** Admins get the preview switcher on their own page too. */
   isAdmin?: boolean
   /** False when the whole page is fixtures: there is no real
@@ -58,6 +70,16 @@ export function SubscriptionScreen({
   const t = useTranslations("dashboard")
   const tb = useTranslations("dashboard.billing")
   const locale = useLocale()
+  const router = useRouter()
+  // Unprefixed: the i18n router puts the locale back on. Checkout
+  // carries it so the reader lands where they started — the admin
+  // preview page and the dashboard both send people here.
+  const pathname = usePathname()
+
+  const euro = (cents: number) =>
+    new Intl.NumberFormat(locale === "nl" ? "nl-NL" : "en-GB", {
+      style: "currency", currency: "EUR",
+    }).format(cents / 100)
 
   const formatDate = (iso: string | null) =>
     iso
@@ -67,13 +89,13 @@ export function SubscriptionScreen({
       : null
 
   const [pending, startTransition] = useTransition()
-  const [busy, setBusy] = useState<"portal" | "primary" | null>(null)
+  const [busy, setBusy] = useState<"portal" | "primary" | "cancel" | "resume" | "switch" | null>(null)
 
   // Every route out of this page ends at Stripe. The action returns a
   // URL rather than redirecting itself, so a failure can surface here
   // as a message instead of a blank page.
   const go = (which: "portal" | "primary", run: () => Promise<{ url: string } | { error: string }>) => {
-    if (pending) return
+    if (pending || (isPreview && refusePreview())) return
     setBusy(which)
     startTransition(async () => {
       const result = await run()
@@ -86,18 +108,80 @@ export function SubscriptionScreen({
     })
   }
 
+  // Cancelling and resuming change a field and leave you where you
+  // are, so they need a runner that does not navigate. Same error
+  // surface as go(), different ending.
+  const [confirmCancel, setConfirmCancel] = useState(false)
+  // The cycle being offered, and what Stripe says it costs today. The
+  // amount is fetched before the dialog can be confirmed, because a
+  // button that moves a few hundred euro should say how many.
+  const [switchTo, setSwitchTo] = useState<"month" | "year" | null>(null)
+  // null while the sum is still being fetched, false when it could not
+  // be. Three states, because "we are working it out" and "we could not
+  // work it out" are different things to say to someone about to spend
+  // money.
+  const [switchPreview, setSwitchPreview] = useState<SwitchPreview | null | false>(null)
+
+  const openSwitch = (interval: "month" | "year") => {
+    if (isPreview && refusePreview()) return
+    setSwitchTo(interval)
+    setSwitchPreview(null)
+    startTransition(async () => {
+      const preview = await previewIntervalSwitchAction(interval)
+      setSwitchPreview("amountDue" in preview ? preview : false)
+    })
+  }
+
+  const confirmSwitch = () => {
+    if (!switchTo || pending) return
+    setBusy("switch")
+    startTransition(async () => {
+      const result = await switchIntervalAction(switchTo)
+      setBusy(null)
+      setSwitchTo(null)
+      setSwitchPreview(null)
+      if ("status" in result) {
+        toast.success(tb("switch_done"))
+        router.refresh()
+        return
+      }
+      toast.error(tb(`error_${result.error}` as never))
+    })
+  }
+
+  const toggleCancel = (cancel: boolean) => {
+    if (pending || (isPreview && refusePreview())) return
+    setBusy(cancel ? "cancel" : "resume")
+    startTransition(async () => {
+      const result = await setCancelAtPeriodEndAction(cancel)
+      setBusy(null)
+      setConfirmCancel(false)
+      if ("ok" in result) {
+        toast.success(tb(cancel ? "cancel_done" : "resume_done"))
+        router.refresh()
+        return
+      }
+      toast.error(tb(`error_${result.error}` as never))
+    })
+  }
+
   const renewal = formatDate(billing.currentPeriodEnd)
   const isPro = billing.plan === "pro"
 
-  // Heading: the plan plus its billing cycle, because "Pro" alone
-  // leaves the reader wondering what they are actually paying.
-  const planTitle = !isPro
-    ? tb("plan_free")
-    : billing.interval === "month"
-      ? `Pro (${t("pricing_monthly")})`
-      : billing.interval === "year"
-        ? `Pro (${t("pricing_yearly")})`
-        : "Pro"
+  // The heading says what you have; the cycle moved into the line
+  // below, where it can be a sentence instead of a parenthesis. Saying
+  // "monthly" in the title, again in the body and again on the pill is
+  // how a banner ends up repeating itself three times and informing
+  // once.
+  const planTitle = isPro ? "Pro" : tb("plan_free")
+
+  // Days until the next charge. A countdown beats a date while the date
+  // is close enough to plan around, and is absurd when it is not —
+  // nobody needs to hear that something renews in 364 days.
+  const daysToRenewal = billing.currentPeriodEnd
+    ? Math.ceil((new Date(billing.currentPeriodEnd).getTime() - Date.now()) / 86400000)
+    : null
+  const renewalIsNear = daysToRenewal !== null && daysToRenewal > 0 && daysToRenewal <= 45
 
   // The plan as a thing you can be "in", without the billing cycle the
   // heading carries: "inbegrepen in Pro (per jaar)" reads as a parenthesis
@@ -108,14 +192,61 @@ export function SubscriptionScreen({
   // company has on Arco, none of it held back.
   const totalProjects = usage.publishedCount + usage.contributorTotal
 
+  // Two bars above each other get read against one another, so they
+  // share a scale: the larger count takes the full open fill and the
+  // other takes its share of it. Without this a 6 and a 2 drew the same
+  // length and said the company had as many credits as projects.
+  const barScale = Math.max(usage.publishedCount, usage.contributorTotal, 1)
+
+  // The plan chooser. Where it belongs on the page depends on who is
+  // reading: on Free the upgrade IS what this page is about, so it
+  // comes before the money; on a paid plan it is a catalogue the reader
+  // has already chosen from, and payment and invoices are the facts
+  // they came for.
+  const plansBlock = (
+    <PricingSection
+      embedded
+      showHeader={false}
+      sectionHeading={tb("plans_heading")}
+      currentPlan={isPro ? "pro" : "free"}
+      // The cycle comes from the toggle in the cards, so the price the
+      // reader just looked at is the one they get billed — and it rides
+      // in the URL, so a half-finished checkout can be reloaded.
+      // The plan cards always go to the real checkout, in admin too:
+      // the banner button already opens the design study, and with both
+      // pointing there the working Stripe flow had no way in from this
+      // page at all.
+      onUpgrade={isOwner ? (interval) => router.push(
+        `/dashboard/subscription/checkout?interval=${interval}&return=${encodeURIComponent(pathname)}`,
+      ) : null}
+      actionsBusy={pending}
+    />
+  )
+
   // One line describing where they stand. Deliberately concrete: a date
   // beats the word "active".
   const statusLine =
     billing.source === "founding" ? tb("founding_body", { company: companyName })
+    // Their own situation beats a description of the pricing model. The
+    // general line explains what Pro unlocks; this one says what is
+    // being withheld right now, which is the only version of that
+    // sentence someone can act on.
+    : billing.source === "none" && usage.contributorHidden > 0
+      // The gap, not the absence: "you are on 3, one shows" states the
+      // loss without needing the word hidden, and the numbers do the
+      // arguing. Anything withheld means the total is at least two, so
+      // "ze" never has to agree with a singular.
+      ? tb("free_body_hidden", { total: usage.contributorTotal, visible: usage.contributorVisible })
     : billing.source === "none" ? tb("free_body")
-    : billing.cancelAtPeriodEnd && renewal ? tb("ends_on", { date: renewal })
-    : renewal ? (billing.interval === "month" ? tb("renews_monthly", { date: renewal }) : tb("renews_yearly", { date: renewal }))
+    // The date is on the pill beside this line, so the line itself says
+    // what the date means. Still gated on having one: without a date
+    // there is no pill either, and "tot die datum" would point at
+    // nothing.
+    : billing.cancelAtPeriodEnd && renewal ? tb("ends_on")
+    : renewal ? tb(billing.interval === "month" ? "renews_body_month" : "renews_body_year", { date: renewal })
     : ""
+
+  const inAdmin = chrome === "admin"
 
   // Exactly one primary action, chosen by what the company should do
   // next — not a row of equally-weighted buttons.
@@ -125,11 +256,42 @@ export function SubscriptionScreen({
     : !isPro ? tb("action_upgrade")
     : null
 
-  // Reactivating and fixing a payment both happen inside Stripe's
-  // portal; only a new subscription needs Checkout.
-  const primaryGoesToPortal = billing.status === "past_due" || billing.cancelAtPeriodEnd
+  // Only a broken payment still needs the portal: that is a card form,
+  // and hosting one is the thing we deliberately do not do. Resuming is
+  // one field on the subscription and happens here, same as cancelling.
+  const primaryGoesToPortal = billing.status === "past_due"
 
-  const inAdmin = chrome === "admin"
+  // Every upgrade shortcut goes to the checkout, not to the cards.
+  //
+  // They used to scroll, because choosing Pro is also choosing a billing
+  // cycle and picking yearly silently on the reader's behalf would have
+  // been self-serving. The checkout now asks that question itself, with
+  // both prices in view — so the scroll had stopped protecting anything
+  // and only added a step between wanting Pro and buying it.
+  const goUpgrade = () => router.push(
+    `/dashboard/subscription/checkout?interval=year&return=${encodeURIComponent(pathname)}`,
+  )
+
+
+  // On a preview tab everything on screen is a fixture, but the actions
+  // were not: they resolved the admin's own company and operated on its
+  // real subscription. Cancelling from the PRO · MONTHLY preview would
+  // have cancelled an actual one. The buttons stay visible — they are
+  // part of what is being previewed — and say so when pressed.
+  const isPreview = Boolean(previewState)
+  const refusePreview = () => {
+    toast.error(tb("preview_readonly"))
+    return true
+  }
+
+  // A mark that says what kind of instrument this is: a direct debit
+  // and a card behave differently — one is pulled, the other pushed —
+  // and that is worth knowing at a glance. Decoration would be a logo;
+  // this is the distinction itself.
+  const MethodIcon =
+    details.paymentMethod?.type === "sepa_debit" ? Repeat
+    : details.paymentMethod?.type === "ideal" ? Landmark
+    : CreditCard
 
   return (
     <div
@@ -142,26 +304,38 @@ export function SubscriptionScreen({
           { href: "/dashboard/company", label: t("company") },
           { href: "/dashboard/team", label: t("team") },
           { href: "/dashboard/inbox", label: t("inbox") },
-          { href: "/dashboard/billing", label: t("subscription") },
+          { href: "/dashboard/subscription", label: t("subscription") },
         ]} />
       )}
 
-      {/* Admin-only switcher, in the admin tab bar's own clothes: the
-          same second-nav layer every admin page uses, so a state is a
-          place you can link to and come back from rather than a toggle.
-          The first tab clears ?preview= — that is the admin's own real
-          subscription, which is also worth being able to reach. */}
-      {isAdmin && (
+      {/* The switcher belongs to the admin page, where walking every
+          state is the job — and to any page currently showing one.
+          It used to key on being an admin, which put it above an
+          admin's own subscription on the very page they came to manage
+          it. On /dashboard/subscription it therefore rides ?preview=, and
+          "Sluiten" is the way back to the real thing.
+
+          "Live" is the admin's own subscription: a tab worth having
+          inside admin, but on the dashboard it would clear the param
+          and take the bar with it — which is what Sluiten says plainly. */}
+      {(inAdmin || previewMode) && (
         <AdminTabs
           param="preview"
           title="Preview"
           tabs={[
             // No company of their own: nothing to return to, so the tab
             // that clears the preview would land on a redirect.
-            ...(hasCompany ? [{ key: "live", label: "Live" }] : []),
+            ...(inAdmin && hasCompany ? [{ key: "live", label: "Live" }] : []),
             ...PREVIEW_STATES.map((s) => ({ key: s, label: PREVIEW_LABELS[s] })),
           ]}
-          active={previewState ?? "live"}
+          active={previewState ?? (inAdmin ? "live" : PREVIEW_STATES[0])}
+          actions={
+            !inAdmin ? (
+              <Link href="/dashboard/subscription" className="arco-text-link arco-text-link--inline">
+                Sluiten
+              </Link>
+            ) : undefined
+          }
         />
       )}
 
@@ -175,7 +349,7 @@ export function SubscriptionScreen({
         {/* .discover-results carries 80px of tail padding for grid
             pages that end here. This page continues, so that padding
             becomes a hole above the next section's title. */}
-        <div className="discover-results" style={{ paddingBottom: 24 }}>
+        <div className="discover-results" style={{ paddingBottom: 0 }}>
           {/* Full wrap width, like the rest of the dashboard: the
               banner and the included table share one edge, and the
               price column lands where the eye already expects a
@@ -193,21 +367,33 @@ export function SubscriptionScreen({
               <div style={{ minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 5 }}>
                   <h3 className="arco-banner-title" style={{ margin: 0 }}>{planTitle}</h3>
+                  {/* Tinted, like the one in the cancellation section:
+                      beside a 28px plan name these carry a state in a
+                      sentence, not a legend on a table row. */}
+                  {/* Healthy and renewing soon: the one state that used
+                      to carry no pill at all, even though "in 23 days"
+                      is exactly the kind of thing a pill is for. */}
+                  {billing.source === "subscription" && !billing.cancelAtPeriodEnd
+                    && billing.status === "active" && renewalIsNear && (
+                    <span className="status-pill status-pill--tinted status-pill--info shrink-0">
+                      {daysToRenewal === 1
+                        ? tb("pill_renews_tomorrow")
+                        : tb("pill_renews_days", { days: daysToRenewal })}
+                    </span>
+                  )}
+
                   {billing.source === "founding" && (
-                    <span className="status-pill shrink-0">
-                      <span className="status-pill-dot" style={{ background: "#0f766e" }} />
+                    <span className="status-pill status-pill--tinted status-pill--info shrink-0">
                       {tb("founding_badge")}
                     </span>
                   )}
                   {billing.cancelAtPeriodEnd && renewal && (
-                    <span className="status-pill shrink-0">
-                      <span className="status-pill-dot" style={{ background: "#a1a1a0" }} />
+                    <span className="status-pill status-pill--tinted status-pill--ending shrink-0">
                       {tb("pill_ends", { date: renewal })}
                     </span>
                   )}
                   {billing.status === "past_due" && (
-                    <span className="status-pill shrink-0">
-                      <span className="status-pill-dot" style={{ background: "#dc2626" }} />
+                    <span className="status-pill status-pill--tinted status-pill--ending shrink-0">
                       {tb("status_past_due")}
                     </span>
                   )}
@@ -215,36 +401,35 @@ export function SubscriptionScreen({
                 <p className="arco-banner-body">{statusLine}</p>
               </div>
 
-              {isOwner && (
+              {/* One action, or none. A broken payment and a cancelled
+                  renewal are both fixed inside Stripe's portal; an
+                  upgrade is a choice between two prices, so it scrolls
+                  to the cards that state them. */}
+              {isOwner && primaryAction && (
                 <div className="arco-banner-actions">
-                  {/* Tertiary first, primary last — the eye lands on the
-                      action we want taken. Manage plan is always here:
-                      invoices and payment details are what a billing
-                      page is for, even between subscriptions. */}
-                  {/* Invoices and payment details have their own
-                      section below, so the banner's slot goes to the one
-                      thing that is not on this page: the plan chooser. */}
-                  {/* The plans sit further down this same page, so this
-                      is a jump rather than a route: nothing to load,
-                      nothing to come back from. */}
-                  <a
-                    href="#plans"
-                    className="btn-tertiary"
-                    style={{ fontSize: 14, padding: "10px 20px", textDecoration: "none" }}
-                  >
-                    {tb("manage_plan")}
-                  </a>
                   {primaryAction && (
                     <button
                       type="button"
                       className="btn-primary"
-                      style={{ fontSize: 14, padding: "10px 20px", opacity: busy === "primary" ? 0.6 : 1 }}
-                      onClick={() => go("primary", primaryGoesToPortal
-                        ? openPortalAction
-                        : () => startCheckoutAction(billing.interval === "month" ? "month" : "year"))}
+                      style={{ fontSize: 14, padding: "10px 20px", opacity: busy ? 0.6 : 1 }}
+                      onClick={
+                        // A failed collection needs a working mandate and
+                        // the open invoice settled. Our own page does
+                        // both now, so the portal is no longer the only
+                        // way out of dunning — in admin, where the
+                        // Elements pages live.
+                        primaryGoesToPortal
+                          ? inAdmin
+                            ? () => router.push("/dashboard/subscription/payment-method?return=/dashboard/subscription")
+                            : () => go("primary", openPortalAction)
+                        : billing.cancelAtPeriodEnd ? () => toggleCancel(false)
+                        : goUpgrade
+                      }
                       disabled={pending}
                     >
-                      {busy === "primary" ? tb("opening") : primaryAction}
+                      {busy === "primary" ? tb("opening")
+                        : busy === "resume" ? tb("working")
+                        : primaryAction}
                     </button>
                   )}
                 </div>
@@ -258,7 +443,12 @@ export function SubscriptionScreen({
                    On Pro that line is gone, so drawing it anyway would
                    invite the reader to look for a difference that no
                    longer exists — one bar, all their work. */}
-            <div style={{ marginBottom: 36, display: "flex", flexDirection: "column", gap: 24 }}>
+            {/* gap 4, not 24: every bar already carries a 28px row of
+                under-labels beneath its track, and that row reads as
+                white space rather than as content. 28 + 4 matches the
+                32px the banner leaves above the first bar, so the two
+                bars sit at the same distance from what precedes them. */}
+            <div style={{ marginBottom: 36, display: "flex", flexDirection: "column", gap: 4 }}>
               {isPro ? (
                 <UsageBar
                   label={tb("projects_noun", { count: totalProjects })}
@@ -277,15 +467,24 @@ export function SubscriptionScreen({
                       label={tb("published_noun", { count: usage.publishedCount })}
                       count={usage.publishedCount}
                       fillPct={usage.publishedCount > 0 ? 100 : 0}
+                      fillShare={usage.publishedCount / barScale}
                       endLabel={tb("unlimited_included", { plan: planName })}
                       unbounded
                     />
                   )}
 
+                  {/* Nothing credited yet, and publishing is what this
+                      company does: an empty credit meter here is a pitch
+                      for something they have not run into. It appears
+                      the moment someone credits them — and a company
+                      that cannot publish keeps it either way, since
+                      credits are its whole relationship with Arco. */}
+                  {(usage.contributorTotal > 0 || !usage.canPublish) && (
                   <UsageBar
                     label={tb("contributor_noun", { count: usage.contributorTotal })}
                     count={usage.contributorTotal}
                     fillPct={usage.contributorTotal > 0 ? 100 : 0}
+                    fillShare={usage.contributorTotal / barScale}
                     unbounded
                     // The dimmed stretch past this point is what the
                     // company has but the public cannot see.
@@ -302,12 +501,9 @@ export function SubscriptionScreen({
                     // The same route as the banner's upgrade button. Only
                     // the owner can take it, so for anyone else the words
                     // stay words.
-                    onEndLabelClick={
-                      isOwner
-                        ? () => go("primary", () => startCheckoutAction(billing.interval === "month" ? "month" : "year"))
-                        : null
-                    }
+                    onEndLabelClick={isOwner ? goUpgrade : null}
                   />
+                  )}
                 </>
               )}
             </div>
@@ -319,41 +515,16 @@ export function SubscriptionScreen({
           </div>
         </div>
 
-        {/* The plans themselves, on the page rather than behind a
-            link: this is a short page, and a plan you cannot see is a
-            plan you do not consider. The pricing cards are the ones the
-            public pricing page uses, so the two can never disagree. */}
-        {/* Carries the page gutter itself: it sits outside the wrap
-            above, and the pricing block no longer brings one of its
-            own now that it renders as a section here. */}
-        <div id="plans" className="wrap" style={{ paddingBottom: 56, scrollMarginTop: 80 }}>
-          {/* No pitch header, no architect strip: both are aimed at
-              someone deciding whether to join Arco, and this reader is
-              already in. What stays is a plain section heading, like
-              Payment and Invoices below it. */}
-          <PricingSection
-            embedded
-            showHeader={false}
-            sectionHeading={tb("plans_heading")}
-            currentPlan={isPro ? "pro" : "free"}
-            // The cycle comes from the toggle in the cards, so the price
-            // the reader just looked at is the one they get billed.
-            onUpgrade={isOwner ? (interval) => go("primary", () => startCheckoutAction(interval)) : null}
-            onDowngrade={isOwner ? () => go("portal", openPortalAction) : null}
-            actionsBusy={pending}
-          />
-        </div>
-
-        {/* Payment and invoices sit under the plan chooser: what you
-            pay and what you paid only mean something once you know
-            which plan you are on. */}
+        {/* Payment and invoices — the facts. On Free they follow the
+            plans; on a paid plan they lead, and the chooser comes after
+            them. */}
         <div className="wrap" style={{ paddingBottom: 80 }}>
           {/* ── Payment ──────────────────────────────────────────── */}
-          {/* Shown for every owner, card or no card. A billing page
-              that hides these until the first payment reads as half
-              built, and "no payment method yet" is itself an answer to
-              the question the reader came with. */}
-          {isOwner && (
+          {/* Only once Stripe knows this company. Before the first
+              subscription there is nothing to show and nothing to add
+              from here — an empty row would be a section about
+              nothing. */}
+          {isOwner && (billing.stripeCustomerId || details.paymentMethod) && (
             <div style={{ marginBottom: 36 }}>
               <h4 className="arco-subsection-title" style={{ marginBottom: 14 }}>{tb("payment_heading")}</h4>
               <div style={{
@@ -361,9 +532,10 @@ export function SubscriptionScreen({
                 gap: 16, padding: "14px 0", borderTop: "1px solid var(--arco-light-grey)",
                 borderBottom: "1px solid var(--arco-light-grey)",
               }}>
-                <span style={{ fontSize: 14 }}>
+                <span style={{ fontSize: 14, display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                   {details.paymentMethod ? (
                     <>
+                      <MethodIcon size={16} strokeWidth={1.5} style={{ color: "var(--arco-mid)", flexShrink: 0 }} />
                       {details.paymentMethod.label}
                       {details.paymentMethod.last4 && (
                         <span style={{ color: "var(--text-secondary)" }}>{` ···· ${details.paymentMethod.last4}`}</span>
@@ -383,30 +555,76 @@ export function SubscriptionScreen({
                     type="button"
                     className="btn-tertiary"
                     style={{ fontSize: 13, padding: "8px 16px" }}
-                    onClick={() => go("portal", openPortalAction)}
+                    // In admin, the Elements page that replaces the
+                    // mandate on our own site. Everywhere else this is
+                    // still Stripe's portal: until the Elements checkout
+                    // ships, sending real customers to one Arco page and
+                    // one hosted page for two halves of the same job
+                    // would be worse than sending them to neither.
+                    onClick={inAdmin
+                      ? () => router.push("/dashboard/subscription/payment-method?return=/dashboard/subscription")
+                      : () => go("portal", openPortalAction)}
                     disabled={pending}
                   >
                     {tb("update")}
                   </button>
                 )}
               </div>
+
+              {/* Cycle beside method, because both answer "how do you
+                  pay". It is also where the annual upsell belongs: a
+                  factual row for someone already looking at their
+                  billing, rather than a button bolted onto the toggle
+                  they were using to compare two prices. */}
+              {isOwner && billing.source === "subscription" && billing.interval && (
+                <>
+                  <div style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    gap: 16, padding: "14px 0", borderBottom: "1px solid var(--arco-light-grey)",
+                  }}>
+                    <span style={{ fontSize: 14, display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                      {/* Not decoration either: the row above is about
+                          the instrument, this one about the schedule,
+                          and the two marks say which is which before
+                          the words do. */}
+                      <CalendarClock size={16} strokeWidth={1.5} style={{ color: "var(--arco-mid)", flexShrink: 0 }} />
+                      {tb(billing.interval === "month" ? "cycle_row_month" : "cycle_row_year")}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-tertiary"
+                      style={{ fontSize: 13, padding: "8px 16px" }}
+                      onClick={() => openSwitch(billing.interval === "month" ? "year" : "month")}
+                      disabled={pending}
+                    >
+                      {tb(billing.interval === "month" ? "cycle_switch_up" : "cycle_switch_down")}
+                    </button>
+                  </div>
+                  {/* Accent, like the same sentence on the checkout
+                      page. The persuasion lives in the number, not in
+                      the button beside it — that one stays as quiet as
+                      the row above it, because changing your cycle and
+                      changing your payment method are the same kind of
+                      act and should not look ranked. */}
+                  {billing.interval === "month" && (
+                    <p className="arco-small-text" style={{ margin: "10px 0 0", color: "var(--primary)" }}>
+                      {tb("cycle_saving")}
+                    </p>
+                  )}
+                </>
+              )}
             </div>
           )}
 
           {/* ── Invoices ─────────────────────────────────────────── */}
-          {isOwner && (
-            <div style={{ marginBottom: 36 }}>
+          {/* No bottom margin of its own: the notes below belong to this
+              table and sit 10px under it, and what follows them is the
+              plan chooser, which brings 64px or more of its own. A 36px
+              gap here only pushed a footnote away from its subject. */}
+          {isOwner && details.invoices.length > 0 && (
+            <div>
               <h4 className="arco-subsection-title" style={{ marginBottom: 14 }}>{tb("invoices_heading")}</h4>
-              {details.invoices.length === 0 && (
-                <div style={{
-                  padding: "14px 0", fontSize: 14, color: "var(--text-secondary)",
-                  borderTop: "1px solid var(--arco-light-grey)",
-                  borderBottom: "1px solid var(--arco-light-grey)",
-                }}>
-                  {tb("no_invoices")}
-                </div>
-              )}
-              <div hidden={details.invoices.length === 0} style={{
+              <div style={{
                 display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 16,
                 paddingBottom: 10, borderBottom: "1px solid var(--arco-light-grey)",
               }}>
@@ -442,21 +660,219 @@ export function SubscriptionScreen({
           )}
 
 
-          {/* Founding companies have no Stripe object yet — say what
-              happens next rather than leaving a dead page. */}
+          {/* Both sit at 10px, the same gap the saving line keeps under
+              the cycle row: a note explains the thing directly above it,
+              so it belongs to that block rather than floating between
+              two of them. */}
           {billing.source === "founding" && (
-            <p className="arco-small-text" style={{ marginTop: 20 }}>
+            <p className="arco-small-text" style={{ margin: "10px 0 0" }}>
               {tb("founding_next")}
             </p>
           )}
 
           {billing.status === "past_due" && (
-            <p className="arco-small-text" style={{ marginTop: 20 }}>
+            <p className="arco-small-text" style={{ margin: "10px 0 0" }}>
               {tb("past_due_help")}
             </p>
           )}
+
+          {/* The chooser, always after the facts and before the way
+              out. On Free there are no facts yet — payment and invoices
+              hide themselves — so it simply follows the meters. */}
+          {/* More air on Free, where this follows the meters directly:
+              after an invoice table the same gap reads as a break, but
+              under a bar it reads as the bar's own bottom padding. */}
+          <div id="plans" style={{ marginTop: isPro ? 64 : 88, scrollMarginTop: 80 }}>
+            {plansBlock}
+          </div>
+
+          {/* ── Cancellation ────────────────────────────────────────
+                 Last on the page, and only for a company that has
+                 something to cancel: on Free there is no subscription,
+                 and on founding access there is no Stripe object behind
+                 it. Ending a plan is a decision, not a setting, so it
+                 gets its own heading rather than hiding in Manage. */}
+          {isOwner && billing.source === "subscription" && billing.stripeCustomerId && (
+            /* The section's own top margin, not the previous block's
+               bottom one: the notes above (a founding explainer, a
+               dunning line) render conditionally, so the gap cannot
+               depend on them being there. */
+            <div style={{ marginTop: 64, marginBottom: 36 }}>
+              <h4 className="arco-subsection-title" style={{ marginBottom: 14 }}>{tb("cancel_heading")}</h4>
+
+              {billing.cancelAtPeriodEnd ? (
+                /* Same row as cancelling, read the other way round: the
+                   state on the left with its date, the way back on the
+                   right. A bordered card made the reversal look like a
+                   different kind of thing than the act that caused it. */
+                <>
+                  <div style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    gap: 16, flexWrap: "wrap", padding: "14px 0",
+                    borderTop: "1px solid var(--arco-light-grey)",
+                    borderBottom: "1px solid var(--arco-light-grey)",
+                  }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", minWidth: 0 }}>
+                      <span style={{ fontSize: 14 }}>{tb("ending_title")}</span>
+                      {renewal && (
+                        <span className="status-pill status-pill--tinted status-pill--ending shrink-0">
+                          {tb("pill_ends", { date: renewal })}
+                        </span>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-tertiary"
+                      style={{ fontSize: 13, padding: "8px 16px", color: "var(--primary)", borderColor: "var(--primary)", opacity: busy === "resume" ? 0.6 : 1 }}
+                      onClick={() => toggleCancel(false)}
+                      disabled={pending}
+                    >
+                      {busy === "resume" ? tb("working") : tb("action_reactivate")}
+                    </button>
+                  </div>
+                  <p className="arco-small-text" style={{ margin: "10px 0 0", maxWidth: 560 }}>
+                    {renewal ? tb("ending_body", { date: renewal }) : tb("ending_note")}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    gap: 16, padding: "14px 0", borderTop: "1px solid var(--arco-light-grey)",
+                    borderBottom: "1px solid var(--arco-light-grey)",
+                  }}>
+                    <span style={{ fontSize: 14 }}>{tb("cancel_row")}</span>
+                    <button
+                      type="button"
+                      className="btn-tertiary"
+                      style={{ fontSize: 13, padding: "8px 16px", color: "var(--destructive)", borderColor: "var(--destructive)" }}
+                      onClick={() => setConfirmCancel(true)}
+                      disabled={pending}
+                    >
+                      {tb("cancel_action")}
+                    </button>
+                  </div>
+                  <p className="arco-small-text" style={{ margin: "10px 0 0", maxWidth: 560 }}>{tb("cancel_note")}</p>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </main>
+
+      {/* The one place a pop-up beats a page: a destructive choice the
+          reader must be able to back out of without losing where they
+          were. Same card as every other confirm on the platform. */}
+      {confirmCancel && (
+        <div className="popup-overlay" onClick={() => !pending && setConfirmCancel(false)}>
+          <div className="popup-card" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">{tb("cancel_confirm_title")}</h3>
+              <button type="button" className="popup-close" onClick={() => setConfirmCancel(false)} aria-label="Sluiten">✕</button>
+            </div>
+            <p className="arco-small-text" style={{ margin: "0 0 24px" }}>
+              {renewal ? tb("cancel_confirm_body", { date: renewal }) : tb("cancel_confirm_body_nodate")}
+            </p>
+            <div className="popup-actions">
+              <button
+                type="button"
+                className="btn-tertiary"
+                style={{ flex: 1 }}
+                onClick={() => setConfirmCancel(false)}
+                disabled={pending}
+              >
+                {tb("cancel_confirm_keep")}
+              </button>
+              <button
+                type="button"
+                className="btn-tertiary"
+                style={{ flex: 1, color: "var(--destructive)", borderColor: "var(--destructive)" }}
+                onClick={() => toggleCancel(true)}
+                disabled={pending}
+              >
+                {busy === "cancel" ? tb("working") : tb("cancel_confirm_go")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Same confirm as cancelling, for the same reason: a choice that
+          moves money, with a way back that costs nothing. */}
+      {switchTo && (
+        <div className="popup-overlay" onClick={() => !pending && setSwitchTo(null)}>
+          <div className="popup-card" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">
+                {tb(switchTo === "year" ? "switch_confirm_title" : "switch_confirm_title_down")}
+              </h3>
+              <button type="button" className="popup-close" onClick={() => setSwitchTo(null)} aria-label="Sluiten">✕</button>
+            </div>
+            {switchPreview === null ? (
+              <p className="arco-small-text" style={{ margin: "0 0 24px" }}>{tb("cycle_calculating")}</p>
+            ) : switchPreview === false ? (
+              <p className="arco-small-text" style={{ margin: "0 0 24px" }}>{tb("switch_confirm_body_unknown")}</p>
+            ) : switchPreview.atPeriodEnd ? (
+              // Nothing moves today, so there is no sum to show. A table
+              // of zeroes would be arithmetic about nothing.
+              <p className="arco-small-text" style={{ margin: "0 0 24px" }}>
+                {tb("switch_at_period_end", { date: renewal ?? "" })}
+              </p>
+            ) : (
+              <div style={{ marginBottom: 24 }}>
+                {/* The sum, not a sentence about the sum. Someone about
+                    to be charged a few hundred euro should be able to
+                    check the arithmetic. */}
+                <div className="checkout-price-row">
+                  <span>{tb(switchTo === "year" ? "cycle_line_new_year" : "cycle_line_new_month")}</span>
+                  <span>{euro(switchPreview.newAmount)}</span>
+                </div>
+                {switchPreview.credit !== 0 && (
+                  <div className="checkout-price-row">
+                    <span>{tb("cycle_line_credit")}</span>
+                    <span>{euro(switchPreview.credit)}</span>
+                  </div>
+                )}
+                <div className="checkout-price-row">
+                  <span>{tb("cycle_line_tax")}</span>
+                  <span>{euro(switchPreview.tax)}</span>
+                </div>
+                <div className="checkout-price-row checkout-price-row--total">
+                  <span>{tb("cycle_line_due")}</span>
+                  <span>{euro(switchPreview.amountDue)}</span>
+                </div>
+                <p className="arco-small-text" style={{ margin: "14px 0 0" }}>
+                  {tb(switchTo === "year" ? "cycle_after_year" : "cycle_after_month")}
+                </p>
+              </div>
+            )}
+            <div className="popup-actions">
+              <button
+                type="button"
+                className="btn-tertiary"
+                style={{ flex: 1 }}
+                onClick={() => setSwitchTo(null)}
+                disabled={pending}
+              >
+                {tb("cancel_confirm_keep")}
+              </button>
+              {/* Primary, not the dark secondary: this is a constructive
+                  choice. The cancel dialog next door wears a red outline
+                  for the opposite reason. */}
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ flex: 1 }}
+                onClick={confirmSwitch}
+                // Nothing to confirm until the amount is on screen.
+                disabled={pending || switchPreview === null}
+              >
+                {busy === "switch" ? tb("working") : tb("switch_confirm_go")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!inAdmin && <Footer />}
     </div>

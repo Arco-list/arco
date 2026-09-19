@@ -189,25 +189,22 @@ export async function addPhotographerToProject(
     companyId = newCompany.id as string
   }
 
-  // Replace any existing photographer credit on this project. The
-  // project_professionals_unique_per_project constraint is UNIQUE (project_id,
-  // invited_email), and we set invited_email='' for every photographer — so
-  // adding a second one without first removing the old would collide. We
-  // resolve that by treating "add a photographer" as a single-slot replace:
-  // delete any prior pro-audience credit on this project (whatever company
-  // it pointed to), then insert the new one. Same-company re-add is a no-op
-  // (delete + reinsert with the same fields).
+  // A project has one photographer, so adding one replaces the last.
   //
-  // Filtered by company.audience='pro' so we never accidentally delete a
-  // homeowner-facing professional credit (architect, builder, etc.).
-  const { data: existingPhotographers } = await serviceSupabase
+  // Which rows ARE the photographer credit is read off the category the
+  // row carries, not off the credited company's audience. The audience
+  // test used to stand in for it and got both ends wrong: a credit
+  // pointing at a homeowner-facing company was never recognised as a
+  // photographer credit, so it survived every later change — and the
+  // same filter on the way in meant nothing ever cleared it either.
+  const { data: photographerCredits } = await serviceSupabase
     .from("project_professionals")
-    .select("id, company_id, companies!inner(audience)")
+    .select("id, company_id")
     .eq("project_id", projectId)
-    .eq("companies.audience", "pro")
+    .contains("invited_service_category_ids", [photographerCategoryId])
 
-  const idsToRemove = (existingPhotographers ?? [])
-    .filter((row: any) => row.company_id !== companyId) // keep the row if it's already pointing at the same photographer
+  const idsToRemove = (photographerCredits ?? [])
+    .filter((row: any) => row.company_id !== companyId)
     .map((row: any) => row.id as string)
 
   if (idsToRemove.length > 0) {
@@ -221,11 +218,32 @@ export async function addPhotographerToProject(
     }
   }
 
-  // Insert the new credit only if the same-company row didn't already exist.
-  const sameCompanyRowExists = (existingPhotographers ?? [])
-    .some((row: any) => row.company_id === companyId)
+  // A company appears on a project once. If this one is already
+  // credited — as the owner, or for some other trade — the photographer
+  // work becomes another service on the row it already has, rather than
+  // a second row carrying the same name. Crediting a company twice used
+  // to be possible here and read, on every page that lists the team, as
+  // two separate businesses.
+  const { data: existingRow } = await serviceSupabase
+    .from("project_professionals")
+    .select("id, invited_service_category_ids")
+    .eq("project_id", projectId)
+    .eq("company_id", companyId)
+    .maybeSingle()
 
-  if (!sameCompanyRowExists) {
+  if (existingRow) {
+    const current = ((existingRow as any).invited_service_category_ids ?? []) as string[]
+    if (!current.includes(photographerCategoryId)) {
+      const { error: mergeError } = await serviceSupabase
+        .from("project_professionals")
+        .update({ invited_service_category_ids: [...current, photographerCategoryId] } as any)
+        .eq("id", (existingRow as any).id)
+      if (mergeError) {
+        logger.db("update", "project_professionals", "Failed to add photographer service", { projectId, companyId }, mergeError)
+        return { success: false, error: mergeError.message }
+      }
+    }
+  } else {
     const { error: linkError } = await serviceSupabase
       .from("project_professionals")
       .insert({

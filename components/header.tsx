@@ -863,7 +863,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-6l-2 3H10l-2-3H2" /><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z" /></svg>
                               {t("inbox")}
                             </Link>
-                            <Link href="/dashboard/pricing" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/dashboard/pricing" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                            <Link href="/dashboard/subscription" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/dashboard/subscription" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>
                               {t("subscription")}
                             </Link>

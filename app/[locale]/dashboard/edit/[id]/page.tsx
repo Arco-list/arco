@@ -108,6 +108,7 @@ import {
   resolveProjectDetailsIcon,
   sortByOrderThenLabel,
 } from "@/lib/project-details"
+import { PHOTOGRAPHER_SERVICE_SLUG } from "@/lib/photographer-specialties"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { Enums, Tables, TablesUpdate } from "@/lib/supabase/types"
 import { useProjectTaxonomyOptions } from "@/hooks/use-project-taxonomy-options"
@@ -564,9 +565,6 @@ export default function ListingEditorPage() {
   const [reviewQueue, setReviewQueue] = useState<string[]>([])
 
   // ── Delete project ─────────────────────────────────────────────────────────
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [isDeletingProject, setIsDeletingProject] = useState(false)
-  const [deleteConfirmText, setDeleteConfirmText] = useState("")
 
   // ── New state for redesigned layout ───────────────────────────────────────
   // activeEditField state removed — title/desc .ec "on" class is now managed
@@ -2165,6 +2163,8 @@ export default function ListingEditorPage() {
       .select("id, name, slug, parent_id, sort_order")
       .eq("is_active", true)
       .not("parent_id", "is", null)
+      // Photography is credited from the detail bar, never from here.
+      .neq("slug", PHOTOGRAPHER_SERVICE_SLUG)
       .order("sort_order", { ascending: true, nullsFirst: false })
       .order("name", { ascending: true })
 
@@ -2631,9 +2631,14 @@ export default function ListingEditorPage() {
       const { data: parents } = await supabase.from("categories").select("id, name").in("id", parentIds)
       if (parents) parents.forEach(p => parentMap.set(p.id, p.name))
     }
+    // A photographer company offers exactly the one service this
+    // section may not hand out; without the filter its card came up with
+    // Fotograaf preselected.
     setInviteCompanyServices(prev => ({
       ...prev,
-      [companyId]: cats.map(c => ({ id: c.id, name: c.name, slug: (c as any).slug ?? null, parentName: c.parent_id ? parentMap.get(c.parent_id) ?? null : null })),
+      [companyId]: cats
+        .filter(c => (c as any).slug !== PHOTOGRAPHER_SERVICE_SLUG)
+        .map(c => ({ id: c.id, name: c.name, slug: (c as any).slug ?? null, parentName: c.parent_id ? parentMap.get(c.parent_id) ?? null : null })),
     }))
   }, [supabase])
 
@@ -2927,19 +2932,50 @@ export default function ListingEditorPage() {
     })
   }
 
+  /**
+   * What stands between this company and a place on the project.
+   *
+   * A company that left is not a duplicate — it is a lapsed credit, and
+   * the leave dialog promises the owner can invite it back. It could
+   * not: the row stays behind as `removed`, every add path read it as
+   * "already credited", and one row per company is now a database rule
+   * so an insert beside it would fail too. The row makes way here, at
+   * the moment someone is deliberately inviting that company again.
+   */
+  type CreditCheck =
+    | { state: "free" }
+    | { state: "owner" | "credited"; existing: ProfessionalInviteSummary }
+
+  const resolveExistingCredit = async (
+    companyId?: string | null,
+    email?: string | null,
+    ignoreInviteId?: string,
+  ): Promise<CreditCheck> => {
+    const existing = findExistingInviteByCompany(companyId, email)
+    if (!existing || (ignoreInviteId && existing.id === ignoreInviteId)) return { state: "free" }
+    if (existing.isOwner) return { state: "owner", existing }
+    if (existing.status !== "removed") return { state: "credited", existing }
+
+    const { error } = await supabase.from("project_professionals").delete().eq("id", existing.id)
+    if (error) return { state: "credited", existing }
+    return { state: "free" }
+  }
+
   const handleProfessionalDirectSelect = async (professional: ProfessionalOption, serviceId: string) => {
     if (!projectId || isInviteMutating) {
       return
     }
 
     // Check if this company already has a row on this project (including owner)
-    const existingInvite = findExistingInviteByCompany(professional.company_id, professional.email)
-    if (existingInvite) {
-      if (existingInvite.isOwner) {
+    const credit = await resolveExistingCredit(professional.company_id, professional.email)
+    if (credit.state !== "free") {
+      if (credit.state === "owner") {
         setInviteError(tErrors("owner_already_credited"))
         return
       }
-      // Add service to existing row
+      // Already on the project for some other trade: this becomes one
+      // more service on the row it has, never a second row.
+      const existingInvite = credit.existing
       if (existingInvite.serviceIds.includes(serviceId)) {
         setInviteError(tErrors("company_already_credited_for_service"))
         return
@@ -3139,9 +3175,9 @@ export default function ListingEditorPage() {
   const saveInviteCompany = async (inviteId: string, companyId: string | null, companyEmail?: string | null) => {
     // Check if this company is already on the project (including owner)
     if (companyId) {
-      const existing = findExistingInviteByCompany(companyId, companyEmail)
-      if (existing && existing.id !== inviteId) {
-        toast.error(existing.isOwner
+      const credit = await resolveExistingCredit(companyId, companyEmail, inviteId)
+      if (credit.state !== "free") {
+        toast.error(credit.state === "owner"
           ? tErrors("owner_already_credited")
           : tErrors("company_already_credited"))
         setEditingInviteField(null)
@@ -3326,9 +3362,9 @@ export default function ListingEditorPage() {
     // Check if company is already on the project (draft card may have companyId from Arco search)
     const checkCompanyId = draftCard?.companyId ?? null
     if (checkCompanyId) {
-      const existing = findExistingInviteByCompany(checkCompanyId, trimmed)
-      if (existing) {
-        toast.error(existing.isOwner
+      const credit = await resolveExistingCredit(checkCompanyId, trimmed)
+      if (credit.state !== "free") {
+        toast.error(credit.state === "owner"
           ? tErrors("owner_already_credited")
           : tErrors("company_already_credited"))
         setDraftCard(null)
@@ -3498,9 +3534,9 @@ export default function ListingEditorPage() {
   const handleDupLinkExisting = async () => {
     if (!dupWarning || !projectId) return
     // Final check: is this company already on the project?
-    const existing = findExistingInviteByCompany(dupWarning.existingId)
-    if (existing) {
-      toast.error(existing.isOwner
+    const credit = await resolveExistingCredit(dupWarning.existingId)
+    if (credit.state !== "free") {
+      toast.error(credit.state === "owner"
         ? tErrors("owner_already_credited")
         : tErrors("company_already_credited"))
       setDupWarning(null)
@@ -3712,9 +3748,9 @@ export default function ListingEditorPage() {
     if (!projectId) return
 
     // Check if this company is already on the project (including owner)
-    const existing = findExistingInviteByCompany(companyId, companyEmail)
-    if (existing) {
-      toast.error(existing.isOwner
+    const credit = await resolveExistingCredit(companyId, companyEmail)
+    if (credit.state !== "free") {
+      toast.error(credit.state === "owner"
         ? tErrors("owner_already_credited")
         : tErrors("company_already_credited"))
       setDraftCard(null)
@@ -4014,20 +4050,6 @@ export default function ListingEditorPage() {
     }
   }, [projectId, isRejecting, rejectionReason, selectedRejectionReasons, navigateToNextReview])
 
-  const handleDeleteProject = useCallback(async () => {
-    if (!projectId || !userId || isDeletingProject) return
-    setIsDeletingProject(true)
-    try {
-      const { error } = await supabase.from("projects").delete().eq("id", projectId).eq("client_id", userId)
-      if (error) throw error
-      toast.success(tToast("project_deleted"))
-      router.push(projectOwnerInvite?.companyId ? `/dashboard/listings?company_id=${projectOwnerInvite.companyId}` : "/dashboard/listings")
-    } catch {
-      toast.error(tToast("delete_failed"))
-    } finally {
-      setIsDeletingProject(false)
-    }
-  }, [projectId, userId, isDeletingProject, supabase, router])
 
   // ── New handlers for redesigned layout ───────────────────────────────────
 
@@ -5230,7 +5252,7 @@ export default function ListingEditorPage() {
         { href: projectOwnerInvite?.companyId ? `/dashboard/company?company_id=${projectOwnerInvite.companyId}` : "/dashboard/company", label: tNav("company") },
         { href: projectOwnerInvite?.companyId ? `/dashboard/team?company_id=${projectOwnerInvite.companyId}` : "/dashboard/team", label: tNav("team") },
         { href: "/dashboard/inbox", label: tNav("inbox") },
-        { href: "/dashboard/pricing", label: tNav("subscription") },
+        { href: "/dashboard/subscription", label: tNav("subscription") },
       ]} />
 
       <div>
@@ -6301,22 +6323,37 @@ export default function ListingEditorPage() {
                       <div className="credit-slot-status flex items-center justify-center gap-1.5" style={{ marginTop: 4 }}>
                         <span className="status-pill">
                           {(() => {
+                            // The owner's vocabulary, not the contributor's.
+                            // From here the questions are whether someone
+                            // answered and whether they are on the project;
+                            // where a credit sits on the professional's OWN
+                            // page is their business, so listed, live_on_page
+                            // and unlisted all read as accepted.
+                            //
+                            // Every status ends somewhere: the old chain fell
+                            // through to the raw enum, so a professional who
+                            // left the project read as "removed", in English,
+                            // in the middle of a Dutch table.
+                            //
+                            // An invitation is answered by accepting it or by
+                            // leaving; declining is no longer offered anywhere
+                            // and no row carries it. The enum value still
+                            // exists, so it is folded in with the professionals
+                            // who left rather than dropped — both mean the same
+                            // thing to the owner, and neither may fall through
+                            // to "accepted".
                             const isPublished = projectStatus === "published" || projectStatus === "completed"
-                            const isPending = inv.status === "invited" && !isPublished
-                            const dotClass = inv.isOwner ? "owner" : isPending ? "pending" : inv.status === "live_on_page" ? "featured" : inv.status
-                            const label = inv.isOwner
-                              ? tTeam("status_owner")
-                              : isPending
-                                ? tTeam("status_pending")
-                                : inv.status === "live_on_page"
-                                  ? tTeam("status_featured")
-                                  : inv.status === "listed"
-                                    ? tTeam("status_listed")
-                                    : inv.status === "invited"
-                                      ? tTeam("status_invited")
-                                      : inv.status === "unlisted"
-                                        ? tTeam("status_unlisted")
-                                        : inv.status.replace(/_/g, " ")
+                            const [dotClass, label] = inv.isOwner
+                              ? (["owner", tTeam("status_owner")] as const)
+                              // A project that is not live has sent nothing yet,
+                              // so "invited" would be a promise we did not keep.
+                              : inv.status === "invited" && !isPublished
+                                ? (["pending", tTeam("status_pending")] as const)
+                                : inv.status === "invited"
+                                  ? (["invited", tTeam("status_invited")] as const)
+                                  : inv.status === "removed" || inv.status === "rejected"
+                                    ? (["removed", tTeam("status_removed")] as const)
+                                    : (["featured", tTeam("status_accepted")] as const)
                             return <><span className={`status-pill-dot status-pill-dot--${dotClass}`} />{label}</>
                           })()}
                         </span>
@@ -6553,7 +6590,7 @@ export default function ListingEditorPage() {
                         <div className="add-pro-services">
                           {/* .form-label — the same field label the signup
                               funnel uses, so a label is a label everywhere. */}
-                          <span className={`form-label${dialogHint === "service" ? " form-label--error" : ""}`}>
+                          <span className="form-label">
                             {tTeam("select_service")}
                           </span>
                           {/* Only this list scrolls, so the email above it
@@ -6618,7 +6655,7 @@ export default function ListingEditorPage() {
                             that says what pressing the button will do —
                             the same shape the signup funnel uses to ask
                             for an address. */}
-                        <label className={`form-label${dialogHint === "email" ? " form-label--error" : ""}`} htmlFor="add-pro-email">
+                        <label className="form-label" htmlFor="add-pro-email">
                           {tTeam("email_label")}
                         </label>
                         <div className="form-email" style={{ marginBottom: 0 }}>
@@ -7050,29 +7087,6 @@ export default function ListingEditorPage() {
 
       </div>
 
-      {/* ── Delete project ─────────────────────────────────────── */}
-      {!isAdminReview && (
-        // `padding: 0 60px 60px` used to override the .wrap horizontal
-        // padding, so on mobile the <hr> stopped short of the content
-        // edges. Dropping the inline horizontal override lets .wrap's
-        // responsive padding (60px desktop / 20px mobile) apply and
-        // the divider now spans the full content width on any device.
-        <section className="wrap" style={{ paddingBottom: 60 }}>
-          <hr style={{ border: "none", borderTop: "1px solid var(--arco-rule)", margin: "0 0 24px" }} />
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              fontSize: 13, fontWeight: 300, padding: 0,
-              color: "#dc2626", background: "none",
-              border: "none", cursor: "pointer",
-            }}
-          >
-            <Trash2 size={14} />
-            {tDelete("trigger")}
-          </button>
-        </section>
-      )}
 
       <Footer maxWidth="max-w-7xl" />
 
@@ -7631,73 +7645,6 @@ export default function ListingEditorPage() {
         </div>
       )}
 
-      {showDeleteConfirm && (
-        <div className="popup-overlay" onClick={() => { if (!isDeletingProject) { setShowDeleteConfirm(false); setDeleteConfirmText("") } }}>
-          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
-            <div className="popup-header">
-              <h3 className="arco-section-title">{tDelete("title")}</h3>
-              <button type="button" className="popup-close" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText("") }} aria-label={tActions("close")}>
-                ✕
-              </button>
-            </div>
-            <p style={{ fontSize: 13, fontWeight: 300, color: "var(--arco-light)", margin: "0 0 16px" }}>
-              {tDelete("description")}
-            </p>
-
-            <div className="space-y-2 mb-4">
-              <div className="arco-alert arco-alert--danger">
-                <AlertTriangle className="arco-alert-icon" />
-                <span>{tDelete("warning_primary")}</span>
-              </div>
-
-              <div className="arco-alert arco-alert--warn">
-                <AlertTriangle className="arco-alert-icon" />
-                <span>{tDelete("warning_secondary")}</span>
-              </div>
-            </div>
-
-            <p className="body-small text-text-secondary mb-3">
-              {/* next-intl rejects plain t() on messages that contain
-                  tags — the rich-tag API is required so the rendered
-                  output is a React node tree, not a raw HTML string.
-                  Without this the message falls back to its key. */}
-              {tDelete.rich("type_to_confirm", { strong: (chunks) => <strong>{chunks}</strong> })}
-            </p>
-            <input
-              type="text"
-              value={deleteConfirmText}
-              onChange={(e) => setDeleteConfirmText(e.target.value)}
-              placeholder={tDelete("confirm_placeholder")}
-              className="w-full px-3 py-2 text-sm border border-border rounded-[3px] mb-4 focus:outline-none focus:border-foreground"
-            />
-
-            <div className="popup-actions">
-              <button
-                type="button"
-                className="btn-tertiary"
-                onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText("") }}
-                disabled={isDeletingProject}
-                style={{ flex: 1 }}
-              >
-                {tActions("cancel")}
-              </button>
-              <button
-                type="button"
-                disabled={deleteConfirmText !== "DELETE" || isDeletingProject}
-                onClick={() => void handleDeleteProject()}
-                className={`flex-1 font-normal py-3 px-4 border-none rounded-[3px] cursor-pointer transition-opacity ${
-                  deleteConfirmText === "DELETE"
-                    ? "bg-red-600 text-white"
-                    : "bg-surface text-text-secondary"
-                } ${isDeletingProject ? "opacity-60" : ""}`}
-                style={{ flex: 1, fontFamily: "var(--font-sans)", fontSize: 15 }}
-              >
-                {isDeletingProject ? tDelete("deleting") : tDelete("trigger")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   )

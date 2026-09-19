@@ -28,6 +28,7 @@ export function UsageBar({
   fillPct,
   note = null,
   unbounded = false,
+  fillShare = 1,
   lockedFromPct = null,
   lockedLabel = null,
   markerLabel = null,
@@ -51,6 +52,13 @@ export function UsageBar({
    * the track only says the road continues.
    */
   unbounded?: boolean
+  /**
+   * How much of the open fill this bar takes, 0–1. For two unbounded
+   * bars shown together: without it a 6 and a 2 draw the same length,
+   * and the eye reads them as equal. Floored, so the shorter bar can
+   * still hold its own labels.
+   */
+  fillShare?: number
   /**
    * Where the visible part ends and the withheld part begins. Past this
    * point the fill is dimmed rather than absent: those projects exist,
@@ -98,11 +106,25 @@ export function UsageBar({
   // it on a phone. Every other case has a real proportion to state, and
   // states it here.
   const open = unbounded && filled > 0
+  const share = Math.max(0.28, Math.min(1, fillShare))
+  // How much of the whole track the dimmed stretch covers. Under this
+  // much there is no room for its label, whatever the words are — a
+  // count plus two words needs roughly a fifth of a bar.
+  const dimmedTrackShare = (open ? 62 * share : filled) * (1 - lockedShare)
+  const lockedLabelFits = dimmedTrackShare >= 22
 
   return (
     <div
       className={`usage-bar${open ? " usage-bar--open" : ""}${nothingYet ? " usage-bar--slot" : ""}`}
-      style={open || nothingYet ? undefined : ({ "--u-fill": `${filled}%` } as React.CSSProperties)}
+      style={
+        open
+          ? share < 1
+            ? ({ "--u-fill": `calc(var(--u-open) * ${share})` } as React.CSSProperties)
+            : undefined
+          : nothingYet
+            ? undefined
+            : ({ "--u-fill": `${filled}%` } as React.CSSProperties)
+      }
     >
       {/* The same count line the discovery grids use: the number in
           black, the noun beside it in secondary. One convention for
@@ -162,7 +184,7 @@ export function UsageBar({
             same object rather than a legend to cross-reference. Set
             against the far edge of that stretch, where the fill stops,
             so it reads as the count that stretch arrives at. */}
-        {split && (
+        {split && (lockedLabelFits ? (
           <span style={{
             position: "absolute", top: 0, bottom: 0,
             left: ofFill(lockedShare), width: ofFill(1 - lockedShare),
@@ -172,7 +194,19 @@ export function UsageBar({
           }}>
             {lockedLabel}
           </span>
-        )}
+        ) : (
+          /* The dimmed stretch is too short to hold its own words —
+             they would spill left over the bright segment, teal on
+             teal. Out on the open track instead, in dark text, where
+             the reader can at least read them. */
+          <span style={{
+            position: "absolute", top: 0, bottom: 0, left: "calc(var(--u-fill) + 14px)",
+            display: "flex", alignItems: "center",
+            fontSize: 13, color: "var(--text-secondary)", whiteSpace: "nowrap",
+          }}>
+            {lockedLabel}
+          </span>
+        ))}
       </div>
 
       {/* Labels pinned under the two points that matter: where the free

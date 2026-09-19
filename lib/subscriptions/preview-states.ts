@@ -22,6 +22,7 @@ export const PREVIEW_STATES = [
   "pro_year",
   "past_due",
   "canceling",
+  "returning",
 ] as const
 
 export type PreviewState = (typeof PREVIEW_STATES)[number]
@@ -34,6 +35,7 @@ export const PREVIEW_LABELS: Record<PreviewState, string> = {
   pro_year: "Pro · yearly",
   past_due: "Past due",
   canceling: "Cancelling",
+  returning: "Returning",
 }
 
 export const PREVIEW_NOTES: Record<PreviewState, string> = {
@@ -44,6 +46,7 @@ export const PREVIEW_NOTES: Record<PreviewState, string> = {
   pro_year: "The state we steer people to: €468 a year by direct debit.",
   past_due: "A collection that failed. The company keeps access while dunning runs (D6).",
   canceling: "Cancelled but still inside the paid period. Access holds until the end date.",
+  returning: "Paid once, on Free again, thinking about coming back. We still hold their mandate, so an upgrade should not ask for it twice.",
 }
 
 const daysFromNow = (days: number) =>
@@ -88,6 +91,10 @@ export function previewBilling(state: PreviewState): CompanyBilling {
         interval: "year", currentPeriodEnd: daysFromNow(62), cancelAtPeriodEnd: true,
         stripeCustomerId: "cus_preview", stripeSubscriptionId: "sub_preview",
       }
+    // Free again, but we have met before: no subscription, and a Stripe
+    // customer that still carries the mandate from last time.
+    case "returning":
+      return { ...base, stripeCustomerId: "cus_preview" }
     default:
       return base
   }
@@ -108,6 +115,26 @@ export function previewBillingDetails(state: PreviewState): BillingDetails {
     return { configured: true, paymentMethod: null, invoices: [] }
   }
 
+  // A year of Pro that ended eight months ago, and the mandate still on
+  // file. Cancelling a subscription does not revoke a payment method,
+  // which is exactly why coming back should be one click.
+  if (state === "returning") {
+    return {
+      configured: true,
+      paymentMethod: { type: "sepa_debit", label: "SEPA-incasso", last4: "5264", expiry: null },
+      invoices: [
+        {
+          id: "in_preview_old",
+          number: "A919F631-0004",
+          created: new Date(Date.now() - 243 * 24 * 60 * 60 * 1000).toISOString(),
+          total: "€ 566,28",
+          status: "paid",
+          url: null,
+        },
+      ],
+    }
+  }
+
   const monthly = state === "pro_month"
   const amount = monthly ? "€ 59,29" : "€ 566,28"
   const count = monthly ? 6 : 2
@@ -123,7 +150,10 @@ export function previewBillingDetails(state: PreviewState): BillingDetails {
       // The most recent one carries the state being previewed; the rest
       // are settled history.
       status: i === 0 && state === "past_due" ? "open" : "paid",
-      url: "https://invoice.stripe.com/",
+      // No hosted invoice exists for a fixture, and a link to Stripe's
+      // bare domain is worse than no link: the row says "—", which is
+      // exactly what a real invoice without a hosted copy shows.
+      url: null,
     }
   })
 
@@ -162,6 +192,10 @@ export function previewUsage(state: PreviewState): ProjectUsage {
       return free({ canPublish: false, publishedCount: 0, contributorTotal: 6 })
     case "free_both":
       return free({ canPublish: true, publishedCount: 6, contributorTotal: 2 })
+    // Back on Free after a paid year, so the credits they gained while
+    // paying are the ones now held back — the reason to return.
+    case "returning":
+      return free({ canPublish: true, publishedCount: 6, contributorTotal: 4 })
     // Pro: the same company as free_both, with nothing held back. The
     // page merges the two bars there — see SubscriptionScreen.
     default:

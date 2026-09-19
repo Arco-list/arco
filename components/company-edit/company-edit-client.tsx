@@ -6,7 +6,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useTranslations, useLocale } from "next-intl"
 import { toast } from "sonner"
-import { AlertTriangle, ImageIcon, MoreHorizontal, ExternalLink } from "lucide-react"
+import { AlertTriangle, ImageIcon, ExternalLink } from "lucide-react"
 import { ImportProjectModal } from "@/components/import-project-modal"
 import { LinkInputRow } from "@/components/landing"
 
@@ -25,6 +25,7 @@ import {
   deleteCompanyAction,
   completeCompanySetupAction,
   updateCoverPhotoAction,
+  switchCompanyAction,
 } from "@/app/dashboard/company/actions"
 import { syncCompanyListedStatus } from "@/app/admin/projects/actions"
 import { getCompanyTranslation } from "@/lib/company-translations"
@@ -52,10 +53,16 @@ import {
   type ContributorStatus,
   CONTRIBUTOR_STATUS_LABELS,
   CONTRIBUTOR_STATUS_DOT_CLASS,
+  CONTRIBUTOR_STATUS_CHIP_CLASS,
   buildContributorStatusOptions,
   buildOwnerStatusOptions,
 } from "@/lib/contributor-status-config"
 import { ListingStatusModal } from "@/components/listing-status-modal"
+import { ListingCard } from "@/components/listing-card"
+import { ConfirmDeleteModal } from "@/components/confirm-delete-modal"
+import { getCompanyIsProAction } from "@/lib/subscriptions/plan-actions"
+import { setContributorStatusAction } from "@/lib/subscriptions/credit-actions"
+import { leaveProjectAction } from "@/lib/subscriptions/leave-project-action"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { sendDomainVerificationAction, verifyDomainCodeAction } from "@/app/create-company/actions"
 import { SocialIconsRow } from "@/components/company-edit/social-icons-row"
@@ -103,7 +110,7 @@ interface CompanyProject {
 interface ServiceCategory {
   name: string
   slug: string
-  services: Array<{ id: string; name: string; slug: string | null }>
+  services: Array<{ id: string; name: string; slug: string | null; canPublishProjects?: boolean }>
 }
 
 interface PendingProject {
@@ -116,7 +123,7 @@ interface PendingProject {
 export interface CompanyEditClientProps {
   company: CompanyRow
   socialLinks: SocialLinkRow[]
-  services: Array<{ id: string; name: string; slug: string | null }>
+  services: Array<{ id: string; name: string; slug: string | null; canPublishProjects?: boolean }>
   serviceCategories: ServiceCategory[]
   professionalId: string | null
   projects: CompanyProject[]
@@ -185,6 +192,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   const tIP = useTranslations("import_project")
   const tNav = useTranslations("nav")
   const tStatus = useTranslations("project_status")
+  const tDash = useTranslations("dashboard")
   const ownerStatusOptions = useMemo(() => buildOwnerStatusOptions((k) => tStatus(k)), [tStatus])
   const contributorStatusOptions = useMemo(() => buildContributorStatusOptions((k) => tStatus(k)), [tStatus])
   const locale = useLocale()
@@ -227,6 +235,27 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   // instead of Team Size / Certificates), locks the services badge, hides the
   // Team nav link, and renames "Featured projects" → "Photographed projects".
   const isPhotographer = (company as any).audience === "pro"
+
+  /**
+   * Make the save actions agree with the page about which company this is.
+   *
+   * The page resolves its company from ?company_id=. Every save action
+   * resolves it from the active-company cookie, and none of them is told
+   * otherwise — getCompanyContext takes an override parameter that no
+   * caller passes. Arrive here any way other than through the switcher —
+   * a link from admin, a bookmark, a back-navigation — and the two
+   * disagree: the screen shows one company while the writes land on
+   * another, and report success. It happened: services and a logo
+   * entered on one company's page were written to a different company.
+   *
+   * The switcher sets the cookie before it navigates. This covers every
+   * other way in, and does nothing when they already agree.
+   */
+  useEffect(() => {
+    const active = document.cookie.match(/(?:^|;\s*)active_company_id=([^;]+)/)?.[1]
+    if (active === company.id) return
+    void switchCompanyAction(company.id)
+  }, [company.id])
 
   // ── Specs state ──
   const [foundedYear, setFoundedYear] = useState<number | null>(company.founded_year ?? null)
@@ -280,7 +309,6 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
 
   // ── Delete state ──
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [deleteConfirmText, setDeleteConfirmText] = useState("")
   const [isCheckingDeletion, setIsCheckingDeletion] = useState(false)
   const [isDeletingCompany, setIsDeletingCompany] = useState(false)
   const [deletionCheck, setDeletionCheck] = useState<{
@@ -423,6 +451,63 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   // ── Project card handlers ──
   const userId = user?.id ?? null
 
+  const [isPro, setIsPro] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    getCompanyIsProAction(company.id)
+      .then((r) => { if (!cancelled) setIsPro(r.isPro) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [company.id])
+
+  /**
+   * "Not on your page" has two causes, and only one of them is ours to
+   * sell against: the plan, or the reader's own choice. Free with the
+   * single place already taken by another credit is the first; anything
+   * else — Pro, or a free place still open — is the second.
+   *
+   * Counted over every project the company has, not the three this
+   * section shows: the credit holding the place may be off-screen.
+   */
+  const blockedByPlan = useCallback(
+    (project: CompanyProject) =>
+      !isPro
+      && !project.isOwner
+      && project.projectProfessionalStatus === "listed"
+      && companyProjects.some((p) => !p.isOwner && p.projectProfessionalStatus === "live_on_page"),
+    [isPro, companyProjects],
+  )
+
+  // Leaving a project, or deleting one. Kept together because the
+  // dialog is the same gesture either way; only the consequence differs.
+  const [deleting, setDeleting] = useState<{ project: CompanyProject; mode: "owner" | "leave" } | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleting) return
+    setIsDeleting(true)
+    try {
+      if (deleting.mode === "leave") {
+        if (!deleting.project.projectProfessionalId) throw new Error("not_found")
+        const result = await leaveProjectAction(deleting.project.projectProfessionalId)
+        if ("error" in result) throw new Error(result.error)
+        toast.success(tDash("delete_modal_done_leave"))
+      } else {
+        const { error } = await supabaseClient.from("projects").delete().eq("id", deleting.project.id)
+        if (error) throw error
+        toast.success(tDash("delete_modal_done_owner"))
+      }
+      // Gone from the list either way: one because it no longer exists,
+      // the other because it is no longer yours to show.
+      setCompanyProjects((prev) => prev.filter((p) => p.id !== deleting.project.id))
+      setDeleting(null)
+    } catch {
+      toast.error(tDash("table_delete_failed"))
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [deleting, supabaseClient, tDash])
+
   const handleProjectUpdateStatus = useCallback((project: CompanyProject) => {
     setProjectDropdown(null)
     setSelectedCardProject(project)
@@ -462,8 +547,29 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     if (!selectedCardProject?.projectProfessionalId || !selectedContributorStatus) return
     setIsSavingProjectStatus(true)
     try {
-      const { error } = await supabaseClient.from("project_professionals").update({ status: selectedContributorStatus, responded_at: new Date().toISOString() }).eq("id", selectedCardProject.projectProfessionalId)
-      if (error) throw error
+      // Through the server, not straight at the table: putting a credit
+      // on the page has to take the free allowance into account, and
+      // that means demoting whatever is there — two writes that must
+      // not half-happen, and a rule the browser should not be trusted
+      // to apply to itself. This page used to write the status straight
+      // to the table, which let a free company fill its page one card
+      // at a time.
+      const result = await setContributorStatusAction(
+        selectedCardProject.projectProfessionalId,
+        selectedContributorStatus as "live_on_page" | "listed" | "unlisted",
+      )
+      if ("error" in result) throw new Error(result.error)
+
+      // Whatever gave up its place follows the same path on screen.
+      if (result.demoted.length > 0) {
+        const demotedLabel = tStatus("labels.listed")
+        setCompanyProjects(prev => prev.map(p =>
+          p.projectProfessionalId && result.demoted.includes(p.projectProfessionalId)
+            ? { ...p, status: "listed", projectProfessionalStatus: "listed", statusLabel: demotedLabel, statusDotClass: CONTRIBUTOR_STATUS_DOT_CLASS.listed }
+            : p,
+        ))
+      }
+
       setCompanyProjects(prev => prev.map(p => p.id === selectedCardProject.id ? {
         ...p,
         projectProfessionalStatus: selectedContributorStatus,
@@ -481,7 +587,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     } finally {
       setIsSavingProjectStatus(false)
     }
-  }, [selectedCardProject, selectedContributorStatus, supabaseClient])
+  }, [selectedCardProject, selectedContributorStatus, tStatus])
 
   const handleProjectChangeCover = useCallback((project: CompanyProject) => {
     setProjectDropdown(null)
@@ -585,6 +691,26 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   // Labels are localised so NL visitors see "Aannemer" instead of
   // "Builder" in the header pill and the "professional services"
   // fallback beneath the title.
+  /**
+   * Publishing follows the services on screen, not the ones the page was
+   * built with.
+   *
+   * It used to be a server prop, computed once. Adding "Architect" put
+   * the word in the header — that comes from state — while the projects
+   * section went on saying you could only be invited, because its answer
+   * had been decided before the change. Two claims about the same
+   * company, on the same screen, and only a full reload settled them.
+   *
+   * The server value still opens the page (state and prop agree on the
+   * first render) and stays the fallback for a service list we could not
+   * resolve.
+   */
+  const canPublish = useMemo(() => {
+    const publishable = new Set(services.filter((sv) => sv.canPublishProjects).map((sv) => sv.id))
+    if (publishable.size === 0) return canPublishProjects
+    return servicesOffered.some((id) => publishable.has(id))
+  }, [services, servicesOffered, canPublishProjects])
+
   const orderedServiceNames = servicesOffered
     .map((id) => {
       const s = services.find((svc) => svc.id === id)
@@ -695,7 +821,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   const firstProjectSegment: FirstProjectSegment =
     pendingInviteProject ? "accept_invite" :
     listedProject ? "list_company" :
-    !canPublishProjects ? "invitee" :
+    !canPublish ? "invitee" :
     draftProject ? "complete_draft" :
     "new_publisher"
 
@@ -794,7 +920,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     const d = overrides?.description ?? description
     setEditSaveStatus("saving")
     startTransition(async () => {
-      const result = await updateCompanyProfileAction({ name: n, description: d || null })
+      const result = await updateCompanyProfileAction({ name: n, description: d || null }, company.id)
       if (!result.success) {
         toast.error(result.error ?? t("save_error"))
         setEditSaveStatus("idle")
@@ -814,7 +940,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         city: (overrides?.city !== undefined ? overrides.city : city) as string | null,
         country: (overrides?.country !== undefined ? overrides.country : country) as string | null,
         address: (overrides?.address !== undefined ? overrides.address : address) as string | null,
-      })
+      }, company.id)
       if (!result.success) {
         toast.error(result.error ?? t("specs_error"))
         setEditSaveStatus("idle")
@@ -841,7 +967,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
           ? { latitude: overrides.latitude, longitude: overrides.longitude }
           : {}),
         ...socialForm,
-      })
+      }, company.id)
       if (!result.success) {
         toast.error(result.error ?? t("contact_error"))
         setEditSaveStatus("idle")
@@ -938,7 +1064,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         // Only photographer companies pass specialties; other callers leave
         // it undefined so the action skips the column update.
         specialties: isPhotographer ? (overrides?.specialties ?? specialties) : undefined,
-      })
+      }, company.id)
       if (!result.success) {
         toast.error(result.error ?? t("services_error"))
         setEditSaveStatus("idle")
@@ -956,7 +1082,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       const result = await updateCompanyContactAction({
         domain, email, phone, address, city, country,
         ...newSocial,
-      })
+      }, company.id)
       if (!result.success) {
         toast.error(result.error ?? t("social_error"))
         setEditSaveStatus("idle")
@@ -975,7 +1101,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     formData.append("file", file)
     setEditSaveStatus("saving")
     startTransition(async () => {
-      const result = await uploadCompanyLogoAction(formData)
+      const result = await uploadCompanyLogoAction(formData, company.id)
       if (!result.success) {
         toast.error(result.error ?? t("logo_error"))
         setEditSaveStatus("idle")
@@ -993,7 +1119,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     setStatusDialogOpen(false)
     setCompanyStatus(selectedStatus)
     startTransition(async () => {
-      const result = await changeCompanyStatusAction({ status: selectedStatus })
+      const result = await changeCompanyStatusAction({ status: selectedStatus }, company.id)
       if (!result.success) {
         toast.error(result.error ?? t("status_error"))
         setCompanyStatus(company.status)
@@ -1010,7 +1136,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     setHeroProjectId(project.id)
     setPickerProject(null)
     startTransition(async () => {
-      const result = await setCompanyHeroPhotoAction({ projectId: project.id, photoUrl })
+      const result = await setCompanyHeroPhotoAction({ projectId: project.id, photoUrl }, company.id)
       if (!result.success) {
         toast.error(result.error ?? t("cover_set_error"))
         setHeroUrl(initialHeroUrl)
@@ -1023,7 +1149,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     setHeroUrl(null)
     setHeroProjectId(null)
     startTransition(async () => {
-      const result = await clearCompanyHeroPhotoAction()
+      const result = await clearCompanyHeroPhotoAction(company.id)
       if (!result.success) {
         toast.error(result.error ?? t("cover_clear_error"))
         setHeroUrl(initialHeroUrl)
@@ -1247,7 +1373,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         // the nav order stays stable.
         ...(isPhotographer ? [] : [{ href: `/dashboard/team?company_id=${company.id}`, label: tNav("team") }]),
         { href: "/dashboard/inbox", label: tNav("inbox") },
-        { href: "/dashboard/pricing", label: tNav("subscription") },
+        { href: "/dashboard/subscription", label: tNav("subscription") },
       ]} />
 
       <CompanyEditTour
@@ -1752,7 +1878,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                   View all listings →
                 </Link>
               )}
-              {companyProjects.length > 0 && canPublishProjects && (
+              {companyProjects.length > 0 && canPublish && (
                 <button
                   type="button"
                   className="btn-primary"
@@ -1772,187 +1898,34 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
               }).slice(0, 3).map((project) => {
                 const cardKey = project.id
                 return (
-                  <div
+                  <ListingCard
                     key={project.id}
-                    className="discover-card"
-                    style={{ position: "relative", cursor: "pointer" }}
-                    onClick={(e) => {
-                      if (!(e.target as Element).closest(".dropdown-menu")) {
-                        handleProjectCardClick(project)
-                      }
-                    }}
-                  >
-                    {/* Image */}
-                    <div
-                      className="discover-card-image-wrap"
-                      style={{ position: "relative" }}
-                      onMouseEnter={(e) => {
-                        const overlay = e.currentTarget.querySelector<HTMLElement>(".listing-card-hover-overlay")
-                        const pill = e.currentTarget.querySelector<HTMLElement>(".listing-card-hover-pill")
-                        if (overlay) overlay.style.background = "rgba(0,0,0,.35)"
-                        if (pill) pill.style.opacity = "1"
-                      }}
-                      onMouseLeave={(e) => {
-                        const overlay = e.currentTarget.querySelector<HTMLElement>(".listing-card-hover-overlay")
-                        const pill = e.currentTarget.querySelector<HTMLElement>(".listing-card-hover-pill")
-                        if (overlay) overlay.style.background = "transparent"
-                        if (pill) pill.style.opacity = "0"
-                      }}
-                    >
-                      <div className="discover-card-image-layer">
-                        {project.coverImage ? (
-                          <img src={project.coverImage} alt={project.title} />
-                        ) : (
-                          <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#c8c8c6", background: "var(--arco-surface)" }}>
-                            <ImageIcon size={32} />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Hover action pill / Accept button for invited */}
-                      {project.projectProfessionalStatus === "invited" ? (
-                        <div
-                          style={{
-                            position: "absolute", inset: 0, zIndex: 1,
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            cursor: "pointer",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = "rgba(0,0,0,.15)"
-                            const pill = e.currentTarget.querySelector<HTMLElement>("[data-accept-pill]")
-                            if (pill) { pill.style.opacity = "1"; pill.style.background = "rgba(0,0,0,.6)"; pill.style.borderColor = "rgba(255,255,255,.4)" }
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = "transparent"
-                            const pill = e.currentTarget.querySelector<HTMLElement>("[data-accept-pill]")
-                            if (pill) { pill.style.opacity = "0.7"; pill.style.background = "rgba(0,0,0,.45)"; pill.style.borderColor = "rgba(255,255,255,.25)" }
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleProjectUpdateStatus(project)
-                          }}
-                        >
-                          <span
-                            data-accept-pill=""
-                            style={{
-                              display: "inline-flex", alignItems: "center", gap: 7,
-                              fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 400,
-                              color: "#fff", background: "rgba(0,0,0,.45)",
-                              border: "1px solid rgba(255,255,255,.25)", borderRadius: 100,
-                              padding: "8px 18px",
-                              backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-                              opacity: 0.7, transition: "opacity .2s, background .2s, border-color .2s",
-                            }}
-                          >
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 8l4 4 8-8" /></svg>
-                            Accept
-                          </span>
-                        </div>
-                      ) : (
-                        <div
-                          className="listing-card-hover-overlay"
-                          style={{
-                            position: "absolute", inset: 0, zIndex: 1,
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            background: "transparent", transition: "background .2s",
-                            pointerEvents: "none",
-                          }}
-                        >
-                          <span
-                            className="listing-card-hover-pill"
-                            style={{
-                              display: "inline-flex", alignItems: "center", gap: 7,
-                              fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 400,
-                              color: "#fff", background: "rgba(0,0,0,.6)",
-                              border: "1px solid rgba(255,255,255,.25)", borderRadius: 100,
-                              padding: "8px 18px",
-                              backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-                              opacity: 0, transition: "opacity .2s",
-                            }}
-                          >
-                            {project.isOwner ? t("edit_project") : t("update_cover")}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Owner pill — bottom-left of image */}
-                      {project.isOwner && (
-                        <span
-                          style={{
-                            position: "absolute", bottom: 10, left: 10, zIndex: 2,
-                            display: "inline-flex", alignItems: "center",
-                            fontSize: 11, fontWeight: 500, color: "#fff",
-                            background: "rgba(0,0,0,.45)", borderRadius: 100,
-                            padding: "4px 10px", letterSpacing: ".02em",
-                            backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-                          }}
-                        >
-                          {t("owner_label")}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Status pill */}
-                    <div style={{ position: "absolute", top: 12, left: 12, zIndex: 2 }}>
-                      <button
-                        className="filter-pill flex items-center gap-1.5"
-                        onClick={(e) => { e.stopPropagation(); handleProjectUpdateStatus(project) }}
-                      >
-                        <span className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${project.statusDotClass}`} />
-                        <span className="text-xs font-medium">{project.statusLabel}</span>
-                      </button>
-                    </div>
-
-                    {/* Options menu */}
-                    <div
-                      className="dropdown-menu"
-                      style={{ position: "absolute", top: 12, right: 12, zIndex: 2 }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <button
-                        className="filter-pill"
-                        onClick={() => setProjectDropdown(projectDropdown === cardKey ? null : cardKey)}
-                        data-open={projectDropdown === cardKey ? "true" : undefined}
-                        aria-label={t("project_options_aria")}
-                        style={{ padding: "6px 8px", gap: 0 }}
-                      >
-                        <MoreHorizontal style={{ width: 16, height: 16 }} />
-                      </button>
-                      <div
-                        className="filter-dropdown"
-                        data-open={projectDropdown === cardKey ? "true" : undefined}
-                        data-align="right"
-                        style={{ minWidth: 180, top: "calc(100% + 6px)" }}
-                      >
-                        {project.isOwner && (
-                          <div className="filter-dropdown-option" onClick={() => { setProjectDropdown(null); router.push(`/dashboard/edit/${project.id}`) }} role="menuitem">
-                            <span className="filter-dropdown-label">{t("edit_listing")}</span>
-                          </div>
-                        )}
-                        <div className="filter-dropdown-option" onClick={() => handleProjectUpdateStatus(project)} role="menuitem">
-                          <span className="filter-dropdown-label">{t("update_status")}</span>
-                        </div>
-                        <div className="filter-dropdown-option" onClick={() => handleProjectChangeCover(project)} role="menuitem">
-                          <span className="filter-dropdown-label">{t("change_cover")}</span>
-                        </div>
-                        {project.slug && (
-                          <div className="filter-dropdown-option" onClick={() => { setProjectDropdown(null); const url = projectViewUrl(project); if (url) window.open(url, "_blank", "noopener,noreferrer") }} role="menuitem">
-                            <span className="filter-dropdown-label">{t("view_project")}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Card text */}
-                    <h3 className="discover-card-title">{project.title}</h3>
-                    {project.subtitle && <p className="discover-card-sub">{project.subtitle}</p>}
-                  </div>
+                    title={project.title}
+                    coverImageUrl={project.coverImage}
+                    meta={project.subtitle ? <p className="discover-card-sub">{project.subtitle}</p> : undefined}
+                    statusLabel={project.statusLabel}
+                    statusDotClass={project.statusDotClass}
+                    role={project.isOwner ? "owner" : "contributor"}
+                    invited={project.projectProfessionalStatus === "invited"}
+                    locked={blockedByPlan(project)}
+                    menuOpen={projectDropdown === cardKey}
+                    onMenuOpenChange={(open) => setProjectDropdown(open ? cardKey : null)}
+                    onOpen={() => handleProjectCardClick(project)}
+                    onStatusClick={() => handleProjectUpdateStatus(project)}
+                    onAccept={() => handleProjectUpdateStatus(project)}
+                    onUpgrade={() => router.push("/dashboard/subscription/checkout?interval=year&return=/dashboard/company")}
+                    onEditListing={project.isOwner ? () => { setProjectDropdown(null); router.push(`/dashboard/edit/${project.id}`) } : undefined}
+                    onUpdateStatus={() => handleProjectUpdateStatus(project)}
+                    onChangeCover={() => handleProjectChangeCover(project)}
+                    viewUrl={projectViewUrl(project)}
+                    onDelete={() => setDeleting({ project, mode: project.isOwner ? "owner" : "leave" })}
+                  />
                 )
               })}
             </div>
           ) : (
             <div style={{ border: "1px dashed var(--border)", borderRadius: 8, padding: "80px 24px", textAlign: "center" }}>
-              {canPublishProjects ? (
+              {canPublish ? (
                 <>
                   <p className="arco-eyebrow" style={{ marginBottom: 16 }}>{t("get_started")}</p>
                   <h2 className="arco-section-title" style={{ marginBottom: 12 }}>{t("publish_first_project")}</h2>
@@ -2350,7 +2323,6 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
             <button
               onClick={async () => {
                 setDeleteDialogOpen(true)
-                setDeleteConfirmText("")
                 setIsCheckingDeletion(true)
                 setDeletionCheck(null)
                 const result = await checkCompanyDeletionAction()
@@ -2362,7 +2334,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
               style={{
                 display: "inline-flex", alignItems: "center", gap: 6,
                 fontSize: 13, fontWeight: 300, padding: 0,
-                color: "#dc2626", background: "none",
+                color: "var(--destructive)", background: "none",
                 border: "none", cursor: "pointer",
               }}
             >
@@ -2779,7 +2751,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                 <div>
                   <p style={{ fontWeight: 500 }}>{t("no_live_projects")}</p>
                   <p>
-                    {canPublishProjects
+                    {canPublish
                       ? t("no_live_projects_publisher")
                       : t("no_live_projects_invitee")}
                   </p>
@@ -2842,120 +2814,52 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       })()}
 
       {/* ════════════════════ DELETE DIALOG ════════════════════ */}
-      {deleteDialogOpen && (() => {
-        // Confirmation word is the localized placeholder (DELETE / VERWIJDEREN).
-        // Server always expects the sentinel "DELETE", so we forward that
-        // literal once the user has typed the localized word.
-        const confirmWord = t("delete_confirm_placeholder")
-        const confirmMatches = deleteConfirmText === confirmWord
-        return (
-        <div className="popup-overlay" onClick={() => { setDeleteDialogOpen(false); setDeleteConfirmText("") }}>
-          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
-            <div className="popup-header">
-              <h3 className="arco-section-title">{t("delete_company")}</h3>
-              <button className="popup-close" onClick={() => { setDeleteDialogOpen(false); setDeleteConfirmText("") }} aria-label={tc("close")}>
-                ✕
-              </button>
-            </div>
-            <p style={{ fontSize: 13, fontWeight: 300, color: "var(--arco-light)", margin: "0 0 16px" }}>
-              {t("delete_dialog_body")}
-            </p>
-
-            {isCheckingDeletion ? (
-              <p className="body-small text-text-secondary">{t("delete_check_loading")}</p>
-            ) : deletionCheck ? (
-              <>
-                <div className="arco-alert arco-alert--danger">
-                  <AlertTriangle className="arco-alert-icon" />
-                  <span>{t("delete_dialog_danger")}</span>
-                </div>
-
-                {deletionCheck.warnings.length > 0 && (
-                  <div className="arco-alert arco-alert--warn">
-                    <AlertTriangle className="arco-alert-icon" />
-                    <ul className="m-0 p-0 list-none space-y-0.5">
-                      {deletionCheck.warnings.map((w, i) => (
-                        <li key={i}>
-                          {w.code === "team_members"
-                            ? t("delete_warn_team_members", { count: w.count })
-                            : t("delete_warn_projects", { count: w.count })}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {deletionCheck.blockers.length > 0 && (
-                  <div className="arco-alert arco-alert--danger">
-                    <AlertTriangle className="arco-alert-icon" />
-                    <ul className="m-0 p-0 list-none space-y-0.5">
-                      {deletionCheck.blockers.map((b, i) => <li key={i}>{b}</li>)}
-                    </ul>
-                  </div>
-                )}
-
-                {deletionCheck.canDelete && (
-                  <>
-                    <p className="body-small text-text-secondary mb-3">
-                      {t.rich("delete_confirm_text", {
-                        word: confirmWord,
-                        name: deletionCheck.companyName,
-                        strong: (chunks) => <strong>{chunks}</strong>,
-                      })}
-                    </p>
-                    <input
-                      type="text"
-                      value={deleteConfirmText}
-                      onChange={(e) => setDeleteConfirmText(e.target.value)}
-                      placeholder={confirmWord}
-                      className="w-full px-3 py-2 text-sm border border-border rounded-[3px] mb-4 focus:outline-none focus:border-foreground"
-                    />
-                  </>
-                )}
-
-                <div className="popup-actions">
-                  <button
-                    className="btn-tertiary"
-                    onClick={() => { setDeleteDialogOpen(false); setDeleteConfirmText("") }}
-                    style={{ flex: 1 }}
-                  >
-                    {tc("cancel")}
-                  </button>
-                  <button
-                    disabled={!deletionCheck.canDelete || !confirmMatches || isDeletingCompany}
-                    onClick={async () => {
-                      setIsDeletingCompany(true)
-                      const result = await deleteCompanyAction({ confirmText: "DELETE" })
-                      if (result.success) {
-                        setDeleteDialogOpen(false)
-                        // Deleting the company removes the user's professional
-                        // context — /dashboard would just bounce back to
-                        // create-company. Send them to the marketing home
-                        // instead so they land somewhere useful.
-                        router.push("/")
-                      } else {
-                        setIsDeletingCompany(false)
-                        toast.error(result.error ?? t("delete_failed"))
-                      }
-                    }}
-                    className={`flex-1 font-normal py-3 px-4 border-none rounded-[3px] cursor-pointer transition-opacity ${
-                      deletionCheck.canDelete && confirmMatches
-                        ? "bg-red-600 text-white"
-                        : "bg-surface text-text-secondary"
-                    } ${isDeletingCompany ? "opacity-60" : ""}`}
-                    style={{ flex: 1, fontFamily: "var(--font-sans)", fontSize: 15 }}
-                  >
-                    {isDeletingCompany ? t("deleting") : t("delete_company")}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <p className="body-small text-red-600">{t("delete_check_failed")}</p>
-            )}
-          </div>
-        </div>
-        )
-      })()}
+      {/* The same dialog a project uses. It carried its own before: two
+          alert boxes saying in colour what the sentence above them
+          already said, and a filled red button where the project asks
+          with an outlined one. The consequences a company has and a
+          project does not — the team, the projects it is credited on —
+          ride in as plain lines. */}
+      {deleteDialogOpen && (
+        <ConfirmDeleteModal
+          open
+          onClose={() => setDeleteDialogOpen(false)}
+          onConfirm={async () => {
+            setIsDeletingCompany(true)
+            const result = await deleteCompanyAction({ confirmText: "DELETE" })
+            if (result.success) {
+              setDeleteDialogOpen(false)
+              // Deleting the company removes the user's professional
+              // context — /dashboard would just bounce back to
+              // create-company. Send them to the marketing home instead
+              // so they land somewhere useful.
+              router.push("/")
+            } else {
+              setIsDeletingCompany(false)
+              toast.error(result.error ?? t("delete_failed"))
+            }
+          }}
+          projectTitle={deletionCheck?.companyName ?? name}
+          mode="company"
+          busy={isDeletingCompany}
+          loading={isCheckingDeletion}
+          error={!isCheckingDeletion && !deletionCheck ? t("delete_check_failed") : null}
+          blockers={deletionCheck?.blockers}
+          notice={
+            deletionCheck && deletionCheck.warnings.length > 0 ? (
+              <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                {deletionCheck.warnings.map((w, i) => (
+                  <li key={i}>
+                    {w.code === "team_members"
+                      ? t("delete_warn_team_members", { count: w.count })
+                      : t("delete_warn_projects", { count: w.count })}
+                  </li>
+                ))}
+              </ul>
+            ) : undefined
+          }
+        />
+      )}
 
       <Footer />
 
@@ -2974,6 +2878,15 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
       />
 
       {/* ════════════════════ PROJECT STATUS MODAL ════════════════════ */}
+      <ConfirmDeleteModal
+        open={Boolean(deleting)}
+        onClose={() => !isDeleting && setDeleting(null)}
+        onConfirm={confirmDelete}
+        projectTitle={deleting?.project.title ?? ""}
+        mode={deleting?.mode ?? "leave"}
+        busy={isDeleting}
+      />
+
       <ListingStatusModal
         open={contributorStatusModalOpen}
         onClose={() => { setContributorStatusModalOpen(false); setSelectedCardProject(null) }}

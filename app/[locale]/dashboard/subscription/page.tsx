@@ -11,7 +11,7 @@ export default async function BillingPage({
   const props = await loadBillingPageProps({
     companyIdParam,
     preview,
-    path: "/dashboard/billing",
+    path: "/dashboard/subscription",
   })
 
   return <SubscriptionScreen {...props} />

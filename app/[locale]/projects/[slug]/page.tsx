@@ -433,6 +433,12 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           .select("company_id, project_id, projects!inner(status)")
           .in("company_id", companyIds)
           .eq("projects.status", "published")
+          // The same credits the company's own page shows, and no
+          // others. Counting every credit meant the card promised
+          // projects that are not there once you follow the link:
+          // invitations nobody answered, credits the professional keeps
+          // off their page, and projects they have since left.
+          .eq("status", "live_on_page")
       : Promise.resolve({ data: [] }),
     companyIds.length > 0
       ? supabase

@@ -959,7 +959,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                    separate line to swap the company — that reopens the
                    search. */
                 <div className={styles.field}>
-                  <label className={`form-label${fieldErrors.name ? " form-label--error" : ""}`} htmlFor="cl-name">
+                  <label className="form-label" htmlFor="cl-name">
                     {t("field_company")}
                   </label>
                   <div className={styles.inputWithAction}>
@@ -982,7 +982,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                 </div>
               ) : (
                 <div className={styles.field}>
-                  <label className={`form-label${fieldErrors.name ? " form-label--error" : ""}`} htmlFor="cl-name">
+                  <label className="form-label" htmlFor="cl-name">
                     {t("field_company")}
                   </label>
                   <input className={`${styles.input}${fieldErrors.name ? " input-error" : ""}`} id="cl-name" value={name}
@@ -1001,7 +1001,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
               {(!isPlatform || platformPicked) && (<>
                 {isPlatform && !ctx.company.domain && (
                   <div className={styles.field}>
-                    <label className={`form-label${fieldErrors.website ? " form-label--error" : ""}`} htmlFor="cl-website">
+                    <label className="form-label" htmlFor="cl-website">
                       {t("field_website")}
                     </label>
                     <input className={`${styles.input}${fieldErrors.website ? " input-error" : ""}`}
@@ -1050,7 +1050,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
 
                 {!isPlatform && (<>
                   <div className={styles.field}>
-                    <span className={`form-label${fieldErrors.address ? " form-label--error" : ""}`}>
+                    <span className="form-label">
                       {t("field_location")}
                     </span>
                     {!editingAddress ? (
@@ -1089,7 +1089,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                       ordered selected list (first = primary, draggable),
                       search, then category pills. */}
                   <div className={styles.field}>
-                    <span className={`form-label${fieldErrors.service ? " form-label--error" : ""}`}>
+                    <span className="form-label">
                       {t("field_services")}
                     </span>
                     {/* The reorder hint only makes sense once there is

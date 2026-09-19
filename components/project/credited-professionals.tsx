@@ -142,7 +142,11 @@ export function CreditedProfessionals({ professionals }: CreditedProfessionalsPr
                 <h3 className="arco-label">{professional.companyName}</h3>
                 {/* The project count IS the way through to the portfolio,
                     so it carries the link instead of a separate row. */}
-                {href && (
+                {/* Nothing to count, nothing to promise. A company that
+                    keeps every credit off its own page has a page worth
+                    visiting all the same, so the card stays a link — it
+                    just stops advertising a portfolio that is empty. */}
+                {href && professional.projectsCount > 0 && (
                   <p className="credit-card-projects">
                     {/* The label wears the hover underline on its own, so
                         the rule is not drawn under the arrow too. */}

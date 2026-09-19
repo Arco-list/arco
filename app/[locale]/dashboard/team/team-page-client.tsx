@@ -161,7 +161,7 @@ export function TeamPageClient({ companyId, companyName, members, isOwner, curre
         { href: `/dashboard/company?company_id=${companyId}`, label: t("company") },
         { href: `/dashboard/team?company_id=${companyId}`, label: t("team") },
         { href: "/dashboard/inbox", label: t("inbox") },
-        { href: "/dashboard/pricing", label: t("subscription") },
+        { href: "/dashboard/subscription", label: t("subscription") },
       ]} />
 
       {/* Page title — matches /dashboard/listings layout */}

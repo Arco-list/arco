@@ -20,6 +20,14 @@ export class StripeNotConfiguredError extends Error {
   }
 }
 
+/** A key is present, but something it needs alongside it is not. */
+export class StripeConfigError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "StripeConfigError"
+  }
+}
+
 function secretKey(): string {
   const key = process.env.STRIPE_SECRET_KEY?.trim()
   if (!key) throw new StripeNotConfiguredError()
@@ -63,9 +71,14 @@ export async function stripePost<T = Record<string, unknown>>(
     body: encode(params).join("&"),
   })
 
-  const json = (await res.json()) as T & { error?: { message?: string; type?: string } }
+  const json = (await res.json()) as T & { error?: { message?: string; type?: string; code?: string } }
   if (!res.ok) {
-    throw new Error(json?.error?.message ?? `Stripe ${path} failed with ${res.status}`)
+    // Stripe's own code travels with the error. Without it a caller can
+    // only match on prose, and every failure collapses into one
+    // indistinguishable "something went wrong".
+    const err = new Error(json?.error?.message ?? `Stripe ${path} failed with ${res.status}`)
+    ;(err as Error & { stripeCode?: string }).stripeCode = json?.error?.code
+    throw err
   }
   return json
 }
@@ -96,11 +109,40 @@ export function isStripeConfigured(): boolean {
   return Boolean(process.env.STRIPE_SECRET_KEY?.trim())
 }
 
-/** Price ids. Env first so test and live can differ without a deploy;
- *  the fallbacks are the sandbox objects created on 15 Sep 2026. */
-export const PRICE_IDS = {
-  yearly: process.env.STRIPE_PRICE_PRO_YEARLY?.trim() || "price_1UG2fkP09r3Qx4apBFJZHSFu",
-  monthly: process.env.STRIPE_PRICE_PRO_MONTHLY?.trim() || "price_1UG2idP09r3Qx4apiyFL0Uvr",
+/** True when the key in use is a live one. */
+const isLiveKey = () => Boolean(process.env.STRIPE_SECRET_KEY?.trim().startsWith("sk_live"))
+
+/**
+ * A Stripe object id from the environment, with a sandbox fallback.
+ *
+ * The fallbacks are the sandbox objects created on 15 Sep 2026, and in
+ * the sandbox they save a step. Against a live key they are worse than
+ * useless: those objects do not exist there, so a missing variable on
+ * the deploy would surface as "No such price" in front of whoever was
+ * trying to pay — a broken checkout with nothing pointing at the cause.
+ *
+ * Resolved on use rather than at import, so a build never fails for a
+ * variable no page on it needs.
+ */
+function stripeObjectId(value: string | undefined, sandbox: string, name: string): string {
+  const v = value?.trim()
+  if (v) return v
+  if (isLiveKey()) {
+    throw new StripeConfigError(
+      `${name} must be set: a live Stripe key cannot use the sandbox fallback.`,
+    )
+  }
+  return sandbox
 }
 
-export const TAX_RATE_ID = process.env.STRIPE_TAX_RATE_NL?.trim() || "txr_1UG2g4P09r3Qx4ap3RqHHZvN"
+/** The price for a billing interval. */
+export function priceId(interval: "month" | "year"): string {
+  return interval === "month"
+    ? stripeObjectId(process.env.STRIPE_PRICE_PRO_MONTHLY, "price_1UG2idP09r3Qx4apiyFL0Uvr", "STRIPE_PRICE_PRO_MONTHLY")
+    : stripeObjectId(process.env.STRIPE_PRICE_PRO_YEARLY, "price_1UG2fkP09r3Qx4apBFJZHSFu", "STRIPE_PRICE_PRO_YEARLY")
+}
+
+/** Dutch VAT, as a Stripe tax rate. */
+export function taxRateId(): string {
+  return stripeObjectId(process.env.STRIPE_TAX_RATE_NL, "txr_1UG2g4P09r3Qx4ap3RqHHZvN", "STRIPE_TAX_RATE_NL")
+}

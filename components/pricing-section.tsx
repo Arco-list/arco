@@ -17,8 +17,13 @@ import { claimFoundingAccess, getFoundingClaimStatus } from "@/app/pricing/actio
 // arrive) can show the price before signup. Translation keys stay under
 // the "dashboard" namespace — single source of truth for pricing copy.
 const FEATURE_KEYS = [
-  { labelKey: "pricing_feature_published", freeKey: "pricing_unlimited", proKey: "pricing_unlimited", freeBool: true, proBool: true, tooltipKey: "pricing_feature_published_tooltip", tooltipTitleKey: null },
-  { labelKey: "pricing_feature_contributor", freeKey: "pricing_1_project", proKey: "pricing_unlimited", freeBool: true, proBool: true, tooltipKey: "pricing_feature_contributor_tooltip", tooltipTitleKey: null },
+  // Same shape as the credits row: the quantity leads. Publishing is
+  // the thing Free gives away, so it says so as an act rather than as a
+  // value behind a label.
+  { labelKey: "pricing_feature_published", freeKey: "pricing_publish_free", proKey: "pricing_publish_free", freeAccentKey: "pricing_unlimited", proAccentKey: "pricing_unlimited", freeBool: true, proBool: true, tooltipKey: "pricing_feature_published_tooltip", tooltipTitleKey: null },
+  // The one row the whole plan turns on, so its values say the
+  // difference in words: one of your credits against all of them.
+  { labelKey: "pricing_feature_contributor", freeKey: "pricing_credits_free", proKey: "pricing_credits_pro", freeAccentKey: "pricing_credits_free_accent", proAccentKey: "pricing_credits_pro_accent", freeBool: true, proBool: true, tooltipKey: "pricing_feature_contributor_tooltip", tooltipTitleKey: null },
   { labelKey: "pricing_feature_company_page", freeKey: null, proKey: null, freeBool: true, proBool: true, tooltipKey: "pricing_feature_company_page_tooltip", tooltipTitleKey: null },
   { labelKey: "pricing_feature_team", freeKey: null, proKey: null, freeBool: false, proBool: true, tooltipKey: "pricing_feature_team_tooltip", tooltipTitleKey: null },
   { labelKey: "pricing_feature_analytics", freeKey: null, proKey: null, freeBool: false, proBool: true, tooltipKey: "pricing_feature_analytics_tooltip", tooltipTitleKey: null, comingSoon: true },
@@ -31,6 +36,19 @@ const FEATURE_KEYS = [
 const FEATURE_ORDER = ["pricing_feature_contributor", "pricing_feature_published", "pricing_feature_company_page", "pricing_feature_team", "pricing_feature_analytics", "pricing_feature_arco_approved"]
 const orderedFeatures = () =>
   FEATURE_ORDER.map((k) => FEATURE_KEYS.find((f) => f.labelKey === k)!).filter(Boolean)
+
+/**
+ * What Free actually gives, and what Pro adds on top of it.
+ *
+ * Stacked rather than mirrored: a row of dashes down the Free card
+ * lists what a reader does NOT get, which is a strange thing to show
+ * someone on the plan. Pro repeats only what differs — a feature Free
+ * lacks, or one it has on smaller terms (one credit against unlimited)
+ * — under "everything in Free, and". Nothing is said twice.
+ */
+const freeFeatures = () => orderedFeatures().filter((f) => f.freeBool)
+const proExtras = () =>
+  orderedFeatures().filter((f) => !f.freeBool || f.proKey !== f.freeKey)
 
 /**
  * Contributor claim CTA — full-width grey band (.how-section treatment).
@@ -85,7 +103,6 @@ export function PricingSection({
   sectionHeading = null,
   currentPlan = null,
   onUpgrade = null,
-  onDowngrade = null,
   actionsBusy = false,
 }: {
   embedded?: boolean
@@ -109,7 +126,6 @@ export function PricingSection({
   /** Takes the cycle the reader has selected, so the card and the
    *  checkout can never promise different prices. */
   onUpgrade?: ((interval: "month" | "year") => void) | null
-  onDowngrade?: (() => void) | null
   actionsBusy?: boolean
 }) {
   const t = useTranslations("dashboard")
@@ -121,8 +137,9 @@ export function PricingSection({
   const userTypes = profile?.user_types as string[] | null
   const hasProfessionalRole = userTypes?.includes("professional") ?? false
 
-  // Key pages get a manual pageview (autocapture is off). The same
-  // component serves /pricing and /dashboard/pricing — track the real path.
+  // Key pages get a manual pageview (autocapture is off). Tracked from
+  // the real path rather than a constant: this section also renders
+  // inside the subscription screen.
   useEffect(() => {
     if (typeof window !== "undefined") trackPageView(window.location.pathname.replace(/^\/(nl|en)(?=\/)/, ""))
   }, [])
@@ -170,14 +187,17 @@ export function PricingSection({
   const currentPlanNote = (
     <div style={{
       width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)",
-      border: "1px solid transparent", borderRadius: 3, boxSizing: "border-box",
-      color: "var(--arco-light)", textAlign: "center",
+      border: "1px solid var(--arco-rule)", borderRadius: 3, boxSizing: "border-box",
+      color: "var(--arco-light)", textAlign: "center", cursor: "default",
     }}>
       {t("pricing_your_plan")}
     </div>
   )
 
-  const currentBadge = <span className="pricing-card-badge pricing-card-badge-quiet">{t("pricing_current_badge")}</span>
+  // Recommended while there is something to recommend. Once the reader
+  // is on Pro there is nothing to point at, so the badge and the accent
+  // border both go and the card simply states where they are.
+  const proIsCurrent = currentPlan === "pro"
 
   // Always centred under whatever heading the context supplies.
   const cycleToggle = (
@@ -203,7 +223,11 @@ export function PricingSection({
     {/* Centred in the page rather than flush left: the cards are a
         block to compare, not a row to scan across, and the page around
         them is far wider than they should ever be. */}
-    <div className={sectionHeading ? undefined : "wrap"} style={{ maxWidth: 860, margin: sectionHeading ? "0 auto" : undefined }}>
+    {/* 940 rather than 860: at the narrower measure a feature row like
+        "Onbeperkt projectvermeldingen" wrapped, which broke the line-for-line
+        pairing the two cards are built on. The prose below keeps its own
+        reading width. */}
+    <div className={sectionHeading ? undefined : "wrap"} style={{ maxWidth: 940, margin: sectionHeading ? "0 auto" : undefined }}>
 
       {sectionHeading && (
         <h3 className="arco-section-title" style={{ textAlign: "center", marginBottom: 20 }}>
@@ -235,8 +259,7 @@ export function PricingSection({
       <div className="pricing-grid">
 
         {/* Free */}
-        <div className={`pricing-card pricing-card-subgrid${managing && currentPlan === "pro" ? " pricing-card-featured" : ""}`}>
-          {managing && currentPlan === "free" && currentBadge}
+        <div className="pricing-card pricing-card-subgrid">
           {/* Header mirrors the Pro card's exact stack (label / price /
               meta / desc) with matching heights, so the descriptions and
               everything below them line up across the two cards. */}
@@ -250,10 +273,17 @@ export function PricingSection({
           </div>
 
           <div className="pricing-card-features">
-            {orderedFeatures().map((f) => {
-              const included = f.freeBool
+            {/* Its own intro, so both lists start on the same line and
+                the rows across the two cards stay paired. */}
+            <p className="pricing-feature-intro">{t("pricing_you_start_with")}</p>
+            {freeFeatures().map((f) => {
+              const included = true
               const label = t(f.labelKey as any)
               const valueStr = f.freeKey ? t(f.freeKey as any) : null
+              // A quantity that leads its own sentence rather than
+              // trailing a label after a colon — the one row where the
+              // number IS the difference between the two plans.
+              const accent = "freeAccentKey" in f && f.freeAccentKey ? t(f.freeAccentKey as any) : null
               return (
                 <div key={f.labelKey} className={`pricing-feature${!included ? " disabled" : ""}`}>
                   {included ? (
@@ -262,7 +292,12 @@ export function PricingSection({
                     <span style={{ width: 16, height: 16, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--arco-rule)" }}>—</span>
                   )}
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    {valueStr ? `${label}: ${valueStr}` : label}
+                    {accent ? (
+                      <span>
+                        <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{accent}</strong>{" "}
+                        {valueStr}
+                      </span>
+                    ) : valueStr ? `${label}: ${valueStr}` : label}
                     {f.tooltipKey && (
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -289,27 +324,20 @@ export function PricingSection({
                 the Free card flips to "Included in Pro" instead of
                 wrongly claiming to be the current plan. */}
             {managing ? (
-              currentPlan === "free" ? currentPlanNote : (
-                <button
-                  type="button"
-                  onClick={() => onDowngrade?.()}
-                  disabled={!onDowngrade || actionsBusy}
-                  style={{
-                    width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)",
-                    background: "none", border: "1px solid var(--arco-rule)", borderRadius: 3,
-                    color: onDowngrade ? "var(--arco-black)" : "var(--arco-light)",
-                    cursor: onDowngrade ? "pointer" : "default",
-                  }}
-                >
-                  {t("pricing_switch_to_free")}
-                </button>
-              )
+              /* Only ever a statement here. Going back to Free is
+                 cancelling, and cancelling says what it costs you — so
+                 it lives in its own section with those words, not
+                 behind a button on a price card. */
+              currentPlan === "free" ? currentPlanNote : <span />
             ) : user && hasProfessionalRole ? (
               <button disabled style={{ width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)", background: "none", border: "1px solid var(--arco-rule)", borderRadius: 3, color: "var(--arco-light)", cursor: "default" }}>
                 {foundingClaimed ? t("pricing_included_in_pro") : t("pricing_current_plan")}
               </button>
             ) : (
-              <button onClick={handleStartFree} style={{ width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)", background: "none", border: "1px solid var(--arco-rule)", borderRadius: 3, color: "var(--arco-black)", cursor: "pointer", transition: "border-color .15s" }}>
+              /* Primary on the public page: a visitor with no company
+                 cannot buy Pro yet — creating the page IS the first
+                 step, and both buttons lead there anyway. */
+              <button onClick={handleStartFree} style={{ width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)", background: "var(--primary)", border: "1px solid var(--primary)", borderRadius: 3, color: "#ffffff", cursor: "pointer" }}>
                 {t("pricing_get_started")}
               </button>
             )}
@@ -327,10 +355,8 @@ export function PricingSection({
         </div>
 
         {/* Pro */}
-        <div className={`pricing-card pricing-card-subgrid${!managing || currentPlan === "free" ? " pricing-card-featured" : ""}`}>
-          {managing
-            ? currentPlan === "pro" && currentBadge
-            : <span className="pricing-card-badge">{t("pricing_recommended")}</span>}
+        <div className={`pricing-card pricing-card-subgrid${proIsCurrent ? "" : " pricing-card-featured"}`}>
+          {managing && !proIsCurrent && <span className="pricing-card-badge">{t("pricing_recommended")}</span>}
           <div className="pricing-card-header">
             <p className="pricing-card-label" style={{ color: "var(--primary)" }}>{t("pricing_pro")}</p>
             <div style={{ display: "flex", alignItems: "baseline", gap: 4, minHeight: 48 }}>
@@ -347,14 +373,21 @@ export function PricingSection({
           </div>
 
           <div className="pricing-card-features">
-            {orderedFeatures().map((f) => {
+            <p className="pricing-feature-intro">{t("pricing_everything_in_free")}</p>
+            {proExtras().map((f) => {
               const label = t(f.labelKey as any)
               const valueStr = f.proKey ? t(f.proKey as any) : null
+              const accent = "proAccentKey" in f && f.proAccentKey ? t(f.proAccentKey as any) : null
               return (
                 <div key={f.labelKey} className="pricing-feature">
                   <Check size={16} style={{ color: "var(--primary)", flexShrink: 0 }} />
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    {valueStr ? `${label}: ${valueStr}` : label}
+                    {accent ? (
+                      <span>
+                        <strong style={{ fontWeight: 500, color: "var(--primary)" }}>{accent}</strong>{" "}
+                        {valueStr}
+                      </span>
+                    ) : valueStr ? `${label}: ${valueStr}` : label}
                     {"comingSoon" in f && f.comingSoon && (
                       <span className="pricing-feature-soon">{t("pricing_feature_coming")}</span>
                     )}
@@ -388,6 +421,10 @@ export function PricingSection({
                 so the button is the real one, in the same words the
                 plan banner uses. */}
             {managing ? (
+              // The toggle above these cards compares prices; it does not
+              // move anyone's money. Switching cycle is an act, and acts
+              // live in the manage section with the other rows that
+              // change something.
               currentPlan === "pro" ? currentPlanNote : (
                 <button
                   type="button"
@@ -409,7 +446,10 @@ export function PricingSection({
                 {t("pricing_founding_claimed")}
               </button>
             ) : (
-              <button onClick={handleClaimFounding} style={{ width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)", background: "var(--primary)", border: "1px solid var(--primary)", borderRadius: 3, color: "#ffffff", cursor: "pointer" }}>
+              /* Outline, not primary: it goes to the same signup as the
+                 Free card. Two equally loud buttons for one destination
+                 is a choice the reader does not actually have. */
+              <button onClick={handleClaimFounding} style={{ width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)", background: "none", border: "1px solid var(--primary)", borderRadius: 3, color: "var(--primary)", cursor: "pointer" }}>
                 {t("pricing_claim_founding")}
               </button>
             )}
