@@ -1330,7 +1330,12 @@
       "renews_body_year": "Je jaarabonnement wordt verlengd op {date}.",
       "switch_confirm_title_down": "Overstappen naar maandelijks?",
       "switch_at_period_end": "Er wordt nu niets afgeschreven. Je houdt je jaarabonnement tot {date}; daarna betaal je per maand.",
-      "free_body_hidden": "Je bent vermeld op {total} projecten, maar {visible, plural, one {er staat er # op je pagina} other {er staan er # op je pagina}}. Met Pro staan ze er allemaal."
+      "free_body_hidden": "Je bent vermeld op {total} projecten, maar {visible, plural, one {er staat er # op je pagina} other {er staan er # op je pagina}}. Met Pro staan ze er allemaal.",
+      "welcome_title_active": "Je bent nu Pro",
+      "welcome_body_active": "Je bedrijfspagina is vermeld en al je projecten staan erop. De factuur staat in je mail.",
+      "welcome_title_processing": "Betaling in behandeling",
+      "welcome_body_processing": "Je machtiging is rond. Een SEPA-incasso duurt een paar werkdagen; zodra de betaling binnen is, staat Pro op deze pagina.",
+      "welcome_close": "Aan de slag"
     },
     "pricing_current_badge": "Huidig",
     "pricing_your_plan": "Je huidige abonnement",

@@ -1330,7 +1330,12 @@
       "renews_body_year": "Your yearly subscription renews on {date}.",
       "switch_confirm_title_down": "Switch to monthly?",
       "switch_at_period_end": "Nothing is charged now. You keep your yearly subscription until {date}; after that you pay monthly.",
-      "free_body_hidden": "You're credited on {total} projects, but {visible, plural, one {only # shows} other {only # show}} on your page. Pro shows them all."
+      "free_body_hidden": "You're credited on {total} projects, but {visible, plural, one {only # shows} other {only # show}} on your page. Pro shows them all.",
+      "welcome_title_active": "You're on Pro",
+      "welcome_body_active": "Your company page is listed and all your projects appear on it. The invoice is in your inbox.",
+      "welcome_title_processing": "Payment in progress",
+      "welcome_body_processing": "Your mandate is in place. A SEPA direct debit takes a few working days; as soon as the payment clears, Pro shows on this page.",
+      "welcome_close": "Get started"
     },
     "pricing_current_badge": "Current",
     "pricing_your_plan": "Your current plan",

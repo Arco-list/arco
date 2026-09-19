@@ -557,3 +557,66 @@ export async function switchIntervalAction(
     return { error: "failed" }
   }
 }
+
+/**
+ * Who the invoice is made out to.
+ *
+ * The checkout asks for a company name, an address and a VAT number,
+ * and until now none of the three went anywhere: the buyer typed them
+ * and then received an invoice carrying only their email. A Dutch
+ * invoice has to name the buyer and where they sit.
+ *
+ * Written to the customer before the mandate is confirmed, not after.
+ * An iDEAL payment leaves for the bank and comes back on a fresh page
+ * load, so anything still sitting in the form at that moment is gone.
+ */
+export async function saveBillingIdentityAction(input: {
+  companyName?: string | null
+  vatNumber?: string | null
+  address?: { line1: string; city: string; postalCode?: string | null; country?: string | null } | null
+}): Promise<{ ok: true } | Failure> {
+  if (!isStripeConfigured()) return { error: "not_configured" }
+
+  const resolved = await resolveOwnedCompany()
+  if ("error" in resolved) return { error: resolved.error }
+
+  const customerId = await ensureCustomer(resolved.companyId, resolved.companyName, resolved.email)
+
+  const payload: Record<string, unknown> = {}
+  const name = input.companyName?.trim()
+  if (name) payload.name = name
+  if (input.address?.line1) {
+    payload.address = {
+      line1: input.address.line1,
+      city: input.address.city || "",
+      postal_code: input.address.postalCode || "",
+      country: input.address.country || "NL",
+    }
+  }
+
+  try {
+    if (Object.keys(payload).length > 0) {
+      await stripePost(`/customers/${customerId}`, payload)
+    }
+
+    // A VAT number is a separate object, and Stripe rejects a duplicate.
+    // Re-entering the same number on a second attempt is not an error
+    // the buyer should ever see, so an existing match is left alone.
+    const vat = input.vatNumber?.trim().toUpperCase().replace(/\s/g, "")
+    if (vat) {
+      const existing = await stripeGet<{ data: { id: string; value: string }[] }>(
+        `/customers/${customerId}/tax_ids`,
+      )
+      if (!existing.data.some((t) => t.value.toUpperCase() === vat)) {
+        await stripePost(`/customers/${customerId}/tax_ids`, { type: "eu_vat", value: vat })
+      }
+    }
+  } catch (err) {
+    // A rejected VAT number must not cost someone their subscription:
+    // the identity is worth having, the payment is worth more.
+    logger.warn("Could not save billing identity", { companyId: resolved.companyId, error: String(err) })
+    return { error: "failed" }
+  }
+
+  return { ok: true }
+}

@@ -187,6 +187,21 @@ export async function setCancelAtPeriodEndAction(cancel: boolean): Promise<Toggl
   if (!subscriptionId) return { error: "nothing_to_manage" }
 
   try {
+    // A subscription attached to a schedule cannot be cancelled: Stripe
+    // refuses the field, because the schedule is what decides its
+    // future. Someone who scheduled a switch to monthly and then
+    // changed their mind about Pro altogether was simply stuck.
+    //
+    // Releasing hands the subscription back untouched — it stays the
+    // yearly one it is, minus the phase that would have followed. That
+    // phase is moot anyway: they are cancelling.
+    if (cancel) {
+      const current = await stripeGet<{ schedule?: string | null }>(`/subscriptions/${subscriptionId}`)
+      if (current.schedule) {
+        await stripePost(`/subscription_schedules/${current.schedule}/release`, {})
+      }
+    }
+
     const updated = await stripePost<{ cancel_at_period_end: boolean; canceled_at: number | null }>(
       `/subscriptions/${subscriptionId}`,
       { cancel_at_period_end: cancel },

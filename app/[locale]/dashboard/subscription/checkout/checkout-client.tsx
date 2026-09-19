@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { Check, CreditCard, Landmark, Lock, Repeat, Wallet, X } from "lucide-react"
 
 import { AddressLookup } from "@/components/address-lookup"
 import { FormSelect } from "@/components/form-select"
 import { HeaderLanguageSwitcher } from "@/components/header-language-switcher"
-import { Link } from "@/i18n/navigation"
+import { Link, useRouter } from "@/i18n/navigation"
 
 import { PUBLISHABLE_KEY } from "@/lib/stripe/load-stripe"
 
@@ -123,12 +123,14 @@ export function CheckoutClient({
 }) {
   // Opens on whatever the reader picked on the plan cards, so the price
   // they were looking at is the price they arrive at.
+  const router = useRouter()
   const [cycle, setCycle] = useState<"month" | "year">(interval)
   // A known mandate leads: for anyone who has one, the rest of this
   // form is optional.
   const [method, setMethod] = useState<Method>(savedMethod ? "saved" : "ideal")
   const usingSaved = method === "saved"
   const [business, setBusiness] = useState(true)
+  const [vatNumber, setVatNumber] = useState("")
   const [promoOpen, setPromoOpen] = useState(false)
   const [promoInput, setPromoInput] = useState("")
   const [promo, setPromo] = useState<{ code: string; label: string; percent: number; periods: string } | null>(null)
@@ -211,7 +213,9 @@ export function CheckoutClient({
     resumeSetupIntent,
   })
   const [country, setCountry] = useState(companyAddress?.country ?? "NL")
-  const [address, setAddress] = useState<{ streetAddress: string; city: string } | null>(companyAddress)
+  const [address, setAddress] = useState<
+    { streetAddress: string; city: string; postalCode?: string | null } | null
+  >(companyAddress)
 
   // A code that covers the whole period leaves nothing to pay, and a
   // page with nothing to pay has no business asking how. Everything
@@ -256,6 +260,15 @@ export function CheckoutClient({
   const note = (msg: string | null | undefined) =>
     msg ? <p className="form-note form-note--error">{msg}</p> : null
 
+  // Carried in the URL rather than in state: an iDEAL payment comes
+  // back through a bank and a fresh page load, so there is no state
+  // left to carry it in.
+  useEffect(() => {
+    if (checkout.phase !== "done") return
+    const sep = returnTo.includes("?") ? "&" : "?"
+    router.replace(`${returnTo}${sep}subscribed=${checkout.status === "active" ? "active" : "processing"}`)
+  }, [checkout.phase, checkout.status, returnTo, router])
+
   const busy = checkout.phase === "confirming" || checkout.phase === "mounting"
 
   const submitBlock = (
@@ -274,7 +287,18 @@ export function CheckoutClient({
             checkout.confirmSaved(cycle)
             return
           }
-          checkout.confirm({ name, email, bank })
+          checkout.confirm({
+            name,
+            email,
+            bank,
+            billing: {
+              companyName: business ? companyName : null,
+              vatNumber: business ? vatNumber : null,
+              address: address
+                ? { line1: address.streetAddress, city: address.city, postalCode: address.postalCode, country }
+                : null,
+            },
+          })
         }}
       >
         {busy ? "Bezig…" : freeActivation ? "Pro activeren" : "Abonneren"}
@@ -360,27 +384,15 @@ export function CheckoutClient({
           </h1>
         </div>
 
-        {/* Done: the form has nothing left to ask, so it stops being a
-            form. Without this the page simply sat there after a
-            successful payment, which reads exactly like a failure. */}
+        {/* Done: the form has nothing left to ask, so the reader should
+            not be left looking at it. They go to the page the news is
+            about — their subscription — and the confirmation meets them
+            there. This branch is what shows while that navigation
+            happens; a blank page after a payment reads as a failure. */}
         {checkout.phase === "done" ? (
           <div className="checkout-grid checkout-grid--single" style={{ paddingBottom: 96 }}>
             <aside className="checkout-summary">
-              <h2 className="arco-subsection-title" style={{ marginBottom: 12 }}>
-                {checkout.status === "active" ? "Je bent nu Pro" : "Betaling in behandeling"}
-              </h2>
-              <p className="form-note" style={{ margin: "0 0 20px" }}>
-                {checkout.status === "active"
-                  ? "Je bedrijfspagina wordt vermeld en al je vermeldingen zijn zichtbaar. De factuur staat in je mail."
-                  : "Je machtiging is verwerkt. Een SEPA-incasso duurt een paar werkdagen; zodra de betaling rond is staat Pro op je abonnementspagina."}
-              </p>
-              <Link
-                href={returnTo}
-                className="btn-primary"
-                style={{ display: "inline-block", width: "100%", textAlign: "center", padding: "12px 20px", fontSize: 15, fontWeight: 500 }}
-              >
-                Naar je abonnement
-              </Link>
+              <p className="form-note" style={{ margin: 0 }}>Je abonnement wordt geladen…</p>
             </aside>
           </div>
         ) : (
@@ -601,7 +613,10 @@ export function CheckoutClient({
                     country={country}
                     inputClassName="form-input"
                     onResolved={(r) => {
-                      setAddress({ streetAddress: r.streetAddress, city: r.city ?? "" })
+                      // The resolver carries no postcode of its own; the
+                      // formatted line does, and an invoice wants it.
+                      const postalCode = r.formattedAddress.match(/\b\d{4}\s?[A-Z]{2}\b/)?.[0] ?? null
+                      setAddress({ streetAddress: r.streetAddress, city: r.city ?? "", postalCode })
                       setFieldErrors((prev) => ({ ...prev, address: null }))
                     }}
                   />
@@ -639,7 +654,13 @@ export function CheckoutClient({
                   <label className="form-label" htmlFor="vat">
                     Btw-nummer <span style={{ color: "var(--arco-mid-grey)", fontWeight: 400 }}>(optioneel)</span>
                   </label>
-                  <input id="vat" className="form-input" placeholder="NL123456789B01" />
+                  <input
+                    id="vat"
+                    className="form-input"
+                    placeholder="NL123456789B01"
+                    value={vatNumber}
+                    onChange={(e) => setVatNumber(e.target.value)}
+                  />
                 </div>
               )}
             </section>

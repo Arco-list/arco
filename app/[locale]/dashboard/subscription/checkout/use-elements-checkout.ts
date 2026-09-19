@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { PUBLISHABLE_KEY, loadStripeJs } from "@/lib/stripe/load-stripe"
 import {
   completeSubscriptionAction,
+  saveBillingIdentityAction,
   replacePaymentMethodAction,
   startSetupAction,
   subscribeWithSavedMethodAction,
@@ -236,7 +237,18 @@ export function useElementsCheckout({
    * the page leaves here and the second half happens on the way back.
    */
   const confirm = useCallback(
-    async ({ name, email, bank }: { name: string; email: string; bank?: string }) => {
+    async ({ name, email, bank, billing }: {
+      name: string
+      email: string
+      bank?: string
+      /** Who the invoice is for. Saved before the mandate, because an
+       *  iDEAL redirect takes the form with it. */
+      billing?: {
+        companyName?: string | null
+        vatNumber?: string | null
+        address?: { line1: string; city: string; postalCode?: string | null; country?: string | null } | null
+      }
+    }) => {
       const stripe = stripeRef.current
       const secret = secretRef.current
       if (!stripe || !secret) {
@@ -247,6 +259,10 @@ export function useElementsCheckout({
 
       setPhase("confirming")
       setMessage(null)
+
+      // Best effort on purpose: a rejected VAT number is worth a wrong
+      // invoice line, not a lost subscription.
+      if (billing) await saveBillingIdentityAction(billing)
 
       const billing_details = { name, email }
 

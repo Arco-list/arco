@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { toast } from "sonner"
 import { useLocale, useTranslations } from "next-intl"
 import { Header } from "@/components/header"
@@ -8,6 +8,7 @@ import { Footer } from "@/components/footer"
 import { CalendarClock, CreditCard, Landmark, Repeat } from "lucide-react"
 
 import { Link, usePathname, useRouter } from "@/i18n/navigation"
+import { useSearchParams } from "next/navigation"
 
 import type { CompanyBilling } from "@/lib/subscriptions/get-company-subscription"
 import { FREE_CONTRIBUTOR_LIMIT, type ProjectUsage } from "@/lib/subscriptions/usage-types"
@@ -92,6 +93,27 @@ export function SubscriptionScreen({
 
   const [pending, startTransition] = useTransition()
   const [busy, setBusy] = useState<"primary" | "cancel" | "resume" | "switch" | null>(null)
+
+  /**
+   * The confirmation for a subscription that just started.
+   *
+   * It meets the reader on the page the news is about rather than on a
+   * checkout with nothing left to ask. Read from the URL and then taken
+   * out of it: an iDEAL payment returns through the bank on a fresh
+   * load, so there is no state to carry it in — and a reload should not
+   * congratulate someone twice.
+   */
+  const searchParams = useSearchParams()
+  const [subscribed, setSubscribed] = useState<"active" | "processing" | null>(null)
+  useEffect(() => {
+    const v = searchParams.get("subscribed")
+    if (v !== "active" && v !== "processing") return
+    setSubscribed(v)
+    const next = new URLSearchParams(searchParams.toString())
+    next.delete("subscribed")
+    const qs = next.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }, [searchParams, pathname, router])
 
   const [confirmCancel, setConfirmCancel] = useState(false)
   // The cycle being offered, and what Stripe says it costs today. The
@@ -205,6 +227,12 @@ export function SubscriptionScreen({
     />
   )
 
+  // The cycle the reader is in now. A scheduled switch names the one
+  // that comes next, so the current one is its opposite.
+  const currentInterval = scheduledSwitch
+    ? (scheduledSwitch.interval === "month" ? "year" : "month")
+    : billing.interval
+
   // One line describing where they stand. Deliberately concrete: a date
   // beats the word "active".
   const statusLine =
@@ -225,7 +253,12 @@ export function SubscriptionScreen({
     // there is no pill either, and "tot die datum" would point at
     // nothing.
     : billing.cancelAtPeriodEnd && renewal ? tb("ends_on")
-    : renewal ? tb(billing.interval === "month" ? "renews_body_month" : "renews_body_year", { date: renewal })
+    // Which cycle is ending, not which one is coming. With a switch
+    // scheduled these are opposites, and the banner reads the mirrored
+    // interval while the payment row reads the schedule — so the two
+    // could disagree about the same subscription. The schedule wins:
+    // it is what Stripe will actually do.
+    : renewal ? tb(currentInterval === "month" ? "renews_body_month" : "renews_body_year", { date: renewal })
     : ""
 
   const inAdmin = chrome === "admin"
@@ -778,6 +811,27 @@ export function SubscriptionScreen({
                 disabled={pending}
               >
                 {busy === "cancel" ? tb("working") : tb("cancel_confirm_go")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {subscribed && (
+        <div className="popup-overlay" onClick={() => setSubscribed(null)}>
+          <div className="popup-card" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">
+                {tb(subscribed === "active" ? "welcome_title_active" : "welcome_title_processing")}
+              </h3>
+              <button type="button" className="popup-close" onClick={() => setSubscribed(null)} aria-label="Sluiten">✕</button>
+            </div>
+            <p className="arco-small-text" style={{ margin: "0 0 24px" }}>
+              {tb(subscribed === "active" ? "welcome_body_active" : "welcome_body_processing")}
+            </p>
+            <div className="popup-actions">
+              <button type="button" className="btn-primary" style={{ flex: 1 }} onClick={() => setSubscribed(null)}>
+                {tb("welcome_close")}
               </button>
             </div>
           </div>
