@@ -16,7 +16,7 @@ import { PREVIEW_LABELS, PREVIEW_STATES } from "@/lib/subscriptions/preview-stat
 import { AdminTabs } from "@/components/admin/admin-tabs"
 import { PricingSection } from "@/components/pricing-section"
 import { UsageBar } from "@/components/usage-bar"
-import { openPortalAction, setCancelAtPeriodEndAction } from "@/lib/subscriptions/actions"
+import { setCancelAtPeriodEndAction } from "@/lib/subscriptions/actions"
 import {
   previewIntervalSwitchAction,
   switchIntervalAction,
@@ -27,11 +27,11 @@ import {
  * The subscription screen for one company: which plan, what it shows,
  * what it costs, what was paid.
  *
- * What changes state stays here where it can: upgrading goes to our
- * own checkout, cancelling and resuming are one field on the
- * subscription and are flipped from this page. Only changing a payment
- * method still hands off to Stripe's portal — that one genuinely needs
- * a card form we should not be hosting. Invoices link to Stripe's
+ * Everything that changes state stays here: upgrading, changing the
+ * payment method and settling a failed collection all go to our own
+ * pages, and cancelling and resuming are one field on the subscription,
+ * flipped from this screen. The card fields themselves are Stripe's
+ * iframes, so no card number touches Arco. Invoices link to Stripe's
  * hosted copy, which is the customer's legal document.
  */
 export function SubscriptionScreen({
@@ -42,6 +42,7 @@ export function SubscriptionScreen({
   details,
   previewState = null,
   previewMode = false,
+  scheduledSwitch = null,
   isAdmin = false,
   hasCompany = true,
   chrome = "dashboard",
@@ -54,6 +55,7 @@ export function SubscriptionScreen({
   /** Set only for an admin viewing a synthetic state. */
   previewState?: string | null
   previewMode?: boolean
+  scheduledSwitch?: { interval: "month" | "year"; startsAt: number } | null
   /** Admins get the preview switcher on their own page too. */
   isAdmin?: boolean
   /** False when the whole page is fixtures: there is no real
@@ -89,28 +91,8 @@ export function SubscriptionScreen({
       : null
 
   const [pending, startTransition] = useTransition()
-  const [busy, setBusy] = useState<"portal" | "primary" | "cancel" | "resume" | "switch" | null>(null)
+  const [busy, setBusy] = useState<"primary" | "cancel" | "resume" | "switch" | null>(null)
 
-  // Every route out of this page ends at Stripe. The action returns a
-  // URL rather than redirecting itself, so a failure can surface here
-  // as a message instead of a blank page.
-  const go = (which: "portal" | "primary", run: () => Promise<{ url: string } | { error: string }>) => {
-    if (pending || (isPreview && refusePreview())) return
-    setBusy(which)
-    startTransition(async () => {
-      const result = await run()
-      if ("url" in result) {
-        window.location.href = result.url
-        return
-      }
-      setBusy(null)
-      toast.error(tb(`error_${result.error}` as never))
-    })
-  }
-
-  // Cancelling and resuming change a field and leave you where you
-  // are, so they need a runner that does not navigate. Same error
-  // surface as go(), different ending.
   const [confirmCancel, setConfirmCancel] = useState(false)
   // The cycle being offered, and what Stripe says it costs today. The
   // amount is fetched before the dialog can be confirmed, because a
@@ -256,9 +238,9 @@ export function SubscriptionScreen({
     : !isPro ? tb("action_upgrade")
     : null
 
-  // Only a broken payment still needs the portal: that is a card form,
-  // and hosting one is the thing we deliberately do not do. Resuming is
-  // one field on the subscription and happens here, same as cancelling.
+  // A failed collection is fixed by giving us a working mandate, which
+  // is what the payment-method page is for. Resuming is one field on
+  // the subscription and happens here, same as cancelling.
   const primaryGoesToPortal = billing.status === "past_due"
 
   // Every upgrade shortcut goes to the checkout, not to the cards.
@@ -401,10 +383,7 @@ export function SubscriptionScreen({
                 <p className="arco-banner-body">{statusLine}</p>
               </div>
 
-              {/* One action, or none. A broken payment and a cancelled
-                  renewal are both fixed inside Stripe's portal; an
-                  upgrade is a choice between two prices, so it scrolls
-                  to the cards that state them. */}
+              {/* One action, or none, and all three stay on Arco. */}
               {isOwner && primaryAction && (
                 <div className="arco-banner-actions">
                   {primaryAction && (
@@ -413,15 +392,14 @@ export function SubscriptionScreen({
                       className="btn-primary"
                       style={{ fontSize: 14, padding: "10px 20px", opacity: busy ? 0.6 : 1 }}
                       onClick={
-                        // A failed collection needs a working mandate and
-                        // the open invoice settled. Our own page does
-                        // both now, so the portal is no longer the only
-                        // way out of dunning — in admin, where the
-                        // Elements pages live.
+                        // A failed collection needs a working mandate
+                        // and the open invoice settled. Our own page
+                        // does both — it replaces the mandate and then
+                        // retries the invoice rather than waiting out
+                        // Stripe's own schedule — so dunning no longer
+                        // ends at a hosted page either.
                         primaryGoesToPortal
-                          ? inAdmin
-                            ? () => router.push("/dashboard/subscription/payment-method?return=/dashboard/subscription")
-                            : () => go("primary", openPortalAction)
+                          ? () => router.push("/dashboard/subscription/payment-method?return=/dashboard/subscription")
                         : billing.cancelAtPeriodEnd ? () => toggleCancel(false)
                         : goUpgrade
                       }
@@ -548,22 +526,19 @@ export function SubscriptionScreen({
                     <span style={{ color: "var(--text-secondary)" }}>{tb("no_payment_method")}</span>
                   )}
                 </span>
-                {/* The portal only exists once Stripe knows this
-                    company; before that there is nothing to open. */}
+                {/* Nothing to replace until Stripe knows this company. */}
                 {billing.stripeCustomerId && (
                   <button
                     type="button"
                     className="btn-tertiary"
                     style={{ fontSize: 13, padding: "8px 16px" }}
-                    // In admin, the Elements page that replaces the
-                    // mandate on our own site. Everywhere else this is
-                    // still Stripe's portal: until the Elements checkout
-                    // ships, sending real customers to one Arco page and
-                    // one hosted page for two halves of the same job
-                    // would be worse than sending them to neither.
-                    onClick={inAdmin
-                      ? () => router.push("/dashboard/subscription/payment-method?return=/dashboard/subscription")
-                      : () => go("portal", openPortalAction)}
+                    // Our own page, for everyone. It was the portal
+                    // outside admin while the Elements checkout was
+                    // still a study — sending real customers to one
+                    // Arco page and one hosted page for two halves of
+                    // the same job would have been worse than sending
+                    // them to neither. Both halves are ours now.
+                    onClick={() => router.push("/dashboard/subscription/payment-method?return=/dashboard/subscription")}
                     disabled={pending}
                   >
                     {tb("update")}
@@ -588,17 +563,29 @@ export function SubscriptionScreen({
                           and the two marks say which is which before
                           the words do. */}
                       <CalendarClock size={16} strokeWidth={1.5} style={{ color: "var(--arco-mid)", flexShrink: 0 }} />
-                      {tb(billing.interval === "month" ? "cycle_row_month" : "cycle_row_year")}
+                      {/* A switch to a cheaper cycle is scheduled, not
+                          applied: the subscription stays yearly until
+                          the year it was paid for runs out. Saying only
+                          "Jaarlijks" and offering the switch again was
+                          true of the subscription and false of what the
+                          reader had just done. */}
+                      {scheduledSwitch
+                        ? tb(scheduledSwitch.interval === "month" ? "cycle_row_switching_to_month" : "cycle_row_switching_to_year", {
+                            date: new Date(scheduledSwitch.startsAt * 1000).toLocaleDateString(locale === "en" ? "en-GB" : "nl-NL", { day: "numeric", month: "long", year: "numeric" }),
+                          })
+                        : tb(billing.interval === "month" ? "cycle_row_month" : "cycle_row_year")}
                     </span>
-                    <button
-                      type="button"
-                      className="btn-tertiary"
-                      style={{ fontSize: 13, padding: "8px 16px" }}
-                      onClick={() => openSwitch(billing.interval === "month" ? "year" : "month")}
-                      disabled={pending}
-                    >
-                      {tb(billing.interval === "month" ? "cycle_switch_up" : "cycle_switch_down")}
-                    </button>
+                    {!scheduledSwitch && (
+                      <button
+                        type="button"
+                        className="btn-tertiary"
+                        style={{ fontSize: 13, padding: "8px 16px" }}
+                        onClick={() => openSwitch(billing.interval === "month" ? "year" : "month")}
+                        disabled={pending}
+                      >
+                        {tb(billing.interval === "month" ? "cycle_switch_up" : "cycle_switch_down")}
+                      </button>
+                    )}
                   </div>
                   {/* Accent, like the same sentence on the checkout
                       page. The persuasion lives in the number, not in
@@ -606,7 +593,7 @@ export function SubscriptionScreen({
                       the row above it, because changing your cycle and
                       changing your payment method are the same kind of
                       act and should not look ranked. */}
-                  {billing.interval === "month" && (
+                  {billing.interval === "month" && !scheduledSwitch && (
                     <p className="arco-small-text" style={{ margin: "10px 0 0", color: "var(--primary)" }}>
                       {tb("cycle_saving")}
                     </p>

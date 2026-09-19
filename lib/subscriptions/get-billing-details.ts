@@ -107,3 +107,53 @@ export async function getBillingDetails(
     return { ...EMPTY_BILLING_DETAILS, configured: true }
   }
 }
+
+/**
+ * A billing cycle change that is waiting for the paid period to end.
+ *
+ * Downgrading uses a subscription schedule, so the subscription itself
+ * is deliberately unchanged until the day it changes — that is the
+ * whole point. The page therefore cannot learn about it from the
+ * subscription, or from our mirror of it, and read only those it went
+ * on calling the plan yearly and offering the switch a second time.
+ *
+ * Read live from Stripe, like invoices and the payment method: nothing
+ * in the product depends on it, and a stale answer here would be worse
+ * than no answer.
+ */
+export async function getScheduledSwitch(
+  subscriptionId: string,
+): Promise<{ interval: "month" | "year"; startsAt: number } | null> {
+  if (!isStripeConfigured()) return null
+
+  try {
+    const subscription = await stripeGet<{ schedule?: string | null }>(
+      `/subscriptions/${subscriptionId}`,
+    )
+    if (!subscription.schedule) return null
+
+    const schedule = await stripeGet<{
+      status: string
+      phases: { start_date: number; items: { price: { recurring?: { interval?: string } } | string }[] }[]
+    }>(`/subscription_schedules/${subscription.schedule}`, { "expand[]": "phases.items.price" })
+
+    if (schedule.status !== "active" && schedule.status !== "not_started") return null
+
+    // The first phase that has not begun yet. A released or completed
+    // schedule has none, and neither has one whose only phase is the
+    // period being lived through.
+    const now = Math.floor(Date.now() / 1000)
+    const upcoming = schedule.phases.find((p) => p.start_date > now)
+    if (!upcoming) return null
+
+    const price = upcoming.items[0]?.price
+    const interval = typeof price === "string" ? null : price?.recurring?.interval
+    if (interval !== "month" && interval !== "year") return null
+
+    return { interval, startsAt: upcoming.start_date }
+  } catch {
+    // A page that cannot reach Stripe should still render the plan it
+    // knows about, minus this one line.
+    return null
+  }
+}

@@ -1310,6 +1310,8 @@
       "error_same_interval": "You're already on this plan.",
       "cycle_row_month": "Monthly — € 49.00 per month",
       "cycle_row_year": "Yearly — € 468.00 per year",
+      "cycle_row_switching_to_month": "Yearly — switches to monthly on {date}",
+      "cycle_row_switching_to_year": "Monthly — switches to yearly on {date}",
       "cycle_switch_up": "Switch to yearly",
       "cycle_switch_down": "Switch to monthly",
       "cycle_saving": "Yearly saves € 120.00 a year.",

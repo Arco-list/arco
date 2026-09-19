@@ -6,7 +6,7 @@ import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/l
 import { getActiveCompanyId } from "@/lib/active-company"
 import { getCompanyBilling } from "@/lib/subscriptions/get-company-subscription"
 import { getProjectUsage } from "@/lib/subscriptions/get-project-usage"
-import { getBillingDetails } from "@/lib/subscriptions/get-billing-details"
+import { getBillingDetails, getScheduledSwitch } from "@/lib/subscriptions/get-billing-details"
 import { EMPTY_BILLING_DETAILS } from "@/lib/subscriptions/billing-details-types"
 import { PREVIEW_STATES, isPreviewState, previewBilling, previewBillingDetails, previewUsage } from "@/lib/subscriptions/preview-states"
 import { isAdminUser } from "@/lib/auth-utils"
@@ -37,6 +37,8 @@ export type BillingPageProps = {
    *  The switcher rides on the parameter so an admin's own
    *  subscription page is the page, not a page with a toolbar. */
   previewMode: boolean
+  /** A cycle change waiting for the paid period to run out. */
+  scheduledSwitch: { interval: "month" | "year"; startsAt: number } | null
   isAdmin: boolean
   /** False when the viewer has no company and the page is all fixtures
    *  — the state switcher then has no "Live" to return to. */
@@ -151,6 +153,7 @@ export async function loadBillingPageProps({
       isOwner: true,
       billing: previewBilling(state),
       previewState: state,
+      scheduledSwitch: null,
       previewMode: true,
       isAdmin: true,
       hasCompany: false,
@@ -186,6 +189,12 @@ export async function loadBillingPageProps({
       ? await getBillingDetails(billing.stripeCustomerId, "nl")
       : EMPTY_BILLING_DETAILS
 
+  // Only for a live subscription, and never for a fixture: a preview
+  // tab must not reach into the admin's own Stripe objects.
+  const scheduledSwitch = !previewState && billing.stripeSubscriptionId
+    ? await getScheduledSwitch(billing.stripeSubscriptionId)
+    : null
+
   return {
     companyName: company.name,
     usage,
@@ -193,6 +202,7 @@ export async function loadBillingPageProps({
     isOwner: company.owner_id === user.id || Boolean(previewState),
     billing,
     previewState,
+    scheduledSwitch,
     previewMode: Boolean(preview) && isAdmin,
     isAdmin,
     hasCompany: true,

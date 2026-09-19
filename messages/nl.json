@@ -1310,6 +1310,8 @@
       "error_same_interval": "Je zit al op dit abonnement.",
       "cycle_row_month": "Maandelijks — € 49,00 per maand",
       "cycle_row_year": "Jaarlijks — € 468,00 per jaar",
+      "cycle_row_switching_to_month": "Jaarlijks — gaat op {date} over naar maandelijks",
+      "cycle_row_switching_to_year": "Maandelijks — gaat op {date} over naar jaarlijks",
       "cycle_switch_up": "Overstappen naar jaarlijks",
       "cycle_switch_down": "Overstappen naar maandelijks",
       "cycle_saving": "Jaarlijks scheelt € 120,00 per jaar.",
