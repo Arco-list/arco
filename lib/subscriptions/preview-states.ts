@@ -21,6 +21,7 @@ export const PREVIEW_STATES = [
   "pro_month",
   "pro_year",
   "past_due",
+  "unpaid",
   "canceling",
   "returning",
 ] as const
@@ -34,6 +35,7 @@ export const PREVIEW_LABELS: Record<PreviewState, string> = {
   pro_month: "Pro · monthly",
   pro_year: "Pro · yearly",
   past_due: "Past due",
+  unpaid: "Unpaid",
   canceling: "Cancelling",
   returning: "Returning",
 }
@@ -45,6 +47,7 @@ export const PREVIEW_NOTES: Record<PreviewState, string> = {
   pro_month: "€49 a month. On Pro the split stops meaning anything, so the two bars become one.",
   pro_year: "The state we steer people to: €468 a year by direct debit.",
   past_due: "A collection that failed. The company keeps access while dunning runs (D6).",
+  unpaid: "Dunning has run out. Access is back to Free, the subscription is still there, and the open invoice is the way back.",
   canceling: "Cancelled but still inside the paid period. Access holds until the end date.",
   returning: "Paid once, on Free again, thinking about coming back. We still hold their mandate, so an upgrade should not ask for it twice.",
 }
@@ -83,6 +86,15 @@ export function previewBilling(state: PreviewState): CompanyBilling {
       return {
         ...base, plan: "pro", source: "subscription", status: "past_due",
         interval: "year", currentPeriodEnd: daysFromNow(-3),
+        stripeCustomerId: "cus_preview", stripeSubscriptionId: "sub_preview",
+      }
+    // Every retry spent. The subscription survives — paying the open
+    // invoice revives it — but it no longer carries entitlements, so
+    // the plan reads free while the page still shows what is owed.
+    case "unpaid":
+      return {
+        ...base, plan: "free", source: "subscription", status: "unpaid",
+        interval: "year", currentPeriodEnd: daysFromNow(-34),
         stripeCustomerId: "cus_preview", stripeSubscriptionId: "sub_preview",
       }
     case "canceling":
@@ -149,7 +161,7 @@ export function previewBillingDetails(state: PreviewState): BillingDetails {
       total: amount,
       // The most recent one carries the state being previewed; the rest
       // are settled history.
-      status: i === 0 && state === "past_due" ? "open" : "paid",
+      status: i === 0 && (state === "past_due" || state === "unpaid") ? "open" : "paid",
       // No hosted invoice exists for a fixture, and a link to Stripe's
       // bare domain is worse than no link: the row says "—", which is
       // exactly what a real invoice without a hosted copy shows.
@@ -195,6 +207,11 @@ export function previewUsage(state: PreviewState): ProjectUsage {
     // Back on Free after a paid year, so the credits they gained while
     // paying are the ones now held back — the reason to return.
     case "returning":
+      return free({ canPublish: true, publishedCount: 6, contributorTotal: 4 })
+    // Unpaid falls back to Free, so the bars have to show the limit
+    // biting again — that loss is the whole argument for settling the
+    // invoice, and a preview that kept everything visible would hide it.
+    case "unpaid":
       return free({ canPublish: true, publishedCount: 6, contributorTotal: 4 })
     // Pro: the same company as free_both, with nothing held back. The
     // page merges the two bars there — see SubscriptionScreen.

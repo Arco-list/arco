@@ -104,13 +104,16 @@ export function SubscriptionScreen({
    * congratulate someone twice.
    */
   const searchParams = useSearchParams()
-  const [subscribed, setSubscribed] = useState<"active" | "processing" | null>(null)
+  const [notice, setNotice] = useState<"active" | "processing" | "method" | null>(null)
   useEffect(() => {
-    const v = searchParams.get("subscribed")
-    if (v !== "active" && v !== "processing") return
-    setSubscribed(v)
+    const subscribed = searchParams.get("subscribed")
+    const changed = searchParams.get("payment_method") === "changed"
+    const which = subscribed === "active" || subscribed === "processing" ? subscribed : changed ? "method" : null
+    if (!which) return
+    setNotice(which)
     const next = new URLSearchParams(searchParams.toString())
     next.delete("subscribed")
+    next.delete("payment_method")
     const qs = next.toString()
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }, [searchParams, pathname, router])
@@ -258,23 +261,40 @@ export function SubscriptionScreen({
     // interval while the payment row reads the schedule — so the two
     // could disagree about the same subscription. The schedule wins:
     // it is what Stripe will actually do.
+    //
+    // And when a switch is pending, the date is not simply a renewal:
+    // the plan renews as the other one. Saying only "wordt verlengd"
+    // is true of the date and silent about the change.
+    : renewal && scheduledSwitch
+      ? tb(scheduledSwitch.interval === "month" ? "renews_body_switching_month" : "renews_body_switching_year", { date: renewal })
     : renewal ? tb(currentInterval === "month" ? "renews_body_month" : "renews_body_year", { date: renewal })
     : ""
 
   const inAdmin = chrome === "admin"
 
+  /**
+   * Collection has failed and has not yet been put right.
+   *
+   * Two statuses, one situation: past_due while Stripe still retries,
+   * unpaid once it has stopped. Only the first was handled, so the
+   * state where access is actually gone — and where the reader most
+   * needs telling — arrived without a banner, without a button and
+   * without a word of explanation.
+   */
+  const collectionFailed = billing.status === "past_due" || billing.status === "unpaid"
+
   // Exactly one primary action, chosen by what the company should do
   // next — not a row of equally-weighted buttons.
   const primaryAction =
-    billing.status === "past_due" ? tb("action_fix_payment")
+    collectionFailed ? tb("action_fix_payment")
     : billing.cancelAtPeriodEnd ? tb("action_reactivate")
     : !isPro ? tb("action_upgrade")
     : null
 
-  // A failed collection is fixed by giving us a working mandate, which
-  // is what the payment-method page is for. Resuming is one field on
-  // the subscription and happens here, same as cancelling.
-  const primaryGoesToPortal = billing.status === "past_due"
+  // Fixed by giving us a working mandate, which is what the
+  // payment-method page is for. Resuming is one field on the
+  // subscription and happens here, same as cancelling.
+  const primaryGoesToPortal = collectionFailed
 
   // Every upgrade shortcut goes to the checkout, not to the cards.
   //
@@ -407,9 +427,9 @@ export function SubscriptionScreen({
                       {tb("pill_ends", { date: renewal })}
                     </span>
                   )}
-                  {billing.status === "past_due" && (
+                  {collectionFailed && (
                     <span className="status-pill status-pill--tinted status-pill--ending shrink-0">
-                      {tb("status_past_due")}
+                      {tb(billing.status === "unpaid" ? "status_unpaid" : "status_past_due")}
                     </span>
                   )}
                 </div>
@@ -665,12 +685,18 @@ export function SubscriptionScreen({
                   <span>{formatDate(inv.created)}</span>
                   <span style={{ fontVariantNumeric: "tabular-nums" }}>{inv.total}</span>
                   <span style={{ color: inv.status === "paid" ? "var(--text-secondary)" : "#b45309" }}>
-                    {tb(`invoice_status_${inv.status}` as never)}
+                    {["open", "paid", "uncollectible", "void", "draft"].includes(inv.status)
+                      ? tb(`invoice_status_${inv.status}` as never)
+                      : inv.status}
                   </span>
                   <span style={{ textAlign: "right" }}>
                     {inv.url ? (
                       <a href={inv.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary, #016D75)" }}>
-                        {tb("view_invoice")}
+                        {/* The hosted page is where an open invoice gets
+                            paid, so say so. Calling it "bekijken" while
+                            money is owed hides the one thing the reader
+                            can do about it. */}
+                        {tb(inv.status === "open" ? "pay_invoice" : "view_invoice")}
                       </a>
                     ) : "—"}
                   </span>
@@ -690,9 +716,9 @@ export function SubscriptionScreen({
             </p>
           )}
 
-          {billing.status === "past_due" && (
+          {collectionFailed && (
             <p className="arco-small-text" style={{ margin: "10px 0 0" }}>
-              {tb("past_due_help")}
+              {tb(billing.status === "unpaid" ? "unpaid_help" : "past_due_help")}
             </p>
           )}
 
@@ -817,21 +843,29 @@ export function SubscriptionScreen({
         </div>
       )}
 
-      {subscribed && (
-        <div className="popup-overlay" onClick={() => setSubscribed(null)}>
+      {/* One card for every piece of news this page can arrive with:
+          a subscription that started, one still clearing, or a mandate
+          that moved. They all end the same way — the reader is here,
+          looking at the thing that changed. */}
+      {notice && (
+        <div className="popup-overlay" onClick={() => setNotice(null)}>
           <div className="popup-card" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
             <div className="popup-header">
               <h3 className="arco-section-title">
-                {tb(subscribed === "active" ? "welcome_title_active" : "welcome_title_processing")}
+                {tb(notice === "active" ? "welcome_title_active"
+                  : notice === "processing" ? "welcome_title_processing"
+                  : "method_title")}
               </h3>
-              <button type="button" className="popup-close" onClick={() => setSubscribed(null)} aria-label="Sluiten">✕</button>
+              <button type="button" className="popup-close" onClick={() => setNotice(null)} aria-label="Sluiten">✕</button>
             </div>
             <p className="arco-small-text" style={{ margin: "0 0 24px" }}>
-              {tb(subscribed === "active" ? "welcome_body_active" : "welcome_body_processing")}
+              {tb(notice === "active" ? "welcome_body_active"
+                : notice === "processing" ? "welcome_body_processing"
+                : "method_body")}
             </p>
             <div className="popup-actions">
-              <button type="button" className="btn-primary" style={{ flex: 1 }} onClick={() => setSubscribed(null)}>
-                {tb("welcome_close")}
+              <button type="button" className="btn-primary" style={{ flex: 1 }} onClick={() => setNotice(null)}>
+                {tb(notice === "method" ? "method_close" : "welcome_close")}
               </button>
             </div>
           </div>

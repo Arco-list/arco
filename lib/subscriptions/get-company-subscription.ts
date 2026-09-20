@@ -43,13 +43,25 @@ export type CompanyBilling = {
 }
 
 /**
- * Statuses that still carry entitlements. `past_due` and `unpaid` are
- * deliberately included: with SEPA a collection takes days, and a
- * company that just committed to €468 must not lose its page while the
- * bank moves. Losing access is dunning's job (D6), on its own schedule —
- * not a side effect of a status flag.
+ * Statuses that still carry entitlements.
+ *
+ * `past_due` is included and `unpaid` is not, and the line between them
+ * is Stripe's own: past_due means the retries are still running, and
+ * with SEPA a collection takes days — a company that just committed to
+ * €468 must not lose its page while the bank moves. `unpaid` means
+ * every retry has been spent. That is dunning finishing its work, not
+ * a status flag being read too eagerly.
+ *
+ * An unpaid subscription is not gone, though: Stripe keeps it, and
+ * paying the outstanding invoice brings it back to active. So the page
+ * still renders it — see `plan` below, which drops to free while the
+ * subscription itself stays on screen with its invoice and a way to
+ * settle it.
  */
-const ENTITLED: ReadonlySet<string> = new Set(["trialing", "active", "past_due", "unpaid"])
+const ENTITLED: ReadonlySet<string> = new Set(["trialing", "active", "past_due"])
+
+/** Statuses where a subscription still exists at Stripe, entitled or not. */
+const ALIVE: ReadonlySet<string> = new Set([...ENTITLED, "unpaid"])
 
 export function isEntitled(status: string | null | undefined): boolean {
   return Boolean(status && ENTITLED.has(status))
@@ -83,9 +95,12 @@ export async function getCompanyBilling(companyId: string): Promise<CompanyBilli
 
   const foundingClaimedAt = (company as { founding_claimed_at?: string | null } | null)?.founding_claimed_at ?? null
 
-  if (row?.status && isEntitled(row.status)) {
+  if (row?.status && ALIVE.has(row.status)) {
     return {
-      plan: "pro",
+      // Access follows entitlement; everything else on this object
+      // describes the subscription, which outlives it. An unpaid
+      // company reads as free and still sees what it owes.
+      plan: isEntitled(row.status) ? "pro" : "free",
       source: "subscription",
       status: row.status as StripeSubscriptionStatus,
       interval: (row.billing_interval as "month" | "year" | null) ?? null,

@@ -1,11 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { CreditCard, Landmark, Lock, Repeat, Wallet, X } from "lucide-react"
 
 import { FormSelect } from "@/components/form-select"
 import { HeaderLanguageSwitcher } from "@/components/header-language-switcher"
-import { Link } from "@/i18n/navigation"
+import { Link, useRouter } from "@/i18n/navigation"
 
 import { IDEAL_BANKS } from "../checkout/constants"
 import { useElementsCheckout } from "../checkout/use-elements-checkout"
@@ -41,6 +41,7 @@ export function PaymentMethodClient({
   defaultEmail: string
   resumeSetupIntent?: string | null
 }) {
+  const router = useRouter()
   const [method, setMethod] = useState<"ideal" | "sepa" | "card">("ideal")
   const [name, setName] = useState("")
   const [bank, setBank] = useState("")
@@ -86,7 +87,19 @@ export function PaymentMethodClient({
     return !Object.values(next).some(Boolean)
   }
 
-  const busy = checkout.phase === "confirming" || checkout.phase === "mounting"
+  // Same as the checkout: the news belongs on the page it is about,
+  // and an iDEAL mandate returns through the bank on a fresh load, so
+  // the outcome travels in the URL rather than in state.
+  useEffect(() => {
+    if (checkout.phase !== "done") return
+    const sep = returnTo.includes("?") ? "&" : "?"
+    router.replace(`${returnTo}${sep}payment_method=changed`)
+  }, [checkout.phase, returnTo, router])
+
+  // "done" counts as busy: the confirmation is on the subscription
+  // page and the reader is on their way there, so nothing should be
+  // drawn here that would flash past on the way out.
+  const busy = checkout.phase === "confirming" || checkout.phase === "mounting" || checkout.phase === "done"
 
   return (
     <div className="checkout-page">
@@ -116,26 +129,12 @@ export function PaymentMethodClient({
       <div className="checkout-wrap">
         <div className="discover-page-title">
           <h1 className="arco-section-title">
-            {checkout.phase === "done" ? "Gelukt" : "Betaalmethode wijzigen"}
+            Betaalmethode wijzigen
           </h1>
         </div>
 
         <div className="checkout-grid checkout-grid--single" style={{ paddingBottom: 96 }}>
-          {checkout.phase === "done" ? (
-            <aside className="checkout-summary">
-              <h2 className="arco-subsection-title" style={{ marginBottom: 12 }}>Betaalmethode gewijzigd</h2>
-              <p className="form-note" style={{ margin: "0 0 20px" }}>
-                De volgende afschrijving gaat van je nieuwe rekening. De oude machtiging is ingetrokken.
-              </p>
-              <Link
-                href={returnTo}
-                className="btn-primary"
-                style={{ display: "inline-block", width: "100%", textAlign: "center", padding: "12px 20px", fontSize: 15, fontWeight: 500 }}
-              >
-                Naar je abonnement
-              </Link>
-            </aside>
-          ) : (
+          {(
             <div>
               {/* A value, not a caption. As grey running text under the
                   title this read as an explainer about the page and got

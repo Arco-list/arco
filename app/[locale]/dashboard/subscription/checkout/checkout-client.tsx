@@ -269,7 +269,7 @@ export function CheckoutClient({
     router.replace(`${returnTo}${sep}subscribed=${checkout.status === "active" ? "active" : "processing"}`)
   }, [checkout.phase, checkout.status, returnTo, router])
 
-  const busy = checkout.phase === "confirming" || checkout.phase === "mounting"
+  const busy = checkout.phase === "confirming" || checkout.phase === "mounting" || checkout.phase === "done"
 
   const submitBlock = (
     <>
@@ -380,22 +380,15 @@ export function CheckoutClient({
             you meet one. */}
         <div className="discover-page-title">
           <h1 className="arco-section-title">
-            {checkout.phase === "done" ? "Gelukt" : freeActivation ? "Pro activeren" : "Afrekenen"}
+            {freeActivation ? "Pro activeren" : "Afrekenen"}
           </h1>
         </div>
 
-        {/* Done: the form has nothing left to ask, so the reader should
-            not be left looking at it. They go to the page the news is
-            about — their subscription — and the confirmation meets them
-            there. This branch is what shows while that navigation
-            happens; a blank page after a payment reads as a failure. */}
-        {checkout.phase === "done" ? (
-          <div className="checkout-grid checkout-grid--single" style={{ paddingBottom: 96 }}>
-            <aside className="checkout-summary">
-              <p className="form-note" style={{ margin: 0 }}>Je abonnement wordt geladen…</p>
-            </aside>
-          </div>
-        ) : (
+        {/* No screen for "done". The confirmation lives on the
+            subscription page and the reader is already on their way
+            there; an effect navigates after paint, so any state drawn
+            here would flash past on the way out. The form simply stays
+            busy until the page changes. */}
         <div className={`checkout-grid${freeActivation ? " checkout-grid--single" : ""}`} style={{ paddingBottom: 96 }}>
           {/* ── Left: what the reader hands over. Absent entirely on a
                  free activation — there is nothing to hand over, and a
@@ -800,7 +793,6 @@ export function CheckoutClient({
             <div style={{ marginTop: 20 }}>{submitBlock}</div>
           </aside>
         </div>
-        )}
       </div>
     </div>
   )
