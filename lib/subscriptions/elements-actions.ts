@@ -7,6 +7,8 @@ import { logger } from "@/lib/logger"
 import { priceId, taxRateId, isStripeConfigured, stripeGet, stripePost } from "@/lib/stripe/rest"
 import { mirrorSubscription, type StripeSubscription } from "@/lib/subscriptions/mirror"
 import { ensureCustomer, resolveOwnedCompany } from "@/lib/subscriptions/owned-company"
+import { subscribeFromSetupIntent } from "@/lib/subscriptions/subscribe-from-setup"
+import { LIVE_STATUSES, hasLiveSubscription, type Failure } from "@/lib/subscriptions/live-status"
 
 /**
  * The Elements checkout: mandate first, subscription second.
@@ -27,34 +29,6 @@ import { ensureCustomer, resolveOwnedCompany } from "@/lib/subscriptions/owned-c
  * working subscription should be.
  */
 
-type Failure = {
-  error:
-    | "not_signed_in" | "no_company" | "not_owner" | "not_configured"
-    | "failed" | "not_ready" | "already_subscribed" | "nothing_to_replace" | "no_saved_method"
-    | "nothing_to_switch" | "same_interval"
-}
-
-/** Statuses that mean the company is already paying, or owes us. */
-const LIVE_STATUSES = ["active", "trialing", "past_due", "unpaid"]
-
-/**
- * Whether this company already has a subscription worth protecting.
- *
- * Nothing stopped a second one before, so a reader who pressed twice —
- * or came back to a tab — got charged twice. Keyed on the company
- * rather than the Stripe customer, because a customer is created per
- * attempt until the first subscription pins one down.
- */
-async function hasLiveSubscription(companyId: string): Promise<boolean> {
-  const { data } = await createServiceRoleSupabaseClient()
-    .from("subscriptions" as never)
-    .select("status")
-    .eq("company_id", companyId)
-    .maybeSingle()
-
-  const status = (data as { status?: string } | null)?.status
-  return Boolean(status && LIVE_STATUSES.includes(status))
-}
 
 export type ElementsMethod = "ideal" | "sepa" | "card"
 
@@ -132,74 +106,14 @@ export async function startSetupAction(
  * that as a failure would reject the method we most want people on.
  * The status comes back instead, and the page says what is true.
  */
+/** The signed-in route into the same work. */
 export async function completeSubscriptionAction(
   setupIntentId: string,
   interval: "month" | "year",
 ): Promise<{ status: string } | Failure> {
-  if (!isStripeConfigured()) return { error: "not_configured" }
-  if (!/^seti_[A-Za-z0-9_]+$/.test(setupIntentId)) return { error: "failed" }
-
   const resolved = await resolveOwnedCompany()
   if ("error" in resolved) return { error: resolved.error }
-
-  try {
-    const intent = await stripeGet<{
-      status?: string
-      payment_method?: string | null
-      customer?: string | null
-      metadata?: Record<string, string> | null
-    }>(`/setup_intents/${setupIntentId}`)
-
-    // An id from a query string proves nothing on its own.
-    if (intent.metadata?.company_id !== resolved.companyId) return { error: "failed" }
-    if (intent.status !== "succeeded" || !intent.payment_method) return { error: "not_ready" }
-
-    // The customer the mandate is actually attached to — never a fresh
-    // ensureCustomer call. That looks the customer up in `subscriptions`,
-    // and at this point in the flow there is no row there yet: the first
-    // step made one customer and put the mandate on it, and asking again
-    // would make a second and try to charge a payment method belonging
-    // to the first. Stripe refuses that, correctly.
-    const customerId = intent.customer
-    if (!customerId) return { error: "failed" }
-
-    // Checked twice on purpose. The first guard spares the reader the
-    // form; this one is the one that prevents a second charge, and it
-    // sits as close to the create call as it can.
-    if (await hasLiveSubscription(resolved.companyId)) return { error: "already_subscribed" }
-
-    // And once more at Stripe itself, because our own table can be
-    // behind: the mirror is written after the subscription exists, and
-    // a write that failed leaves a company looking unsubscribed while
-    // it is paying. Only possible here, where the customer comes from
-    // the mandate rather than from ensureCustomer inventing one.
-    const atStripe = await stripeGet<{ data: { status: string }[] }>("/subscriptions", {
-      customer: customerId,
-      status: "all",
-      limit: 20,
-    })
-    if (atStripe.data?.some((sub) => LIVE_STATUSES.includes(sub.status))) {
-      return { error: "already_subscribed" }
-    }
-
-    const subscription = await stripePost<StripeSubscription & { status: string }>("/subscriptions", {
-      customer: customerId,
-      items: [{ price: priceId(interval) }],
-      default_tax_rates: [taxRateId()],
-      default_payment_method: intent.payment_method,
-      metadata: { company_id: resolved.companyId },
-      expand: ["items.data.price"],
-    })
-
-    // Written here rather than waiting for the webhook: the reader is
-    // looking at the page now. The webhook confirms the same row later.
-    await mirrorSubscription(createServiceRoleSupabaseClient(), subscription)
-
-    return { status: subscription.status }
-  } catch (err) {
-    logger.error("Subscription creation after setup failed", { companyId: resolved.companyId }, err as Error)
-    return { error: "failed" }
-  }
+  return subscribeFromSetupIntent(setupIntentId, interval, resolved.companyId)
 }
 
 /**
@@ -211,7 +125,12 @@ export async function completeSubscriptionAction(
  * change — three identical SEPA entries showed up in the sandbox from
  * three attempts alone.
  */
-export async function replacePaymentMethodAction(setupIntentId: string): Promise<{ ok: true } | Failure> {
+export async function replacePaymentMethodAction(
+  setupIntentId: string,
+  // `retried` travels back because the confirmation the reader gets
+  // depends on it: a routine change is about the next charge, a change
+  // made to escape dunning is about the one being collected right now.
+): Promise<{ ok: true; retried: boolean } | Failure> {
   if (!isStripeConfigured()) return { error: "not_configured" }
   if (!/^seti_[A-Za-z0-9_]+$/.test(setupIntentId)) return { error: "failed" }
 
@@ -287,7 +206,7 @@ export async function replacePaymentMethodAction(setupIntentId: string): Promise
             `/subscriptions/${mirrored.stripe_subscription_id}`,
           )
           await mirrorSubscription(service, refreshed)
-          return { ok: true }
+          return { ok: true, retried: true }
         }
       } catch (err) {
         logger.error("Could not retry the open invoice", { companyId: resolved.companyId }, err as Error)
@@ -295,7 +214,7 @@ export async function replacePaymentMethodAction(setupIntentId: string): Promise
     }
 
     await mirrorSubscription(service, subscription)
-    return { ok: true }
+    return { ok: true, retried: false }
   } catch (err) {
     logger.error("Replacing the payment method failed", { companyId: resolved.companyId }, err as Error)
     return { error: "failed" }
@@ -619,4 +538,43 @@ export async function saveBillingIdentityAction(input: {
   }
 
   return { ok: true }
+}
+
+/**
+ * Record which cycle the reader chose, on the mandate itself.
+ *
+ * The webhook needs it: when someone authorises at their bank and never
+ * returns, the intent is all there is to go on. It is stamped here, at
+ * confirm time, rather than when the intent is created — the toggle on
+ * the checkout can change the cycle afterwards, and a metadata field
+ * written too early would bill a yearly choice monthly.
+ */
+export async function stampSetupIntervalAction(
+  setupIntentId: string,
+  interval: "month" | "year",
+): Promise<{ ok: true } | Failure> {
+  if (!isStripeConfigured()) return { error: "not_configured" }
+  if (!/^seti_[A-Za-z0-9_]+$/.test(setupIntentId)) return { error: "failed" }
+
+  const resolved = await resolveOwnedCompany()
+  if ("error" in resolved) return { error: resolved.error }
+
+  try {
+    // The id comes from the client, so it proves nothing until the
+    // intent says it belongs to this company.
+    const intent = await stripeGet<{ metadata?: Record<string, string> | null }>(
+      `/setup_intents/${setupIntentId}`,
+    )
+    if (intent.metadata?.company_id !== resolved.companyId) return { error: "failed" }
+
+    await stripePost(`/setup_intents/${setupIntentId}`, {
+      metadata: { company_id: resolved.companyId, interval },
+    })
+    return { ok: true }
+  } catch (err) {
+    logger.warn("Could not stamp the interval on the setup intent", {
+      companyId: resolved.companyId, error: String(err),
+    })
+    return { error: "failed" }
+  }
 }

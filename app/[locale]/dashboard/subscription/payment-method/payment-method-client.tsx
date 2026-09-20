@@ -93,8 +93,10 @@ export function PaymentMethodClient({
   useEffect(() => {
     if (checkout.phase !== "done") return
     const sep = returnTo.includes("?") ? "&" : "?"
-    router.replace(`${returnTo}${sep}payment_method=changed`)
-  }, [checkout.phase, returnTo, router])
+    // Two different pieces of news: the next charge moves, or the one
+    // that is already owed is being collected right now.
+    router.replace(`${returnTo}${sep}payment_method=${checkout.status === "retried" ? "retried" : "changed"}`)
+  }, [checkout.phase, checkout.status, returnTo, router])
 
   // "done" counts as busy: the confirmation is on the subscription
   // page and the reader is on their way there, so nothing should be

@@ -1344,7 +1344,9 @@
       "pay_invoice": "Betalen",
       "invoice_status_draft": "Concept",
       "status_unpaid": "Niet betaald",
-      "unpaid_help": "De incasso is meerdere keren mislukt, dus je account staat weer op Gratis. Betaal de openstaande factuur hieronder en je abonnement loopt gewoon door."
+      "unpaid_body": "Je account staat op Gratis tot de openstaande factuur is betaald. Daarna loopt je abonnement gewoon door.",
+      "retried_title": "Betaalmethode gewijzigd",
+      "retried_body": "We innen de openstaande factuur opnieuw, van je nieuwe rekening. Een SEPA-incasso duurt een paar werkdagen; zodra hij binnen is staat Pro weer aan."
     },
     "pricing_current_badge": "Huidig",
     "pricing_your_plan": "Je huidige abonnement",

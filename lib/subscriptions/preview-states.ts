@@ -162,10 +162,11 @@ export function previewBillingDetails(state: PreviewState): BillingDetails {
       // The most recent one carries the state being previewed; the rest
       // are settled history.
       status: i === 0 && (state === "past_due" || state === "unpaid") ? "open" : "paid",
-      // No hosted invoice exists for a fixture, and a link to Stripe's
-      // bare domain is worse than no link: the row says "—", which is
-      // exactly what a real invoice without a hosted copy shows.
-      url: null,
+      // A fixture has no hosted invoice, so the link goes nowhere on
+      // purpose. It is still rendered for an open one: the action is
+      // part of what these two states are being previewed for, and a
+      // row reading "—" hides the thing under review.
+      url: i === 0 && (state === "past_due" || state === "unpaid") ? "#" : null,
     }
   })
 

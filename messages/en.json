@@ -1344,7 +1344,9 @@
       "pay_invoice": "Pay",
       "invoice_status_draft": "Draft",
       "status_unpaid": "Unpaid",
-      "unpaid_help": "The direct debit failed several times, so your account is back on Free. Pay the outstanding invoice below and your subscription carries on."
+      "unpaid_body": "Your account is on Free until the outstanding invoice is paid. After that your subscription carries on.",
+      "retried_title": "Payment method changed",
+      "retried_body": "We're collecting the outstanding invoice again, from your new account. A SEPA direct debit takes a few working days; as soon as it clears, Pro is back on."
     },
     "pricing_current_badge": "Current",
     "pricing_your_plan": "Your current plan",

@@ -104,11 +104,14 @@ export function SubscriptionScreen({
    * congratulate someone twice.
    */
   const searchParams = useSearchParams()
-  const [notice, setNotice] = useState<"active" | "processing" | "method" | null>(null)
+  const [notice, setNotice] = useState<"active" | "processing" | "method" | "retried" | null>(null)
   useEffect(() => {
     const subscribed = searchParams.get("subscribed")
-    const changed = searchParams.get("payment_method") === "changed"
-    const which = subscribed === "active" || subscribed === "processing" ? subscribed : changed ? "method" : null
+    const changed = searchParams.get("payment_method")
+    const which = subscribed === "active" || subscribed === "processing" ? subscribed
+      : changed === "retried" ? "retried"
+      : changed === "changed" ? "method"
+      : null
     if (!which) return
     setNotice(which)
     const next = new URLSearchParams(searchParams.toString())
@@ -265,6 +268,10 @@ export function SubscriptionScreen({
     // And when a switch is pending, the date is not simply a renewal:
     // the plan renews as the other one. Saying only "wordt verlengd"
     // is true of the date and silent about the change.
+    // Unpaid is not a renewal date. Saying "wordt verlengd op" about a
+    // subscription whose access has just been withdrawn describes a
+    // future that is not going to happen unless something is done.
+    : billing.status === "unpaid" ? tb("unpaid_body")
     : renewal && scheduledSwitch
       ? tb(scheduledSwitch.interval === "month" ? "renews_body_switching_month" : "renews_body_switching_year", { date: renewal })
     : renewal ? tb(currentInterval === "month" ? "renews_body_month" : "renews_body_year", { date: renewal })
@@ -665,7 +672,7 @@ export function SubscriptionScreen({
             <div>
               <h4 className="arco-subsection-title" style={{ marginBottom: 14 }}>{tb("invoices_heading")}</h4>
               <div style={{
-                display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 16,
+                display: "grid", gridTemplateColumns: "1fr 1fr 1fr 96px", gap: 16,
                 paddingBottom: 10, borderBottom: "1px solid var(--arco-light-grey)",
               }}>
                 <span className="arco-eyebrow">{tb("col_date")}</span>
@@ -677,7 +684,7 @@ export function SubscriptionScreen({
                 <div
                   key={inv.id}
                   style={{
-                    display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 16,
+                    display: "grid", gridTemplateColumns: "1fr 1fr 1fr 96px", gap: 16,
                     alignItems: "baseline", padding: "14px 0",
                     borderBottom: "1px solid var(--arco-light-grey)", fontSize: 14,
                   }}
@@ -716,9 +723,12 @@ export function SubscriptionScreen({
             </p>
           )}
 
-          {collectionFailed && (
+          {/* Only while retries are running. Once they have stopped the
+              banner says it, and saying it twice on one page turns one
+              problem into two. */}
+          {billing.status === "past_due" && (
             <p className="arco-small-text" style={{ margin: "10px 0 0" }}>
-              {tb(billing.status === "unpaid" ? "unpaid_help" : "past_due_help")}
+              {tb("past_due_help")}
             </p>
           )}
 
@@ -854,6 +864,7 @@ export function SubscriptionScreen({
               <h3 className="arco-section-title">
                 {tb(notice === "active" ? "welcome_title_active"
                   : notice === "processing" ? "welcome_title_processing"
+                  : notice === "retried" ? "retried_title"
                   : "method_title")}
               </h3>
               <button type="button" className="popup-close" onClick={() => setNotice(null)} aria-label="Sluiten">✕</button>
@@ -861,11 +872,12 @@ export function SubscriptionScreen({
             <p className="arco-small-text" style={{ margin: "0 0 24px" }}>
               {tb(notice === "active" ? "welcome_body_active"
                 : notice === "processing" ? "welcome_body_processing"
+                : notice === "retried" ? "retried_body"
                 : "method_body")}
             </p>
             <div className="popup-actions">
               <button type="button" className="btn-primary" style={{ flex: 1 }} onClick={() => setNotice(null)}>
-                {tb(notice === "method" ? "method_close" : "welcome_close")}
+                {tb(notice === "method" || notice === "retried" ? "method_close" : "welcome_close")}
               </button>
             </div>
           </div>

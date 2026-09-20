@@ -5,6 +5,7 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
 import { stripeGet } from "@/lib/stripe/rest"
 import { mirrorSubscription, type StripeSubscription } from "@/lib/subscriptions/mirror"
+import { subscribeFromSetupIntent } from "@/lib/subscriptions/subscribe-from-setup"
 
 /**
  * Stripe webhook — the only thing that writes a subscription.
@@ -119,6 +120,39 @@ export async function POST(request: NextRequest) {
       case "customer.subscription.updated":
       case "customer.subscription.deleted": {
         await mirrorSubscription(supabase, event.data.object as unknown as StripeSubscription)
+        break
+      }
+
+      /**
+       * A mandate that completed away from the browser.
+       *
+       * iDEAL sends the customer to their bank and relies on them
+       * coming back to finish; when they do, the page creates the
+       * subscription itself. When they do not — a closed tab, a
+       * banking app that never hands back — the mandate exists at
+       * Stripe and nothing else does. This is the other way of
+       * hearing about it.
+       *
+       * Only for a setup that carries an interval: replacing a
+       * payment method uses the same object and must not create a
+       * subscription. The guards inside refuse a second one, so a
+       * reader who does return races with this and loses harmlessly.
+       */
+      case "setup_intent.succeeded": {
+        const intent = event.data.object as {
+          id?: string
+          metadata?: Record<string, string> | null
+        }
+        const companyId = intent.metadata?.company_id
+        const interval = intent.metadata?.interval
+        if (intent.id && companyId && (interval === "month" || interval === "year")) {
+          const result = await subscribeFromSetupIntent(intent.id, interval, companyId)
+          if ("error" in result && result.error !== "already_subscribed") {
+            logger.warn("Subscription from setup_intent.succeeded did not complete", {
+              setupIntentId: intent.id, companyId, reason: result.error,
+            })
+          }
+        }
         break
       }
 

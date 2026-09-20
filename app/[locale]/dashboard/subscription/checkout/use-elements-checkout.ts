@@ -6,6 +6,7 @@ import { PUBLISHABLE_KEY, loadStripeJs } from "@/lib/stripe/load-stripe"
 import {
   completeSubscriptionAction,
   saveBillingIdentityAction,
+  stampSetupIntervalAction,
   replacePaymentMethodAction,
   startSetupAction,
   subscribeWithSavedMethodAction,
@@ -199,7 +200,7 @@ export function useElementsCheckout({
         setPhase("error")
         return
       }
-      setStatus("replaced")
+      setStatus(replaced.retried ? "retried" : "replaced")
       setPhase("done")
       return
     }
@@ -263,6 +264,13 @@ export function useElementsCheckout({
       // Best effort on purpose: a rejected VAT number is worth a wrong
       // invoice line, not a lost subscription.
       if (billing) await saveBillingIdentityAction(billing)
+
+      // The cycle, onto the mandate, while it is still settled and
+      // before the browser leaves for a bank it may not come back from.
+      if (purpose === "subscribe" && secretRef.current) {
+        const id = secretRef.current.clientSecret.split("_secret_")[0]
+        if (id) await stampSetupIntervalAction(id, intervalRef.current)
+      }
 
       const billing_details = { name, email }
 
