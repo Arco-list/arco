@@ -14,6 +14,7 @@ import type { CompanyBilling } from "@/lib/subscriptions/get-company-subscriptio
 import { FREE_CONTRIBUTOR_LIMIT, type ProjectUsage } from "@/lib/subscriptions/usage-types"
 import type { BillingDetails } from "@/lib/subscriptions/billing-details-types"
 import { PREVIEW_LABELS, PREVIEW_STATES } from "@/lib/subscriptions/preview-states"
+import { hasUnpaidInvoice, isCollectionFailing } from "@/lib/subscriptions/collection-state"
 import { AdminTabs } from "@/components/admin/admin-tabs"
 import { FormSelect } from "@/components/form-select"
 import { PricingSection } from "@/components/pricing-section"
@@ -260,24 +261,11 @@ export function SubscriptionScreen({
     ? (scheduledSwitch.interval === "month" ? "year" : "month")
     : billing.interval
 
-  /**
-   * An invoice that is owed and that nothing is doing anything about.
-   *
-   * The subscription's own status is not the only way this happens: an
-   * invoice can sit open while the subscription still reads active —
-   * between a finalisation and its payment, or for anything billed
-   * outside the subscription. The page said "wordt verlengd op…" over
-   * a red "Openstaand" two rows below it and offered no way to settle
-   * it. What the reader owes is a fact about the page, not about one
-   * field on the subscription.
-   *
-   * A payment already travelling does not count: that is `processing`,
-   * and it needs waiting rather than acting.
-   */
-  const unpaidInvoice = details.invoices.some((inv) => inv.status === "open" && !inv.processing)
-
-  const collectionFailed =
-    billing.status === "past_due" || billing.status === "unpaid" || unpaidInvoice
+  // What the reader owes is a fact about the page, not about one field
+  // on the subscription. Both live in collection-state.ts, so this page
+  // and the payment-method page it sends people to cannot disagree.
+  const unpaidInvoice = hasUnpaidInvoice(details.invoices)
+  const collectionFailed = isCollectionFailing(billing.status, details.invoices)
 
   // One line describing where they stand. Deliberately concrete: a date
   // beats the word "active".
@@ -322,15 +310,6 @@ export function SubscriptionScreen({
 
   const inAdmin = chrome === "admin"
 
-  /**
-   * Collection has failed and has not yet been put right.
-   *
-   * Two statuses, one situation: past_due while Stripe still retries,
-   * unpaid once it has stopped. Only the first was handled, so the
-   * state where access is actually gone — and where the reader most
-   * needs telling — arrived without a banner, without a button and
-   * without a word of explanation.
-   */
 
   // Exactly one primary action, chosen by what the company should do
   // next — not a row of equally-weighted buttons.

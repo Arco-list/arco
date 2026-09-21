@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { getBillingDetails } from "@/lib/subscriptions/get-billing-details"
+import { isCollectionFailing } from "@/lib/subscriptions/collection-state"
 
 import { PaymentMethodClient } from "./payment-method-client"
 
@@ -55,8 +56,11 @@ export default async function PaymentMethodPage({
   // Arriving from dunning, it is the thing that failed — and saying
   // "wordt losgekoppeld zodra de nieuwe werkt" about a mandate that
   // already stopped working reads as if nothing is wrong.
+  // The same question the subscription screen asks, asked the same way:
+  // this page is where that reader is sent, so it must not greet them
+  // as a routine change.
   const status = (row as { status?: string } | null)?.status
-  const collectionFailed = status === "past_due" || status === "unpaid"
+  const collectionFailed = isCollectionFailing(status, details?.invoices ?? [])
 
   return (
     <PaymentMethodClient
