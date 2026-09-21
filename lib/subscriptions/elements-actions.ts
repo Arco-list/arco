@@ -10,6 +10,7 @@ import { ensureCustomer, resolveOwnedCompany } from "@/lib/subscriptions/owned-c
 import { subscribeFromSetupIntent } from "@/lib/subscriptions/subscribe-from-setup"
 import { LIVE_STATUSES, hasLiveSubscription, type Failure } from "@/lib/subscriptions/live-status"
 import { setDefaultPaymentMethod } from "@/lib/subscriptions/set-default-method"
+import { isValidVatNumber, normaliseVatNumber } from "@/lib/subscriptions/vat-number"
 
 /**
  * The Elements checkout: mandate first, subscription second.
@@ -554,7 +555,11 @@ export async function saveBillingIdentityAction(input: {
     // A VAT number is a separate object, and Stripe rejects a duplicate.
     // Re-entering the same number on a second attempt is not an error
     // the buyer should ever see, so an existing match is left alone.
-    const vat = input.vatNumber?.trim().toUpperCase().replace(/\s/g, "")
+    // Checked here as well as in the form: a server action is an
+    // endpoint, and the form is only the polite way in. Same rule, one
+    // module, so the two cannot disagree about what a VAT number is.
+    const raw = input.vatNumber ? normaliseVatNumber(input.vatNumber) : ""
+    const vat = raw && isValidVatNumber(raw) ? raw : ""
     if (vat) {
       const existing = await stripeGet<{ data: { id: string; value: string }[] }>(
         `/customers/${customerId}/tax_ids`,

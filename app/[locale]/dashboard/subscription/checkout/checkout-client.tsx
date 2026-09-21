@@ -11,6 +11,8 @@ import { Link, useRouter } from "@/i18n/navigation"
 
 import { PUBLISHABLE_KEY } from "@/lib/stripe/load-stripe"
 
+import { isValidVatNumber } from "@/lib/subscriptions/vat-number"
+
 import { FREE_MONTHS, IDEAL_BANKS } from "./constants"
 import { useElementsCheckout } from "./use-elements-checkout"
 
@@ -192,6 +194,12 @@ export function CheckoutClient({
       // Same reason as the address: a Dutch invoice must carry the
       // buyer's name, and only they know the registered one.
       companyName: business && !companyName.trim() ? t("err_company") : null,
+      // Optional, so an empty field is fine — but a filled one has to
+      // be right. Stripe refuses a malformed number when the tax ID is
+      // written, and that write is best-effort on purpose, so without
+      // this the number simply never reaches the invoice and nobody is
+      // told.
+      vatNumber: business && vatNumber.trim() && !isValidVatNumber(vatNumber) ? t("err_vat") : null,
       // Stripe's own errors cover wrong; these cover empty. Without
       // them an untouched IBAN produced a refusal from the payment
       // processor instead of a sentence under the field.
@@ -218,7 +226,12 @@ export function CheckoutClient({
     returnPath: returnTo,
     resumeSetupIntent,
   })
-  const [country, setCountry] = useState(companyAddress?.country ?? "NL")
+  // Fixed until reverse charge exists. The selector offered Belgium
+  // and Germany while the checkout charged 21% Dutch VAT to everyone,
+  // which is the wrong tax on a cross-border B2B invoice — a buyer
+  // with a valid EU VAT number is entitled to have it shifted to them.
+  // Offering the country was the promise; the tax was the product.
+  const country = "NL"
   const [address, setAddress] = useState<
     { streetAddress: string; city: string; postalCode?: string | null } | null
   >(companyAddress)
@@ -257,6 +270,13 @@ export function CheckoutClient({
   const total = net + vat
   const freeToday = total === 0
   const fullPrice = plan.net + Math.round(plan.net * 0.21)
+
+  const promoLabel = (key: string) =>
+    key === "promo_founding" ? t("promo_founding") : t("promo_intro")
+  const promoPeriod = (key: string) =>
+    key === "promo_founding_periods"
+      ? t("promo_founding_periods", { months: FREE_MONTHS })
+      : t("promo_intro_periods")
 
   const applyPromo = () => {
     const found = CODES[promoInput.trim().toUpperCase()]
@@ -346,9 +366,7 @@ export function CheckoutClient({
           ? t("legal_free")
           : freeToday
             ? t("legal_trial", {
-                period: promo
-                  ? t(promo.periodsKey as never, { months: FREE_MONTHS })
-                  : t("trial_period"),
+                period: promo ? promoPeriod(promo.periodsKey) : t("trial_period"),
                 amount: euro(fullPrice),
                 per: plan.per,
               })
@@ -612,13 +630,6 @@ export function CheckoutClient({
                 </>
               ) : (
                 <>
-                  <label className="form-label" htmlFor="country">{t("label_country")}</label>
-                  <FormSelect id="country" value={country} onChange={(e) => setCountry(e.target.value)}>
-                    <option value="NL">{t("country_nl")}</option>
-                    <option value="BE">{t("country_be")}</option>
-                    <option value="DE">{t("country_de")}</option>
-                  </FormSelect>
-
                   <label className="form-label">{t("label_address")}</label>
                   <AddressLookup
                     placeholder={t("address_placeholder")}
@@ -668,11 +679,16 @@ export function CheckoutClient({
                   </label>
                   <input
                     id="vat"
-                    className="form-input"
+                    className={inputCls("vatNumber")}
                     placeholder={t("vat_placeholder")}
                     value={vatNumber}
-                    onChange={(e) => setVatNumber(e.target.value)}
+                    style={{ marginBottom: 0 }}
+                    onChange={(e) => {
+                      setVatNumber(e.target.value)
+                      setFieldErrors((prev) => ({ ...prev, vatNumber: null }))
+                    }}
                   />
+                  {note(errOf("vatNumber"))}
                 </div>
               )}
             </section>
@@ -688,7 +704,7 @@ export function CheckoutClient({
                 thing it changes. */}
             {freeActivation ? (
               <p className="form-note" style={{ margin: "0 0 20px" }}>
-                Pro staat vanaf nu aan, gratis tot {freeUntil}, en stopt daarna vanzelf.
+                {t("free_activation_note", { until: freeUntil })}
               </p>
             ) : (
             <div className="audience-toggle" style={{ marginBottom: 20, display: "flex" }}>
@@ -736,7 +752,7 @@ export function CheckoutClient({
             {promo && (
               <div className="checkout-price-row checkout-price-row--discount">
                 <span>
-                  {t(promo.labelKey as never)} ({promo.percent}%)
+                  {promoLabel(promo.labelKey)} ({promo.percent}%)
                   <button
                     type="button"
                     className="checkout-promo-remove"
@@ -746,7 +762,7 @@ export function CheckoutClient({
                     <X size={13} strokeWidth={1.75} />
                   </button>
                   <span style={{ display: "block", fontSize: 12, color: "var(--arco-mid-grey)" }}>
-                    {promo.code} · {t(promo.periodsKey as never, { months: FREE_MONTHS })}
+                    {promo.code} · {promoPeriod(promo.periodsKey)}
                   </span>
                 </span>
                 <span>−{euro(discount)}</span>

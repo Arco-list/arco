@@ -2254,7 +2254,6 @@
     "label_email": "Email address",
     "email_note": "We confirm the mandate here and send your invoices to this address.",
     "billing_address": "Billing address",
-    "label_country": "Country",
     "label_address": "Address",
     "address_placeholder": "Street and number",
     "change": "Change",
@@ -2293,13 +2292,12 @@
     "legal_and": "and",
     "mandate": "By providing your IBAN and confirming this payment, you authorise Arco and Stripe, our payment provider, to instruct your bank to debit the amount from your account. You are entitled to a refund from your bank under the terms of your agreement with it. A refund must be claimed within eight weeks.",
     "email_placeholder": "name@company.com",
-    "country_nl": "Netherlands",
-    "country_be": "Belgium",
-    "country_de": "Germany",
     "vat_placeholder": "NL123456789B01",
     "promo_placeholder": "PROMO CODE",
     "vat_line": "VAT (21%)",
     "promo_unknown": "We don't know this code, or it doesn't apply to this plan.",
-    "yearly_saving": "You save {amount} compared with paying monthly."
+    "yearly_saving": "You save {amount} compared with paying monthly.",
+    "err_vat": "This does not look like a valid VAT number. A Dutch one looks like NL123456789B01.",
+    "free_activation_note": "Pro is on from now, free until {until}, and stops by itself afterwards."
   }
 }

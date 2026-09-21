@@ -2254,7 +2254,6 @@
     "label_email": "E-mailadres",
     "email_note": "Hier bevestigen we de machtiging en sturen we je facturen naartoe.",
     "billing_address": "Factuuradres",
-    "label_country": "Land",
     "label_address": "Adres",
     "address_placeholder": "Straat en huisnummer",
     "change": "Wijzigen",
@@ -2293,13 +2292,12 @@
     "legal_and": "en",
     "mandate": "Door je IBAN op te geven en deze betaling te bevestigen, machtig je Arco en Stripe, onze betaaldienstverlener, om je bank opdracht te geven het bedrag van je rekening af te schrijven. Je hebt recht op terugbetaling door je bank volgens de voorwaarden van je overeenkomst met je bank. Een verzoek tot terugbetaling dien je binnen acht weken in.",
     "email_placeholder": "naam@bedrijf.nl",
-    "country_nl": "Nederland",
-    "country_be": "België",
-    "country_de": "Duitsland",
     "vat_placeholder": "NL123456789B01",
     "promo_placeholder": "ACTIECODE",
     "vat_line": "Btw (21%)",
     "promo_unknown": "Deze code kennen we niet, of hij geldt niet voor dit abonnement.",
-    "yearly_saving": "Je bespaart {amount} ten opzichte van maandelijks betalen."
+    "yearly_saving": "Je bespaart {amount} ten opzichte van maandelijks betalen.",
+    "err_vat": "Dit lijkt geen geldig btw-nummer. Een Nederlands nummer ziet eruit als NL123456789B01.",
+    "free_activation_note": "Pro staat vanaf nu aan, gratis tot {until}, en stopt daarna vanzelf."
   }
 }
