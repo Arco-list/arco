@@ -14,9 +14,9 @@ import type { CompanyBilling } from "@/lib/subscriptions/get-company-subscriptio
 import { FREE_CONTRIBUTOR_LIMIT, type ProjectUsage } from "@/lib/subscriptions/usage-types"
 import type { BillingDetails } from "@/lib/subscriptions/billing-details-types"
 import { PREVIEW_LABELS, PREVIEW_STATES } from "@/lib/subscriptions/preview-states"
-import { hasUnpaidInvoice, isCollectionFailing } from "@/lib/subscriptions/collection-state"
+import { collectionState, hasUnpaidInvoice } from "@/lib/subscriptions/collection-state"
+import { isValidVatNumber } from "@/lib/subscriptions/vat-number"
 import { AdminTabs } from "@/components/admin/admin-tabs"
-import { FormSelect } from "@/components/form-select"
 import { PricingSection } from "@/components/pricing-section"
 import { UsageBar } from "@/components/usage-bar"
 import { setCancelAtPeriodEndAction } from "@/lib/subscriptions/actions"
@@ -134,12 +134,16 @@ export function SubscriptionScreen({
    * to fix an address.
    */
   const [editIdentity, setEditIdentity] = useState(false)
+  // Under the field it belongs to, not in a toast over the dialog. The
+  // toast named the VAT number as the likely cause of any failure —
+  // a guess dressed as a fact, and it appeared above a form the reader
+  // then had to search for the offending field.
+  const [identityVatError, setIdentityVatError] = useState<string | null>(null)
   const [identity, setIdentity] = useState({
     companyName: details.identity?.companyName ?? "",
     line1: details.identity?.line1 ?? "",
     postalCode: details.identity?.postalCode ?? "",
     city: details.identity?.city ?? "",
-    country: details.identity?.country ?? "NL",
     vatNumber: details.identity?.vatNumber ?? "",
   })
 
@@ -265,7 +269,11 @@ export function SubscriptionScreen({
   // on the subscription. Both live in collection-state.ts, so this page
   // and the payment-method page it sends people to cannot disagree.
   const unpaidInvoice = hasUnpaidInvoice(details.invoices)
-  const collectionFailed = isCollectionFailing(billing.status, details.invoices)
+  // The same three states the invoice table renders per row. The banner
+  // used to derive its own answer and contradict the table above which
+  // it sits: "Betaling openstaand" over a row reading "In behandeling".
+  const collection = collectionState(billing.status, details.invoices)
+  const collectionFailed = collection === "failing"
 
   // One line describing where they stand. Deliberately concrete: a date
   // beats the word "active".
@@ -296,6 +304,9 @@ export function SubscriptionScreen({
     // And when a switch is pending, the date is not simply a renewal:
     // the plan renews as the other one. Saying only "wordt verlengd"
     // is true of the date and silent about the change.
+    // A debit in flight outranks the renewal date: the reader is
+    // waiting on this week, not on next year.
+    : collection === "processing" ? tb("processing_body")
     // Unpaid is not a renewal date. Saying "wordt verlengd op" about a
     // subscription whose access has just been withdrawn describes a
     // future that is not going to happen unless something is done.
@@ -365,13 +376,23 @@ export function SubscriptionScreen({
 
   const saveIdentity = () => {
     if (isPreview && refusePreview()) return
+    // Optional, so empty is fine; a filled one has to be right. Without
+    // this the number is quietly dropped before it reaches the invoice.
+    if (identity.vatNumber.trim() && !isValidVatNumber(identity.vatNumber)) {
+      setIdentityVatError(tb("identity_vat_invalid"))
+      return
+    }
     setBusy("identity")
     startTransition(async () => {
       const result = await saveBillingIdentityAction({
         companyName: identity.companyName,
         vatNumber: identity.vatNumber,
         address: identity.line1
-          ? { line1: identity.line1, city: identity.city, postalCode: identity.postalCode, country: identity.country }
+          // Fixed, like the checkout's: we charge 21% Dutch VAT to
+          // everyone, which is the wrong tax on a cross-border B2B
+          // invoice. Until reverse charge exists, NL is the only
+          // country we can bill correctly.
+          ? { line1: identity.line1, city: identity.city, postalCode: identity.postalCode, country: "NL" }
           : null,
       })
       setBusy(null)
@@ -498,9 +519,14 @@ export function SubscriptionScreen({
                       {tb("pill_ends", { date: renewal })}
                     </span>
                   )}
-                  {collectionFailed && (
+                  {collection === "failing" && (
                     <span className="status-pill status-pill--tinted status-pill--ending shrink-0">
                       {tb(billing.status === "unpaid" ? "status_unpaid" : "status_past_due")}
+                    </span>
+                  )}
+                  {collection === "processing" && (
+                    <span className="status-pill status-pill--tinted status-pill--neutral shrink-0">
+                      {tb("status_processing")}
                     </span>
                   )}
                 </div>
@@ -1010,11 +1036,14 @@ export function SubscriptionScreen({
       )}
 
       {editIdentity && (
-        <div className="popup-overlay" onClick={() => !pending && setEditIdentity(false)}>
+        <div className="popup-overlay"
+          onClick={() => { if (!pending) { setEditIdentity(false); setIdentityVatError(null) } }}>
           <div className="popup-card" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
             <div className="popup-header">
               <h3 className="arco-section-title">{tb("identity_title")}</h3>
-              <button type="button" className="popup-close" onClick={() => setEditIdentity(false)} aria-label="Sluiten">✕</button>
+              <button type="button" className="popup-close"
+                onClick={() => { setEditIdentity(false); setIdentityVatError(null) }}
+                aria-label={tb("method_close")}>✕</button>
             </div>
             <p className="arco-small-text" style={{ margin: "0 0 20px" }}>{tb("identity_intro")}</p>
 
@@ -1039,24 +1068,23 @@ export function SubscriptionScreen({
               </div>
             </div>
 
-            <label className="form-label" htmlFor="bi-country">{tb("identity_country")}</label>
-            <FormSelect id="bi-country" value={identity.country}
-              onChange={(e) => setIdentity((v) => ({ ...v, country: e.target.value }))}>
-              <option value="NL">Nederland</option>
-              <option value="BE">België</option>
-              <option value="DE">Duitsland</option>
-            </FormSelect>
-
             <label className="form-label" htmlFor="bi-vat">
               {tb("identity_vat")} <span style={{ color: "var(--arco-mid-grey)", fontWeight: 400 }}>{tb("identity_optional")}</span>
             </label>
-            <input id="bi-vat" className="form-input" placeholder="NL123456789B01" value={identity.vatNumber}
-              onChange={(e) => setIdentity((v) => ({ ...v, vatNumber: e.target.value }))}
-              style={{ marginBottom: 24 }} />
+            <input id="bi-vat" className={`form-input${identityVatError ? " form-input--error" : ""}`}
+              placeholder="NL123456789B01" value={identity.vatNumber}
+              onChange={(e) => {
+                setIdentity((v) => ({ ...v, vatNumber: e.target.value }))
+                setIdentityVatError(null)
+              }}
+              style={{ marginBottom: identityVatError ? 0 : 24 }} />
+            {identityVatError && (
+              <p className="form-note form-note--error" style={{ marginBottom: 24 }}>{identityVatError}</p>
+            )}
 
             <div className="popup-actions">
               <button type="button" className="btn-tertiary" style={{ flex: 1 }}
-                onClick={() => setEditIdentity(false)} disabled={pending}>
+                onClick={() => { setEditIdentity(false); setIdentityVatError(null) }} disabled={pending}>
                 {tb("cancel_confirm_keep")}
               </button>
               <button type="button" className="btn-primary" style={{ flex: 1 }}

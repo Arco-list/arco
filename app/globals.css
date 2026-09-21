@@ -6602,6 +6602,15 @@ body.no-scroll {
   color: #b91c1c;
 }
 
+/* Money on its way. Not amber and not red: the invoice row renders a
+   processing payment in the same secondary grey it gives a paid one,
+   because a SEPA debit taking its three days is the system working. A
+   warning colour here would contradict the row two sections below. */
+.status-pill--neutral {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-secondary);
+}
+
 .status-pill--info {
   background: rgba(1, 109, 117, 0.08);
   color: var(--primary);
