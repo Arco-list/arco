@@ -41,6 +41,22 @@ type StripeInvoice = {
   currency: string
   status: string
   hosted_invoice_url: string | null
+  invoice_pdf: string | null
+  // Expanded below. Newer API versions moved the intent off the invoice
+  // and onto `payments`, so both shapes are read — an unrecognised one
+  // simply means "not processing", which is the safe answer.
+  payment_intent?: { status?: string } | string | null
+  payments?: { data?: { payment?: { payment_intent?: { status?: string } | string | null } }[] }
+}
+
+/** Is money for this invoice already on its way? */
+function isProcessing(inv: StripeInvoice): boolean {
+  const direct = typeof inv.payment_intent === "object" ? inv.payment_intent?.status : undefined
+  const viaPayments = (() => {
+    const pi = inv.payments?.data?.[0]?.payment?.payment_intent
+    return typeof pi === "object" ? pi?.status : undefined
+  })()
+  return (direct ?? viaPayments) === "processing"
 }
 
 function summarisePaymentMethod(pm: StripePaymentMethod): PaymentMethodSummary {
@@ -83,7 +99,15 @@ export async function getBillingDetails(
       // customer can have exactly one attached and no default set — so
       // list and take the first rather than reading the default alone.
       stripeGet<StripeList<StripePaymentMethod>>("/payment_methods", { customer: customerId, limit: 1 }),
-      stripeGet<StripeList<StripeInvoice>>("/invoices", { customer: customerId, limit: 12 }),
+      stripeGet<StripeList<StripeInvoice>>("/invoices", {
+        customer: customerId,
+        limit: 12,
+        // A SEPA debit leaves the invoice open for days while it
+        // travels. Without this the page cannot tell "nobody is paying
+        // this" from "it is already underway", and shows the same
+        // "pay now" to both.
+        "expand[]": "data.payment_intent",
+      }),
       // Who the invoice names, so the page can show it and offer to
       // correct it. Read from Stripe rather than mirrored: this is the
       // record the document is built from, and a copy could disagree.
@@ -114,6 +138,8 @@ export async function getBillingDetails(
           number: inv.number,
           created: new Date(inv.created * 1000).toISOString(),
           total: formatAmount(inv.total, inv.currency, locale),
+          processing: inv.status === "open" && isProcessing(inv),
+          pdfUrl: inv.invoice_pdf,
           status: inv.status,
           url: inv.hosted_invoice_url,
         })),

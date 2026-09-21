@@ -25,8 +25,14 @@ export type InvoiceSummary = {
   total: string
   /** Stripe's status, verbatim: paid, open, void, uncollectible, draft. */
   status: string
-  /** Hosted invoice page — the customer's copy, with a PDF link. */
+  /** Open, but a payment for it is already in flight — a SEPA debit
+   *  takes days, and "openstaand" reads as "nothing is happening". */
+  processing: boolean
+  /** Hosted invoice page — kept as the fallback when there is no PDF. */
   url: string | null
+  /** The PDF itself. Linked directly, so reading your own invoice does
+   *  not mean a trip through a payment page to find the download. */
+  pdfUrl: string | null
 }
 
 /** Who the invoice is made out to — name, address and VAT number. */

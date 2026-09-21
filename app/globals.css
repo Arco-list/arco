@@ -6830,7 +6830,10 @@ body.no-scroll {
    half the height and none of the wrapping. */
 .invoice-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 96px;
+  /* Fixed, not auto: every row is its own grid, so an auto column
+     sizes to that row's content and the header lands somewhere else.
+     Wide enough for "Betalen  Downloaden" side by side. */
+  grid-template-columns: 1fr 1fr 1fr 160px;
   gap: 16px;
   align-items: baseline;
 }

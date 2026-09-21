@@ -30,10 +30,13 @@ const FEATURE_KEYS = [
   { labelKey: "pricing_feature_arco_approved", freeKey: null, proKey: null, freeBool: false, proBool: true, tooltipKey: "pricing_feature_arco_approved_tooltip", tooltipTitleKey: "pricing_feature_arco_approved_tooltip_title", comingSoon: true },
 ] as const
 
-// One shared order on both cards so the rows align line-for-line —
-// contributor credits (the thing being sold) at the top, the Free
-// card's included features grouped above its dashes.
-const FEATURE_ORDER = ["pricing_feature_contributor", "pricing_feature_published", "pricing_feature_company_page", "pricing_feature_team", "pricing_feature_analytics", "pricing_feature_arco_approved"]
+// Publishing first, credits second — the order the reader lives them.
+// You arrive as an architect with your own work, and only then meet
+// the other half: being named on someone else's. Leading with credits
+// asked a question before the reader knew what it was about. Pro's
+// list drops publishing (it is the same there) and opens on the row
+// that differs, so the thing being sold still leads that card.
+const FEATURE_ORDER = ["pricing_feature_published", "pricing_feature_contributor", "pricing_feature_company_page", "pricing_feature_team", "pricing_feature_analytics", "pricing_feature_arco_approved"]
 const orderedFeatures = () =>
   FEATURE_ORDER.map((k) => FEATURE_KEYS.find((f) => f.labelKey === k)!).filter(Boolean)
 

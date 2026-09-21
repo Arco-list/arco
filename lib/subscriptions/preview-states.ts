@@ -149,7 +149,9 @@ export function previewBillingDetails(state: PreviewState): BillingDetails {
           created: new Date(Date.now() - 243 * 24 * 60 * 60 * 1000).toISOString(),
           total: "€ 566,28",
           status: "paid",
+          processing: false,
           url: null,
+          pdfUrl: null,
         },
       ],
     }
@@ -170,11 +172,16 @@ export function previewBillingDetails(state: PreviewState): BillingDetails {
       // The most recent one carries the state being previewed; the rest
       // are settled history.
       status: i === 0 && (state === "past_due" || state === "unpaid") ? "open" : "paid",
+      // past_due is a collection still being retried, so its open
+      // invoice has money on the way; unpaid has run out of attempts.
+      processing: i === 0 && state === "past_due",
       // A fixture has no hosted invoice, so the link goes nowhere on
       // purpose. It is still rendered for an open one: the action is
       // part of what these two states are being previewed for, and a
       // row reading "—" hides the thing under review.
       url: i === 0 && (state === "past_due" || state === "unpaid") ? "#" : null,
+      // A fixture has no document; the row shows what it can.
+      pdfUrl: null,
     }
   })
 

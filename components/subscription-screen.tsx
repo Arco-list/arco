@@ -781,21 +781,36 @@ export function SubscriptionScreen({
                 >
                   <span>{formatDate(inv.created)}</span>
                   <span style={{ fontVariantNumeric: "tabular-nums" }}>{inv.total}</span>
-                  <span style={{ color: inv.status === "paid" ? "var(--text-secondary)" : "#b45309" }}>
-                    {["open", "paid", "uncollectible", "void", "draft"].includes(inv.status)
-                      ? tb(`invoice_status_${inv.status}` as never)
-                      : inv.status}
+                  {/* An open invoice with a debit already travelling is
+                      not the same as one nobody is paying, and they used
+                      to read identically — the same amber "Openstaand"
+                      beside the same "Betalen", which made a payment in
+                      progress look like a payment that had failed.
+                      Money on the way is a quiet, grey fact. */}
+                  <span style={{
+                    // The same red as "Loopt af op …": an invoice nobody
+                    // is paying costs access, so it belongs with the
+                    // other facts that do. Amber was a warning about
+                    // something that might go wrong; this one already
+                    // has.
+                    color: inv.status === "paid" || inv.processing
+                      ? "var(--text-secondary)"
+                      : "var(--destructive)",
+                  }}>
+                    {inv.processing
+                      ? tb("invoice_status_processing")
+                      : ["open", "paid", "uncollectible", "void", "draft"].includes(inv.status)
+                        ? tb(`invoice_status_${inv.status}` as never)
+                        : inv.status}
                   </span>
-                  <span>
+                  <span style={{ display: "inline-flex", gap: 14, justifyContent: "flex-end", flexWrap: "wrap" }}>
                     {/* An open invoice is settled on our own page, not
-                        Stripe's. Updating the mandate collects this
-                        invoice AND fixes every one after it, which is
-                        what the reader actually needs — two doors to
-                        the same room, one of them leaving Arco, only
-                        made them wonder which was right. A paid one
-                        still links to its hosted copy: that document
-                        is the customer's, and it lives at Stripe. */}
-                    {inv.status === "open" ? (
+                        Stripe's: updating the mandate collects this one
+                        AND fixes every one after it, which is what the
+                        reader needs. Two doors to the same room, one of
+                        them leaving Arco, only made them wonder which
+                        was right. */}
+                    {inv.status === "open" && !inv.processing && (
                       <button
                         type="button"
                         onClick={() => goReal(`/dashboard/subscription/payment-method?return=${encodeURIComponent(pathname)}`)}
@@ -806,11 +821,22 @@ export function SubscriptionScreen({
                       >
                         {tb("pay_invoice")}
                       </button>
+                    )}
+                    {/* The document itself, straight to the file. It
+                        used to be a link to Stripe's payment page with
+                        the download hidden on it — three steps to read
+                        an invoice you have already paid. Offered while
+                        it is still open too: an unpaid invoice is just
+                        as much a document you may need to forward. */}
+                    {inv.pdfUrl ? (
+                      <a href={inv.pdfUrl} target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary, #016D75)" }}>
+                        {tb("download_invoice")}
+                      </a>
                     ) : inv.url ? (
                       <a href={inv.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary, #016D75)" }}>
                         {tb("view_invoice")}
                       </a>
-                    ) : "—"}
+                    ) : inv.status === "open" && !inv.processing ? null : "—"}
                   </span>
                 </div>
               ))}
