@@ -6803,6 +6803,58 @@ body.no-scroll {
   color: var(--destructive);
 }
 
+/* ── Billing rows ─────────────────────────────────────────────────
+   A fact on the left, the button that changes it on the right. On a
+   narrow screen the two stop fitting: the label wrapped to two lines
+   and the button wrapped its own words beside it, so both read badly
+   and neither had room. Wrapping the row instead drops the button onto
+   its own line, where `margin-left: auto` keeps it against the right
+   edge — it only ever happens when the two genuinely do not fit. */
+.billing-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--arco-light-grey);
+}
+.billing-row > :last-child { margin-left: auto; }
+/* Room to breathe once it stands alone, and no hyphenated label. */
+.billing-row > :last-child { white-space: nowrap; }
+
+/* ── Invoice table ────────────────────────────────────────────────
+   Four columns hold on a desktop and fall apart on a phone: the date
+   wraps over three lines and the action column spends its width on a
+   dash. Below 640px each invoice becomes two lines instead — date and
+   amount, then status and action — which is the same information in
+   half the height and none of the wrapping. */
+.invoice-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 96px;
+  gap: 16px;
+  align-items: baseline;
+}
+/* The action sits against the right edge at every width. */
+.invoice-grid > :nth-child(4) { text-align: right; }
+
+@media (max-width: 640px) {
+  /* The column names become guesswork once the columns are gone, and
+     "21 september 2026 · € 59,29" needs none of them. */
+  .invoice-head { display: none; }
+
+  .invoice-grid {
+    grid-template-columns: 1fr auto;
+    column-gap: 12px;
+    row-gap: 2px;
+  }
+  /* The amount joins it there once the row folds in two. */
+  .invoice-grid > :nth-child(2) { text-align: right; }
+  /* The status carries the weight on this line, so it keeps the row's
+     own colour while the date above it stays the heading. */
+  .invoice-grid > :nth-child(3) { font-size: 13px; }
+  .invoice-grid > :nth-child(4) { font-size: 13px; }
+}
+
 .filter-dropdown-icon {
   flex-shrink: 0;
   color: var(--text-disabled);
@@ -8918,6 +8970,13 @@ body.no-scroll {
 }
 
 .checkout-method-saved .checkout-method-icon { color: var(--primary); }
+
+/* The same card, when the mandate on it is the reason you are here.
+   Accent means "this one is recommended"; a method that has just
+   failed to collect is the opposite of a recommendation. */
+.checkout-method-saved--failed { border-color: var(--destructive); }
+.checkout-method-saved--failed .checkout-method-icon { color: var(--destructive); }
+.checkout-method-saved--failed .status-modal-option-label { color: var(--destructive); }
 
 .checkout-method-icon {
   flex-shrink: 0;

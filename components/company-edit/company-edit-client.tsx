@@ -998,6 +998,9 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         address: newAddress,
         city: resolved.city || city,
         country: resolved.country || country,
+        // Stored, never shown here: the company page has no use for a
+        // postcode, an invoice does.
+        ...(resolved.postalCode ? { postalCode: resolved.postalCode } : {}),
         ...(resolved.stateRegion ? { stateRegion: resolved.stateRegion } : {}),
         googlePlaceId: resolved.placeId,
         ...(resolved.latitude != null && resolved.longitude != null

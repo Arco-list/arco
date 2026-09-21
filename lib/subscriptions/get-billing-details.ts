@@ -78,17 +78,33 @@ export async function getBillingDetails(
   if (!customerId || !isStripeConfigured()) return EMPTY_BILLING_DETAILS
 
   try {
-    const [methods, invoices] = await Promise.all([
+    const [methods, invoices, customer, taxIds] = await Promise.all([
       // The default for invoices is what actually gets charged, but a
       // customer can have exactly one attached and no default set — so
       // list and take the first rather than reading the default alone.
       stripeGet<StripeList<StripePaymentMethod>>("/payment_methods", { customer: customerId, limit: 1 }),
       stripeGet<StripeList<StripeInvoice>>("/invoices", { customer: customerId, limit: 12 }),
+      // Who the invoice names, so the page can show it and offer to
+      // correct it. Read from Stripe rather than mirrored: this is the
+      // record the document is built from, and a copy could disagree.
+      stripeGet<{
+        name?: string | null
+        address?: { line1?: string | null; postal_code?: string | null; city?: string | null; country?: string | null } | null
+      }>(`/customers/${customerId}`),
+      stripeGet<StripeList<{ value: string }>>(`/customers/${customerId}/tax_ids`),
     ])
 
     return {
       configured: true,
       paymentMethod: methods.data[0] ? summarisePaymentMethod(methods.data[0]) : null,
+      identity: {
+        companyName: customer.name ?? null,
+        line1: customer.address?.line1 ?? null,
+        postalCode: customer.address?.postal_code || null,
+        city: customer.address?.city ?? null,
+        country: customer.address?.country ?? null,
+        vatNumber: taxIds.data[0]?.value ?? null,
+      },
       invoices: invoices.data
         // Drafts are Stripe's scratch space — not something a customer
         // should see in their own history.

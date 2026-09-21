@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { CreditCard, Landmark, Lock, Repeat, Wallet, X } from "lucide-react"
+import { AlertTriangle, CreditCard, Landmark, Lock, Repeat, Wallet, X } from "lucide-react"
 
 import { FormSelect } from "@/components/form-select"
 import { HeaderLanguageSwitcher } from "@/components/header-language-switcher"
@@ -32,12 +32,17 @@ const MESSAGES: Record<string, string> = {
 export function PaymentMethodClient({
   returnTo,
   currentLabel,
+  collectionFailed = false,
   defaultEmail,
   resumeSetupIntent = null,
 }: {
   returnTo: string
   /** What is on the subscription today, in words. */
   currentLabel: string | null
+  /** True when the reader came here because a collection failed. The
+   *  card then marks the method as the problem rather than as the one
+   *  being politely replaced. */
+  collectionFailed?: boolean
   defaultEmail: string
   resumeSetupIntent?: string | null
 }) {
@@ -93,9 +98,9 @@ export function PaymentMethodClient({
   useEffect(() => {
     if (checkout.phase !== "done") return
     const sep = returnTo.includes("?") ? "&" : "?"
-    // Two different pieces of news: the next charge moves, or the one
-    // that is already owed is being collected right now.
-    router.replace(`${returnTo}${sep}payment_method=${checkout.status === "retried" ? "retried" : "changed"}`)
+    // Three different pieces of news: the next charge moves, the one
+    // already owed is on its way, or it has just been paid.
+    router.replace(`${returnTo}${sep}payment_method=${checkout.status ?? "changed"}`)
   }, [checkout.phase, checkout.status, returnTo, router])
 
   // "done" counts as busy: the confirmation is on the subscription
@@ -131,7 +136,7 @@ export function PaymentMethodClient({
       <div className="checkout-wrap">
         <div className="discover-page-title">
           <h1 className="arco-section-title">
-            Betaalmethode wijzigen
+            {collectionFailed ? "Betaling herstellen" : "Betaalmethode wijzigen"}
           </h1>
         </div>
 
@@ -145,14 +150,27 @@ export function PaymentMethodClient({
               {/* The same card the checkout uses for a saved mandate, so
                   the two pages rhyme — but a div, not a button. Here it
                   is the thing being replaced, and there is nothing to
-                  choose about it. */}
+                  choose about it.
+
+                  Red when it is also the thing that failed. Accent
+                  marks a recommendation, and a mandate that just
+                  bounced is the opposite of one. */}
               {currentLabel && (
-                <div className="status-modal-option checkout-method-saved" style={{ cursor: "default", marginBottom: 6 }}>
-                  <Wallet size={18} strokeWidth={1.5} className="checkout-method-icon" />
+                <div
+                  className={`status-modal-option checkout-method-saved${collectionFailed ? " checkout-method-saved--failed" : ""}`}
+                  style={{ cursor: "default", marginBottom: 6 }}
+                >
+                  {collectionFailed
+                    ? <AlertTriangle size={18} strokeWidth={1.5} className="checkout-method-icon" />
+                    : <Wallet size={18} strokeWidth={1.5} className="checkout-method-icon" />}
                   <div className="status-modal-option-text">
-                    <span className="status-modal-option-label">Huidige betaalmethode</span>
+                    <span className="status-modal-option-label">
+                      {collectionFailed ? "Deze betaalmethode werkt niet" : "Huidige betaalmethode"}
+                    </span>
                     <span className="status-modal-option-desc">
-                      {currentLabel} — wordt losgekoppeld zodra de nieuwe werkt
+                      {collectionFailed
+                        ? `${currentLabel} — de incasso is mislukt`
+                        : `${currentLabel} — wordt losgekoppeld zodra de nieuwe werkt`}
                     </span>
                   </div>
                 </div>
@@ -160,6 +178,11 @@ export function PaymentMethodClient({
 
               <section className="checkout-section" style={{ marginTop: 28 }}>
               <h2 className="checkout-legend">Betalen met</h2>
+              {collectionFailed && (
+                <p className="form-note" style={{ margin: "0 0 14px" }}>
+                  Van deze rekening innen we de openstaande factuur én alles daarna.
+                </p>
+              )}
 
               <div className="checkout-methods">
                 {([
@@ -257,7 +280,7 @@ export function PaymentMethodClient({
                   checkout.confirm({ name, email: defaultEmail, bank })
                 }}
               >
-                {busy ? "Bezig…" : "Betaalmethode wijzigen"}
+                {busy ? "Bezig…" : collectionFailed ? "Betalen en abonnement hervatten" : "Betaalmethode wijzigen"}
               </button>
 
               {checkout.phase === "error" && checkout.message && (

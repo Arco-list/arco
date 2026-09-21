@@ -40,7 +40,7 @@ export default async function PaymentMethodPage({
   const { data: row } = company
     ? await service
         .from("subscriptions" as never)
-        .select("stripe_customer_id")
+        .select("stripe_customer_id, status")
         .eq("company_id", company.id)
         .maybeSingle()
     : { data: null }
@@ -50,10 +50,19 @@ export default async function PaymentMethodPage({
   const pm = details?.paymentMethod ?? null
   const currentLabel = pm ? `${pm.label}${pm.last4 ? ` ···· ${pm.last4}` : ""}` : null
 
+  // Why the reader is here changes what this page is. Arriving from a
+  // routine change, the method on file is fine and about to be swapped.
+  // Arriving from dunning, it is the thing that failed — and saying
+  // "wordt losgekoppeld zodra de nieuwe werkt" about a mandate that
+  // already stopped working reads as if nothing is wrong.
+  const status = (row as { status?: string } | null)?.status
+  const collectionFailed = status === "past_due" || status === "unpaid"
+
   return (
     <PaymentMethodClient
       returnTo={returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "/dashboard/subscription"}
       currentLabel={currentLabel}
+      collectionFailed={collectionFailed}
       defaultEmail={session.user.email ?? ""}
       resumeSetupIntent={setupIntent ?? null}
     />

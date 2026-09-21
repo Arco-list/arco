@@ -29,8 +29,19 @@ export type InvoiceSummary = {
   url: string | null
 }
 
+/** Who the invoice is made out to — name, address and VAT number. */
+export type BillingIdentity = {
+  companyName: string | null
+  line1: string | null
+  postalCode: string | null
+  city: string | null
+  country: string | null
+  vatNumber: string | null
+}
+
 export type BillingDetails = {
   paymentMethod: PaymentMethodSummary | null
+  identity: BillingIdentity | null
   invoices: InvoiceSummary[]
   /** False when the app has no Stripe key, so the UI can say why it is empty. */
   configured: boolean
@@ -38,6 +49,7 @@ export type BillingDetails = {
 
 export const EMPTY_BILLING_DETAILS: BillingDetails = {
   paymentMethod: null,
+  identity: null,
   invoices: [],
   configured: false,
 }

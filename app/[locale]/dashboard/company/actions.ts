@@ -57,6 +57,9 @@ const contactSchema = z.object({
   address: z.string().trim().optional(),
   city: z.string().trim().optional(),
   country: z.string().trim().optional(),
+  // Never rendered on the company page — kept because an invoice needs
+  // one and the lookup already knows it.
+  postalCode: z.string().trim().optional(),
   // Full Places record, present when the address came from a lookup
   // pick (lib/places/resolve-address). Keeps state_region, place_id and
   // coordinates from being silently dropped on every owner edit — the
@@ -572,6 +575,9 @@ export async function updateCompanyContactAction(
       address: payload.address ?? null,
       city: payload.city ?? null,
       country: payload.country ?? null,
+      // Only when the lookup supplied one: a manual edit that leaves it
+      // out should not wipe a postcode we already had.
+      ...(payload.postalCode ? { postal_code: payload.postalCode } : {}),
       ...(payload.stateRegion ? { state_region: payload.stateRegion } : {}),
       ...(payload.googlePlaceId ? { google_place_id: payload.googlePlaceId } : {}),
       ...(latitude != null && longitude != null ? { latitude, longitude } : {}),

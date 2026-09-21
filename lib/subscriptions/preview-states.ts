@@ -124,7 +124,7 @@ export function isPreviewState(value: string | undefined): value is PreviewState
  */
 export function previewBillingDetails(state: PreviewState): BillingDetails {
   if (state.startsWith("free")) {
-    return { configured: true, paymentMethod: null, invoices: [] }
+    return { configured: true, paymentMethod: null, identity: null, invoices: [] }
   }
 
   // A year of Pro that ended eight months ago, and the mandate still on
@@ -133,6 +133,14 @@ export function previewBillingDetails(state: PreviewState): BillingDetails {
   if (state === "returning") {
     return {
       configured: true,
+    identity: {
+      companyName: "Voorbeeld Architecten",
+      line1: "Keizersgracht 123",
+      postalCode: "1015 CJ",
+      city: "Amsterdam",
+      country: "NL",
+      vatNumber: "NL001234567B01",
+    },
       paymentMethod: { type: "sepa_debit", label: "SEPA-incasso", last4: "5264", expiry: null },
       invoices: [
         {
@@ -172,6 +180,14 @@ export function previewBillingDetails(state: PreviewState): BillingDetails {
 
   return {
     configured: true,
+    identity: {
+      companyName: "Voorbeeld Architecten",
+      line1: "Keizersgracht 123",
+      postalCode: "1015 CJ",
+      city: "Amsterdam",
+      country: "NL",
+      vatNumber: "NL001234567B01",
+    },
     paymentMethod: { type: "sepa_debit", label: "SEPA-incasso", last4: "5264", expiry: null },
     invoices,
   }

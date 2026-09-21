@@ -46,7 +46,7 @@ export default async function CheckoutPage({
   const service = createServiceRoleSupabaseClient()
   const { data: company } = await service
     .from("companies")
-    .select("id, address, city, country")
+    .select("id, address, postal_code, city, country")
     .eq("owner_id", session.user.id)
     .order("created_at", { ascending: true })
     .limit(1)
@@ -74,9 +74,22 @@ export default async function CheckoutPage({
   // one they see on their own page rather than a second one they have to
   // type. Absent for a company that has not filled it in — then the
   // lookup opens empty, which is the honest state.
-  const c = company as { address?: string | null; city?: string | null; country?: string | null } | null
+  const c = company as {
+    address?: string | null
+    postal_code?: string | null
+    city?: string | null
+    country?: string | null
+  } | null
   const companyAddress = c?.address && c?.city
-    ? { streetAddress: c.address, city: c.city, country: c.country ?? "NL" }
+    ? {
+        streetAddress: c.address,
+        postalCode: c.postal_code ?? null,
+        city: c.city,
+        // companies.country holds a display name ("Netherlands"), and
+        // Stripe wants an ISO code. Passing the name straight through
+        // put "Netherlands" in the country field of a live invoice.
+        country: /^[A-Z]{2}$/.test(c.country ?? "") ? c.country! : "NL",
+      }
     : null
 
   return (

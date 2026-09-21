@@ -119,7 +119,7 @@ export function CheckoutClient({
   /** The address on the company's own page. A fixture used to stand in
    *  for it, so the checkout stated an address the buyer had never
    *  given — on the document they would later have to file. */
-  companyAddress: { streetAddress: string; city: string; country?: string } | null
+  companyAddress: { streetAddress: string; postalCode?: string | null; city: string; country?: string } | null
 }) {
   // Opens on whatever the reader picked on the plan cards, so the price
   // they were looking at is the price they arrive at.

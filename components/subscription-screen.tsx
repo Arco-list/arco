@@ -5,7 +5,7 @@ import { toast } from "sonner"
 import { useLocale, useTranslations } from "next-intl"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { CalendarClock, CreditCard, Landmark, Repeat } from "lucide-react"
+import { CalendarClock, CreditCard, FileText, Landmark, Repeat } from "lucide-react"
 
 import { Link, usePathname, useRouter } from "@/i18n/navigation"
 import { useSearchParams } from "next/navigation"
@@ -15,9 +15,11 @@ import { FREE_CONTRIBUTOR_LIMIT, type ProjectUsage } from "@/lib/subscriptions/u
 import type { BillingDetails } from "@/lib/subscriptions/billing-details-types"
 import { PREVIEW_LABELS, PREVIEW_STATES } from "@/lib/subscriptions/preview-states"
 import { AdminTabs } from "@/components/admin/admin-tabs"
+import { FormSelect } from "@/components/form-select"
 import { PricingSection } from "@/components/pricing-section"
 import { UsageBar } from "@/components/usage-bar"
 import { setCancelAtPeriodEndAction } from "@/lib/subscriptions/actions"
+import { saveBillingIdentityAction } from "@/lib/subscriptions/elements-actions"
 import {
   previewIntervalSwitchAction,
   switchIntervalAction,
@@ -92,7 +94,7 @@ export function SubscriptionScreen({
       : null
 
   const [pending, startTransition] = useTransition()
-  const [busy, setBusy] = useState<"primary" | "cancel" | "resume" | "switch" | null>(null)
+  const [busy, setBusy] = useState<"primary" | "cancel" | "resume" | "switch" | "identity" | null>(null)
 
   /**
    * The confirmation for a subscription that just started.
@@ -104,13 +106,12 @@ export function SubscriptionScreen({
    * congratulate someone twice.
    */
   const searchParams = useSearchParams()
-  const [notice, setNotice] = useState<"active" | "processing" | "method" | "retried" | null>(null)
+  const [notice, setNotice] = useState<"active" | "processing" | "changed" | "collecting" | "settled" | null>(null)
   useEffect(() => {
     const subscribed = searchParams.get("subscribed")
     const changed = searchParams.get("payment_method")
     const which = subscribed === "active" || subscribed === "processing" ? subscribed
-      : changed === "retried" ? "retried"
-      : changed === "changed" ? "method"
+      : changed === "changed" || changed === "collecting" || changed === "settled" ? changed
       : null
     if (!which) return
     setNotice(which)
@@ -120,6 +121,26 @@ export function SubscriptionScreen({
     const qs = next.toString()
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }, [searchParams, pathname, router])
+
+  /**
+   * Who the invoice is made out to.
+   *
+   * Collected once at checkout and then unreachable: a company that
+   * moved, was renamed, or finally registered for VAT had no way to
+   * correct the document it receives every month. It lives beside the
+   * payment method rather than on it — those change for different
+   * reasons, and nobody should walk a mandate flow through their bank
+   * to fix an address.
+   */
+  const [editIdentity, setEditIdentity] = useState(false)
+  const [identity, setIdentity] = useState({
+    companyName: details.identity?.companyName ?? "",
+    line1: details.identity?.line1 ?? "",
+    postalCode: details.identity?.postalCode ?? "",
+    city: details.identity?.city ?? "",
+    country: details.identity?.country ?? "NL",
+    vatNumber: details.identity?.vatNumber ?? "",
+  })
 
   const [confirmCancel, setConfirmCancel] = useState(false)
   // The cycle being offered, and what Stripe says it costs today. The
@@ -310,7 +331,7 @@ export function SubscriptionScreen({
   // been self-serving. The checkout now asks that question itself, with
   // both prices in view — so the scroll had stopped protecting anything
   // and only added a step between wanting Pro and buying it.
-  const goUpgrade = () => router.push(
+  const goUpgrade = () => goReal(
     `/dashboard/subscription/checkout?interval=year&return=${encodeURIComponent(pathname)}`,
   )
 
@@ -321,6 +342,49 @@ export function SubscriptionScreen({
   // have cancelled an actual one. The buttons stay visible — they are
   // part of what is being previewed — and say so when pressed.
   const isPreview = Boolean(previewState)
+
+  /**
+   * Leaving this page for one that acts.
+   *
+   * A preview tab draws an imagined company; the checkout and the
+   * payment-method page resolve the reader's real one. Pressing a
+   * button on the UNPAID fixture took an admin to a page that looked
+   * for their own subscription — which is either absent, and says so
+   * confusingly, or present, in which case they would have been one
+   * form away from replacing a mandate that has nothing to do with
+   * what is on screen.
+   *
+   * The state-changing actions were already guarded; navigation was
+   * not, because it does not change anything here. It changes things
+   * there.
+   */
+  const goReal = (path: string) => {
+    if (isPreview && refusePreview()) return
+    router.push(path)
+  }
+
+  const saveIdentity = () => {
+    if (isPreview && refusePreview()) return
+    setBusy("identity")
+    startTransition(async () => {
+      const result = await saveBillingIdentityAction({
+        companyName: identity.companyName,
+        vatNumber: identity.vatNumber,
+        address: identity.line1
+          ? { line1: identity.line1, city: identity.city, postalCode: identity.postalCode, country: identity.country }
+          : null,
+      })
+      setBusy(null)
+      if ("error" in result) {
+        toast.error(tb("identity_failed"))
+        return
+      }
+      setEditIdentity(false)
+      toast.success(tb("identity_saved"))
+      router.refresh()
+    })
+  }
+
   const refusePreview = () => {
     toast.error(tb("preview_readonly"))
     return true
@@ -459,7 +523,7 @@ export function SubscriptionScreen({
                         // Stripe's own schedule — so dunning no longer
                         // ends at a hosted page either.
                         primaryGoesToPortal
-                          ? () => router.push("/dashboard/subscription/payment-method?return=/dashboard/subscription")
+                          ? () => goReal("/dashboard/subscription/payment-method?return=/dashboard/subscription")
                         : billing.cancelAtPeriodEnd ? () => toggleCancel(false)
                         : goUpgrade
                       }
@@ -565,11 +629,7 @@ export function SubscriptionScreen({
           {isOwner && (billing.stripeCustomerId || details.paymentMethod) && (
             <div style={{ marginBottom: 36 }}>
               <h4 className="arco-subsection-title" style={{ marginBottom: 14 }}>{tb("payment_heading")}</h4>
-              <div style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                gap: 16, padding: "14px 0", borderTop: "1px solid var(--arco-light-grey)",
-                borderBottom: "1px solid var(--arco-light-grey)",
-              }}>
+              <div className="billing-row" style={{ borderTop: "1px solid var(--arco-light-grey)" }}>
                 <span style={{ fontSize: 14, display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                   {details.paymentMethod ? (
                     <>
@@ -598,7 +658,7 @@ export function SubscriptionScreen({
                     // Arco page and one hosted page for two halves of
                     // the same job would have been worse than sending
                     // them to neither. Both halves are ours now.
-                    onClick={() => router.push("/dashboard/subscription/payment-method?return=/dashboard/subscription")}
+                    onClick={() => goReal("/dashboard/subscription/payment-method?return=/dashboard/subscription")}
                     disabled={pending}
                   >
                     {tb("update")}
@@ -606,17 +666,47 @@ export function SubscriptionScreen({
                 )}
               </div>
 
-              {/* Cycle beside method, because both answer "how do you
-                  pay". It is also where the annual upsell belongs: a
+
+              {/* Beside the method rather than after the cycle: both
+                  are standing facts about the payer that get corrected
+                  now and then, while the cycle is a decision with money
+                  behind it. Facts first, choice last. Only once Stripe
+                  knows this company — before that there is no document
+                  to be wrong about. */}
+              {isOwner && billing.stripeCustomerId && (
+                <div className="billing-row">
+                  <span style={{ fontSize: 14, display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                    <FileText size={16} strokeWidth={1.5} style={{ color: "var(--arco-mid)", flexShrink: 0 }} />
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {details.identity?.companyName || tb("identity_empty")}
+                      {details.identity?.line1 && (
+                        <span style={{ color: "var(--text-secondary)" }}>
+                          {" · "}{[details.identity.line1, details.identity.postalCode, details.identity.city]
+                            .filter(Boolean).join(", ")}
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-tertiary"
+                    style={{ fontSize: 13, padding: "8px 16px", whiteSpace: "nowrap" }}
+                    onClick={() => setEditIdentity(true)}
+                    disabled={pending}
+                  >
+                    {tb("update")}
+                  </button>
+                </div>
+              )}
+              {/* Last, because it is the only row here that changes
+                  what gets charged. It is also where the annual upsell
+                  belongs: a
                   factual row for someone already looking at their
                   billing, rather than a button bolted onto the toggle
                   they were using to compare two prices. */}
               {isOwner && billing.source === "subscription" && billing.interval && (
                 <>
-                  <div style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    gap: 16, padding: "14px 0", borderBottom: "1px solid var(--arco-light-grey)",
-                  }}>
+                  <div className="billing-row">
                     <span style={{ fontSize: 14, display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                       {/* Not decoration either: the row above is about
                           the instrument, this one about the schedule,
@@ -660,6 +750,7 @@ export function SubscriptionScreen({
                   )}
                 </>
               )}
+
             </div>
           )}
 
@@ -671,21 +762,20 @@ export function SubscriptionScreen({
           {isOwner && details.invoices.length > 0 && (
             <div>
               <h4 className="arco-subsection-title" style={{ marginBottom: 14 }}>{tb("invoices_heading")}</h4>
-              <div style={{
-                display: "grid", gridTemplateColumns: "1fr 1fr 1fr 96px", gap: 16,
+              <div className="invoice-grid invoice-head" style={{
                 paddingBottom: 10, borderBottom: "1px solid var(--arco-light-grey)",
               }}>
                 <span className="arco-eyebrow">{tb("col_date")}</span>
                 <span className="arco-eyebrow">{tb("col_total")}</span>
                 <span className="arco-eyebrow">{tb("col_status")}</span>
-                <span className="arco-eyebrow" style={{ textAlign: "right" }}>{tb("col_actions")}</span>
+                <span className="arco-eyebrow">{tb("col_actions")}</span>
               </div>
               {details.invoices.map((inv) => (
                 <div
                   key={inv.id}
+                  className="invoice-grid"
                   style={{
-                    display: "grid", gridTemplateColumns: "1fr 1fr 1fr 96px", gap: 16,
-                    alignItems: "baseline", padding: "14px 0",
+                    padding: "14px 0",
                     borderBottom: "1px solid var(--arco-light-grey)", fontSize: 14,
                   }}
                 >
@@ -696,14 +786,29 @@ export function SubscriptionScreen({
                       ? tb(`invoice_status_${inv.status}` as never)
                       : inv.status}
                   </span>
-                  <span style={{ textAlign: "right" }}>
-                    {inv.url ? (
+                  <span>
+                    {/* An open invoice is settled on our own page, not
+                        Stripe's. Updating the mandate collects this
+                        invoice AND fixes every one after it, which is
+                        what the reader actually needs — two doors to
+                        the same room, one of them leaving Arco, only
+                        made them wonder which was right. A paid one
+                        still links to its hosted copy: that document
+                        is the customer's, and it lives at Stripe. */}
+                    {inv.status === "open" ? (
+                      <button
+                        type="button"
+                        onClick={() => goReal(`/dashboard/subscription/payment-method?return=${encodeURIComponent(pathname)}`)}
+                        style={{
+                          background: "none", border: "none", padding: 0, cursor: "pointer",
+                          font: "inherit", color: "var(--primary, #016D75)",
+                        }}
+                      >
+                        {tb("pay_invoice")}
+                      </button>
+                    ) : inv.url ? (
                       <a href={inv.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary, #016D75)" }}>
-                        {/* The hosted page is where an open invoice gets
-                            paid, so say so. Calling it "bekijken" while
-                            money is owed hides the one thing the reader
-                            can do about it. */}
-                        {tb(inv.status === "open" ? "pay_invoice" : "view_invoice")}
+                        {tb("view_invoice")}
                       </a>
                     ) : "—"}
                   </span>
@@ -762,12 +867,7 @@ export function SubscriptionScreen({
                    right. A bordered card made the reversal look like a
                    different kind of thing than the act that caused it. */
                 <>
-                  <div style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    gap: 16, flexWrap: "wrap", padding: "14px 0",
-                    borderTop: "1px solid var(--arco-light-grey)",
-                    borderBottom: "1px solid var(--arco-light-grey)",
-                  }}>
+                  <div className="billing-row" style={{ borderTop: "1px solid var(--arco-light-grey)" }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", minWidth: 0 }}>
                       <span style={{ fontSize: 14 }}>{tb("ending_title")}</span>
                       {renewal && (
@@ -792,11 +892,7 @@ export function SubscriptionScreen({
                 </>
               ) : (
                 <>
-                  <div style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    gap: 16, padding: "14px 0", borderTop: "1px solid var(--arco-light-grey)",
-                    borderBottom: "1px solid var(--arco-light-grey)",
-                  }}>
+                  <div className="billing-row" style={{ borderTop: "1px solid var(--arco-light-grey)" }}>
                     <span style={{ fontSize: 14 }}>{tb("cancel_row")}</span>
                     <button
                       type="button"
@@ -864,7 +960,7 @@ export function SubscriptionScreen({
               <h3 className="arco-section-title">
                 {tb(notice === "active" ? "welcome_title_active"
                   : notice === "processing" ? "welcome_title_processing"
-                  : notice === "retried" ? "retried_title"
+                  : notice === "settled" ? "settled_title"
                   : "method_title")}
               </h3>
               <button type="button" className="popup-close" onClick={() => setNotice(null)} aria-label="Sluiten">✕</button>
@@ -872,12 +968,72 @@ export function SubscriptionScreen({
             <p className="arco-small-text" style={{ margin: "0 0 24px" }}>
               {tb(notice === "active" ? "welcome_body_active"
                 : notice === "processing" ? "welcome_body_processing"
-                : notice === "retried" ? "retried_body"
+                : notice === "collecting" ? "retried_body"
+                : notice === "settled" ? "settled_body"
                 : "method_body")}
             </p>
             <div className="popup-actions">
               <button type="button" className="btn-primary" style={{ flex: 1 }} onClick={() => setNotice(null)}>
-                {tb(notice === "method" || notice === "retried" ? "method_close" : "welcome_close")}
+                {tb(notice === "active" || notice === "processing" ? "welcome_close" : "method_close")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editIdentity && (
+        <div className="popup-overlay" onClick={() => !pending && setEditIdentity(false)}>
+          <div className="popup-card" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">{tb("identity_title")}</h3>
+              <button type="button" className="popup-close" onClick={() => setEditIdentity(false)} aria-label="Sluiten">✕</button>
+            </div>
+            <p className="arco-small-text" style={{ margin: "0 0 20px" }}>{tb("identity_intro")}</p>
+
+            <label className="form-label" htmlFor="bi-name">{tb("identity_company")}</label>
+            <input id="bi-name" className="form-input" value={identity.companyName}
+              onChange={(e) => setIdentity((v) => ({ ...v, companyName: e.target.value }))} />
+
+            <label className="form-label" htmlFor="bi-line1">{tb("identity_street")}</label>
+            <input id="bi-line1" className="form-input" value={identity.line1}
+              onChange={(e) => setIdentity((v) => ({ ...v, line1: e.target.value }))} />
+
+            <div className="form-row">
+              <div>
+                <label className="form-label" htmlFor="bi-zip">{tb("identity_postcode")}</label>
+                <input id="bi-zip" className="form-input" value={identity.postalCode}
+                  onChange={(e) => setIdentity((v) => ({ ...v, postalCode: e.target.value }))} />
+              </div>
+              <div>
+                <label className="form-label" htmlFor="bi-city">{tb("identity_city")}</label>
+                <input id="bi-city" className="form-input" value={identity.city}
+                  onChange={(e) => setIdentity((v) => ({ ...v, city: e.target.value }))} />
+              </div>
+            </div>
+
+            <label className="form-label" htmlFor="bi-country">{tb("identity_country")}</label>
+            <FormSelect id="bi-country" value={identity.country}
+              onChange={(e) => setIdentity((v) => ({ ...v, country: e.target.value }))}>
+              <option value="NL">Nederland</option>
+              <option value="BE">België</option>
+              <option value="DE">Duitsland</option>
+            </FormSelect>
+
+            <label className="form-label" htmlFor="bi-vat">
+              {tb("identity_vat")} <span style={{ color: "var(--arco-mid-grey)", fontWeight: 400 }}>{tb("identity_optional")}</span>
+            </label>
+            <input id="bi-vat" className="form-input" placeholder="NL123456789B01" value={identity.vatNumber}
+              onChange={(e) => setIdentity((v) => ({ ...v, vatNumber: e.target.value }))}
+              style={{ marginBottom: 24 }} />
+
+            <div className="popup-actions">
+              <button type="button" className="btn-tertiary" style={{ flex: 1 }}
+                onClick={() => setEditIdentity(false)} disabled={pending}>
+                {tb("cancel_confirm_keep")}
+              </button>
+              <button type="button" className="btn-primary" style={{ flex: 1 }}
+                onClick={saveIdentity} disabled={pending}>
+                {busy === "identity" ? tb("working") : tb("identity_save")}
               </button>
             </div>
           </div>

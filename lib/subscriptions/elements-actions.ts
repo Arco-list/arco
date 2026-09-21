@@ -127,10 +127,12 @@ export async function completeSubscriptionAction(
  */
 export async function replacePaymentMethodAction(
   setupIntentId: string,
-  // `retried` travels back because the confirmation the reader gets
-  // depends on it: a routine change is about the next charge, a change
-  // made to escape dunning is about the one being collected right now.
-): Promise<{ ok: true; retried: boolean } | Failure> {
+  // The outcome travels back because the confirmation depends on it,
+  // and "a few working days" is only true for two of the three methods.
+  // A card settles the open invoice on the spot; iDEAL and SEPA both
+  // end in a direct debit, so both take days — iDEAL produces a SEPA
+  // mandate, it is not a second card.
+): Promise<{ ok: true; outcome: "changed" | "collecting" | "settled" } | Failure> {
   if (!isStripeConfigured()) return { error: "not_configured" }
   if (!/^seti_[A-Za-z0-9_]+$/.test(setupIntentId)) return { error: "failed" }
 
@@ -194,19 +196,18 @@ export async function replacePaymentMethodAction(
         })
         const open = invoices.data?.[0]
         if (open) {
-          const paid = await stripePost<StripeSubscription & { status: string }>(
-            `/invoices/${open.id}/pay`,
-            {},
-          )
+          const paid = await stripePost<{ status?: string }>(`/invoices/${open.id}/pay`, {})
           logger.info("Retried an open invoice after a payment method change", {
             invoiceId: open.id,
-            result: (paid as unknown as { status?: string }).status,
+            result: paid.status,
           })
           const refreshed = await stripeGet<StripeSubscription & { status: string }>(
             `/subscriptions/${mirrored.stripe_subscription_id}`,
           )
           await mirrorSubscription(service, refreshed)
-          return { ok: true, retried: true }
+          // Reported rather than assumed: the invoice itself says
+          // whether the money arrived or is on its way.
+          return { ok: true, outcome: paid.status === "paid" ? "settled" : "collecting" }
         }
       } catch (err) {
         logger.error("Could not retry the open invoice", { companyId: resolved.companyId }, err as Error)
@@ -214,7 +215,7 @@ export async function replacePaymentMethodAction(
     }
 
     await mirrorSubscription(service, subscription)
-    return { ok: true, retried: false }
+    return { ok: true, outcome: "changed" }
   } catch (err) {
     logger.error("Replacing the payment method failed", { companyId: resolved.companyId }, err as Error)
     return { error: "failed" }

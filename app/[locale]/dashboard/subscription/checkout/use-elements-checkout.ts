@@ -200,7 +200,7 @@ export function useElementsCheckout({
         setPhase("error")
         return
       }
-      setStatus(replaced.retried ? "retried" : "replaced")
+      setStatus(replaced.outcome)
       setPhase("done")
       return
     }

@@ -30,6 +30,8 @@ export type ResolvedAddress = {
   /** Street + number, for display contexts that strip postcode/country. */
   streetAddress: string
   city: string | null
+  /** Kept for invoices; the company page never shows it. */
+  postalCode: string | null
   stateRegion: string | null
   country: string | null
   placeId: string
@@ -106,12 +108,14 @@ export async function resolveAddressDetails(placeId: string): Promise<ResolvedAd
     })
 
     let city: string | null = null
+    let postalCode: string | null = null
     let stateRegion: string | null = null
     let country: string | null = null
     let street = ""
     let streetNumber = ""
     for (const comp of place.address_components ?? []) {
       if (comp.types.includes("locality")) city = comp.long_name
+      if (comp.types.includes("postal_code")) postalCode = comp.long_name
       if (comp.types.includes("administrative_area_level_1")) stateRegion = comp.long_name
       if (comp.types.includes("country")) country = comp.long_name
       if (comp.types.includes("route")) street = comp.long_name
@@ -122,6 +126,7 @@ export async function resolveAddressDetails(placeId: string): Promise<ResolvedAd
     return {
       formattedAddress: place.formatted_address ?? [street, streetNumber].filter(Boolean).join(" "),
       streetAddress: [street, streetNumber].filter(Boolean).join(" "),
+      postalCode,
       city,
       stateRegion,
       country,
