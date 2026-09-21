@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useTranslations } from "next-intl"
 import { AlertTriangle, CreditCard, Landmark, Lock, Repeat, Wallet, X } from "lucide-react"
 
 import { FormSelect } from "@/components/form-select"
@@ -19,16 +20,6 @@ import { useElementsCheckout } from "../checkout/use-elements-checkout"
  * mandate pointed at a subscription that already exists.
  */
 
-const MESSAGES: Record<string, string> = {
-  not_configured: "Stripe is nog niet gekoppeld.",
-  not_signed_in: "Je bent niet ingelogd.",
-  no_company: "Je hebt nog geen bedrijf op Arco.",
-  not_owner: "Alleen de eigenaar van het bedrijf kan de betaalmethode wijzigen.",
-  not_ready: "De machtiging is nog niet rond. Probeer het zo nog eens.",
-  nothing_to_replace: "Er loopt geen abonnement om een betaalmethode voor te wijzigen.",
-  failed: "Dat lukte niet. Probeer het zo nog eens.",
-}
-
 export function PaymentMethodClient({
   returnTo,
   currentLabel,
@@ -46,6 +37,7 @@ export function PaymentMethodClient({
   defaultEmail: string
   resumeSetupIntent?: string | null
 }) {
+  const t = useTranslations("payment_method")
   const router = useRouter()
   const [method, setMethod] = useState<"ideal" | "sepa" | "card">("ideal")
   const [name, setName] = useState("")
@@ -72,20 +64,20 @@ export function PaymentMethodClient({
       cardCvc: Boolean(checkout.complete.cardCvc),
     }
     if (!done.cardNumber && !done.cardExpiry && !done.cardCvc) {
-      return { cardNumber: "Vul je kaartgegevens in.", cardExpiry: null, cardCvc: null }
+      return { cardNumber: t("err_card"), cardExpiry: null, cardCvc: null }
     }
     return {
-      cardNumber: done.cardNumber ? null : "Vul je kaartnummer in.",
-      cardExpiry: done.cardExpiry ? null : "Vul de vervaldatum in.",
-      cardCvc: done.cardCvc ? null : "Vul de CVC in.",
+      cardNumber: done.cardNumber ? null : t("err_card_number"),
+      cardExpiry: done.cardExpiry ? null : t("err_card_expiry"),
+      cardCvc: done.cardCvc ? null : t("err_card_cvc"),
     }
   }
 
   const validate = () => {
     const next: Record<string, string | null> = {
-      name: name.trim() ? null : "Vul de naam in zoals die op de rekening staat.",
-      bank: method === "ideal" && !bank ? "Kies je bank." : null,
-      ...(method === "sepa" && !checkout.complete.iban ? { iban: "Vul je IBAN in." } : { iban: null }),
+      name: name.trim() ? null : t("err_name"),
+      bank: method === "ideal" && !bank ? t("err_bank") : null,
+      ...(method === "sepa" && !checkout.complete.iban ? { iban: t("err_iban") } : { iban: null }),
       ...(method === "card" ? cardErrors() : { cardNumber: null, cardExpiry: null, cardCvc: null }),
     }
     setFieldErrors(next)
@@ -112,7 +104,7 @@ export function PaymentMethodClient({
     <div className="checkout-page">
       <div className="checkout-strip">
         <div className="checkout-wrap checkout-strip-inner">
-          <span>Elements op de Stripe-sandbox. Er gaat geen echt geld doorheen.</span>
+          <span>{t("test_mode")}</span>
         </div>
       </div>
 
@@ -126,7 +118,7 @@ export function PaymentMethodClient({
           />
           <div className="checkout-bar-right">
             <HeaderLanguageSwitcher />
-            <Link href={returnTo} className="checkout-close" aria-label="Sluiten">
+            <Link href={returnTo} className="checkout-close" aria-label={t("close")}>
               <X size={18} strokeWidth={1.5} />
             </Link>
           </div>
@@ -136,7 +128,7 @@ export function PaymentMethodClient({
       <div className="checkout-wrap">
         <div className="discover-page-title">
           <h1 className="arco-section-title">
-            {collectionFailed ? "Betaling herstellen" : "Betaalmethode wijzigen"}
+            {t(collectionFailed ? "title_repair" : "title_change")}
           </h1>
         </div>
 
@@ -165,30 +157,28 @@ export function PaymentMethodClient({
                     : <Wallet size={18} strokeWidth={1.5} className="checkout-method-icon" />}
                   <div className="status-modal-option-text">
                     <span className="status-modal-option-label">
-                      {collectionFailed ? "Deze betaalmethode werkt niet" : "Huidige betaalmethode"}
+                      {t(collectionFailed ? "current_failed" : "current")}
                     </span>
                     <span className="status-modal-option-desc">
-                      {collectionFailed
-                        ? `${currentLabel} — de incasso is mislukt`
-                        : `${currentLabel} — wordt losgekoppeld zodra de nieuwe werkt`}
+                      {t(collectionFailed ? "current_failed_desc" : "current_desc", { method: currentLabel })}
                     </span>
                   </div>
                 </div>
               )}
 
               <section className="checkout-section" style={{ marginTop: 28 }}>
-              <h2 className="checkout-legend">Betalen met</h2>
+              <h2 className="checkout-legend">{t("pay_with")}</h2>
               {collectionFailed && (
                 <p className="form-note" style={{ margin: "0 0 14px" }}>
-                  Van deze rekening innen we de openstaande factuur én alles daarna.
+                  {t("repair_note")}
                 </p>
               )}
 
               <div className="checkout-methods">
                 {([
-                  { key: "ideal", label: "iDEAL | Wero", desc: "Betaal en machtig ons in één keer", Icon: Landmark },
-                  { key: "sepa", label: "SEPA-incasso", desc: "Automatische incasso", Icon: Repeat },
-                  { key: "card", label: "Kaart", desc: "Visa, Mastercard, Amex", Icon: CreditCard },
+                  { key: "ideal", label: t("method_ideal"), desc: t("method_ideal_desc"), Icon: Landmark },
+                  { key: "sepa", label: t("method_sepa"), desc: t("method_sepa_desc"), Icon: Repeat },
+                  { key: "card", label: t("method_card"), desc: t("method_card_desc"), Icon: CreditCard },
                 ] as const).map(({ key, label, desc, Icon }) => (
                   <button
                     key={key}
@@ -207,7 +197,7 @@ export function PaymentMethodClient({
 
               {method === "ideal" && (
                 <>
-                  <label className="form-label" htmlFor="bank">Je bank</label>
+                  <label className="form-label" htmlFor="bank">{t("label_bank")}</label>
                   <FormSelect
                     id="bank"
                     value={bank}
@@ -218,7 +208,7 @@ export function PaymentMethodClient({
                       setFieldErrors((prev) => ({ ...prev, bank: null }))
                     }}
                   >
-                    <option value="" disabled>Kies je bank</option>
+                    <option value="" disabled>{t("bank_placeholder")}</option>
                     {IDEAL_BANKS.map((b) => (
                       <option key={b.value} value={b.value}>{b.label}</option>
                     ))}
@@ -229,7 +219,7 @@ export function PaymentMethodClient({
 
               {method === "sepa" && (
                 <>
-                  <label className="form-label">IBAN</label>
+                  <label className="form-label">{t("label_iban")}</label>
                   <div id="el-iban" className={elCls("iban")} style={errOf("iban") ? { marginBottom: 0 } : undefined} />
                   {note(errOf("iban"))}
                 </>
@@ -237,18 +227,18 @@ export function PaymentMethodClient({
 
               {method === "card" && (
                 <>
-                  <label className="form-label">Kaartnummer</label>
+                  <label className="form-label">{t("label_card_number")}</label>
                   <div id="el-card-number" className={elCls("cardNumber")} style={errOf("cardNumber") ? { marginBottom: 0 } : undefined} />
                   {note(errOf("cardNumber"))}
 
                   <div className="form-row">
                     <div>
-                      <label className="form-label">Vervaldatum</label>
+                      <label className="form-label">{t("label_card_expiry")}</label>
                       <div id="el-card-expiry" className={elCls("cardExpiry")} style={errOf("cardExpiry") ? { marginBottom: 0 } : undefined} />
                       {note(errOf("cardExpiry"))}
                     </div>
                     <div>
-                      <label className="form-label">CVC</label>
+                      <label className="form-label">{t("label_card_cvc")}</label>
                       <div id="el-card-cvc" className={elCls("cardCvc")} style={errOf("cardCvc") ? { marginBottom: 0 } : undefined} />
                       {note(errOf("cardCvc"))}
                     </div>
@@ -256,11 +246,11 @@ export function PaymentMethodClient({
                 </>
               )}
 
-              <label className="form-label" htmlFor="holder">Naam rekeninghouder</label>
+              <label className="form-label" htmlFor="holder">{t("label_holder")}</label>
               <input
                 id="holder"
                 className={inputCls("name")}
-                placeholder="Volledige naam"
+                placeholder={t("holder_placeholder")}
                 value={name}
                 style={errOf("name") ? { marginBottom: 0 } : undefined}
                 onChange={(e) => {
@@ -280,18 +270,18 @@ export function PaymentMethodClient({
                   checkout.confirm({ name, email: defaultEmail, bank })
                 }}
               >
-                {busy ? "Bezig…" : collectionFailed ? "Betalen en abonnement hervatten" : "Betaalmethode wijzigen"}
+                {busy ? t("working") : t(collectionFailed ? "submit_repair" : "submit_change")}
               </button>
 
               {checkout.phase === "error" && checkout.message && (
                 <p className="form-note form-note--error" style={{ marginTop: 10 }}>
-                  {MESSAGES[checkout.message] ?? checkout.message}
+                  {t(`err_${checkout.message}` as never)}
                 </p>
               )}
 
               <p className="checkout-secure" style={{ marginTop: 20 }}>
                 <Lock size={12} strokeWidth={1.5} />
-                Je betaalgegevens gaan rechtstreeks naar Stripe, onze betaaldienstverlener. Arco slaat ze niet op.
+                {t("secure")}
               </p>
               </section>
             </div>

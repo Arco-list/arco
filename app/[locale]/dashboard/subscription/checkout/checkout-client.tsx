@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, type ReactNode } from "react"
+import { useTranslations } from "next-intl"
 import { Check, CreditCard, Landmark, Lock, Repeat, Wallet, X } from "lucide-react"
 
 import { AddressLookup } from "@/components/address-lookup"
@@ -43,27 +44,31 @@ import { useElementsCheckout } from "./use-elements-checkout"
 
 type Method = "saved" | "sepa" | "ideal" | "card"
 
+/* Prices are data; the words around them are translated at render.
+   The three prose fields used to live here as Dutch literals, which is
+   what kept this screen monolingual while the rest of the dashboard
+   switched languages. */
 const CYCLES = {
-  month: { net: 4900, label: "Maandabonnement", renews: "maandelijks", per: "per maand" },
-  year: { net: 46800, label: "Jaarabonnement", renews: "jaarlijks", per: "per jaar" },
+  month: { net: 4900 },
+  year: { net: 46800 },
 } as const
 
 const FEATURES = [
-  "Vermelde bedrijfspagina met al je projecten",
-  "Onbeperkt vermeldingen zichtbaar op je pagina",
-  "Onbeperkt projecten publiceren",
-  "Teambeheer",
-  "Paginastatistieken",
-]
+  "feature_page",
+  "feature_credits",
+  "feature_publish",
+  "feature_team",
+  "feature_analytics",
+] as const
 
 /* Two that work and everything else that doesn't, so the drawing shows
    both the applied row and the error. FOUNDING is the one the launch
    plan actually needs: a full year of Pro at no charge, reached through
    the same checkout as a paying signup rather than a second, untested
    path. */
-const CODES: Record<string, { label: string; percent: number; periods: string }> = {
-  FOUNDING: { label: "Founding member", percent: 100, periods: `eerste ${FREE_MONTHS} maanden` },
-  START20: { label: "Introductiekorting", percent: 20, periods: "eerste termijn" },
+const CODES: Record<string, { labelKey: string; percent: number; periodsKey: string }> = {
+  FOUNDING: { labelKey: "promo_founding", percent: 100, periodsKey: "promo_founding_periods" },
+  START20: { labelKey: "promo_intro", percent: 20, periodsKey: "promo_intro_periods" },
 }
 
 /* Already on the company page, resolved through Places when it was
@@ -81,15 +86,15 @@ const COMPANY_NAME = "Arco Testbedrijf"
    expired one far better than we could. This replaces a guess based on
    string length, which quietly turned every short code of ours into
    "Dat lukte niet". */
-const MESSAGES: Record<string, string> = {
-  not_configured: "Stripe is nog niet gekoppeld.",
-  not_signed_in: "Je bent niet ingelogd.",
-  no_company: "Je hebt nog geen bedrijf op Arco.",
-  not_owner: "Alleen de eigenaar van het bedrijf kan het abonnement regelen.",
-  not_ready: "De machtiging is nog niet rond. Probeer het zo nog eens.",
-  already_subscribed: "Dit bedrijf heeft al een actief abonnement.",
-  failed: "Dat lukte niet. Probeer het zo nog eens.",
-}
+const OUR_CODES = [
+  "not_configured",
+  "not_signed_in",
+  "no_company",
+  "not_owner",
+  "not_ready",
+  "already_subscribed",
+  "failed",
+]
 
 const euro = (cents: number) =>
   new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(cents / 100)
@@ -123,6 +128,7 @@ export function CheckoutClient({
 }) {
   // Opens on whatever the reader picked on the plan cards, so the price
   // they were looking at is the price they arrive at.
+  const t = useTranslations("checkout")
   const router = useRouter()
   const [cycle, setCycle] = useState<"month" | "year">(interval)
   // A known mandate leads: for anyone who has one, the rest of this
@@ -133,7 +139,7 @@ export function CheckoutClient({
   const [vatNumber, setVatNumber] = useState("")
   const [promoOpen, setPromoOpen] = useState(false)
   const [promoInput, setPromoInput] = useState("")
-  const [promo, setPromo] = useState<{ code: string; label: string; percent: number; periods: string } | null>(null)
+  const [promo, setPromo] = useState<{ code: string; labelKey: string; percent: number; periodsKey: string } | null>(null)
   const [promoError, setPromoError] = useState(false)
   // Billing details Stripe requires with every mandate.
   const [name, setName] = useState("")
@@ -156,12 +162,12 @@ export function CheckoutClient({
       cardCvc: Boolean(checkout.complete.cardCvc),
     }
     if (!done.cardNumber && !done.cardExpiry && !done.cardCvc) {
-      return { cardNumber: "Vul je kaartgegevens in.", cardExpiry: null, cardCvc: null }
+      return { cardNumber: t("err_card"), cardExpiry: null, cardCvc: null }
     }
     return {
-      cardNumber: done.cardNumber ? null : "Vul je kaartnummer in.",
-      cardExpiry: done.cardExpiry ? null : "Vul de vervaldatum in.",
-      cardCvc: done.cardCvc ? null : "Vul de CVC in.",
+      cardNumber: done.cardNumber ? null : t("err_card_number"),
+      cardExpiry: done.cardExpiry ? null : t("err_card_expiry"),
+      cardCvc: done.cardCvc ? null : t("err_card_cvc"),
     }
   }
 
@@ -172,25 +178,25 @@ export function CheckoutClient({
       return true
     }
     const next: Record<string, string | null> = {
-      name: name.trim() ? null : "Vul de naam in zoals die op de rekening staat.",
+      name: name.trim() ? null : t("err_name"),
       email: !email.trim()
-        ? "Vul je e-mailadres in — daar sturen we de factuur naartoe."
+        ? t("err_email")
         : /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())
           ? null
-          : "Dit adres lijkt niet te kloppen.",
-      bank: method === "ideal" && !bank ? "Kies je bank." : null,
+          : t("err_email_invalid"),
+      bank: method === "ideal" && !bank ? t("err_bank") : null,
       // Not Stripe's requirement but the tax office's: a Dutch invoice
       // must carry the buyer's name and address. Without one we cannot
       // issue a valid one.
-      address: address ? null : "Kies je adres — het hoort op de factuur.",
+      address: address ? null : t("err_address"),
       // Same reason as the address: a Dutch invoice must carry the
       // buyer's name, and only they know the registered one.
-      companyName: business && !companyName.trim() ? "Vul de naam in zoals je bedrijf is ingeschreven." : null,
+      companyName: business && !companyName.trim() ? t("err_company") : null,
       // Stripe's own errors cover wrong; these cover empty. Without
       // them an untouched IBAN produced a refusal from the payment
       // processor instead of a sentence under the field.
       ...(method === "sepa" && !checkout.complete.iban
-        ? { iban: "Vul je IBAN in." }
+        ? { iban: t("err_iban") }
         : { iban: null }),
       // A card is one thing to a reader, not three. While none of the
       // parts is finished — the ordinary case of pressing the button on
@@ -227,8 +233,18 @@ export function CheckoutClient({
   // Valuing it at the yearly rate would be quoting a price nobody
   // could have paid.
   const plan = freeActivation
-    ? { net: FREE_MONTHS * CYCLES.month.net, label: `${FREE_MONTHS} maanden Pro`, renews: "", per: "" }
-    : CYCLES[cycle]
+    ? {
+        net: FREE_MONTHS * CYCLES.month.net,
+        label: t("free_months_plan", { months: FREE_MONTHS }),
+        renews: "",
+        per: "",
+      }
+    : {
+        net: CYCLES[cycle].net,
+        label: t(cycle === "month" ? "cycle_month" : "cycle_year"),
+        renews: t(cycle === "month" ? "renews_month" : "renews_year"),
+        per: t(cycle === "month" ? "per_month" : "per_year"),
+      }
 
   // What the line under the label says, when it says anything.
   const perMonth = freeActivation ? CYCLES.month.net : cycle === "year" ? 3900 : null
@@ -301,7 +317,7 @@ export function CheckoutClient({
           })
         }}
       >
-        {busy ? "Bezig…" : freeActivation ? "Pro activeren" : "Abonneren"}
+        {busy ? t("working") : t(freeActivation ? "submit_activate" : "submit_subscribe")}
       </button>
 
       {/* Directly under the button, before any fine print. Only what no
@@ -310,14 +326,14 @@ export function CheckoutClient({
           the field it belongs to. */}
       {checkout.phase === "error" && checkout.message && (
         <p className="form-note form-note--error" style={{ margin: "10px 0 0" }}>
-          {MESSAGES[checkout.message] ?? checkout.message}
+          {OUR_CODES.includes(checkout.message) ? t(`err_${checkout.message}` as never) : checkout.message}
         </p>
       )}
 
       {!freeActivation && (
         <p className="checkout-secure" style={{ marginTop: 12 }}>
           <Lock size={12} strokeWidth={1.5} />
-          Je betaalgegevens gaan rechtstreeks naar Stripe, onze betaaldienstverlener. Arco slaat ze niet op.
+          {t("secure")}
         </p>
       )}
 
@@ -327,12 +343,18 @@ export function CheckoutClient({
             a charge starts later and how big it is. A real page would
             name the date; this one is a drawing, so it counts. */}
         {freeActivation
-          ? "Je geeft geen betaalgegevens op, dus er wordt nooit iets afgeschreven."
+          ? t("legal_free")
           : freeToday
-            ? `Je betaalt vandaag niets. Na de ${promo?.periods ?? "proefperiode"} wordt ${euro(fullPrice)} ${plan.per} (incl. btw) afgeschreven, tot je opzegt.`
-            : `Wordt ${plan.renews} verlengd tot je opzegt. Er wordt dan ${euro(fullPrice)} ${plan.per} (incl. btw) afgeschreven.`}{" "}
-        Door op {freeActivation ? "Pro activeren" : "Abonneren"} te klikken ga je akkoord met onze{" "}
-        <a href="#">algemene voorwaarden</a> en <a href="#">privacyverklaring</a>.
+            ? t("legal_trial", {
+                period: promo
+                  ? t(promo.periodsKey as never, { months: FREE_MONTHS })
+                  : t("trial_period"),
+                amount: euro(fullPrice),
+                per: plan.per,
+              })
+            : t("legal_renews", { renews: plan.renews, amount: euro(fullPrice), per: plan.per })}{" "}
+        {t("legal_agree", { action: t(freeActivation ? "submit_activate" : "submit_subscribe") })}{" "}
+        <a href="#">{t("legal_terms")}</a> {t("legal_and")} <a href="#">{t("legal_privacy")}</a>.
       </p>
     </>
   )
@@ -346,7 +368,7 @@ export function CheckoutClient({
       {PUBLISHABLE_KEY?.startsWith("pk_test") && (
         <div className="checkout-strip">
           <div className="checkout-wrap checkout-strip-inner">
-            <span>Testmodus — er gaat geen echt geld doorheen.</span>
+            <span>{t("test_mode")}</span>
           </div>
         </div>
       )}
@@ -364,7 +386,7 @@ export function CheckoutClient({
           />
           <div className="checkout-bar-right">
             <HeaderLanguageSwitcher />
-            <Link href={returnTo} className="checkout-close" aria-label="Sluiten">
+            <Link href={returnTo} className="checkout-close" aria-label={t("close")}>
               <X size={18} strokeWidth={1.5} />
             </Link>
           </div>
@@ -380,7 +402,7 @@ export function CheckoutClient({
             you meet one. */}
         <div className="discover-page-title">
           <h1 className="arco-section-title">
-            {freeActivation ? "Pro activeren" : "Afrekenen"}
+            {t(freeActivation ? "title_activate" : "title_checkout")}
           </h1>
         </div>
 
@@ -396,7 +418,7 @@ export function CheckoutClient({
           {!freeActivation && (
           <div>
             <section className="checkout-section">
-              <h2 className="checkout-legend">Betalen met</h2>
+              <h2 className="checkout-legend">{t("pay_with")}</h2>
 
 
               {/* Full width and above the row: not one of four options
@@ -409,7 +431,7 @@ export function CheckoutClient({
                 >
                   <Wallet size={18} strokeWidth={1.5} className="checkout-method-icon" />
                   <div className="status-modal-option-text">
-                    <span className="status-modal-option-label">Opgeslagen betaalmethode</span>
+                    <span className="status-modal-option-label">{t("saved_method")}</span>
                     <span className="status-modal-option-desc">{savedMethod} — niets in te vullen</span>
                   </div>
                 </button>
@@ -417,9 +439,9 @@ export function CheckoutClient({
 
               <div className="checkout-methods">
                 {([
-                  { key: "ideal", label: "iDEAL | Wero", desc: "Betaal en machtig ons in één keer", Icon: Landmark },
-                  { key: "sepa", label: "SEPA-incasso", desc: "Automatische incasso", Icon: Repeat },
-                  { key: "card", label: "Kaart", desc: "Visa, Mastercard, Amex", Icon: CreditCard },
+                  { key: "ideal", label: t("method_ideal"), desc: t("method_ideal_desc"), Icon: Landmark },
+                  { key: "sepa", label: t("method_sepa"), desc: t("method_sepa_desc"), Icon: Repeat },
+                  { key: "card", label: t("method_card"), desc: t("method_card_desc"), Icon: CreditCard },
                 ] as const).map(({ key, label, desc, Icon }) => (
                   <button
                     key={key}
@@ -438,7 +460,7 @@ export function CheckoutClient({
 
               {method === "sepa" && (
                 <>
-                  <label className="form-label">IBAN</label>
+                  <label className="form-label">{t("label_iban")}</label>
                   {/* Stripe mounts an iframe into this box. We own the
                       border, the radius and the padding; the text
                       inside is dressed through the element's style. */}
@@ -447,10 +469,7 @@ export function CheckoutClient({
 
 
                   <p className="checkout-mandate">
-                    Door je IBAN op te geven en deze betaling te bevestigen, machtig je Arco en Stripe, onze
-                    betaaldienstverlener, om je bank opdracht te geven het bedrag van je rekening af te
-                    schrijven. Je hebt recht op terugbetaling door je bank volgens de voorwaarden van je
-                    overeenkomst met je bank. Een verzoek tot terugbetaling dien je binnen acht weken in.
+                    {t("mandate")}
                   </p>
                 </>
               )}
@@ -460,7 +479,7 @@ export function CheckoutClient({
                   {/* Ours, not Stripe's: the bank travels to them as a
                       plain value, so the control can be an ordinary
                       Arco field with our own chevron and our own type. */}
-                  <label className="form-label" htmlFor="bank">Je bank</label>
+                  <label className="form-label" htmlFor="bank">{t("label_bank")}</label>
                   <FormSelect
                     id="bank"
                     value={bank}
@@ -471,7 +490,7 @@ export function CheckoutClient({
                       setFieldErrors((prev) => ({ ...prev, bank: null }))
                     }}
                   >
-                    <option value="" disabled>Kies je bank</option>
+                    <option value="" disabled>{t("bank_placeholder")}</option>
                     {IDEAL_BANKS.map((b) => (
                       <option key={b.value} value={b.value}>{b.label}</option>
                     ))}
@@ -488,19 +507,19 @@ export function CheckoutClient({
 
               {method === "card" && (
                 <>
-                  <label className="form-label">Kaartnummer</label>
+                  <label className="form-label">{t("label_card_number")}</label>
                   {/* Stripe draws the accepted brands inside this one. */}
                   <div id="el-card-number" className={elCls("cardNumber")} style={errOf("cardNumber") ? { marginBottom: 0 } : undefined} />
                   {note(errOf("cardNumber"))}
 
                   <div className="form-row">
                     <div>
-                      <label className="form-label">Vervaldatum</label>
+                      <label className="form-label">{t("label_card_expiry")}</label>
                       <div id="el-card-expiry" className={elCls("cardExpiry")} style={errOf("cardExpiry") ? { marginBottom: 0 } : undefined} />
                       {note(errOf("cardExpiry"))}
                     </div>
                     <div>
-                      <label className="form-label">CVC</label>
+                      <label className="form-label">{t("label_card_cvc")}</label>
                       <div id="el-card-cvc" className={elCls("cardCvc")} style={errOf("cardCvc") ? { marginBottom: 0 } : undefined} />
                       {note(errOf("cardCvc"))}
                     </div>
@@ -519,11 +538,11 @@ export function CheckoutClient({
                   mandate needs one attached to it. */}
               {!usingSaved && (
               <>
-              <label className="form-label" htmlFor="holder">Naam rekeninghouder</label>
+              <label className="form-label" htmlFor="holder">{t("label_holder")}</label>
               <input
                 id="holder"
                 className={inputCls("name")}
-                placeholder="Volledige naam"
+                placeholder={t("holder_placeholder")}
                 value={name}
                 style={fieldErrors.name ? { marginBottom: 0 } : undefined}
                 onChange={(e) => {
@@ -535,12 +554,12 @@ export function CheckoutClient({
 
               {editingEmail ? (
                 <>
-                  <label className="form-label" htmlFor="email">E-mailadres</label>
+                  <label className="form-label" htmlFor="email">{t("label_email")}</label>
                   <input
                     id="email"
                     type="email"
                     className={inputCls("email")}
-                    placeholder="naam@bedrijf.nl"
+                    placeholder={t("email_placeholder")}
                     value={email}
                     autoFocus
                     style={{ marginBottom: 0 }}
@@ -551,7 +570,7 @@ export function CheckoutClient({
                   />
                   {note(fieldErrors.email)}
                   {!fieldErrors.email && (
-                    <p className="form-note">Hier bevestigen we de machtiging en sturen we je facturen naartoe.</p>
+                    <p className="form-note">{t("email_note")}</p>
                   )}
                 </>
               ) : (
@@ -568,7 +587,7 @@ export function CheckoutClient({
             </section>
 
             <section className="checkout-section">
-              <h2 className="checkout-legend">Factuuradres</h2>
+              <h2 className="checkout-legend">{t("billing_address")}</h2>
 
               {/* Land is a question about the address, so it only shows
                   while the address is being answered. Once one is
@@ -580,29 +599,29 @@ export function CheckoutClient({
                   fifty. */}
               {address ? (
                 <>
-                  <label className="form-label">Adres</label>
+                  <label className="form-label">{t("label_address")}</label>
                   <div className="checkout-address">
                     <div style={{ minWidth: 0 }}>
                       <span className="checkout-address-line">{address.streetAddress}</span>
                       <span className="checkout-address-sub">{address.city}</span>
                     </div>
                     <button type="button" className="arco-text-link" onClick={() => setAddress(null)}>
-                      Wijzigen
+                      {t("change")}
                     </button>
                   </div>
                 </>
               ) : (
                 <>
-                  <label className="form-label" htmlFor="country">Land</label>
+                  <label className="form-label" htmlFor="country">{t("label_country")}</label>
                   <FormSelect id="country" value={country} onChange={(e) => setCountry(e.target.value)}>
-                    <option value="NL">Nederland</option>
-                    <option value="BE">België</option>
-                    <option value="DE">Duitsland</option>
+                    <option value="NL">{t("country_nl")}</option>
+                    <option value="BE">{t("country_be")}</option>
+                    <option value="DE">{t("country_de")}</option>
                   </FormSelect>
 
-                  <label className="form-label">Adres</label>
+                  <label className="form-label">{t("label_address")}</label>
                   <AddressLookup
-                    placeholder="Straat en huisnummer"
+                    placeholder={t("address_placeholder")}
                     country={country}
                     inputClassName="form-input"
                     onResolved={(r) => {
@@ -619,7 +638,7 @@ export function CheckoutClient({
 
               <label className="checkout-check">
                 <input type="checkbox" checked={business} onChange={(e) => setBusiness(e.target.checked)} />
-                Ik koop zakelijk
+                {t("business_checkbox")}
               </label>
 
               {business && (
@@ -628,7 +647,7 @@ export function CheckoutClient({
                       there: the name on Arco is a brand, the name on an
                       invoice is a registration, and on this platform
                       they rarely match. */}
-                  <label className="form-label" htmlFor="company">Bedrijfsnaam</label>
+                  <label className="form-label" htmlFor="company">{t("label_company")}</label>
                   <input
                     id="company"
                     className={inputCls("companyName")}
@@ -641,16 +660,16 @@ export function CheckoutClient({
                   />
                   {note(errOf("companyName"))}
                   {!errOf("companyName") && (
-                    <p className="form-note">Zoals je bedrijf bij de KvK staat ingeschreven.</p>
+                    <p className="form-note">{t("company_note")}</p>
                   )}
 
                   <label className="form-label" htmlFor="vat">
-                    Btw-nummer <span style={{ color: "var(--arco-mid-grey)", fontWeight: 400 }}>(optioneel)</span>
+                    {t("label_vat")} <span style={{ color: "var(--arco-mid-grey)", fontWeight: 400 }}>{t("optional")}</span>
                   </label>
                   <input
                     id="vat"
                     className="form-input"
-                    placeholder="NL123456789B01"
+                    placeholder={t("vat_placeholder")}
                     value={vatNumber}
                     onChange={(e) => setVatNumber(e.target.value)}
                   />
@@ -697,7 +716,7 @@ export function CheckoutClient({
               {FEATURES.map((f) => (
                 <div key={f} className="pricing-feature">
                   <Check size={15} strokeWidth={1.75} style={{ color: "var(--primary)", flexShrink: 0 }} />
-                  {f}
+                  {t(f)}
                 </div>
               ))}
             </div>
@@ -717,17 +736,17 @@ export function CheckoutClient({
             {promo && (
               <div className="checkout-price-row checkout-price-row--discount">
                 <span>
-                  {promo.label} ({promo.percent}%)
+                  {t(promo.labelKey as never)} ({promo.percent}%)
                   <button
                     type="button"
                     className="checkout-promo-remove"
                     onClick={() => setPromo(null)}
-                    aria-label={`Code ${promo.code} verwijderen`}
+                    aria-label={t("promo_remove", { code: promo.code })}
                   >
                     <X size={13} strokeWidth={1.75} />
                   </button>
                   <span style={{ display: "block", fontSize: 12, color: "var(--arco-mid-grey)" }}>
-                    {promo.code} · {promo.periods}
+                    {promo.code} · {t(promo.periodsKey as never, { months: FREE_MONTHS })}
                   </span>
                 </span>
                 <span>−{euro(discount)}</span>
@@ -740,7 +759,7 @@ export function CheckoutClient({
                 the whole reason to keep this link quiet. */}
             {!promo && !promoOpen && (
               <button type="button" className="arco-text-link" style={{ padding: "6px 0" }} onClick={() => setPromoOpen(true)}>
-                Actiecode toevoegen
+                {t("promo_add")}
               </button>
             )}
 
@@ -749,7 +768,7 @@ export function CheckoutClient({
                 <div className="checkout-promo-form">
                   <input
                     className={`form-input${promoError ? " form-input--error" : ""}`}
-                    placeholder="ACTIECODE"
+                    placeholder={t("promo_placeholder")}
                     value={promoInput}
                     autoFocus
                     onChange={(e) => { setPromoInput(e.target.value); setPromoError(false) }}
@@ -761,24 +780,24 @@ export function CheckoutClient({
                     style={{ flexShrink: 0, fontSize: 13, padding: "8px 16px" }}
                     onClick={applyPromo}
                   >
-                    Toepassen
+                    {t("promo_apply")}
                   </button>
                 </div>
                 {promoError && (
                   <p className="form-note form-note--error" style={{ marginBottom: 6 }}>
-                    Deze code kennen we niet, of hij geldt niet voor dit abonnement.
+                    {t("promo_unknown")}
                   </p>
                 )}
               </>
             )}
 
             <div className="checkout-price-row">
-              <span>Btw (21%)</span>
+              <span>{t("vat_line")}</span>
               <span>{euro(vat)}</span>
             </div>
 
             <div className="checkout-price-row checkout-price-row--total">
-              <span>Vandaag te betalen</span>
+              <span>{t("due_today")}</span>
               <span>{euro(total)}</span>
             </div>
 
@@ -786,7 +805,7 @@ export function CheckoutClient({
                 applied it would be weighing the wrong two numbers. */}
             {cycle === "year" && !promo && (
               <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--primary)" }}>
-                Je bespaart {euro(12 * 4900 - 46800)} ten opzichte van maandelijks betalen.
+                {t("yearly_saving", { amount: euro(12 * 4900 - 46800) })}
               </p>
             )}
 
