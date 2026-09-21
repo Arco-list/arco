@@ -1362,7 +1362,8 @@
       "identity_save": "Save",
       "identity_saved": "Invoice details updated.",
       "identity_failed": "That didn't work. Check the VAT number and try again.",
-      "identity_empty": "No invoice details yet"
+      "identity_empty": "No invoice details yet",
+      "open_invoice_body": "An invoice is still outstanding. Update your payment details to settle it."
     },
     "pricing_current_badge": "Current",
     "pricing_your_plan": "Your current plan",

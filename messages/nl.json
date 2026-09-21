@@ -1362,7 +1362,8 @@
       "identity_save": "Opslaan",
       "identity_saved": "Factuurgegevens bijgewerkt.",
       "identity_failed": "Dat lukte niet. Controleer het btw-nummer en probeer het nog eens.",
-      "identity_empty": "Nog geen factuurgegevens"
+      "identity_empty": "Nog geen factuurgegevens",
+      "open_invoice_body": "Er staat nog een factuur open. Werk je betaalgegevens bij om hem te voldoen."
     },
     "pricing_current_badge": "Huidig",
     "pricing_your_plan": "Je huidige abonnement",

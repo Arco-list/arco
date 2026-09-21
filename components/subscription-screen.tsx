@@ -260,6 +260,25 @@ export function SubscriptionScreen({
     ? (scheduledSwitch.interval === "month" ? "year" : "month")
     : billing.interval
 
+  /**
+   * An invoice that is owed and that nothing is doing anything about.
+   *
+   * The subscription's own status is not the only way this happens: an
+   * invoice can sit open while the subscription still reads active —
+   * between a finalisation and its payment, or for anything billed
+   * outside the subscription. The page said "wordt verlengd op…" over
+   * a red "Openstaand" two rows below it and offered no way to settle
+   * it. What the reader owes is a fact about the page, not about one
+   * field on the subscription.
+   *
+   * A payment already travelling does not count: that is `processing`,
+   * and it needs waiting rather than acting.
+   */
+  const unpaidInvoice = details.invoices.some((inv) => inv.status === "open" && !inv.processing)
+
+  const collectionFailed =
+    billing.status === "past_due" || billing.status === "unpaid" || unpaidInvoice
+
   // One line describing where they stand. Deliberately concrete: a date
   // beats the word "active".
   const statusLine =
@@ -293,6 +312,9 @@ export function SubscriptionScreen({
     // subscription whose access has just been withdrawn describes a
     // future that is not going to happen unless something is done.
     : billing.status === "unpaid" ? tb("unpaid_body")
+    // Still entitled, but something is owed. The renewal date is true
+    // and beside the point.
+    : unpaidInvoice ? tb("open_invoice_body")
     : renewal && scheduledSwitch
       ? tb(scheduledSwitch.interval === "month" ? "renews_body_switching_month" : "renews_body_switching_year", { date: renewal })
     : renewal ? tb(currentInterval === "month" ? "renews_body_month" : "renews_body_year", { date: renewal })
@@ -309,7 +331,6 @@ export function SubscriptionScreen({
    * needs telling — arrived without a banner, without a button and
    * without a word of explanation.
    */
-  const collectionFailed = billing.status === "past_due" || billing.status === "unpaid"
 
   // Exactly one primary action, chosen by what the company should do
   // next — not a row of equally-weighted buttons.
