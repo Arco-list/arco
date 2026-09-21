@@ -5,6 +5,7 @@ import { logger } from "@/lib/logger"
 import { priceId, taxRateId, isStripeConfigured, stripeGet, stripePost } from "@/lib/stripe/rest"
 import { mirrorSubscription, type StripeSubscription } from "@/lib/subscriptions/mirror"
 import { LIVE_STATUSES, hasLiveSubscription, type Failure } from "@/lib/subscriptions/live-status"
+import { setDefaultPaymentMethod } from "@/lib/subscriptions/set-default-method"
 
 /**
  * Turn a completed mandate into a subscription.
@@ -79,6 +80,10 @@ export async function subscribeFromSetupIntent(
       metadata: { company_id: resolved.companyId },
       expand: ["items.data.price"],
     })
+
+    // The subscription's own charge is covered by the line above; this
+    // covers everything else Stripe bills this customer.
+    await setDefaultPaymentMethod(customerId, intent.payment_method)
 
     // Written here rather than waiting for the webhook: the reader is
     // looking at the page now. The webhook confirms the same row later.

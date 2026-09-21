@@ -9,6 +9,7 @@ import { mirrorSubscription, type StripeSubscription } from "@/lib/subscriptions
 import { ensureCustomer, resolveOwnedCompany } from "@/lib/subscriptions/owned-company"
 import { subscribeFromSetupIntent } from "@/lib/subscriptions/subscribe-from-setup"
 import { LIVE_STATUSES, hasLiveSubscription, type Failure } from "@/lib/subscriptions/live-status"
+import { setDefaultPaymentMethod } from "@/lib/subscriptions/set-default-method"
 
 /**
  * The Elements checkout: mandate first, subscription second.
@@ -160,7 +161,8 @@ export async function replacePaymentMethodAction(
     if (intent.metadata?.company_id !== resolved.companyId) return { error: "failed" }
     if (intent.status !== "succeeded" || !intent.payment_method) return { error: "not_ready" }
     // A mandate given on one customer cannot be charged on another.
-    if (intent.customer !== mirrored.stripe_customer_id) return { error: "failed" }
+    if (!intent.customer || intent.customer !== mirrored.stripe_customer_id) return { error: "failed" }
+    const customerId = intent.customer
 
     const before = await stripeGet<{ default_payment_method?: string | null }>(
       `/subscriptions/${mirrored.stripe_subscription_id}`,
@@ -170,6 +172,10 @@ export async function replacePaymentMethodAction(
       `/subscriptions/${mirrored.stripe_subscription_id}`,
       { default_payment_method: intent.payment_method },
     )
+
+    // Before the retry below, not after: the invoice reads its default
+    // from the customer at the moment it is paid.
+    await setDefaultPaymentMethod(customerId, intent.payment_method)
 
     // Only once the subscription is safely on the new one.
     const previous = before.default_payment_method
@@ -211,7 +217,12 @@ export async function replacePaymentMethodAction(
 
     if (open) {
       try {
-        const paid = await stripePost<{ status?: string }>(`/invoices/${open.id}/pay`, {})
+        // Named rather than left to the default: the reader asked for
+        // THIS method to settle THIS invoice, and an invoice finalised
+        // earlier can still carry the old one as its own default.
+        const paid = await stripePost<{ status?: string }>(`/invoices/${open.id}/pay`, {
+          payment_method: intent.payment_method,
+        })
         logger.info("Retried an open invoice after a payment method change", {
           invoiceId: open.id,
           result: paid.status,
