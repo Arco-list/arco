@@ -132,7 +132,7 @@ export async function replacePaymentMethodAction(
   // A card settles the open invoice on the spot; iDEAL and SEPA both
   // end in a direct debit, so both take days — iDEAL produces a SEPA
   // mandate, it is not a second card.
-): Promise<{ ok: true; outcome: "changed" | "collecting" | "settled" } | Failure> {
+): Promise<{ ok: true; outcome: "changed" | "collecting" | "settled" | "still_open" } | Failure> {
   if (!isStripeConfigured()) return { error: "not_configured" }
   if (!/^seti_[A-Za-z0-9_]+$/.test(setupIntentId)) return { error: "failed" }
 
@@ -185,32 +185,53 @@ export async function replacePaymentMethodAction(
 
     // A method swapped during dunning is only half the repair. Stripe
     // would retry on its own schedule, which can be days; the reader
-    // just fixed the thing and expects it settled. Best-effort, because
-    // a retry that fails must not undo a mandate that worked.
-    if (["past_due", "unpaid"].includes(subscription.status)) {
+    // just fixed the thing and expects it settled.
+    //
+    // Asked of the customer, not of the subscription. The status gate
+    // that used to guard this — past_due or unpaid — is the same one
+    // the two pages outgrew: an invoice can be open while the
+    // subscription still reads active, and looking it up *by*
+    // subscription missed anything billed outside it. The page shows
+    // every open invoice this customer has and offers to settle it, so
+    // this has to look in the same place.
+    const openInvoices = await stripeGet<{
+      data: { id: string; status: string; payment_intent?: { status?: string } | string | null }[]
+    }>("/invoices", {
+      customer: mirrored.stripe_customer_id,
+      status: "open",
+      limit: 5,
+      "expand[]": "data.payment_intent",
+    })
+
+    // One already travelling needs waiting, not a second attempt.
+    const open = openInvoices.data?.find((inv) => {
+      const pi = inv.payment_intent
+      return (typeof pi === "object" ? pi?.status : undefined) !== "processing"
+    })
+
+    if (open) {
       try {
-        const invoices = await stripeGet<{ data: { id: string; status: string }[] }>("/invoices", {
-          subscription: mirrored.stripe_subscription_id,
-          status: "open",
-          limit: 1,
+        const paid = await stripePost<{ status?: string }>(`/invoices/${open.id}/pay`, {})
+        logger.info("Retried an open invoice after a payment method change", {
+          invoiceId: open.id,
+          result: paid.status,
         })
-        const open = invoices.data?.[0]
-        if (open) {
-          const paid = await stripePost<{ status?: string }>(`/invoices/${open.id}/pay`, {})
-          logger.info("Retried an open invoice after a payment method change", {
-            invoiceId: open.id,
-            result: paid.status,
-          })
+        if (mirrored.stripe_subscription_id) {
           const refreshed = await stripeGet<StripeSubscription & { status: string }>(
             `/subscriptions/${mirrored.stripe_subscription_id}`,
           )
           await mirrorSubscription(service, refreshed)
-          // Reported rather than assumed: the invoice itself says
-          // whether the money arrived or is on its way.
-          return { ok: true, outcome: paid.status === "paid" ? "settled" : "collecting" }
         }
+        // Reported rather than assumed: the invoice itself says whether
+        // the money arrived or is on its way.
+        return { ok: true, outcome: paid.status === "paid" ? "settled" : "collecting" }
       } catch (err) {
+        // The mandate was saved; the invoice was not collected. Saying
+        // "your next charge will come from the new account" here would
+        // be true and would hide the thing they came to fix.
         logger.error("Could not retry the open invoice", { companyId: resolved.companyId }, err as Error)
+        await mirrorSubscription(service, subscription)
+        return { ok: true, outcome: "still_open" }
       }
     }
 

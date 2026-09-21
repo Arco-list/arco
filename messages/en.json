@@ -1363,7 +1363,9 @@
       "identity_saved": "Invoice details updated.",
       "identity_failed": "That didn't work. Check the VAT number and try again.",
       "identity_empty": "No invoice details yet",
-      "open_invoice_body": "An invoice is still outstanding. Update your payment details to settle it."
+      "open_invoice_body": "An invoice is still outstanding. Update your payment details to settle it.",
+      "still_open_title": "Payment method saved",
+      "still_open_body": "We could not collect the outstanding invoice with it yet. Check the details, or try a different payment method."
     },
     "pricing_current_badge": "Current",
     "pricing_your_plan": "Your current plan",

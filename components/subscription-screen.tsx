@@ -107,12 +107,12 @@ export function SubscriptionScreen({
    * congratulate someone twice.
    */
   const searchParams = useSearchParams()
-  const [notice, setNotice] = useState<"active" | "processing" | "changed" | "collecting" | "settled" | null>(null)
+  const [notice, setNotice] = useState<"active" | "processing" | "changed" | "collecting" | "settled" | "still_open" | null>(null)
   useEffect(() => {
     const subscribed = searchParams.get("subscribed")
     const changed = searchParams.get("payment_method")
     const which = subscribed === "active" || subscribed === "processing" ? subscribed
-      : changed === "changed" || changed === "collecting" || changed === "settled" ? changed
+      : changed === "changed" || changed === "collecting" || changed === "settled" || changed === "still_open" ? changed
       : null
     if (!which) return
     setNotice(which)
@@ -987,6 +987,7 @@ export function SubscriptionScreen({
                 {tb(notice === "active" ? "welcome_title_active"
                   : notice === "processing" ? "welcome_title_processing"
                   : notice === "settled" ? "settled_title"
+                  : notice === "still_open" ? "still_open_title"
                   : "method_title")}
               </h3>
               <button type="button" className="popup-close" onClick={() => setNotice(null)} aria-label="Sluiten">✕</button>
@@ -996,6 +997,7 @@ export function SubscriptionScreen({
                 : notice === "processing" ? "welcome_body_processing"
                 : notice === "collecting" ? "retried_body"
                 : notice === "settled" ? "settled_body"
+                : notice === "still_open" ? "still_open_body"
                 : "method_body")}
             </p>
             <div className="popup-actions">

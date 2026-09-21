@@ -6818,9 +6818,15 @@ body.no-scroll {
   padding: 14px 0;
   border-bottom: 1px solid var(--arco-light-grey);
 }
-.billing-row > :last-child { margin-left: auto; }
-/* Room to breathe once it stands alone, and no hyphenated label. */
-.billing-row > :last-child { white-space: nowrap; }
+/* The fact takes the space and the button follows it to the right
+   edge. Keyed on the first child, not the last: a row whose button is
+   conditional — the cycle loses one once a switch is scheduled — then
+   has the text as its own last child, and `margin-left: auto` shoved
+   the sentence to the right instead. */
+.billing-row > :first-child { margin-right: auto; min-width: 0; }
+/* Only what follows the fact: room to breathe once it stands alone on
+   a wrapped line, and no label broken across two. */
+.billing-row > :first-child ~ * { white-space: nowrap; }
 
 /* ── Invoice table ────────────────────────────────────────────────
    Four columns hold on a desktop and fall apart on a phone: the date
