@@ -153,8 +153,61 @@ async function getCompanyContext(overrideCompanyId?: string) {
     return { supabase, user: null as const, error: "You need to be signed in." }
   }
 
-  // 0. Admin with active company cookie pointing to a different company
   const { getActiveCompanyId, setActiveCompanyId } = await import("@/lib/active-company")
+
+
+  /**
+   * A company named by the caller wins over the cookie.
+   *
+   * The company page resolves which company it is showing from
+   * ?company_id=; these actions resolved it from a session-wide cookie
+   * that any other tab, or a later fallback below, can move. When the
+   * two disagreed the screen showed one company and the writes went to
+   * another, reporting success — services and a logo entered on one
+   * company's page landed on a different company's record.
+   *
+   * Access is verified here on every path, so naming a company grants
+   * nothing: owner, active team member, team profile, or admin.
+   */
+  if (overrideCompanyId) {
+    const sr = createServiceRoleSupabaseClient()
+    const [{ data: isOwner }, { data: isMember }, { data: isProfessional }] = await Promise.all([
+      sr.from("companies").select("id").eq("id", overrideCompanyId).eq("owner_id", user.id).maybeSingle(),
+      sr.from("company_contacts")
+        .select("id, person:persons!inner(auth_user_id)")
+        .eq("company_id", overrideCompanyId)
+        .eq("person.auth_user_id", user.id)
+        .in("role", ["owner", "admin", "member"])
+        .eq("status", "active")
+        .maybeSingle(),
+      sr.from("professionals").select("id").eq("company_id", overrideCompanyId).eq("user_id", user.id).maybeSingle(),
+    ])
+
+    let allowed = Boolean(isOwner || isMember || isProfessional)
+    // Admins reach any company, and only they get the service-role
+    // client — someone editing their own company keeps RLS.
+    let needsServiceRole = false
+    if (!allowed) {
+      const { data: adminProfile } = await sr.from("profiles").select("user_types, admin_role").eq("id", user.id).maybeSingle()
+      const isAdmin = adminProfile?.user_types?.includes("admin") || adminProfile?.admin_role === "admin" || adminProfile?.admin_role === "super_admin"
+      allowed = Boolean(isAdmin)
+      needsServiceRole = allowed
+    }
+
+    if (allowed) {
+      const { data: named } = await sr
+        .from("companies")
+        .select("id, name, logo_url, primary_service:categories!companies_primary_service_id_fkey(slug)")
+        .eq("id", overrideCompanyId)
+        .maybeSingle()
+      if (named) {
+        return { supabase: needsServiceRole ? sr : supabase, user, company: named, error: null }
+      }
+    }
+  }
+
+
+  // 0. Admin with active company cookie pointing to a different company
   const activeCompanyId = overrideCompanyId ?? await getActiveCompanyId()
 
   if (activeCompanyId) {
@@ -367,8 +420,8 @@ const deleteFromStorage = async (
   }
 }
 
-export async function updateCompanyProfileAction(input: { name: string; description?: string | null }): Promise<ActionResult> {
-  const { supabase, company, error } = await getCompanyContext()
+export async function updateCompanyProfileAction(input: { name: string; description?: string | null }, companyId?: string): Promise<ActionResult> {
+  const { supabase, company, error } = await getCompanyContext(companyId)
 
   if (error) {
     return { success: false, error }
@@ -596,8 +649,8 @@ export async function updateCompanyContactAction(
   return { success: true }
 }
 
-export async function updateCompanyServicesAction(input: z.infer<typeof servicesSchema>): Promise<ActionResult> {
-  const { supabase, company, error } = await getCompanyContext()
+export async function updateCompanyServicesAction(input: z.infer<typeof servicesSchema>, companyId?: string): Promise<ActionResult> {
+  const { supabase, company, error } = await getCompanyContext(companyId)
 
   if (error) {
     return { success: false, error }
@@ -670,8 +723,8 @@ const specsSchema = z.object({
   address: z.string().trim().max(500).nullable().optional(),
 })
 
-export async function updateCompanySpecsAction(input: z.infer<typeof specsSchema>): Promise<ActionResult> {
-  const { supabase, company, error } = await getCompanyContext()
+export async function updateCompanySpecsAction(input: z.infer<typeof specsSchema>, companyId?: string): Promise<ActionResult> {
+  const { supabase, company, error } = await getCompanyContext(companyId)
 
   if (error) {
     return { success: false, error }
@@ -708,8 +761,8 @@ export async function updateCompanySpecsAction(input: z.infer<typeof specsSchema
   return { success: true }
 }
 
-export async function changeCompanyStatusAction(input: z.infer<typeof statusSchema>): Promise<ActionResult> {
-  const { supabase, company, error } = await getCompanyContext()
+export async function changeCompanyStatusAction(input: z.infer<typeof statusSchema>, companyId?: string): Promise<ActionResult> {
+  const { supabase, company, error } = await getCompanyContext(companyId)
 
   if (error) {
     return { success: false, error }
@@ -758,8 +811,8 @@ export async function changeCompanyStatusAction(input: z.infer<typeof statusSche
   return { success: true }
 }
 
-export async function uploadCompanyLogoAction(formData: FormData): Promise<UploadActionResult> {
-  const { supabase, company, user, error } = await getCompanyContext()
+export async function uploadCompanyLogoAction(formData: FormData, companyId?: string): Promise<UploadActionResult> {
+  const { supabase, company, user, error } = await getCompanyContext(companyId)
 
   if (error) {
     return { success: false, error }

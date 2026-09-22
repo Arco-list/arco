@@ -794,7 +794,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     const d = overrides?.description ?? description
     setEditSaveStatus("saving")
     startTransition(async () => {
-      const result = await updateCompanyProfileAction({ name: n, description: d || null })
+      const result = await updateCompanyProfileAction({ name: n, description: d || null }, company.id)
       if (!result.success) {
         toast.error(result.error ?? t("save_error"))
         setEditSaveStatus("idle")
@@ -814,7 +814,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         city: (overrides?.city !== undefined ? overrides.city : city) as string | null,
         country: (overrides?.country !== undefined ? overrides.country : country) as string | null,
         address: (overrides?.address !== undefined ? overrides.address : address) as string | null,
-      })
+      }, company.id)
       if (!result.success) {
         toast.error(result.error ?? t("specs_error"))
         setEditSaveStatus("idle")
@@ -938,7 +938,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         // Only photographer companies pass specialties; other callers leave
         // it undefined so the action skips the column update.
         specialties: isPhotographer ? (overrides?.specialties ?? specialties) : undefined,
-      })
+      }, company.id)
       if (!result.success) {
         toast.error(result.error ?? t("services_error"))
         setEditSaveStatus("idle")
@@ -975,7 +975,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     formData.append("file", file)
     setEditSaveStatus("saving")
     startTransition(async () => {
-      const result = await uploadCompanyLogoAction(formData)
+      const result = await uploadCompanyLogoAction(formData, company.id)
       if (!result.success) {
         toast.error(result.error ?? t("logo_error"))
         setEditSaveStatus("idle")
@@ -993,7 +993,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     setStatusDialogOpen(false)
     setCompanyStatus(selectedStatus)
     startTransition(async () => {
-      const result = await changeCompanyStatusAction({ status: selectedStatus })
+      const result = await changeCompanyStatusAction({ status: selectedStatus }, company.id)
       if (!result.success) {
         toast.error(result.error ?? t("status_error"))
         setCompanyStatus(company.status)
