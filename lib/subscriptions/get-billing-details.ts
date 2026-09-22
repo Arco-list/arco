@@ -142,7 +142,11 @@ export async function getBillingDetails(
         // now the invoice is indistinguishable from a failed debit —
         // and a failed debit does belong here, since that one had money
         // in transit for days.
-        .filter((inv) => inv.metadata?.[HIDDEN_METADATA_KEY] !== "declined_first_payment")
+        // Presence, not a particular value. The value says WHY, for
+        // anyone reading the invoice in Stripe later; making the filter
+        // depend on it means a second reason spelled differently
+        // silently stops hiding anything.
+        .filter((inv) => !inv.metadata?.[HIDDEN_METADATA_KEY])
         .map<InvoiceSummary>((inv) => ({
           id: inv.id,
           number: inv.number,

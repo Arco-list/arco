@@ -3,7 +3,7 @@ import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { logger } from "@/lib/logger"
-import { stripeGet, stripePost } from "@/lib/stripe/rest"
+import { stripeDelete, stripeGet, stripePost } from "@/lib/stripe/rest"
 
 /**
  * What happens when somebody does not pay.
@@ -129,7 +129,7 @@ export async function cancelUnpaidFirstPeriod(
   methodType?: string | null,
 ): Promise<void> {
   try {
-    await stripePost(`/subscriptions/${subscriptionId}/cancel`, {})
+    await stripeDelete(`/subscriptions/${subscriptionId}`)
   } catch (err) {
     logger.error("Could not cancel a subscription after its first payment failed", { subscriptionId }, err as Error)
     return

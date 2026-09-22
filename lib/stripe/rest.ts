@@ -103,6 +103,29 @@ export async function stripeGet<T = Record<string, unknown>>(
   return json
 }
 
+/**
+ * Cancel an object, which for Stripe means DELETE on the object itself.
+ *
+ * There is no POST /subscriptions/:id/cancel, however naturally it
+ * reads. Sending one returns "Unrecognized request URL" — an error the
+ * caller catches and logs, which is how a subscription meant to be
+ * cancelled on a declined first payment sat there as `incomplete` with
+ * an open invoice on the customer's screen.
+ */
+export async function stripeDelete<T = Record<string, unknown>>(path: string): Promise<T> {
+  const res = await fetch(`${API}${path}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${secretKey()}` },
+  })
+  const json = (await res.json()) as T & { error?: { message?: string; code?: string } }
+  if (!res.ok) {
+    const err = new Error(json?.error?.message ?? `Stripe DELETE ${path} failed with ${res.status}`)
+    ;(err as Error & { stripeCode?: string }).stripeCode = json?.error?.code
+    throw err
+  }
+  return json
+}
+
 /** True when the app has a key at all — lets the UI say something
  *  useful instead of throwing at a visitor. */
 export function isStripeConfigured(): boolean {

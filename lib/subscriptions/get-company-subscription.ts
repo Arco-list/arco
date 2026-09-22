@@ -89,31 +89,28 @@ export function isEntitled(status: string | null | undefined): boolean {
  * deadline is written when a repair starts collecting and expires by
  * itself, so a debit that quietly fails costs a few days of access
  * rather than granting Pro forever.
+ *
+ * Deliberately blind to whether this company has failed to pay before.
+ * It knew, briefly: a repeat offender got no credit on `past_due`
+ * until their money had arrived once. The rule worked and was still
+ * the wrong trade. Cancelling a first period the moment its payment
+ * fails already cut the free ride from three weeks to the days a debit
+ * spends in transit, and what remained asked a fraudster to re-enter a
+ * mandate every few days, forever, to avoid €49 a month. Two more
+ * parameters in the function that decides whether someone may use what
+ * they paid for is a steep price for that, and being wrong here denies
+ * a paying customer.
+ *
+ * `companies.nonpayment_cancellations` still counts. Keeping the
+ * record costs a line and leaves the evidence if this ever stops being
+ * hypothetical — at which point the gate is an hour's work, because
+ * the column is already there.
  */
 export function isEntitledNow(
   status: string | null | undefined,
   collectionPendingUntil: string | null | undefined,
-  /** How often Stripe has cancelled a subscription of this company for
-   *  non-payment. Zero for almost everyone. */
-  nonpaymentCancellations = 0,
-  /** When this subscription's money first arrived, if it ever has. */
-  firstPaymentAt: string | null | undefined = null,
 ): boolean {
-  if (status === "trialing" || status === "active") return true
-
-  // `past_due` is credit: the product, granted on a mandate, before the
-  // money is in. Almost always right — a SEPA debit takes days and an
-  // honest buyer should not wait for what they have bought.
-  //
-  // It is also the whole loophole, for one particular reader: give a
-  // mandate on an empty account, take Pro, let the debit fail, keep it
-  // through dunning, get cancelled, begin again. So the credit is
-  // extended to anyone who has not already done this to us, and to any
-  // subscription that has been paid for at least once — a renewal
-  // failing after two good years is not the same event as a first
-  // debit bouncing, however identical the status looks.
-  if (status === "past_due") return nonpaymentCancellations === 0 || Boolean(firstPaymentAt)
-
+  if (isEntitled(status)) return true
   if (status !== "unpaid" || !collectionPendingUntil) return false
   return new Date(collectionPendingUntil).getTime() > Date.now()
 }
@@ -124,12 +121,12 @@ export async function getCompanyBilling(companyId: string): Promise<CompanyBilli
   const [{ data: sub }, { data: company }] = await Promise.all([
     supabase
       .from("subscriptions" as never)
-      .select("status, billing_interval, current_period_end, cancel_at_period_end, trial_end, stripe_customer_id, stripe_subscription_id, collection_pending_until, first_payment_at")
+      .select("status, billing_interval, current_period_end, cancel_at_period_end, trial_end, stripe_customer_id, stripe_subscription_id, collection_pending_until")
       .eq("company_id", companyId)
       .maybeSingle(),
     supabase
       .from("companies")
-      .select("founding_claimed_at, nonpayment_cancellations")
+      .select("founding_claimed_at")
       .eq("id", companyId)
       .maybeSingle(),
   ])
@@ -143,27 +140,17 @@ export async function getCompanyBilling(companyId: string): Promise<CompanyBilli
     stripe_customer_id?: string | null
     stripe_subscription_id?: string | null
     collection_pending_until?: string | null
-    first_payment_at?: string | null
   } | null
 
-  const companyRow = company as {
-    founding_claimed_at?: string | null
-    nonpayment_cancellations?: number | null
-  } | null
-  const foundingClaimedAt = companyRow?.founding_claimed_at ?? null
-  const nonpaymentCancellations = companyRow?.nonpayment_cancellations ?? 0
+  const foundingClaimedAt =
+    (company as { founding_claimed_at?: string | null } | null)?.founding_claimed_at ?? null
 
   if (row?.status && ALIVE.has(row.status)) {
     return {
       // Access follows entitlement; everything else on this object
       // describes the subscription, which outlives it. An unpaid
       // company reads as free and still sees what it owes.
-      plan: isEntitledNow(
-        row.status,
-        row.collection_pending_until,
-        nonpaymentCancellations,
-        row.first_payment_at,
-      ) ? "pro" : "free",
+      plan: isEntitledNow(row.status, row.collection_pending_until) ? "pro" : "free",
       source: "subscription",
       status: row.status as StripeSubscriptionStatus,
       interval: (row.billing_interval as "month" | "year" | null) ?? null,

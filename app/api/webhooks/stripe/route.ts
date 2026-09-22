@@ -125,9 +125,7 @@ export async function POST(request: NextRequest) {
       case "customer.subscription.created":
       case "customer.subscription.updated":
       case "customer.subscription.deleted": {
-        const subscription = event.data.object as unknown as StripeSubscription & {
-          cancellation_details?: { reason?: string | null } | null
-        }
+        const subscription = event.data.object as unknown as StripeSubscription
         await mirrorSubscription(supabase, subscription)
 
         // Remembered after the mirror, so the row exists to look the

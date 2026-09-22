@@ -28,6 +28,9 @@ export type StripeSubscription = {
   canceled_at: number | null
   items: { data: { price: { id: string; recurring?: { interval?: string } | null } }[] }
   metadata?: Record<string, string> | null
+  /** Why it ended. `cancellation_requested` and `payment_failed` are
+   *  very different facts about the mandate we still hold. */
+  cancellation_details?: { reason?: string | null } | null
 }
 
 type ServiceClient = ReturnType<typeof createServiceRoleSupabaseClient>
@@ -87,21 +90,35 @@ export async function mirrorSubscription(
 
   const item = subscription.items?.data?.[0]
 
-  // "First" has to mean first. The upsert rewrites the whole row, so
-  // stamping the moment unconditionally would push the date forward on
-  // every mirror while active — a column named first_payment_at that
-  // actually held "last seen paid", which is a different fact and the
-  // wrong one for deciding whether this subscription has ever been
-  // good for its money.
+  // "First" has to mean first, and it has to mean THIS subscription's
+  // first. Two ways to get that wrong, and the row's shape invites
+  // both: it is one per company, keyed on company_id, so a new
+  // subscription overwrites the old one's row.
+  //
+  // Stamp it on every mirror and the column holds "last seen paid",
+  // which is a different fact. Carry it across a change of
+  // subscription and a brand-new one inherits its predecessor's
+  // payment — that one actually happened, and it is the worse of the
+  // two: the webhook reads this to tell a first payment from a
+  // renewal, so an inherited stamp makes a first debit that bounces
+  // look like a renewal and sends it through three weeks of dunning
+  // instead of ending it.
+  //
+  // So the value is computed rather than omitted, and a different
+  // subscription id starts from nothing.
   const paidNow = subscription.status === "active" || subscription.status === "trialing"
-  const { data: existing } = paidNow
-    ? await supabase
-        .from("subscriptions" as never)
-        .select("first_payment_at")
-        .eq("company_id", companyId)
-        .maybeSingle()
-    : { data: null }
-  const alreadyPaid = (existing as { first_payment_at?: string | null } | null)?.first_payment_at
+  const { data: existing } = await supabase
+    .from("subscriptions" as never)
+    .select("first_payment_at, stripe_subscription_id")
+    .eq("company_id", companyId)
+    .maybeSingle()
+  const previous = existing as {
+    first_payment_at?: string | null
+    stripe_subscription_id?: string | null
+  } | null
+  const sameSubscription = previous?.stripe_subscription_id === subscription.id
+  const carried = sameSubscription ? (previous?.first_payment_at ?? null) : null
+  const firstPaymentAt = carried ?? (paidNow ? new Date().toISOString() : null)
 
   // One row per company: a company has one subscription, and an upgrade
   // replaces rather than accumulates.
@@ -119,6 +136,7 @@ export async function mirrorSubscription(
         cancel_at_period_end: Boolean(subscription.cancel_at_period_end),
         trial_end: toIso(subscription.trial_end),
         canceled_at: toIso(subscription.canceled_at),
+        canceled_reason: subscription.cancellation_details?.reason ?? null,
         // The grant exists only to cover the gap between a repair
         // payment leaving and Stripe hearing that it landed. Any status
         // but `unpaid` means that gap has closed — the money arrived,
@@ -134,7 +152,7 @@ export async function mirrorSubscription(
         // renewal that fails takes the subscription back to past_due,
         // and forgetting it had ever been paid would treat a two-year
         // customer like someone who has never given us a cent.
-        ...(paidNow && !alreadyPaid ? { first_payment_at: new Date().toISOString() } : {}),
+        first_payment_at: firstPaymentAt,
         updated_at: new Date().toISOString(),
       } as never,
       { onConflict: "company_id" },
