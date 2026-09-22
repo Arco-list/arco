@@ -2301,6 +2301,11 @@
     "yearly_saving": "Je bespaart {amount} ten opzichte van maandelijks betalen.",
     "err_vat": "Dit lijkt geen geldig btw-nummer. Een Nederlands nummer ziet eruit als NL123456789B01.",
     "free_activation_note": "Pro staat vanaf nu aan, gratis tot {until}, en stopt daarna vanzelf.",
-    "err_payment_declined": "Je betaling is geweigerd. Controleer de gegevens of probeer een andere betaalmethode."
+    "err_payment_declined": "Je betaling is geweigerd. Controleer de gegevens of probeer een andere betaalmethode.",
+    "saved_method_failed": "Deze betaalmethode werkt niet",
+    "saved_method_failed_desc": "{method} — de vorige incasso is mislukt",
+    "saved_method_desc": "{method} — niets in te vullen",
+    "saved_note": "We gebruiken de machtiging die je eerder gaf.",
+    "saved_note_failed": "We proberen het opnieuw met dezelfde machtiging. Werkte hij niet omdat de rekening even krap stond, dan kan dat lukken — zo niet, kies dan hierboven een andere methode."
   }
 }

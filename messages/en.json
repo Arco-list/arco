@@ -2301,6 +2301,11 @@
     "yearly_saving": "You save {amount} compared with paying monthly.",
     "err_vat": "This does not look like a valid VAT number. A Dutch one looks like NL123456789B01.",
     "free_activation_note": "Pro is on from now, free until {until}, and stops by itself afterwards.",
-    "err_payment_declined": "Your payment was declined. Check the details or try a different payment method."
+    "err_payment_declined": "Your payment was declined. Check the details or try a different payment method.",
+    "saved_method_failed": "This payment method is not working",
+    "saved_method_failed_desc": "{method} — the last debit failed",
+    "saved_method_desc": "{method} — nothing to fill in",
+    "saved_note": "We will use the mandate you gave us earlier.",
+    "saved_note_failed": "We will try the same mandate again. If it failed because the account was briefly short, that may now work — if not, pick another method above."
   }
 }

@@ -55,15 +55,32 @@ export default async function CheckoutPage({
   const { data: row } = company
     ? await service
         .from("subscriptions" as never)
-        .select("stripe_customer_id")
+        .select("stripe_customer_id, status, canceled_reason")
         .eq("company_id", company.id)
         .maybeSingle()
     : { data: null }
 
-  const customerId = (row as { stripe_customer_id?: string } | null)?.stripe_customer_id ?? null
+  const mirrored = row as {
+    stripe_customer_id?: string
+    status?: string
+    canceled_reason?: string | null
+  } | null
+  const customerId = mirrored?.stripe_customer_id ?? null
   const details = customerId ? await getBillingDetails(customerId, "nl") : null
   const pm = details?.paymentMethod ?? null
   const savedMethod = pm ? `${pm.label}${pm.last4 ? ` ···· ${pm.last4}` : ""}` : null
+
+  // The mandate we hold is the one the last subscription was charging.
+  // If that subscription ended because the money never came, offering
+  // it back as the quickest way through this form is offering the
+  // failure again — so the card says so, and something else is
+  // selected instead.
+  //
+  // Only for a non-payment ending. Somebody who cancelled on purpose
+  // has a mandate that works, and a red warning there would send them
+  // hunting for an IBAN over a problem they never had.
+  const savedMethodFailed =
+    mirrored?.status === "canceled" && mirrored?.canceled_reason === "payment_failed"
 
   // Computed on the server so the client never renders a different date
   // than the one that was sent, and so the page can name a day — which
@@ -105,6 +122,7 @@ export default async function CheckoutPage({
       resumeSetupIntent={setupIntent ?? null}
       defaultEmail={defaultEmail}
       savedMethod={savedMethod}
+      savedMethodFailed={savedMethodFailed}
       companyAddress={companyAddress}
     />
   )

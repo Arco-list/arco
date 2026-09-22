@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react"
 import { useTranslations } from "next-intl"
-import { Check, CreditCard, Landmark, Lock, Repeat, Wallet, X } from "lucide-react"
+import { AlertCircle, Check, CreditCard, Landmark, Lock, Repeat, Wallet, X } from "lucide-react"
 
 import { AddressLookup } from "@/components/address-lookup"
 import { FormSelect } from "@/components/form-select"
@@ -109,6 +109,7 @@ export function CheckoutClient({
   resumeSetupIntent = null,
   defaultEmail,
   savedMethod,
+  savedMethodFailed = false,
   companyAddress,
 }: {
   interval: "month" | "year"
@@ -124,6 +125,11 @@ export function CheckoutClient({
    *  subscription does not revoke one, so a returning customer is
    *  still authorised and should not be asked twice. */
   savedMethod: string | null
+  /** The last subscription ended because this mandate stopped
+   *  collecting. Still offered, because the account may simply have
+   *  been short for a day and only its owner knows — but marked, and
+   *  never the default. */
+  savedMethodFailed?: boolean
   /** The address on the company's own page. A fixture used to stand in
    *  for it, so the checkout stated an address the buyer had never
    *  given — on the document they would later have to file. */
@@ -136,7 +142,7 @@ export function CheckoutClient({
   const [cycle, setCycle] = useState<"month" | "year">(interval)
   // A known mandate leads: for anyone who has one, the rest of this
   // form is optional.
-  const [method, setMethod] = useState<Method>(savedMethod ? "saved" : "ideal")
+  const [method, setMethod] = useState<Method>(savedMethod && !savedMethodFailed ? "saved" : "ideal")
   const usingSaved = method === "saved"
   const [business, setBusiness] = useState(true)
   const [vatNumber, setVatNumber] = useState("")
@@ -446,12 +452,20 @@ export function CheckoutClient({
                 <button
                   type="button"
                   onClick={() => setMethod("saved")}
-                  className={`status-modal-option checkout-method-saved${usingSaved ? " selected" : ""}`}
+                  className={`status-modal-option checkout-method-saved${usingSaved ? " selected" : ""}${
+                    savedMethodFailed ? " checkout-method-saved--failed" : ""
+                  }`}
                 >
-                  <Wallet size={18} strokeWidth={1.5} className="checkout-method-icon" />
+                  {savedMethodFailed
+                    ? <AlertCircle size={18} strokeWidth={1.5} className="checkout-method-icon" />
+                    : <Wallet size={18} strokeWidth={1.5} className="checkout-method-icon" />}
                   <div className="status-modal-option-text">
-                    <span className="status-modal-option-label">{t("saved_method")}</span>
-                    <span className="status-modal-option-desc">{savedMethod} — niets in te vullen</span>
+                    <span className="status-modal-option-label">
+                      {t(savedMethodFailed ? "saved_method_failed" : "saved_method")}
+                    </span>
+                    <span className="status-modal-option-desc">
+                      {t(savedMethodFailed ? "saved_method_failed_desc" : "saved_method_desc", { method: savedMethod })}
+                    </span>
                   </div>
                 </button>
               )}
@@ -547,8 +561,11 @@ export function CheckoutClient({
               )}
 
               {usingSaved && (
+                // Chosen deliberately now that it is not the default,
+                // so the note says what that choice means rather than
+                // reassuring them about a mandate that just failed.
                 <p className="form-note" style={{ margin: "0 0 4px" }}>
-                  We gebruiken de machtiging die je eerder gaf.
+                  {t(savedMethodFailed ? "saved_note_failed" : "saved_note")}
                 </p>
               )}
 
