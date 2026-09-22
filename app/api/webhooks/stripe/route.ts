@@ -6,6 +6,8 @@ import { logger } from "@/lib/logger"
 import { stripeGet } from "@/lib/stripe/rest"
 import { mirrorSubscription, type StripeSubscription } from "@/lib/subscriptions/mirror"
 import { subscribeFromSetupIntent } from "@/lib/subscriptions/subscribe-from-setup"
+import { getCompanyBilling } from "@/lib/subscriptions/get-company-subscription"
+import { enforceCreditAllowance } from "@/lib/subscriptions/enforce-credit-allowance"
 import {
   cancelUnpaidFirstPeriod,
   forgiveOutstandingInvoices,
@@ -70,14 +72,28 @@ function verifySignature(payload: string, header: string | null, secret: string)
 }
 
 export async function POST(request: NextRequest) {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim()
-  if (!secret) {
+  // More than one secret, because more than one sender is legitimate.
+  //
+  // A configured endpoint signs with the secret Stripe shows in the
+  // dashboard; `stripe listen` signs with its own. Holding one meant
+  // swapping the value and restarting to move between them, so a
+  // deployed endpoint and a local listener could never both work.
+  //
+  // Comma-separated, tried in turn. Each is still verified in full:
+  // this widens who may sign, not what counts as a signature.
+  const secrets = (process.env.STRIPE_WEBHOOK_SECRET ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+
+  if (secrets.length === 0) {
     logger.error("Stripe webhook called without STRIPE_WEBHOOK_SECRET set", {})
     return NextResponse.json({ error: "not_configured" }, { status: 500 })
   }
 
   const payload = await request.text()
-  if (!verifySignature(payload, request.headers.get("stripe-signature"), secret)) {
+  const stripeSignature = request.headers.get("stripe-signature")
+  if (!secrets.some((secret) => verifySignature(payload, stripeSignature, secret))) {
     // Unsigned or stale: 400, never 500 — a retry would not help.
     return NextResponse.json({ error: "bad_signature" }, { status: 400 })
   }
@@ -127,6 +143,19 @@ export async function POST(request: NextRequest) {
       case "customer.subscription.deleted": {
         const subscription = event.data.object as unknown as StripeSubscription
         await mirrorSubscription(supabase, subscription)
+
+        // Whatever the plan now allows, make it true.
+        //
+        // Not only on `deleted`: a subscription that lapses to unpaid,
+        // or is downgraded, loses its entitlement without any event
+        // called "deleted". Asked after the mirror, so the billing it
+        // reads is the one Stripe just described, and cheap when
+        // nothing is over the line — which is almost always.
+        const companyForCredits = subscription.metadata?.company_id
+        if (companyForCredits) {
+          const billing = await getCompanyBilling(companyForCredits)
+          if (billing.plan !== "pro") await enforceCreditAllowance(companyForCredits)
+        }
 
         // Remembered after the mirror, so the row exists to look the
         // company up from, and only for Stripe's own cancellations —

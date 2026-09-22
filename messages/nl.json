@@ -1194,7 +1194,7 @@
     "credit_growth_title": "Wil je meer projecten op je pagina?",
     "credit_growth_body": "Alleen de eigenaar van een project — meestal de architect — kan het publiceren. Vraag hen om jouw bedrijf op het project te vermelden; het verschijnt dan vanzelf hier.",
     "plan_limit_title": "Meer projecten op je pagina",
-    "plan_limit_body": "Op Gratis staat één project op je bedrijfspagina. Je bent op {count} projecten vermeld. Met Pro staan ze er allemaal op.",
+    "plan_limit_body": "Met Gratis staat één project op je bedrijfspagina. Je bent op {count} projecten vermeld. Met Pro staan ze er allemaal op.",
     "plan_limit_cta": "Upgrade naar Pro",
     "close": "Sluiten",
     "billing": {
