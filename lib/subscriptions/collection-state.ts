@@ -30,6 +30,10 @@ export type CollectionState =
   /** Money is owed and nothing is travelling towards it. */
   | "failing"
 
+function isRepairPending(until: string | null | undefined): boolean {
+  return Boolean(until && new Date(until).getTime() > Date.now())
+}
+
 /** An invoice that is owed and that no payment is travelling towards. */
 export function hasUnpaidInvoice(invoices: readonly InvoiceSummary[]): boolean {
   // `processing` is money already on its way — a SEPA debit takes days.
@@ -41,6 +45,9 @@ export function hasUnpaidInvoice(invoices: readonly InvoiceSummary[]): boolean {
 export function collectionState(
   status: string | null | undefined,
   invoices: readonly InvoiceSummary[],
+  /** From the billing object: while in the future, a repair payment is
+   *  in transit and `unpaid` means "being paid", not "abandoned". */
+  collectionPendingUntil?: string | null,
 ): CollectionState {
   // A stuck invoice outranks everything. Even mid-debit on another one,
   // this is money owed that nothing is being done about.
@@ -51,9 +58,27 @@ export function collectionState(
   // bookkeeping, not the reader's situation.
   if (invoices.some((inv) => inv.processing)) return "processing"
 
-  // The status says trouble and no invoice explains it. Rare, and
-  // warning is the safe way to be wrong.
-  if (status === "past_due" || status === "unpaid") return "failing"
+  // Nothing owed in the invoices, so nothing is owed.
+  //
+  // The two sources are not equally trustworthy and it matters which
+  // wins. Invoices are fetched live from Stripe on every render; the
+  // status is a row in our own table that only learns of a recovery
+  // when a webhook arrives. A debit that clears leaves the invoice
+  // reading `paid` immediately and the mirror reading `past_due` until
+  // Stripe gets through to us — which on a developer's machine is
+  // never. Believing the mirror there put "Betaling openstaand" above
+  // a table of paid invoices.
+  //
+  // `unpaid` is the exception, because it normally costs the reader
+  // something: access is back to Free. Leaving that unexplained is
+  // worse than a warning that turns out to be stale.
+  //
+  // Unless a repair is in transit — then access was never taken away,
+  // and the same grant that decides that has to decide this too. Read
+  // apart, they produced the state this guards against: the plan
+  // reading Pro beside a red "Niet betaald", in the window between a
+  // debit landing and Stripe telling us so.
+  if (status === "unpaid" && !isRepairPending(collectionPendingUntil)) return "failing"
 
   return "settled"
 }
@@ -68,6 +93,7 @@ export function collectionState(
 export function isCollectionFailing(
   status: string | null | undefined,
   invoices: readonly InvoiceSummary[],
+  collectionPendingUntil?: string | null,
 ): boolean {
-  return collectionState(status, invoices) === "failing"
+  return collectionState(status, invoices, collectionPendingUntil) === "failing"
 }

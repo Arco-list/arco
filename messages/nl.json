@@ -1249,7 +1249,7 @@
       "invoice_status_paid": "Betaald",
       "invoice_status_open": "Openstaand",
       "invoice_status_processing": "In behandeling",
-      "invoice_status_void": "Vervallen",
+      "invoice_status_void": "Geannuleerd",
       "invoice_status_uncollectible": "Oninbaar",
       "back_to_overview": "Terug naar overzicht",
       "current_plan_button": "Huidig abonnement",
@@ -1353,9 +1353,6 @@
       "identity_title": "Factuurgegevens",
       "identity_intro": "Deze gegevens komen op je factuur te staan. Ze staan los van het adres op je bedrijfspagina.",
       "identity_company": "Bedrijfsnaam",
-      "identity_street": "Straat en huisnummer",
-      "identity_postcode": "Postcode",
-      "identity_city": "Plaats",
       "identity_vat": "Btw-nummer",
       "identity_optional": "(optioneel)",
       "identity_save": "Opslaan",
@@ -1367,7 +1364,10 @@
       "still_open_body": "De openstaande factuur konden we er nog niet mee innen. Controleer of de gegevens kloppen, of probeer een andere betaalmethode.",
       "status_processing": "Betaling in behandeling",
       "processing_body": "Je betaling is onderweg. Een SEPA-incasso duurt een paar werkdagen; je houdt intussen volledige toegang.",
-      "identity_vat_invalid": "Dit lijkt geen geldig btw-nummer. Een Nederlands nummer ziet eruit als NL123456789B01."
+      "identity_vat_invalid": "Dit lijkt geen geldig btw-nummer. Een Nederlands nummer ziet eruit als NL123456789B01.",
+      "identity_address": "Adres",
+      "identity_address_placeholder": "Straat en huisnummer",
+      "identity_address_change": "Wijzigen"
     },
     "pricing_current_badge": "Huidig",
     "pricing_your_plan": "Je huidige abonnement",
@@ -2300,6 +2300,7 @@
     "promo_unknown": "Deze code kennen we niet, of hij geldt niet voor dit abonnement.",
     "yearly_saving": "Je bespaart {amount} ten opzichte van maandelijks betalen.",
     "err_vat": "Dit lijkt geen geldig btw-nummer. Een Nederlands nummer ziet eruit als NL123456789B01.",
-    "free_activation_note": "Pro staat vanaf nu aan, gratis tot {until}, en stopt daarna vanzelf."
+    "free_activation_note": "Pro staat vanaf nu aan, gratis tot {until}, en stopt daarna vanzelf.",
+    "err_payment_declined": "Je betaling is geweigerd. Controleer de gegevens of probeer een andere betaalmethode."
   }
 }

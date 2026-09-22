@@ -41,7 +41,7 @@ export default async function PaymentMethodPage({
   const { data: row } = company
     ? await service
         .from("subscriptions" as never)
-        .select("stripe_customer_id, status")
+        .select("stripe_customer_id, status, collection_pending_until")
         .eq("company_id", company.id)
         .maybeSingle()
     : { data: null }
@@ -59,8 +59,15 @@ export default async function PaymentMethodPage({
   // The same question the subscription screen asks, asked the same way:
   // this page is where that reader is sent, so it must not greet them
   // as a routine change.
-  const status = (row as { status?: string } | null)?.status
-  const collectionFailed = isCollectionFailing(status, details?.invoices ?? [])
+  const mirrored = row as { status?: string; collection_pending_until?: string | null } | null
+  const status = mirrored?.status
+  // Including the grant, so this page cannot offer to repair something
+  // that is already being paid for.
+  const collectionFailed = isCollectionFailing(
+    status,
+    details?.invoices ?? [],
+    mirrored?.collection_pending_until,
+  )
 
   return (
     <PaymentMethodClient

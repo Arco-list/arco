@@ -20,6 +20,7 @@ export const PREVIEW_STATES = [
   "free_contributor",
   "pro_month",
   "pro_year",
+  "processing",
   "past_due",
   "unpaid",
   "canceling",
@@ -34,6 +35,7 @@ export const PREVIEW_LABELS: Record<PreviewState, string> = {
   free_contributor: "Free · contributor",
   pro_month: "Pro · monthly",
   pro_year: "Pro · yearly",
+  processing: "Payment in progress",
   past_due: "Past due",
   unpaid: "Unpaid",
   canceling: "Cancelling",
@@ -46,6 +48,7 @@ export const PREVIEW_NOTES: Record<PreviewState, string> = {
   free_contributor: "A photographer or kitchen builder: cannot publish, lives entirely off credits. One bar, 5 of 6 locked.",
   pro_month: "€49 a month. On Pro the split stops meaning anything, so the two bars become one.",
   pro_year: "The state we steer people to: €468 a year by direct debit.",
+  processing: "A SEPA debit on its way — days in transit and nothing wrong. The state the banner used to call \"openstaand\" because Stripe marks the subscription past_due while it travels.",
   past_due: "A collection that failed. The company keeps access while dunning runs (D6).",
   unpaid: "Dunning has run out. Access is back to Free, the subscription is still there, and the open invoice is the way back.",
   canceling: "Cancelled but still inside the paid period. Access holds until the end date.",
@@ -66,6 +69,7 @@ const base: CompanyBilling = {
   stripeCustomerId: null,
   stripeSubscriptionId: null,
   foundingClaimedAt: null,
+  collectionPendingUntil: null,
 }
 
 export function previewBilling(state: PreviewState): CompanyBilling {
@@ -82,6 +86,16 @@ export function previewBilling(state: PreviewState): CompanyBilling {
         interval: "month", currentPeriodEnd: daysFromNow(17),
         stripeCustomerId: "cus_preview", stripeSubscriptionId: "sub_preview",
       }
+    case "processing":
+      return {
+        ...base, plan: "pro", source: "subscription", status: "unpaid",
+        interval: "year", currentPeriodEnd: daysFromNow(300),
+        // The grant that makes this state coherent: Stripe still reads
+        // unpaid, the money is on its way, and access holds until it
+        // lands or the deadline runs out.
+        collectionPendingUntil: daysFromNow(9),
+      }
+
     case "past_due":
       return {
         ...base, plan: "pro", source: "subscription", status: "past_due",
@@ -171,10 +185,15 @@ export function previewBillingDetails(state: PreviewState): BillingDetails {
       total: amount,
       // The most recent one carries the state being previewed; the rest
       // are settled history.
-      status: i === 0 && (state === "past_due" || state === "unpaid") ? "open" : "paid",
-      // past_due is a collection still being retried, so its open
-      // invoice has money on the way; unpaid has run out of attempts.
-      processing: i === 0 && state === "past_due",
+      status: i === 0 && (state === "past_due" || state === "unpaid" || state === "processing")
+        ? "open"
+        : "paid",
+      // Only the state that is actually about a payment in transit.
+      // past_due means the last attempt FAILED and the next is days
+      // away; unpaid means they have run out. Marking past_due as
+      // processing made that preview render "Betaling in behandeling"
+      // — the opposite of the failed collection it exists to show.
+      processing: i === 0 && state === "processing",
       // A fixture has no hosted invoice, so the link goes nowhere on
       // purpose. It is still rendered for an open one: the action is
       // part of what these two states are being previewed for, and a

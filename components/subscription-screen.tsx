@@ -16,6 +16,7 @@ import type { BillingDetails } from "@/lib/subscriptions/billing-details-types"
 import { PREVIEW_LABELS, PREVIEW_STATES } from "@/lib/subscriptions/preview-states"
 import { collectionState, hasUnpaidInvoice } from "@/lib/subscriptions/collection-state"
 import { isValidVatNumber } from "@/lib/subscriptions/vat-number"
+import { AddressLookup } from "@/components/address-lookup"
 import { AdminTabs } from "@/components/admin/admin-tabs"
 import { PricingSection } from "@/components/pricing-section"
 import { UsageBar } from "@/components/usage-bar"
@@ -139,6 +140,7 @@ export function SubscriptionScreen({
   // a guess dressed as a fact, and it appeared above a form the reader
   // then had to search for the offending field.
   const [identityVatError, setIdentityVatError] = useState<string | null>(null)
+  const [editingAddress, setEditingAddress] = useState(false)
   const [identity, setIdentity] = useState({
     companyName: details.identity?.companyName ?? "",
     line1: details.identity?.line1 ?? "",
@@ -272,8 +274,23 @@ export function SubscriptionScreen({
   // The same three states the invoice table renders per row. The banner
   // used to derive its own answer and contradict the table above which
   // it sits: "Betaling openstaand" over a row reading "In behandeling".
-  const collection = collectionState(billing.status, details.invoices)
-  const collectionFailed = collection === "failing"
+  const collection = collectionState(billing.status, details.invoices, billing.collectionPendingUntil)
+  // A warning about collection only belongs to a subscription there is
+  // something to collect FOR. An invoice can sit open with no live
+  // subscription behind it — a first payment declined, or one cancelled
+  // at the end of dunning before its invoice was withdrawn — and there
+  // the banner offered "Betaalgegevens bijwerken", which led to a page
+  // that refuses outright: there is no subscription to move a mandate
+  // onto. A button that cannot do what it says is worse than no button,
+  // so this state falls through to the ordinary upgrade path, which is
+  // what the reader actually needs to do.
+  const hasLiveSubscription = billing.source === "subscription"
+  // Gated once, here, rather than at each of the four places that read
+  // it — the pill, the sentence, the button and the destination. Those
+  // four have to agree, and asking the same question four times is how
+  // they stop agreeing.
+  const collectionShown = hasLiveSubscription ? collection : "settled"
+  const collectionFailed = collectionShown === "failing"
 
   // One line describing where they stand. Deliberately concrete: a date
   // beats the word "active".
@@ -306,14 +323,14 @@ export function SubscriptionScreen({
     // is true of the date and silent about the change.
     // A debit in flight outranks the renewal date: the reader is
     // waiting on this week, not on next year.
-    : collection === "processing" ? tb("processing_body")
+    : collectionShown === "processing" ? tb("processing_body")
     // Unpaid is not a renewal date. Saying "wordt verlengd op" about a
     // subscription whose access has just been withdrawn describes a
     // future that is not going to happen unless something is done.
     : billing.status === "unpaid" ? tb("unpaid_body")
     // Still entitled, but something is owed. The renewal date is true
     // and beside the point.
-    : unpaidInvoice ? tb("open_invoice_body")
+    : unpaidInvoice && hasLiveSubscription ? tb("open_invoice_body")
     : renewal && scheduledSwitch
       ? tb(scheduledSwitch.interval === "month" ? "renews_body_switching_month" : "renews_body_switching_year", { date: renewal })
     : renewal ? tb(currentInterval === "month" ? "renews_body_month" : "renews_body_year", { date: renewal })
@@ -519,12 +536,12 @@ export function SubscriptionScreen({
                       {tb("pill_ends", { date: renewal })}
                     </span>
                   )}
-                  {collection === "failing" && (
+                  {collectionShown === "failing" && (
                     <span className="status-pill status-pill--tinted status-pill--ending shrink-0">
                       {tb(billing.status === "unpaid" ? "status_unpaid" : "status_past_due")}
                     </span>
                   )}
-                  {collection === "processing" && (
+                  {collectionShown === "processing" && (
                     <span className="status-pill status-pill--tinted status-pill--neutral shrink-0">
                       {tb("status_processing")}
                     </span>
@@ -700,7 +717,7 @@ export function SubscriptionScreen({
                   knows this company — before that there is no document
                   to be wrong about. */}
               {isOwner && billing.stripeCustomerId && (
-                <div className="billing-row">
+                <div className="billing-row billing-row--single-line">
                   <span style={{ fontSize: 14, display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                     <FileText size={16} strokeWidth={1.5} style={{ color: "var(--arco-mid)", flexShrink: 0 }} />
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -819,7 +836,20 @@ export function SubscriptionScreen({
                     // other facts that do. Amber was a warning about
                     // something that might go wrong; this one already
                     // has.
-                    color: inv.status === "paid" || inv.processing
+                    //
+                    // `void` is not one of those, though it used to be
+                    // drawn as one. A voided invoice was withdrawn
+                    // before payment — nothing is owed on it and
+                    // nothing ever was — and Stripe issues them on its
+                    // own whenever a subscription is cancelled with an
+                    // unpaid invoice, so a real customer meets one. In
+                    // red, directly under an invoice that genuinely is
+                    // owed, it read as a second debt. It stays in the
+                    // list because it may already have been emailed and
+                    // its cancellation is the news; it just isn't a
+                    // demand. `uncollectible` keeps the red: there the
+                    // money was owed and never came.
+                    color: inv.status === "paid" || inv.status === "void" || inv.processing
                       ? "var(--text-secondary)"
                       : "var(--destructive)",
                   }}>
@@ -1037,12 +1067,12 @@ export function SubscriptionScreen({
 
       {editIdentity && (
         <div className="popup-overlay"
-          onClick={() => { if (!pending) { setEditIdentity(false); setIdentityVatError(null) } }}>
+          onClick={() => { if (!pending) { setEditIdentity(false); setIdentityVatError(null); setEditingAddress(false) } }}>
           <div className="popup-card" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
             <div className="popup-header">
               <h3 className="arco-section-title">{tb("identity_title")}</h3>
               <button type="button" className="popup-close"
-                onClick={() => { setEditIdentity(false); setIdentityVatError(null) }}
+                onClick={() => { setEditIdentity(false); setIdentityVatError(null); setEditingAddress(false) }}
                 aria-label={tb("method_close")}>✕</button>
             </div>
             <p className="arco-small-text" style={{ margin: "0 0 20px" }}>{tb("identity_intro")}</p>
@@ -1051,22 +1081,47 @@ export function SubscriptionScreen({
             <input id="bi-name" className="form-input" value={identity.companyName}
               onChange={(e) => setIdentity((v) => ({ ...v, companyName: e.target.value }))} />
 
-            <label className="form-label" htmlFor="bi-line1">{tb("identity_street")}</label>
-            <input id="bi-line1" className="form-input" value={identity.line1}
-              onChange={(e) => setIdentity((v) => ({ ...v, line1: e.target.value }))} />
-
-            <div className="form-row">
-              <div>
-                <label className="form-label" htmlFor="bi-zip">{tb("identity_postcode")}</label>
-                <input id="bi-zip" className="form-input" value={identity.postalCode}
-                  onChange={(e) => setIdentity((v) => ({ ...v, postalCode: e.target.value }))} />
+            <label className="form-label">{tb("identity_address")}</label>
+            {/* Stated, with a way in — not a search box the reader has
+                to answer. Someone who opened this dialog to correct a
+                VAT number did not come to re-pick their address, and a
+                lookup standing where a known address should be makes
+                them do exactly that. Empty, it opens as the search,
+                because "Wijzigen" over nothing is a button to nowhere. */}
+            {identity.line1 && !editingAddress ? (
+              <div className="checkout-address">
+                <div style={{ minWidth: 0 }}>
+                  <span className="checkout-address-line">{identity.line1}</span>
+                  <span className="checkout-address-sub">
+                    {[identity.postalCode, identity.city].filter(Boolean).join(" · ")}
+                  </span>
+                </div>
+                <button type="button" className="arco-text-link" onClick={() => setEditingAddress(true)}>
+                  {tb("identity_address_change")}
+                </button>
               </div>
+            ) : (
               <div>
-                <label className="form-label" htmlFor="bi-city">{tb("identity_city")}</label>
-                <input id="bi-city" className="form-input" value={identity.city}
-                  onChange={(e) => setIdentity((v) => ({ ...v, city: e.target.value }))} />
+                <AddressLookup
+                  placeholder={tb("identity_address_placeholder")}
+                  country="NL"
+                  inputClassName="form-input"
+                  onResolved={(r) => {
+                    setIdentity((v) => ({
+                      ...v,
+                      line1: r.streetAddress,
+                      // Straight from the resolver's own field. The
+                      // checkout dug it out of the formatted line with
+                      // a regex, which only ever matched the Dutch
+                      // shape and returned nothing elsewhere.
+                      postalCode: r.postalCode ?? "",
+                      city: r.city ?? "",
+                    }))
+                    setEditingAddress(false)
+                  }}
+                />
               </div>
-            </div>
+            )}
 
             <label className="form-label" htmlFor="bi-vat">
               {tb("identity_vat")} <span style={{ color: "var(--arco-mid-grey)", fontWeight: 400 }}>{tb("identity_optional")}</span>
@@ -1075,7 +1130,7 @@ export function SubscriptionScreen({
               placeholder="NL123456789B01" value={identity.vatNumber}
               onChange={(e) => {
                 setIdentity((v) => ({ ...v, vatNumber: e.target.value }))
-                setIdentityVatError(null)
+                setIdentityVatError(null); setEditingAddress(false)
               }}
               style={{ marginBottom: identityVatError ? 0 : 24 }} />
             {identityVatError && (
@@ -1084,7 +1139,7 @@ export function SubscriptionScreen({
 
             <div className="popup-actions">
               <button type="button" className="btn-tertiary" style={{ flex: 1 }}
-                onClick={() => { setEditIdentity(false); setIdentityVatError(null) }} disabled={pending}>
+                onClick={() => { setEditIdentity(false); setIdentityVatError(null); setEditingAddress(false) }} disabled={pending}>
                 {tb("cancel_confirm_keep")}
               </button>
               <button type="button" className="btn-primary" style={{ flex: 1 }}

@@ -234,6 +234,23 @@ export async function replacePaymentMethodAction(
           )
           await mirrorSubscription(service, refreshed)
         }
+        // Written after the mirror, which would otherwise overwrite it:
+        // mirrorSubscription upserts the whole row from Stripe, and
+        // Stripe still reads `unpaid` while the debit travels.
+        //
+        // Ten days, not five. A SEPA debit takes two to five working
+        // days and a long weekend is not the reader's fault; being a
+        // few days generous costs one billing period of access at
+        // worst, while being short takes the product away from someone
+        // who did everything asked of them.
+        if (paid.status !== "paid") {
+          const until = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString()
+          await service
+            .from("subscriptions" as never)
+            .update({ collection_pending_until: until } as never)
+            .eq("company_id", resolved.companyId)
+        }
+
         // Reported rather than assumed: the invoice itself says whether
         // the money arrived or is on its way.
         return { ok: true, outcome: paid.status === "paid" ? "settled" : "collecting" }

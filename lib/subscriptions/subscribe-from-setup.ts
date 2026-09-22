@@ -6,6 +6,7 @@ import { priceId, taxRateId, isStripeConfigured, stripeGet, stripePost } from "@
 import { mirrorSubscription, type StripeSubscription } from "@/lib/subscriptions/mirror"
 import { LIVE_STATUSES, hasLiveSubscription, type Failure } from "@/lib/subscriptions/live-status"
 import { setDefaultPaymentMethod } from "@/lib/subscriptions/set-default-method"
+import { cancelUnpaidFirstPeriod } from "@/lib/subscriptions/nonpayment"
 
 /**
  * Turn a completed mandate into a subscription.
@@ -88,6 +89,52 @@ export async function subscribeFromSetupIntent(
     // Written here rather than waiting for the webhook: the reader is
     // looking at the page now. The webhook confirms the same row later.
     await mirrorSubscription(createServiceRoleSupabaseClient(), subscription)
+
+    // A subscription exists, and it is not a sale. `incomplete` means
+    // the first charge was refused — a declined card, most often — and
+    // the reader is standing in front of the form that can fix it.
+    //
+    // Reported as a failure because the alternative is what it did
+    // before: the page took any non-error as success, sent them to the
+    // subscription screen and congratulated them on Pro, while the
+    // banner behind the dialog already read Gratis. The subscription
+    // itself is cleaned up by the webhook, which cancels a first
+    // period that was never paid for.
+    //
+    // SEPA does not land here. A debit in transit reports `processing`
+    // on the payment and leaves the subscription past_due, which is a
+    // real sale that simply has not settled.
+    if (subscription.status === "incomplete" || subscription.status === "incomplete_expired") {
+      logger.warn("First payment was declined", {
+        companyId: resolved.companyId,
+        subscriptionId: subscription.id,
+      })
+      // Withdrawn here, not left to the webhook.
+      //
+      // The invoice cannot be avoided — Stripe issues one as part of
+      // creating a subscription, and there is no way to ask for a
+      // subscription without it. Leaving it is avoidable, and we were
+      // not avoiding it: a declined card left a subscription reading
+      // `incomplete` and a bill reading `openstaand` on the reader's
+      // invoice list, for a purchase that never happened.
+      //
+      // The webhook does the same thing on invoice.payment_failed, so
+      // this is a duplicate — deliberately. That path is the safety net
+      // for a decline that happens away from the browser; this one runs
+      // while the reader is still on the page, and it is the difference
+      // between never seeing the stray invoice and seeing it until an
+      // event is delivered. Both are idempotent.
+      // The instrument decides whether this leaves a trace. Read
+      // now, while the payment method still exists and says what it
+      // is — cancelling the subscription cancels its payment intent,
+      // and after that a declined card looks exactly like a failed
+      // direct debit.
+      const method = await stripeGet<{ type?: string }>(
+        `/payment_methods/${intent.payment_method}`,
+      ).catch(() => null)
+      await cancelUnpaidFirstPeriod(customerId, subscription.id, method?.type)
+      return { error: "payment_declined" }
+    }
 
     return { status: subscription.status }
   } catch (err) {

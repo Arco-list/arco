@@ -96,6 +96,7 @@ const OUR_CODES = [
   "not_ready",
   "already_subscribed",
   "failed",
+  "payment_declined",
 ]
 
 const euro = (cents: number) =>
@@ -636,10 +637,13 @@ export function CheckoutClient({
                     country={country}
                     inputClassName="form-input"
                     onResolved={(r) => {
-                      // The resolver carries no postcode of its own; the
-                      // formatted line does, and an invoice wants it.
-                      const postalCode = r.formattedAddress.match(/\b\d{4}\s?[A-Z]{2}\b/)?.[0] ?? null
-                      setAddress({ streetAddress: r.streetAddress, city: r.city ?? "", postalCode })
+                      // The resolver does carry one — it reads the
+                      // postal_code component straight off the place.
+                      // This used to dig it out of the formatted line
+                      // with a regex shaped like a Dutch postcode,
+                      // which found nothing anywhere else and could
+                      // match the wrong run of characters at home.
+                      setAddress({ streetAddress: r.streetAddress, city: r.city ?? "", postalCode: r.postalCode })
                       setFieldErrors((prev) => ({ ...prev, address: null }))
                     }}
                   />

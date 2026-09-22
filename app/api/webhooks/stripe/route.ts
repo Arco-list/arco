@@ -6,6 +6,12 @@ import { logger } from "@/lib/logger"
 import { stripeGet } from "@/lib/stripe/rest"
 import { mirrorSubscription, type StripeSubscription } from "@/lib/subscriptions/mirror"
 import { subscribeFromSetupIntent } from "@/lib/subscriptions/subscribe-from-setup"
+import {
+  cancelUnpaidFirstPeriod,
+  forgiveOutstandingInvoices,
+  isNonpaymentCancellation,
+  recordNonpaymentCancellation,
+} from "@/lib/subscriptions/nonpayment"
 
 /**
  * Stripe webhook — the only thing that writes a subscription.
@@ -119,7 +125,27 @@ export async function POST(request: NextRequest) {
       case "customer.subscription.created":
       case "customer.subscription.updated":
       case "customer.subscription.deleted": {
-        await mirrorSubscription(supabase, event.data.object as unknown as StripeSubscription)
+        const subscription = event.data.object as unknown as StripeSubscription & {
+          cancellation_details?: { reason?: string | null } | null
+        }
+        await mirrorSubscription(supabase, subscription)
+
+        // Remembered after the mirror, so the row exists to look the
+        // company up from, and only for Stripe's own cancellations —
+        // somebody who chooses to leave has not done anything that
+        // should follow them back.
+        if (
+          event.type === "customer.subscription.deleted" &&
+          isNonpaymentCancellation(subscription.cancellation_details?.reason)
+        ) {
+          const companyId = subscription.metadata?.company_id
+          if (companyId) await recordNonpaymentCancellation(supabase, companyId)
+          // And forgive what it billed. Stripe's account setting has
+          // already marked the invoice uncollectible by now, which is
+          // the safe resting place if this never runs — but it reads as
+          // a debt we gave up on, and we mean to withdraw it.
+          if (subscription.customer) await forgiveOutstandingInvoices(subscription.customer)
+        }
         break
       }
 
@@ -160,10 +186,29 @@ export async function POST(request: NextRequest) {
       case "invoice.payment_failed": {
         // The invoice moves the subscription's status (active ⇄
         // past_due), and that status is what the product reads.
-        const subscriptionId = (event.data.object as { subscription?: string }).subscription
+        const invoice = event.data.object as { subscription?: string; customer?: string }
+        const subscriptionId = invoice.subscription
         if (subscriptionId) {
           const subscription = await stripeGet<StripeSubscription>(`/subscriptions/${subscriptionId}`)
           await mirrorSubscription(supabase, subscription)
+
+          // A first payment that fails ends the subscription here,
+          // rather than after three weeks of retries. Read from our own
+          // row and after the mirror above, so `first_payment_at`
+          // reflects everything Stripe has told us: unset means this
+          // subscription has never once been paid for, and there is
+          // nothing for dunning to recover.
+          if (event.type === "invoice.payment_failed" && invoice.customer) {
+            const { data: row } = await supabase
+              .from("subscriptions" as never)
+              .select("first_payment_at")
+              .eq("stripe_subscription_id" as never, subscriptionId as never)
+              .maybeSingle()
+            const everPaid = (row as { first_payment_at?: string | null } | null)?.first_payment_at
+            if (!everPaid) {
+              await cancelUnpaidFirstPeriod(invoice.customer, subscriptionId)
+            }
+          }
         }
         break
       }

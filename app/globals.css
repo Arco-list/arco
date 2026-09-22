@@ -6826,6 +6826,17 @@ body.no-scroll {
   gap: 10px 16px;
   padding: 14px 0;
   border-bottom: 1px solid var(--arco-light-grey);
+  /* Equal rows whether or not this one carries a button. The cycle row
+     loses its button once a switch is scheduled, and it then collapsed
+     to the height of its own text — a shorter row in the middle of a
+     section whose whole job is to read as a list.
+
+     34px is the button's box (13px text, 8px padding and a 1px border,
+     doubled) and 28px the row's own padding. Erring high is harmless:
+     once min-height clears the tallest natural row, every row renders
+     at exactly this, so the rhythm holds either way. A row that wraps
+     on a narrow screen still grows past it. */
+  min-height: 62px;
 }
 /* The fact takes the space and the button follows it to the right
    edge. Keyed on the first child, not the last: a row whose button is
@@ -6836,6 +6847,18 @@ body.no-scroll {
 /* Only what follows the fact: room to breathe once it stands alone on
    a wrapped line, and no label broken across two. */
 .billing-row > :first-child ~ * { white-space: nowrap; }
+
+/* A row whose text already truncates never needs a second line. The
+   company row carries a name and a full address, ellipsised at
+   whatever width is left; on a phone the pair still measured wider
+   than the screen, so the row wrapped and dropped the button beneath
+   an already-shortened sentence — two lines spent saying what one had
+   room for.
+
+   Not the default, because the cycle row is the opposite case: a whole
+   sentence that wraps on purpose, and squeezing it beside a button
+   would stack it four lines tall to keep them level. */
+.billing-row--single-line { flex-wrap: nowrap; }
 
 /* ── Invoice table ────────────────────────────────────────────────
    Four columns hold on a desktop and fall apart on a phone: the date

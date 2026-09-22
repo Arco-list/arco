@@ -2,6 +2,7 @@ import "server-only"
 
 import { logger } from "@/lib/logger"
 import { isStripeConfigured, stripeGet } from "@/lib/stripe/rest"
+import { HIDDEN_METADATA_KEY } from "@/lib/subscriptions/nonpayment"
 import {
   EMPTY_BILLING_DETAILS,
   type BillingDetails,
@@ -47,6 +48,7 @@ type StripeInvoice = {
   // simply means "not processing", which is the safe answer.
   payment_intent?: { status?: string } | string | null
   payments?: { data?: { payment?: { payment_intent?: { status?: string } | string | null } }[] }
+  metadata?: Record<string, string> | null
 }
 
 /** Is money for this invoice already on its way? */
@@ -133,6 +135,14 @@ export async function getBillingDetails(
         // Drafts are Stripe's scratch space — not something a customer
         // should see in their own history.
         .filter((inv) => inv.status !== "draft")
+        // A card refused in the checkout leaves a withdrawn invoice for
+        // a purchase that never happened. Three attempts would leave
+        // three, which is a record of somebody's typing rather than of
+        // their money. Marked at the moment of the refusal, because by
+        // now the invoice is indistinguishable from a failed debit —
+        // and a failed debit does belong here, since that one had money
+        // in transit for days.
+        .filter((inv) => inv.metadata?.[HIDDEN_METADATA_KEY] !== "declined_first_payment")
         .map<InvoiceSummary>((inv) => ({
           id: inv.id,
           number: inv.number,

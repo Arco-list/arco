@@ -87,6 +87,22 @@ export async function mirrorSubscription(
 
   const item = subscription.items?.data?.[0]
 
+  // "First" has to mean first. The upsert rewrites the whole row, so
+  // stamping the moment unconditionally would push the date forward on
+  // every mirror while active — a column named first_payment_at that
+  // actually held "last seen paid", which is a different fact and the
+  // wrong one for deciding whether this subscription has ever been
+  // good for its money.
+  const paidNow = subscription.status === "active" || subscription.status === "trialing"
+  const { data: existing } = paidNow
+    ? await supabase
+        .from("subscriptions" as never)
+        .select("first_payment_at")
+        .eq("company_id", companyId)
+        .maybeSingle()
+    : { data: null }
+  const alreadyPaid = (existing as { first_payment_at?: string | null } | null)?.first_payment_at
+
   // One row per company: a company has one subscription, and an upgrade
   // replaces rather than accumulates.
   const { error } = await supabase
@@ -103,6 +119,22 @@ export async function mirrorSubscription(
         cancel_at_period_end: Boolean(subscription.cancel_at_period_end),
         trial_end: toIso(subscription.trial_end),
         canceled_at: toIso(subscription.canceled_at),
+        // The grant exists only to cover the gap between a repair
+        // payment leaving and Stripe hearing that it landed. Any status
+        // but `unpaid` means that gap has closed — the money arrived,
+        // or the subscription moved on without it — and a deadline left
+        // standing would quietly re-grant Pro if the company fell back
+        // to unpaid inside the same ten days.
+        // Omitted entirely while unpaid — PostgREST builds its SET list
+        // from the keys present, so leaving it out preserves a deadline
+        // this same call would otherwise wipe on its way past.
+        ...(subscription.status === "unpaid" ? {} : { collection_pending_until: null }),
+        // Stamped once, when money first arrives, and omitted every
+        // other time so a later mirror can neither move nor wipe it. A
+        // renewal that fails takes the subscription back to past_due,
+        // and forgetting it had ever been paid would treat a two-year
+        // customer like someone who has never given us a cent.
+        ...(paidNow && !alreadyPaid ? { first_payment_at: new Date().toISOString() } : {}),
         updated_at: new Date().toISOString(),
       } as never,
       { onConflict: "company_id" },

@@ -16,7 +16,7 @@ export type Failure = {
   error:
     | "not_signed_in" | "no_company" | "not_owner" | "not_configured"
     | "failed" | "not_ready" | "already_subscribed" | "nothing_to_replace" | "no_saved_method"
-    | "nothing_to_switch" | "same_interval"
+    | "nothing_to_switch" | "same_interval" | "payment_declined"
 }
 
 /** Statuses that mean the company is already paying, or owes us. */
