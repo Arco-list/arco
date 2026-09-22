@@ -469,14 +469,51 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     }
   })
 
-  // A company is "on Arco" when it has been claimed and has a public page.
-  // Both the ordering and the card's hasPage flag key on this, so the rule
-  // lives in one place rather than being restated in two.
+  // A credit links to a company page when that page would actually show
+  // this project.
+  //
+  // Two conditions, and the second is the one that was missing. A page
+  // has to exist at all: claimed, slugged, and not hidden — an unlisted
+  // company keeps its credits but they stop being doors. And the
+  // project has to be ON that page, which is the same `live_on_page`
+  // the company page itself filters by.
+  //
+  // Without the second, a free company's credits all led to a page that
+  // showed one of them: follow the link from any of the others and the
+  // project you came for is not there, and neither is any explanation.
+  // It is also what the free allowance is FOR — with one place on the
+  // page, one credit is a working link and the rest are plain text,
+  // which is the limit made visible rather than merely counted.
+  //
+  // Owners are not special here, though it looks as if they should be:
+  // the company page shows owned and credited work through the same
+  // filter, so an owner whose own project sits at `listed` does not
+  // have it on their page either, and their credit should not pretend
+  // otherwise.
   const hasCompanyPage = (p: typeof professionals[number]) => Boolean(
     (p.companies as any)?.owner_id
     && (p.companies as any)?.slug
-    && ["listed", "prospected"].includes(String((p.companies as any)?.status)),
+    && ["listed", "prospected"].includes(String((p.companies as any)?.status))
+    && String(p.status) === "live_on_page",
   )
+
+  /**
+   * The services a credit is actually shown under.
+   *
+   * Invited services when it has any, otherwise the company's own. The
+   * eyebrow already fell back this way and the sort did not, so a
+   * credit reading "Aannemer" scored 999 and landed behind every named
+   * service — two contractors on one project, separated by a furniture
+   * maker, each sorted by a different idea of what they do.
+   */
+  const effectiveServiceIds = (p: typeof professionals[number]): string[] => {
+    const invited = (p.invited_service_category_ids as string[] | null) ?? []
+    if (invited.length > 0) return invited
+    const company = p.companies as any
+    if (company?.primary_service_id) return [company.primary_service_id]
+    if (company?.services_offered?.length) return [company.services_offered[0]]
+    return []
+  }
 
   // Format professionals data for components — project owner first
   const formattedProfessionals = professionals
@@ -492,23 +529,14 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       const bPage = hasCompanyPage(b) ? 1 : 0
       if (aPage !== bPage) return bPage - aPage
       // Then sort by primary service order
-      const aServices = (a.invited_service_category_ids as string[] | null) ?? []
-      const bServices = (b.invited_service_category_ids as string[] | null) ?? []
+      const aServices = effectiveServiceIds(a)
+      const bServices = effectiveServiceIds(b)
       const aOrder = Math.min(...aServices.map(id => categorySortOrder.get(id) ?? 999), 999)
       const bOrder = Math.min(...bServices.map(id => categorySortOrder.get(id) ?? 999), 999)
       return aOrder - bOrder
     })
     .map(p => {
-      let serviceIds = (p.invited_service_category_ids as string[] | null) ?? []
-      // Fall back to company's primary service or services_offered if no invited services set
-      if (serviceIds.length === 0) {
-        const company = p.companies as any
-        if (company?.primary_service_id) {
-          serviceIds = [company.primary_service_id]
-        } else if (company?.services_offered?.length) {
-          serviceIds = [company.services_offered[0]]
-        }
-      }
+      const serviceIds = effectiveServiceIds(p)
       // categories.name is stored in English, so the credit eyebrow has to
       // be translated for display — keyed on the slug, falling back to the
       // English name for a category with no translation yet.
@@ -558,6 +586,13 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   // covers cross-studio discovery.
   const projectOwner =
     formattedProfessionals.find((p) => p.isProjectOwner) ?? formattedProfessionals[0]
+
+  // The owner's name is always shown; whether it is a link follows the
+  // same rule as every credit below it. Read raw, companySlug pointed
+  // at a page that may be hidden, or that does not carry this project
+  // — and the attribution under a title is the most prominent link on
+  // the page to have that be untrue.
+  const ownerHref = projectOwner?.hasPage ? projectOwner.companySlug ?? null : null
 
   // "More from this owner": up to 3 other published projects from the same owning company.
   // `count: 'exact'` returns the total matching rows so we can show the
@@ -832,7 +867,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           <ProjectHeader
             title={localizedTitle}
             architectName={projectOwner?.companyName ?? null}
-            architectSlug={projectOwner?.companySlug ?? null}
+            architectSlug={ownerHref}
             description={localizedDescription}
             seoBody={localizedSeoBody}
           />
@@ -865,7 +900,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           <RelatedProjects
             projects={formattedRelatedProjects}
             architectName={projectOwner?.companyName ?? t("this_architect")}
-            architectSlug={projectOwner?.companySlug ?? null}
+            architectSlug={ownerHref}
             // Only surface the "View all →" link when the owner has
             // more projects than the 3 we render here.
             hasMore={(relatedProjectsTotal ?? 0) > formattedRelatedProjects.length}

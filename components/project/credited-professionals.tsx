@@ -105,9 +105,11 @@ export function CreditedProfessionals({ professionals }: CreditedProfessionalsPr
         <div className="credits-grid">
           {professionals.map((professional) => {
             const initials = getInitials(professional.companyName)
-            // Every credit shows the same way — service, icon, name. Only
-            // a claimed company has a page behind it, so only that one is
-            // a link; the rest are plain text rather than dead links.
+            // Every credit shows the same way — service, icon, name. A
+            // link is the exception: it needs a page to lead to AND this
+            // project to be on it, so the reader who follows it finds
+            // the work they came from. The rest are plain text rather
+            // than doors into a room that does not hold the thing.
             const href = professional.hasPage && professional.companySlug
               ? `/professionals/${professional.companySlug}`
               : null
@@ -142,10 +144,10 @@ export function CreditedProfessionals({ professionals }: CreditedProfessionalsPr
                 <h3 className="arco-label">{professional.companyName}</h3>
                 {/* The project count IS the way through to the portfolio,
                     so it carries the link instead of a separate row. */}
-                {/* Nothing to count, nothing to promise. A company that
-                    keeps every credit off its own page has a page worth
-                    visiting all the same, so the card stays a link — it
-                    just stops advertising a portfolio that is empty. */}
+                {/* Counted only where the card leads somewhere. A
+                    credit that is not a link has no page to promise a
+                    portfolio on, and a number beside a name nobody can
+                    follow is a claim with nothing behind it. */}
                 {href && professional.projectsCount > 0 && (
                   <p className="credit-card-projects">
                     {/* The label wears the hover underline on its own, so
