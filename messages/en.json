@@ -1367,7 +1367,11 @@
       "identity_vat_invalid": "This does not look like a valid VAT number. A Dutch one looks like NL123456789B01.",
       "identity_address": "Address",
       "identity_address_placeholder": "Street and number",
-      "identity_address_change": "Change"
+      "identity_address_change": "Change",
+      "cycle_keep_year": "Stay yearly",
+      "cycle_keep_month": "Stay monthly",
+      "cycle_kept": "The switch has been undone.",
+      "cycle_keep_failed": "That didn't work. Try again in a moment."
     },
     "pricing_current_badge": "Current",
     "pricing_your_plan": "Your current plan",

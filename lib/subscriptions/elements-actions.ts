@@ -452,6 +452,51 @@ export async function previewIntervalSwitchAction(
  * to someone who just pressed a button. No mandate is collected: the
  * one already on the subscription pays for it.
  */
+/**
+ * Undo a scheduled switch, leaving the subscription on the cycle it is
+ * already on.
+ *
+ * A downgrade is a schedule, not a price change: phase one is the year
+ * already paid for, phase two the monthly price that picks up when it
+ * expires. Releasing the schedule hands the subscription back with
+ * phase two never applied, so it simply carries on yearly.
+ *
+ * Until this existed the switch was a one-way door. The row lost its
+ * button the moment a switch was scheduled — correct, because offering
+ * "overstappen naar maandelijks" again would have denied what they had
+ * just done — but the reader was then held to the decision for as long
+ * as a year, with nothing on the page to change it back.
+ */
+export async function cancelScheduledSwitchAction(): Promise<{ ok: true } | Failure> {
+  if (!isStripeConfigured()) return { error: "not_configured" }
+
+  const resolved = await resolveOwnedCompany()
+  if ("error" in resolved) return { error: resolved.error }
+
+  try {
+    const current = await liveSubscriptionItem(resolved.companyId)
+    if (!current) return { error: "nothing_to_switch" }
+
+    const subscription = await stripeGet<{ schedule?: string | null }>(
+      `/subscriptions/${current.subscriptionId}`,
+    )
+    // Nothing scheduled is not a failure: two clicks on the same button,
+    // or a release that already landed, should read as "done".
+    if (!subscription.schedule) return { ok: true }
+
+    await stripePost(`/subscription_schedules/${subscription.schedule}/release`, {})
+
+    const released = await stripeGet<StripeSubscription & { status: string }>(
+      `/subscriptions/${current.subscriptionId}`,
+    )
+    await mirrorSubscription(createServiceRoleSupabaseClient(), released)
+    return { ok: true }
+  } catch (err) {
+    logger.error("Cancelling the scheduled switch failed", { companyId: resolved.companyId }, err as Error)
+    return { error: "failed" }
+  }
+}
+
 export async function switchIntervalAction(
   interval: "month" | "year",
 ): Promise<{ status: string } | Failure> {

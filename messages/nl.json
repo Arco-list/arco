@@ -1367,7 +1367,11 @@
       "identity_vat_invalid": "Dit lijkt geen geldig btw-nummer. Een Nederlands nummer ziet eruit als NL123456789B01.",
       "identity_address": "Adres",
       "identity_address_placeholder": "Straat en huisnummer",
-      "identity_address_change": "Wijzigen"
+      "identity_address_change": "Wijzigen",
+      "cycle_keep_year": "Jaarlijks houden",
+      "cycle_keep_month": "Maandelijks houden",
+      "cycle_kept": "De overstap is teruggedraaid.",
+      "cycle_keep_failed": "Dat lukte niet. Probeer het zo nog eens."
     },
     "pricing_current_badge": "Huidig",
     "pricing_your_plan": "Je huidige abonnement",

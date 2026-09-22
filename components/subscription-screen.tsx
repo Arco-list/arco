@@ -24,6 +24,7 @@ import { setCancelAtPeriodEndAction } from "@/lib/subscriptions/actions"
 import { saveBillingIdentityAction } from "@/lib/subscriptions/elements-actions"
 import {
   previewIntervalSwitchAction,
+  cancelScheduledSwitchAction,
   switchIntervalAction,
   type SwitchPreview,
 } from "@/lib/subscriptions/elements-actions"
@@ -96,7 +97,7 @@ export function SubscriptionScreen({
       : null
 
   const [pending, startTransition] = useTransition()
-  const [busy, setBusy] = useState<"primary" | "cancel" | "resume" | "switch" | "identity" | null>(null)
+  const [busy, setBusy] = useState<"primary" | "cancel" | "resume" | "switch" | "identity" | "keep" | null>(null)
 
   /**
    * The confirmation for a subscription that just started.
@@ -159,6 +160,24 @@ export function SubscriptionScreen({
   // work it out" are different things to say to someone about to spend
   // money.
   const [switchPreview, setSwitchPreview] = useState<SwitchPreview | null | false>(null)
+
+  // Undone in place: no dialog, because there is nothing to weigh.
+  // Cancelling a switch restores what they already have and costs
+  // nothing, unlike making one.
+  const keepCurrentCycle = () => {
+    if (isPreview && refusePreview()) return
+    setBusy("keep")
+    startTransition(async () => {
+      const result = await cancelScheduledSwitchAction()
+      setBusy(null)
+      if ("error" in result) {
+        toast.error(tb("cycle_keep_failed"))
+        return
+      }
+      toast.success(tb("cycle_kept"))
+      router.refresh()
+    })
+  }
 
   const openSwitch = (interval: "month" | "year") => {
     if (isPreview && refusePreview()) return
@@ -768,7 +787,25 @@ export function SubscriptionScreen({
                           })
                         : tb(billing.interval === "month" ? "cycle_row_month" : "cycle_row_year")}
                     </span>
-                    {!scheduledSwitch && (
+                    {/* Two buttons, never both: one offers the
+                        switch, the other takes it back. Offering the
+                        same switch again once it is scheduled would
+                        deny what the reader just did — but leaving the
+                        row bare held them to the decision for up to a
+                        year with nothing on the page to undo it. */}
+                    {scheduledSwitch ? (
+                      <button
+                        type="button"
+                        className="btn-tertiary"
+                        style={{ fontSize: 13, padding: "8px 16px" }}
+                        onClick={keepCurrentCycle}
+                        disabled={pending}
+                      >
+                        {busy === "keep"
+                          ? tb("working")
+                          : tb(billing.interval === "month" ? "cycle_keep_month" : "cycle_keep_year")}
+                      </button>
+                    ) : (
                       <button
                         type="button"
                         className="btn-tertiary"
@@ -786,7 +823,14 @@ export function SubscriptionScreen({
                       the row above it, because changing your cycle and
                       changing your payment method are the same kind of
                       act and should not look ranked. */}
-                  {billing.interval === "month" && !scheduledSwitch && (
+                  {/* Whoever ends up on monthly, whether they are there
+                      now or on their way. A scheduled switch used to
+                      silence this, which withheld the argument at the
+                      one moment it is most worth making: beside the
+                      button that undoes the switch, for a reader who
+                      has decided to leave the yearly price and can
+                      still change their mind. */}
+                  {(scheduledSwitch?.interval ?? billing.interval) === "month" && (
                     <p className="arco-small-text" style={{ margin: "10px 0 0", color: "var(--primary)" }}>
                       {tb("cycle_saving")}
                     </p>
