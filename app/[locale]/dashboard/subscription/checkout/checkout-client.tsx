@@ -13,7 +13,7 @@ import { PUBLISHABLE_KEY } from "@/lib/stripe/load-stripe"
 
 import { isValidVatNumber } from "@/lib/subscriptions/vat-number"
 
-import { FREE_MONTHS, IDEAL_BANKS } from "./constants"
+import { FREE_MONTHS, IDEAL_BANKS, NET_CENTS, VAT_RATE } from "./constants"
 import { useElementsCheckout } from "./use-elements-checkout"
 import { claimFoundingAccess } from "@/app/pricing/actions"
 
@@ -57,8 +57,8 @@ type Method = "saved" | "sepa" | "ideal" | "card"
    what kept this screen monolingual while the rest of the dashboard
    switched languages. */
 const CYCLES = {
-  month: { net: 4900 },
-  year: { net: 46800 },
+  month: { net: NET_CENTS.month },
+  year: { net: NET_CENTS.year },
 } as const
 
 const FEATURES = [
@@ -278,10 +278,10 @@ export function CheckoutClient({
   // 21% on what is actually charged, not on the list price: a Dutch
   // company buying from a Dutch company. A drawing that quietly showed
   // 0% would be promising a reverse charge we have not built.
-  const vat = Math.round(net * 0.21)
+  const vat = Math.round(net * VAT_RATE)
   const total = net + vat
   const freeToday = total === 0
-  const fullPrice = plan.net + Math.round(plan.net * 0.21)
+  const fullPrice = plan.net + Math.round(plan.net * VAT_RATE)
 
   const promoLabel = (key: string) =>
     key === "promo_founding" ? t("promo_founding") : t("promo_intro")

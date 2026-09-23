@@ -26,8 +26,14 @@ export type StripeSubscription = {
   current_period_end: number | null
   trial_end: number | null
   canceled_at: number | null
-  items: { data: { price: { id: string; recurring?: { interval?: string } | null } }[] }
+  /** `price` arrives as a full Price object, so the amount is here
+   *  without an expand — net of tax, which is what Stripe stores and
+   *  what the tax rate is then applied to. */
+  items: { data: { price: { id: string; unit_amount?: number | null; recurring?: { interval?: string } | null } }[] }
   metadata?: Record<string, string> | null
+  /** The mandate the recurring charge runs on. Read to warn before a
+   *  card on it expires. */
+  default_payment_method?: string | null
   /** Why it ended. `cancellation_requested` and `payment_failed` are
    *  very different facts about the mandate we still hold. */
   cancellation_details?: { reason?: string | null } | null

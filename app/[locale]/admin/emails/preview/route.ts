@@ -43,6 +43,26 @@ const TEST_VARS = {
   inviter_logo_url: 'https://ogvobdcrectqsegqrquz.supabase.co/storage/v1/object/public/company-logos/marco-van-veldhuizen.png',
   inviter_subtitle: 'Architect · Naarden',
   inviter_page_url: 'https://arcolist.com/professionals/marco-van-veldhuizen',
+  // Subscription — raw cents and ISO dates, because the renderer does
+  // the formatting: it is the only place that knows which language the
+  // mail goes out in. Amounts are what the customer is actually
+  // charged, so including VAT (€49 + 21% = €59,29). The plan is quoted
+  // ex-VAT everywhere on the site, but a mail about money that names a
+  // different number than the bank statement is the one place that is
+  // never acceptable.
+  amount_cents: 5929,
+  price_cents: 5929,
+  next_attempt_at: '2026-10-14T00:00:00.000Z',
+  renewal_at: '2027-03-03T00:00:00.000Z',
+  until_at: '2027-01-01T00:00:00.000Z',
+  end_at: '2027-01-01T00:00:00.000Z',
+  exp_month: 11,
+  exp_year: 2026,
+  last4: '4242',
+  // Counts above 1 on purpose: both mails have a singular and a plural
+  // branch, and the preview should show the one that actually ships.
+  hidden_count: 3,
+  live_count: 4,
 }
 
 // Map admin template IDs to email-service template names for auth emails.

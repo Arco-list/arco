@@ -193,6 +193,12 @@ export type EmailTemplate =
   | 'listed-professionals-publisher'
   | 'listed-professionals-contributor'
   | 'listed-backlink'
+  | 'payment-failed'
+  | 'subscription-ended-nonpayment'
+  | 'payment-method-expiring'
+  | 'renewal-reminder'
+  | 'founding-active'
+  | 'founding-ending'
   | 'auth-confirm-signup'
   | 'auth-magic-link'
   | 'auth-recovery'
@@ -265,6 +271,15 @@ const TEMPLATE_AUDIENCE: Record<EmailTemplate, EmailAudience> = {
   'listed-professionals-publisher': 'pro',
   'listed-professionals-contributor': 'pro',
   'listed-backlink': 'pro',
+  // Subscription — sent to companies that pay (or had it free), so the
+  // same bucket as the rest of the pro transactional mail. A click here
+  // is a paying customer coming back to the product.
+  'payment-failed': 'pro',
+  'subscription-ended-nonpayment': 'pro',
+  'payment-method-expiring': 'pro',
+  'renewal-reminder': 'pro',
+  'founding-active': 'pro',
+  'founding-ending': 'pro',
   // Client transactional / marketing
   'welcome-homeowner': 'client',
   'discover-projects': 'client',
@@ -2301,6 +2316,365 @@ function renderListedBacklink(vars: EmailVariables, locale: EmailLocale = 'nl'):
   }
 }
 
+// ─── Subscription ────────────────────────────────────────────────────────────
+//
+// Six mails about money, and one rule holds them together: never say
+// less than the reader would need to fix it themselves.
+//
+// Stripe sends the invoice and the SEPA pre-notification; those are
+// its documents and its voice, and they are marked as such on /emails.
+// These six are ours, because each of them is about the PRODUCT — what
+// is on your page, what comes off it, and by when. Stripe cannot write
+// that mail; it does not know what a credit is.
+//
+// Amounts and dates arrive RAW — cents and ISO strings — and are
+// formatted here.
+//
+// The first draft had callers pass "€ 59,29" and "3 maart 2027", which
+// is the obvious way and wrong. The recipient's language is resolved
+// inside sendTransactionalEmail, AFTER the caller has already built
+// those strings, so a company that reads English would have received
+// "Your subscription renews on 3 maart 2027". The preview showed it on
+// the first render.
+//
+// The renderer is the only place that knows the locale for certain, so
+// it is the only place allowed to turn a number into words.
+
+/** The one place these mails send people. */
+function subscriptionUrl(): string {
+  return `${(process.env.NEXT_PUBLIC_SITE_URL || 'https://www.arcolist.com')}/dashboard/subscription`
+}
+
+/** Cents to the reader's own currency notation. */
+function euros(cents: unknown, locale: EmailLocale): string {
+  if (typeof cents !== 'number' || !Number.isFinite(cents)) return ''
+  return new Intl.NumberFormat(locale === 'nl' ? 'nl-NL' : 'en-IE', {
+    style: 'currency',
+    currency: 'EUR',
+  }).format(cents / 100)
+}
+
+/** An ISO timestamp as a date a person would say out loud. */
+function longDate(iso: unknown, locale: EmailLocale): string {
+  if (typeof iso !== 'string' || !iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString(locale === 'nl' ? 'nl-NL' : 'en-GB', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  })
+}
+
+/** A card's expiry month, named rather than numbered. */
+function expiryMonth(month: unknown, year: unknown, locale: EmailLocale): string {
+  if (typeof month !== 'number' || typeof year !== 'number') return ''
+  return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString(
+    locale === 'nl' ? 'nl-NL' : 'en-GB',
+    { month: 'long', year: 'numeric', timeZone: 'UTC' },
+  )
+}
+
+/**
+ * A renewal we could not collect.
+ *
+ * Only ever a renewal — a first payment that fails ends the
+ * subscription on the spot, and that reader gets Back to Free instead.
+ * The difference matters for the tone: this person has paid us before,
+ * so the mail is a notice, not a warning.
+ *
+ * What it deliberately does NOT contain is the date the subscription
+ * dies. Stripe's retry schedule is an account setting, not something
+ * the API hands back per invoice, so any such date would be a guess
+ * presented as a fact — in the one mail where the reader is counting
+ * on the dates being real. `next_payment_attempt` is real, so that is
+ * the date it names, and the ending is described without one.
+ */
+function renderPaymentFailed(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const amount = euros(vars.amount_cents, locale)
+  const nextAttempt = longDate(vars.next_attempt_at, locale)
+  const copy = locale === 'en'
+    ? {
+        subject: `We couldn't collect ${amount}`,
+        h1: `Your payment didn't go through`,
+        intro: `We tried to collect ${amount} for your Arco Pro subscription, and the payment was refused. Usually that means an expired card or a mandate that was cancelled.`,
+        stillFine: `Nothing has changed on your page. Your projects stay visible while we retry.`,
+        next: nextAttempt
+          ? `The next attempt is on ${nextAttempt}. If it still doesn't go through over the coming weeks, the subscription ends and your page goes back to the free limit.`
+          : `We'll retry over the coming weeks. If it still doesn't go through, the subscription ends and your page goes back to the free limit.`,
+        fix: `Updating your payment method takes a minute, and the outstanding amount is collected straight after.`,
+        button: `Update payment method`,
+      }
+    : {
+        subject: `We konden ${amount} niet afschrijven`,
+        h1: `Je betaling is niet gelukt`,
+        intro: `We probeerden ${amount} af te schrijven voor je Arco Pro-abonnement, maar de betaling werd geweigerd. Meestal komt dat door een verlopen kaart of een ingetrokken machtiging.`,
+        stillFine: `Er is niets veranderd aan je pagina. Je projecten blijven zichtbaar zolang we het opnieuw proberen.`,
+        next: nextAttempt
+          ? `De volgende poging is op ${nextAttempt}. Lukt het de komende weken alsnog niet, dan stopt het abonnement en gaat je pagina terug naar de gratis limiet.`
+          : `We proberen het de komende weken nog een paar keer. Lukt het niet, dan stopt het abonnement en gaat je pagina terug naar de gratis limiet.`,
+        fix: `Je betaalmethode bijwerken kost een minuut, en het openstaande bedrag wordt daarna meteen geïncasseerd.`,
+        button: `Betaalmethode bijwerken`,
+      }
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
+      ${body(copy.stillFine)}
+      ${body(`<strong style="color:#1c1c1a;font-weight:500;">${copy.next}</strong>`)}
+      ${button(copy.button, subscriptionUrl())}
+      ${body(copy.fix)}
+    `, locale),
+  }
+}
+
+/**
+ * The subscription ended over money, and the page changed.
+ *
+ * Two roads arrive here: a first payment that was refused, and dunning
+ * that ran out. The reader does not care which.
+ *
+ * Two things carry this mail. The count — how many projects actually
+ * came off the page — because "back to the free limit" is policy and
+ * "3 projecten staan niet meer op je pagina" is what happened. And the
+ * line about the invoice: we withdraw it rather than chase it, and
+ * saying so removes the reason people avoid opening this kind of mail.
+ * Nothing is owed, so nothing should read like a debt.
+ */
+function renderSubscriptionEndedNonpayment(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'Je bedrijf' : 'Your company')
+  // Only stated when we know it. A wrong number here is worse than no
+  // number: the reader checks, and from then on the mail is a liar.
+  const hidden = typeof vars.hidden_count === 'number' ? vars.hidden_count : null
+  const copy = locale === 'en'
+    ? {
+        subject: `${companyName} is back on Free`,
+        h1: `Your subscription has ended`,
+        intro: `We couldn't collect payment for your Arco Pro subscription, so it has ended and ${companyName} is back on the free plan.`,
+        hidden: hidden === null
+          ? `Your page now shows one project instead of all of them.`
+          : hidden === 1
+            ? `One project is no longer shown on your page.`
+            : `${hidden} projects are no longer shown on your page.`,
+        kept: `Nothing is deleted. Every credit is still yours and goes straight back up the moment Pro is active again.`,
+        noDebt: `We've withdrawn the outstanding invoice — there is nothing left to pay.`,
+        button: `Reactivate Pro`,
+      }
+    : {
+        subject: `${companyName} staat weer op Gratis`,
+        h1: `Je abonnement is gestopt`,
+        intro: `We konden je Arco Pro-abonnement niet incasseren, dus het is gestopt en ${companyName} staat weer op het gratis plan.`,
+        hidden: hidden === null
+          ? `Je pagina toont nu één project in plaats van allemaal.`
+          : hidden === 1
+            ? `Eén project staat niet meer op je pagina.`
+            : `${hidden} projecten staan niet meer op je pagina.`,
+        kept: `Er is niets verwijderd. Elke vermelding is nog van jou en staat er meteen weer op zodra Pro weer actief is.`,
+        noDebt: `De openstaande factuur hebben we ingetrokken — je hoeft niets te betalen.`,
+        button: `Pro weer activeren`,
+      }
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
+      ${body(copy.hidden)}
+      ${body(copy.kept)}
+      ${button(copy.button, subscriptionUrl())}
+      ${divider()}
+      ${body(copy.noDebt)}
+    `, locale),
+  }
+}
+
+/**
+ * The card expires before the next renewal.
+ *
+ * The only mail in this set that prevents the problem rather than
+ * reporting it, so it stays short: one fact, one button. Every extra
+ * sentence is a reason to read it later.
+ *
+ * Cards only. A SEPA mandate has no expiry date — it lapses when the
+ * account holder cancels it, and we never see that coming.
+ */
+function renderPaymentMethodExpiring(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const expiry = expiryMonth(vars.exp_month, vars.exp_year, locale)
+  const last4 = vars.last4 || ''
+  const cardLabel = last4 ? (locale === 'en' ? `ending in ${last4}` : `eindigend op ${last4}`) : ''
+  const copy = locale === 'en'
+    ? {
+        subject: `Your payment method expires soon`,
+        h1: `Your card expires in ${expiry}`,
+        intro: `The card ${cardLabel} we use for your Arco Pro subscription expires in ${expiry} — before your next renewal.`,
+        why: `Replace it now and the renewal goes through as usual. Leave it, and the payment gets refused and your projects come off your page while it's sorted out.`,
+        button: `Update payment method`,
+      }
+    : {
+        subject: `Je betaalmethode verloopt binnenkort`,
+        h1: `Je kaart verloopt in ${expiry}`,
+        intro: `De kaart ${cardLabel} waarmee we je Arco Pro-abonnement incasseren verloopt in ${expiry} — vóór je volgende verlenging.`,
+        why: `Vervang hem nu en de verlenging gaat gewoon door. Doe je het niet, dan wordt de betaling geweigerd en gaan je projecten van je pagina tot het is opgelost.`,
+        button: `Betaalmethode bijwerken`,
+      }
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
+      ${body(copy.why)}
+      ${button(copy.button, subscriptionUrl())}
+    `, locale),
+  }
+}
+
+/**
+ * A yearly subscription renews in two weeks.
+ *
+ * Yearly only. A monthly charge is a rhythm people know; a yearly one
+ * arrives eleven months after the decision, and a €468 debit nobody
+ * saw coming is how a chargeback starts.
+ *
+ * It names the amount, the date and the way out in the same breath. A
+ * reminder that makes cancelling hard to find is not a courtesy, it is
+ * a trap with good manners.
+ */
+function renderRenewalReminder(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const amount = euros(vars.amount_cents, locale)
+  const date = longDate(vars.renewal_at, locale)
+  const copy = locale === 'en'
+    ? {
+        subject: `Your yearly subscription renews on ${date}`,
+        h1: `Your subscription renews on ${date}`,
+        intro: `Your Arco Pro subscription runs for another year on ${date}. We'll collect ${amount} from the payment method on file.`,
+        change: `Want to switch to monthly, or stop? You can arrange both from your subscription page — up to the day before, and it takes effect without anything being charged first.`,
+        button: `View your subscription`,
+      }
+    : {
+        subject: `Je jaarabonnement wordt op ${date} verlengd`,
+        h1: `Je abonnement wordt op ${date} verlengd`,
+        intro: `Je Arco Pro-abonnement loopt op ${date} een jaar door. We schrijven dan ${amount} af van je opgeslagen betaalmethode.`,
+        change: `Liever maandelijks, of wil je stoppen? Allebei regel je op je abonnementspagina — tot de dag ervoor, en het gaat in zonder dat er eerst iets wordt afgeschreven.`,
+        button: `Bekijk je abonnement`,
+      }
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
+      ${body(copy.change)}
+      ${button(copy.button, subscriptionUrl())}
+    `, locale),
+  }
+}
+
+/**
+ * Founding access is on.
+ *
+ * The one mail here with no invoice behind it, which is exactly why it
+ * has to exist: every other subscription confirms itself with a
+ * receipt, and this reader would get nothing at all.
+ *
+ * Two facts do the work, and the second is the one that buys trust:
+ * until when, and that it does NOT renew by itself. Saying so costs a
+ * sentence and removes the suspicion that a free period is a trick
+ * with a debit at the end of it.
+ */
+function renderFoundingActive(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'je bedrijf' : 'your company')
+  const until = longDate(vars.until_at, locale)
+  const copy = locale === 'en'
+    ? {
+        subject: `Pro is on — free until ${until}`,
+        h1: `Pro is on for ${companyName}`,
+        intro: `You're one of the first companies on Arco, so Pro is yours free until ${until}. Every project you're credited on is on your page, and it stays that way.`,
+        noCard: `There's no payment method on file and nothing renews by itself. When the period ends your page goes back to the free plan unless you choose to continue.`,
+        ask: `Anything missing, or something that should work differently? Reply to this mail — I read them myself.`,
+        button: `Open your page`,
+      }
+    : {
+        subject: `Pro staat aan — gratis tot ${until}`,
+        h1: `Pro staat aan voor ${companyName}`,
+        intro: `Je bent een van de eerste bedrijven op Arco, dus Pro is tot ${until} van jou. Elk project waarop je vermeld wordt staat op je pagina, en dat blijft zo.`,
+        noCard: `Er staat geen betaalmethode klaar en er wordt niets automatisch verlengd. Loopt de periode af, dan gaat je pagina terug naar het gratis plan tenzij je zelf kiest om door te gaan.`,
+        ask: `Mis je iets, of zou iets anders moeten werken? Antwoord gewoon op deze mail — ik lees ze zelf.`,
+        button: `Bekijk je pagina`,
+      }
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
+      ${body(copy.noCard)}
+      ${button(copy.button, vars.dashboard_link || subscriptionUrl())}
+      ${body(copy.ask)}
+    `, locale),
+  }
+}
+
+/**
+ * Founding access ends in two weeks.
+ *
+ * The mail that decides whether a founding member converts, so it
+ * makes the choice concrete rather than flattering. What they have now
+ * versus what is left afterwards, in projects — the unit they think
+ * in — and then the price.
+ *
+ * Sent from Niek for the same reason the founding offer came from him.
+ */
+function renderFoundingEnding(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'je bedrijf' : 'your company')
+  const endDate = longDate(vars.end_at, locale)
+  // `price_cents`, not `amount_cents`: this one is a rate — the copy
+  // around it adds "per maand" — where every other mail here names a
+  // single charge. One variable doing both jobs reads correctly in one
+  // mail and wrong in the next.
+  const amount = euros(vars.price_cents, locale)
+  const live = typeof vars.live_count === 'number' ? vars.live_count : null
+  const copy = locale === 'en'
+    ? {
+        subject: `Your founding period ends on ${endDate}`,
+        h1: `Your founding period ends on ${endDate}`,
+        intro: live === null || live <= 1
+          ? `Pro has been free for ${companyName} since the start. On ${endDate} that period ends.`
+          : `Pro has been free for ${companyName} since the start, and ${live} projects are on your page because of it. On ${endDate} that period ends.`,
+        after: live === null || live <= 1
+          ? `After that your page goes back to the free plan: one project shown at a time.`
+          : `After that your page goes back to the free plan: one project instead of ${live}. Nothing is deleted — the rest waits until Pro is back on.`,
+        price: `Continuing costs ${amount} a month, or less if you pay yearly. Same page, same projects, nothing to set up again.`,
+        nothing: `Doing nothing is fine too. There's no payment method on file, so nothing will be charged.`,
+        button: `Continue with Pro`,
+      }
+    : {
+        subject: `Je founding-periode loopt af op ${endDate}`,
+        h1: `Je founding-periode loopt af op ${endDate}`,
+        intro: live === null || live <= 1
+          ? `Pro is voor ${companyName} vanaf het begin gratis geweest. Op ${endDate} loopt die periode af.`
+          : `Pro is voor ${companyName} vanaf het begin gratis geweest, en daardoor staan er ${live} projecten op je pagina. Op ${endDate} loopt die periode af.`,
+        after: live === null || live <= 1
+          ? `Daarna gaat je pagina terug naar het gratis plan: één project tegelijk zichtbaar.`
+          : `Daarna gaat je pagina terug naar het gratis plan: één project in plaats van ${live}. Er wordt niets verwijderd — de rest wacht tot Pro weer aanstaat.`,
+        price: `Doorgaan kost ${amount} per maand, of minder als je per jaar betaalt. Zelfde pagina, zelfde projecten, niets opnieuw in te stellen.`,
+        nothing: `Niets doen mag ook. Er staat geen betaalmethode klaar, dus er wordt niets afgeschreven.`,
+        button: `Doorgaan met Pro`,
+      }
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
+      ${body(copy.after)}
+      ${body(copy.price)}
+      ${button(copy.button, subscriptionUrl())}
+      ${body(copy.nothing)}
+    `, locale),
+  }
+}
+
 const TEMPLATE_RENDERERS: Record<EmailTemplate, TemplateRenderer> = {
   'project-live': renderProjectLive,
   'project-rejected': renderProjectRejected,
@@ -2332,6 +2706,12 @@ const TEMPLATE_RENDERERS: Record<EmailTemplate, TemplateRenderer> = {
   'listed-professionals-publisher': renderListedProfessionalsPublisher,
   'listed-professionals-contributor': renderListedProfessionalsContributor,
   'listed-backlink': renderListedBacklink,
+  'payment-failed': renderPaymentFailed,
+  'subscription-ended-nonpayment': renderSubscriptionEndedNonpayment,
+  'payment-method-expiring': renderPaymentMethodExpiring,
+  'renewal-reminder': renderRenewalReminder,
+  'founding-active': renderFoundingActive,
+  'founding-ending': renderFoundingEnding,
   'auth-confirm-signup': renderAuthConfirmSignup,
   'auth-magic-link': renderAuthMagicLink,
   'auth-recovery': renderAuthRecovery,
@@ -2457,8 +2837,17 @@ export async function sendTransactionalEmail(
   // from Niek's mailbox and replies route to him so he can answer
   // personally. The Invite series (new-professional-*) is automated and
   // brand-voiced, so it goes from the generic Arco address.
+  //
+  // The two founding mails join them. Founding access was handed out
+  // personally, the mail that ends it asks a personal question, and
+  // 'automated@' asking whether you want to keep paying reads like a
+  // collections notice. The other four subscription mails stay on the
+  // brand address: they report facts about an account, and a person's
+  // name on a failed-payment notice invites a reply to someone who
+  // cannot fix it any faster than the button can.
   const isPersonalSeries = template.startsWith('prospect-') || template.startsWith('outreach-')
     || template === 'visitor-nudge-showcase' || template === 'visitor-nudge-platform'
+    || template.startsWith('founding-')
 
   try {
     const { data, error } = await getResend().emails.send({

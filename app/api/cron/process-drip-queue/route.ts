@@ -199,6 +199,19 @@ async function sendOne(
     if (featuredProjects) variables.projects = featuredProjects
     if (featuredProfessionals) variables.professionals = featuredProfessionals
   }
+  // Founding-ending is enqueued six months before it sends, and its
+  // argument is "you have N projects on your page, afterwards you have
+  // one". A count frozen at enqueue time would be the number they had
+  // on day one, which for a company that used the period properly is
+  // the least persuasive number available — and wrong besides.
+  if (row.template === "founding-ending" && row.company_id) {
+    const { count } = await supabase
+      .from("project_professionals")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", row.company_id)
+      .eq("status", "live_on_page")
+    if (typeof count === "number") variables.live_count = count
+  }
 
   // Sequence drips that target a company (prospect-* and the new
   // new-professional-*): row.email is a snapshot from enqueue time. If the
@@ -210,6 +223,16 @@ async function sendOne(
   // prospect_events row. Includes the cron-fired Outreach intro
   // (auto-enrolled Apollo contacts) plus the existing followup/final
   // steps for every series.
+  // The three subscription mails that are scheduled rather than
+  // triggered. Deliberately outside every gate below: those exist to
+  // stop a sales sequence once a prospect has moved on, and these go to
+  // customers, where the only thing that stops them is the event they
+  // warn about — which the scheduler clears at source.
+  const SUBSCRIPTION_TEMPLATES = new Set([
+    "renewal-reminder",
+    "founding-ending",
+    "payment-method-expiring",
+  ])
   const COMPANY_SEQUENCE_TEMPLATES = new Set([
     "prospect-followup",
     "prospect-final",
@@ -272,6 +295,18 @@ async function sendOne(
   }
 
   let recipient = row.email
+
+  // Subscription mail is enqueued six to eleven months ahead — long
+  // enough for a company to change hands. The address on the row is a
+  // snapshot from the day it was scheduled; the person who has to act
+  // on a renewal or a founding period is whoever owns the company on
+  // the day it sends.
+  if (SUBSCRIPTION_TEMPLATES.has(row.template) && row.company_id) {
+    const { getSubscriptionRecipient } = await import("@/lib/subscriptions/notify")
+    const current = await getSubscriptionRecipient(row.company_id)
+    if (current?.email) recipient = current.email
+  }
+
   if (COMPANY_SEQUENCE_TEMPLATES.has(row.template)) {
     // Re-lookup current email on the prospect row in case the admin
     // edited it after the drip was enqueued. company_id resolves

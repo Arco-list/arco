@@ -137,6 +137,29 @@ export function isNonpaymentCancellation(reason: string | null | undefined): boo
 }
 
 /**
+ * Our word for the same thing.
+ *
+ * Stripe only writes `payment_failed` on a cancellation IT decided —
+ * dunning running out. The first-payment cancellation below is ours,
+ * so Stripe records it as `cancellation_requested`, which is
+ * indistinguishable from someone pressing the cancel button.
+ *
+ * The difference matters to exactly one reader: the person who has to
+ * be told their page changed and that nothing is owed. Stamped on the
+ * subscription before it is cancelled so the deleted event carries it,
+ * because by the time that event arrives there is nothing left to ask.
+ */
+export const NONPAYMENT_METADATA_KEY = "arco_ended_unpaid"
+
+/** Either road: Stripe gave up, or we did on Stripe's behalf. */
+export function endedOverNonpayment(
+  reason: string | null | undefined,
+  metadata: Record<string, string> | null | undefined,
+): boolean {
+  return isNonpaymentCancellation(reason) || Boolean(metadata?.[NONPAYMENT_METADATA_KEY])
+}
+
+/**
  * Cancel a subscription whose first payment never arrived, and forgive
  * what it billed.
  *
@@ -167,6 +190,18 @@ export async function cancelUnpaidFirstPeriod(
       subscriptionId, error: String(err),
     })
   }
+
+  // Before the cancellation, because a cancelled subscription still
+  // carries its metadata into the deleted event and a deleted one
+  // cannot be written to. Non-fatal: losing the stamp costs a
+  // notification, not the cleanup.
+  await stripePost(`/subscriptions/${subscriptionId}`, {
+    metadata: { [NONPAYMENT_METADATA_KEY]: methodType || "unknown" },
+  }).catch((err) =>
+    logger.warn("Could not mark a subscription as ended over non-payment", {
+      subscriptionId, error: String(err),
+    }),
+  )
 
   try {
     await stripeDelete(`/subscriptions/${subscriptionId}`)

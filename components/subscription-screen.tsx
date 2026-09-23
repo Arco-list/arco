@@ -16,7 +16,7 @@ import type { BillingDetails } from "@/lib/subscriptions/billing-details-types"
 import { PREVIEW_LABELS, PREVIEW_STATES } from "@/lib/subscriptions/preview-states"
 import { collectionState, hasUnpaidInvoice } from "@/lib/subscriptions/collection-state"
 import { isValidVatNumber } from "@/lib/subscriptions/vat-number"
-import { FREE_MONTHS } from "@/app/dashboard/subscription/checkout/constants"
+import { foundingEndsAt } from "@/app/dashboard/subscription/checkout/constants"
 import { AddressLookup } from "@/components/address-lookup"
 import { AdminTabs } from "@/components/admin/admin-tabs"
 import { PricingSection } from "@/components/pricing-section"
@@ -315,10 +315,8 @@ export function SubscriptionScreen({
   // the launch period" — a promise with no end, on the one screen whose
   // job is to say what happens next and when.
   const foundingUntil = (() => {
-    if (!billing.foundingClaimedAt) return null
-    const end = new Date(billing.foundingClaimedAt)
-    if (Number.isNaN(end.getTime())) return null
-    end.setMonth(end.getMonth() + FREE_MONTHS)
+    const end = foundingEndsAt(billing.foundingClaimedAt)
+    if (!end) return null
     return end.toLocaleDateString(locale === "en" ? "en-GB" : "nl-NL", {
       day: "numeric", month: "long", year: "numeric",
     })

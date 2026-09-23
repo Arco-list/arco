@@ -11,9 +11,12 @@ import { enforceCreditAllowance, restoreHeldBackCredits } from "@/lib/subscripti
 import {
   cancelUnpaidFirstPeriod,
   forgiveOutstandingInvoices,
-  isNonpaymentCancellation,
+  endedOverNonpayment,
   recordNonpaymentCancellation,
 } from "@/lib/subscriptions/nonpayment"
+import { notifySubscriber } from "@/lib/subscriptions/notify"
+import { cancelFoundingEnding, scheduleCardExpiry, scheduleRenewalReminder } from "@/lib/subscriptions/schedule-mail"
+import { grossCents } from "@/app/dashboard/subscription/checkout/constants"
 
 /**
  * Stripe webhook — the only thing that writes a subscription.
@@ -152,6 +155,11 @@ export async function POST(request: NextRequest) {
         // reads is the one Stripe just described, and cheap when
         // nothing is over the line — which is almost always.
         const companyForCredits = subscription.metadata?.company_id
+        // How many projects this event actually took off the page. Kept
+        // because the mail below is worth more with it: "back to the
+        // free limit" is policy, "3 projecten staan niet meer op je
+        // pagina" is what happened.
+        let demotedCount = 0
         if (companyForCredits) {
           const billing = await getCompanyBilling(companyForCredits)
           if (billing.plan === "pro") {
@@ -160,8 +168,37 @@ export async function POST(request: NextRequest) {
             // the reader finish their own purchase, one menu at a time.
             await restoreHeldBackCredits(companyForCredits)
           } else {
-            await enforceCreditAllowance(companyForCredits)
+            demotedCount = (await enforceCreditAllowance(companyForCredits)).length
           }
+
+          // Re-decided on every subscription event rather than only at
+          // signup, because every one of them can change the answer: a
+          // switch to yearly earns the reminder, a switch back removes
+          // it, a renewal moves it to the next period, and a
+          // cancellation clears it. One call that recomputes beats four
+          // call sites that each remember to.
+          // A real subscription outranks founding access, so the
+          // warning that founding is ending stops being true the
+          // moment one exists.
+          if (billing.source === "subscription") await cancelFoundingEnding(companyForCredits)
+
+          await scheduleCardExpiry(
+            companyForCredits,
+            subscription.default_payment_method,
+            billing.plan === "pro",
+          )
+
+          const netAmount = subscription.items?.data?.[0]?.price?.unit_amount ?? null
+          await scheduleRenewalReminder(
+            companyForCredits,
+            billing.interval,
+            billing.currentPeriodEnd,
+            // Gross, because the mail names what leaves the account
+            // and Stripe stores the price net of the tax rate it then
+            // applies. The same arithmetic the checkout draws.
+            netAmount === null ? null : grossCents(netAmount),
+            billing.plan === "pro" && !billing.cancelAtPeriodEnd,
+          )
         }
 
         // Remembered after the mirror, so the row exists to look the
@@ -170,7 +207,7 @@ export async function POST(request: NextRequest) {
         // should follow them back.
         if (
           event.type === "customer.subscription.deleted" &&
-          isNonpaymentCancellation(subscription.cancellation_details?.reason)
+          endedOverNonpayment(subscription.cancellation_details?.reason, subscription.metadata)
         ) {
           const companyId = subscription.metadata?.company_id
           if (companyId) await recordNonpaymentCancellation(supabase, companyId)
@@ -180,6 +217,14 @@ export async function POST(request: NextRequest) {
           // a debt we gave up on, and we mean to withdraw it.
           if (subscription.customer) {
             await forgiveOutstandingInvoices(subscription.customer, subscription.latest_invoice)
+          }
+          // Last, because the mail promises the invoice is withdrawn
+          // and the credits are held rather than lost. Sending it
+          // before those ran would make it a forecast.
+          if (companyId) {
+            await notifySubscriber(companyId, "subscription-ended-nonpayment", {
+              hidden_count: demotedCount,
+            })
           }
         }
         break
@@ -222,7 +267,13 @@ export async function POST(request: NextRequest) {
       case "invoice.payment_failed": {
         // The invoice moves the subscription's status (active ⇄
         // past_due), and that status is what the product reads.
-        const invoice = event.data.object as { subscription?: string; customer?: string }
+        const invoice = event.data.object as {
+          subscription?: string
+          customer?: string
+          amount_due?: number
+          attempt_count?: number
+          next_payment_attempt?: number | null
+        }
         const subscriptionId = invoice.subscription
         if (subscriptionId) {
           const subscription = await stripeGet<StripeSubscription>(`/subscriptions/${subscriptionId}`)
@@ -243,6 +294,24 @@ export async function POST(request: NextRequest) {
             const everPaid = (row as { first_payment_at?: string | null } | null)?.first_payment_at
             if (!everPaid) {
               await cancelUnpaidFirstPeriod(invoice.customer, subscriptionId)
+              // No mail from here. The cancellation above fires
+              // customer.subscription.deleted, and that branch sends
+              // Back to Free — after the credits have been swept, so it
+              // can say how many projects actually came off the page.
+              // Sending here would be a forecast of its own side
+              // effects, and would arrive twice.
+            } else if (invoice.attempt_count === 1 && subscription.metadata?.company_id) {
+              // A renewal, and only on the FIRST refusal. Stripe fires
+              // this event on every retry in the schedule; one mail per
+              // attempt would turn a recoverable card problem into four
+              // identical warnings, which is how people learn to ignore
+              // the fourth.
+              await notifySubscriber(subscription.metadata.company_id, "payment-failed", {
+                amount_cents: invoice.amount_due,
+                next_attempt_at: invoice.next_payment_attempt
+                  ? new Date(invoice.next_payment_attempt * 1000).toISOString()
+                  : null,
+              })
             }
           }
         }
