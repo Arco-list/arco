@@ -1,5 +1,6 @@
 import { loadBillingPageProps } from "@/lib/subscriptions/billing-page-props"
 import { SubscriptionScreen } from "@/components/subscription-screen"
+import { WebhookHealth } from "@/components/webhook-health"
 
 /**
  * The subscription screen, mounted inside admin.
@@ -25,5 +26,16 @@ export default async function AdminSubscriptionsPage({
     previewWithoutCompany: true,
   })
 
-  return <SubscriptionScreen {...props} chrome="admin" />
+  return (
+    <>
+      <SubscriptionScreen {...props} chrome="admin" />
+      {/* Beneath the screen rather than above it: the page is about a
+          company's subscription, and this is about whether anything on
+          it can be trusted today. Read second, acted on first. */}
+      {/* Called rather than mounted: TS2786 is a false positive on
+          async-component JSX, and the project hub routes sidestep it
+          the same way. */}
+      {await WebhookHealth()}
+    </>
+  )
 }

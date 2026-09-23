@@ -15,7 +15,8 @@ import { RelatedProjects } from "@/components/project/related-projects"
 import { SimilarProjects } from "@/components/project/similar-projects"
 import { ProjectStructuredData } from "@/components/project-structured-data"
 import { TrackProjectView } from "@/components/track-view"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
+import { isEntitledNow } from "@/lib/subscriptions/get-company-subscription"
 import { isProjectRow } from "@/lib/supabase/type-guards"
 import { getSiteUrl } from "@/lib/utils"
 import { SPACES, SPACE_SLUGS } from "@/lib/spaces"
@@ -426,7 +427,17 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     .map(p => p.company_id)
     .filter((id): id is string => Boolean(id))
 
-  const [{ data: projectCounts }, { data: companyPhotos }] = await Promise.all([
+  // Which of these companies is on Pro.
+  //
+  // One query for all of them rather than a flag denormalised onto
+  // companies: a column would need keeping in sync by every webhook
+  // that touches a subscription, and a stale one decides in public
+  // whether a credit is a link. Asked here it cannot drift.
+  //
+  // Read with the service role because a subscription is not public
+  // data and RLS rightly refuses an anonymous reader. Only the
+  // statuses leave this function, never a customer or an amount.
+  const [{ data: projectCounts }, { data: companyPhotos }, { data: subscriptionRows }] = await Promise.all([
     companyIds.length > 0
       ? supabase
           .from("project_professionals")
@@ -447,8 +458,25 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           .in("company_id", companyIds)
           .order("is_cover", { ascending: false })
           .order("order_index", { ascending: true })
-      : Promise.resolve({ data: [] })
+      : Promise.resolve({ data: [] }),
+    companyIds.length > 0
+      ? createServiceRoleSupabaseClient()
+          .from("subscriptions" as never)
+          .select("company_id, status, collection_pending_until")
+          .in("company_id" as never, companyIds as never)
+      : Promise.resolve({ data: [] }),
   ])
+
+  const proCompanyIds = new Set(
+    ((subscriptionRows ?? []) as {
+      company_id?: string | null
+      status?: string | null
+      collection_pending_until?: string | null
+    }[])
+      .filter((row) => isEntitledNow(row.status, row.collection_pending_until))
+      .map((row) => row.company_id)
+      .filter((id): id is string => Boolean(id)),
+  )
 
   // Count unique projects per company
   const companyProjectCounts = new Map<string, Set<string>>()
@@ -478,12 +506,21 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   // project has to be ON that page, which is the same `live_on_page`
   // the company page itself filters by.
   //
-  // Without the second, a free company's credits all led to a page that
-  // showed one of them: follow the link from any of the others and the
-  // project you came for is not there, and neither is any explanation.
-  // It is also what the free allowance is FOR — with one place on the
-  // page, one credit is a working link and the rest are plain text,
-  // which is the limit made visible rather than merely counted.
+  // Without the second, a free company's credits all led to a page
+  // that showed one of them: follow the link from any of the others and
+  // the project you came for is not there, and neither is any
+  // explanation. It is also what the free allowance is FOR — with one
+  // place on the page, one credit is a working link and the rest are
+  // plain text, which is the limit made visible rather than counted.
+  //
+  // Pro lifts the second condition rather than satisfying it. A paying
+  // company has a full portfolio behind its name, so the page is worth
+  // reaching even from a credit it has deliberately taken off there —
+  // the visitor finds a body of work rather than a dead end, which is
+  // not true of a free page holding one project.
+  //
+  // It does not lift the third. Whatever the plan, a credit nobody has
+  // accepted stays plain text.
   //
   // Owners are not special here, though it looks as if they should be:
   // the company page shows owned and credited work through the same
@@ -494,7 +531,12 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
     (p.companies as any)?.owner_id
     && (p.companies as any)?.slug
     && ["listed", "prospected"].includes(String((p.companies as any)?.status))
-    && String(p.status) === "live_on_page",
+    // An unanswered invitation is never a link, on any plan. The
+    // project owner put the name there; the company has not yet agreed
+    // to it, and a link is the difference between naming someone and
+    // sending readers to them on their behalf.
+    && String(p.status) !== "invited"
+    && (proCompanyIds.has(String(p.company_id)) || String(p.status) === "live_on_page"),
   )
 
   /**
