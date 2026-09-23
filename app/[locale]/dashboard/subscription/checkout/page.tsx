@@ -76,11 +76,24 @@ export default async function CheckoutPage({
   // failure again — so the card says so, and something else is
   // selected instead.
   //
-  // Only for a non-payment ending. Somebody who cancelled on purpose
-  // has a mandate that works, and a red warning there would send them
-  // hunting for an IBAN over a problem they never had.
+  // Two endings mean that, and the second was missing. A subscription
+  // Stripe gave up collecting ends at `canceled` with a reason. One
+  // whose FIRST charge was refused never gets that far: it expires at
+  // `incomplete_expired` with no reason at all, because there were no
+  // retries to exhaust. A declined card was therefore offered straight
+  // back, preselected, as "niets in te vullen".
+  //
+  // `first_payment_at` is the honest test for the second case — unset
+  // means this subscription was never once paid for — but a status
+  // check needs no extra column to be true.
+  //
+  // Neither covers somebody who cancelled on purpose: their mandate
+  // works, and a red warning there would send them hunting for an IBAN
+  // over a problem they never had.
   const savedMethodFailed =
-    mirrored?.status === "canceled" && mirrored?.canceled_reason === "payment_failed"
+    (mirrored?.status === "canceled" && mirrored?.canceled_reason === "payment_failed")
+    || mirrored?.status === "incomplete"
+    || mirrored?.status === "incomplete_expired"
 
   // Computed on the server so the client never renders a different date
   // than the one that was sent, and so the page can name a day — which

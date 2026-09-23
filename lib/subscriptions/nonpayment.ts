@@ -71,10 +71,33 @@ export const HIDDEN_METADATA_KEY = "arco_hidden"
  */
 export async function forgiveOutstandingInvoices(
   customerId: string,
+  /** The invoice we already know about, voided by name before anything
+   *  is searched for. A list query run moments after Stripe moves an
+   *  invoice can find it in neither the status it left nor the one it
+   *  is entering — which is how a subscription cancelled at the end of
+   *  dunning kept its bill sitting on "Oninbaar", a debt we had
+   *  decided not to pursue and then failed to withdraw. */
+  knownInvoiceId?: string | null,
   /** Keep these off the customer's invoice list entirely — see
    *  HIDDEN_METADATA_KEY. */
   hide = false,
 ): Promise<void> {
+  // By name first: a retrieve is consistent where a list is not.
+  if (knownInvoiceId) {
+    await stripePost(`/invoices/${knownInvoiceId}/void_invoice`, {}).catch((err) =>
+      // Already void, or paid after all — both are fine ends.
+      logger.info("Could not void the named invoice", {
+        invoiceId: knownInvoiceId, reason: String(err),
+      }),
+    )
+    if (hide) {
+      await stripePost(`/invoices/${knownInvoiceId}`, {
+        metadata: { [HIDDEN_METADATA_KEY]: "declined_first_payment" },
+      }).catch(() => {})
+    }
+  }
+
+  // And then the sweep, for anything else this customer still owes.
   for (const status of ["open", "uncollectible"] as const) {
     try {
       const found = await stripeGet<{ data: { id: string }[] }>("/invoices", {
@@ -128,6 +151,23 @@ export async function cancelUnpaidFirstPeriod(
    *  leaves nothing worth recording; a bank debit's is not. */
   methodType?: string | null,
 ): Promise<void> {
+  // Read before the cancellation, because the cancellation destroys
+  // the evidence: Stripe voids an incomplete subscription's invoice on
+  // its way out, and `forgiveOutstandingInvoices` then finds nothing
+  // open or uncollectible to stamp. The invoice a declined card leaves
+  // behind was staying visible for exactly that reason.
+  let firstInvoiceId: string | null = null
+  try {
+    const before = await stripeGet<{ latest_invoice?: string | null }>(
+      `/subscriptions/${subscriptionId}`,
+    )
+    firstInvoiceId = before.latest_invoice ?? null
+  } catch (err) {
+    logger.warn("Could not read the first invoice before cancelling", {
+      subscriptionId, error: String(err),
+    })
+  }
+
   try {
     await stripeDelete(`/subscriptions/${subscriptionId}`)
   } catch (err) {
@@ -136,8 +176,10 @@ export async function cancelUnpaidFirstPeriod(
   }
 
   // After the cancellation, not before: voiding first would let Stripe
-  // finalise the next period's invoice into the gap.
-  await forgiveOutstandingInvoices(customerId, methodType === "card")
+  // finalise the next period's invoice into the gap. The invoice is
+  // handed over by name — it is stamped and withdrawn there, whatever
+  // state the cancellation left it in.
+  await forgiveOutstandingInvoices(customerId, firstInvoiceId, methodType === "card")
 }
 
 /**
@@ -161,7 +203,7 @@ export async function recordNonpaymentCancellation(
 
   const { error } = await supabase
     .from("companies")
-    .update({ nonpayment_cancellations: seen + 1 } as never)
+    .update({ nonpayment_cancellations: seen + 1 })
     .eq("id", companyId)
 
   if (error) {

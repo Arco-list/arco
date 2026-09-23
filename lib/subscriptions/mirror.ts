@@ -31,6 +31,10 @@ export type StripeSubscription = {
   /** Why it ended. `cancellation_requested` and `payment_failed` are
    *  very different facts about the mandate we still hold. */
   cancellation_details?: { reason?: string | null } | null
+  /** The bill this subscription last raised. Named rather than searched
+   *  for, because a list query moments after a status change can miss
+   *  it in both the status it left and the one it is entering. */
+  latest_invoice?: string | null
 }
 
 type ServiceClient = ReturnType<typeof createServiceRoleSupabaseClient>
@@ -56,7 +60,7 @@ async function resolveCompanyId(
   if (fromMetadata) return fromMetadata
 
   const { data: mirrored } = await supabase
-    .from("subscriptions" as never)
+    .from("subscriptions")
     .select("company_id")
     .eq("stripe_customer_id", subscription.customer)
     .maybeSingle()
@@ -108,7 +112,7 @@ export async function mirrorSubscription(
   // subscription id starts from nothing.
   const paidNow = subscription.status === "active" || subscription.status === "trialing"
   const { data: existing } = await supabase
-    .from("subscriptions" as never)
+    .from("subscriptions")
     .select("first_payment_at, stripe_subscription_id")
     .eq("company_id", companyId)
     .maybeSingle()
@@ -123,7 +127,7 @@ export async function mirrorSubscription(
   // One row per company: a company has one subscription, and an upgrade
   // replaces rather than accumulates.
   const { error } = await supabase
-    .from("subscriptions" as never)
+    .from("subscriptions")
     .upsert(
       {
         company_id: companyId,

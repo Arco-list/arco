@@ -73,14 +73,31 @@ export async function subscribeFromSetupIntent(
       return { error: "already_subscribed" }
     }
 
+    // Keyed on the mandate, because two callers arrive with the same
+    // one. The page finishes the checkout in the browser and the
+    // webhook hears `setup_intent.succeeded` from Stripe, by design —
+    // that is how a mandate given at a bank and never returned from
+    // still becomes a subscription.
+    //
+    // The guards above were supposed to stop the second, and for a
+    // working payment they do. A declined card leaves the first
+    // attempt at `incomplete`, which is in neither LIVE_STATUSES nor
+    // anything else the guards ask about, so the second caller saw no
+    // subscription and made another: one click, two subscriptions, two
+    // invoices on the reader's screen.
+    //
+    // An idempotency key settles it at Stripe instead of in a race we
+    // keep losing. The same intent returns the same subscription, so it
+    // no longer matters who gets there first or what state the attempt
+    // left behind.
     const subscription = await stripePost<StripeSubscription & { status: string }>("/subscriptions", {
       customer: customerId,
       items: [{ price: priceId(interval) }],
       default_tax_rates: [taxRateId()],
       default_payment_method: intent.payment_method,
-      metadata: { company_id: resolved.companyId },
+      metadata: { company_id: resolved.companyId, setup_intent: setupIntentId },
       expand: ["items.data.price"],
-    })
+    }, { idempotencyKey: `sub:${setupIntentId}` })
 
     // The subscription's own charge is covered by the line above; this
     // covers everything else Stripe bills this customer.

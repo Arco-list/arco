@@ -16,6 +16,7 @@ import type { BillingDetails } from "@/lib/subscriptions/billing-details-types"
 import { PREVIEW_LABELS, PREVIEW_STATES } from "@/lib/subscriptions/preview-states"
 import { collectionState, hasUnpaidInvoice } from "@/lib/subscriptions/collection-state"
 import { isValidVatNumber } from "@/lib/subscriptions/vat-number"
+import { FREE_MONTHS } from "@/app/dashboard/subscription/checkout/constants"
 import { AddressLookup } from "@/components/address-lookup"
 import { AdminTabs } from "@/components/admin/admin-tabs"
 import { PricingSection } from "@/components/pricing-section"
@@ -303,6 +304,24 @@ export function SubscriptionScreen({
   // onto. A button that cannot do what it says is worse than no button,
   // so this state falls through to the ordinary upgrade path, which is
   // what the reader actually needs to do.
+  // The day founding access runs to, worked out from the claim rather
+  // than stored: one constant decides how long the give-away lasts, and
+  // the checkout quotes the same date from the same place.
+  //
+  // Stated because the banner is where a subscriber reads when they
+  // renew, and a founding member was told only that it was free "during
+  // the launch period" — a promise with no end, on the one screen whose
+  // job is to say what happens next and when.
+  const foundingUntil = (() => {
+    if (!billing.foundingClaimedAt) return null
+    const end = new Date(billing.foundingClaimedAt)
+    if (Number.isNaN(end.getTime())) return null
+    end.setMonth(end.getMonth() + FREE_MONTHS)
+    return end.toLocaleDateString(locale === "en" ? "en-GB" : "nl-NL", {
+      day: "numeric", month: "long", year: "numeric",
+    })
+  })()
+
   const hasLiveSubscription = billing.source === "subscription"
   // Gated once, here, rather than at each of the four places that read
   // it — the pill, the sentence, the button and the destination. Those
@@ -314,7 +333,10 @@ export function SubscriptionScreen({
   // One line describing where they stand. Deliberately concrete: a date
   // beats the word "active".
   const statusLine =
-    billing.source === "founding" ? tb("founding_body", { company: companyName })
+    billing.source === "founding"
+      ? (foundingUntil
+          ? tb("founding_body", { date: foundingUntil })
+          : tb("founding_body_undated", { company: companyName }))
     // Their own situation beats a description of the pricing model. The
     // general line explains what Pro unlocks; this one says what is
     // being withheld right now, which is the only version of that
@@ -688,7 +710,14 @@ export function SubscriptionScreen({
               subscription there is nothing to show and nothing to add
               from here — an empty row would be a section about
               nothing. */}
-          {isOwner && (billing.stripeCustomerId || details.paymentMethod) && (
+          {/* Only while there is something to pay for.
+              A customer, a mandate and a billing address all outlive a
+              checkout that failed, so a declined card sat under
+              "Betaling" on a free account — a payment relationship
+              announced where none exists. The mandate is not lost by
+              hiding it: the checkout still offers it back as the saved
+              method, which is the moment it is worth mentioning. */}
+          {isOwner && hasLiveSubscription && (billing.stripeCustomerId || details.paymentMethod) && (
             <div style={{ marginBottom: 36 }}>
               <h4 className="arco-subsection-title" style={{ marginBottom: 14 }}>{tb("payment_heading")}</h4>
               <div className="billing-row" style={{ borderTop: "1px solid var(--arco-light-grey)" }}>
@@ -948,12 +977,6 @@ export function SubscriptionScreen({
               the cycle row: a note explains the thing directly above it,
               so it belongs to that block rather than floating between
               two of them. */}
-          {billing.source === "founding" && (
-            <p className="arco-small-text" style={{ margin: "10px 0 0" }}>
-              {tb("founding_next")}
-            </p>
-          )}
-
           {/* Only while retries are running. Once they have stopped the
               banner says it, and saying it twice on one page turns one
               problem into two. */}
