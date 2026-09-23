@@ -178,7 +178,7 @@ export async function setCancelAtPeriodEndAction(cancel: boolean): Promise<Toggl
 
   const service = createServiceRoleSupabaseClient()
   const { data: row } = await service
-    .from("subscriptions" as never)
+    .from("subscriptions")
     .select("stripe_subscription_id")
     .eq("company_id", resolved.companyId)
     .maybeSingle()
@@ -212,7 +212,7 @@ export async function setCancelAtPeriodEndAction(cancel: boolean): Promise<Toggl
     // means the answer is on screen before the round trip finishes;
     // the webhook then confirms the same thing.
     await service
-      .from("subscriptions" as never)
+      .from("subscriptions")
       .update({
         cancel_at_period_end: Boolean(updated.cancel_at_period_end),
         canceled_at: updated.canceled_at ? new Date(updated.canceled_at * 1000).toISOString() : null,
@@ -253,7 +253,7 @@ export async function openPortalAction(): Promise<Result> {
 
   const service = createServiceRoleSupabaseClient()
   const { data: row } = await service
-    .from("subscriptions" as never)
+    .from("subscriptions")
     .select("stripe_customer_id")
     .eq("company_id", resolved.companyId)
     .maybeSingle()

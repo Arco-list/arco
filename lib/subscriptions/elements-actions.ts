@@ -4,7 +4,7 @@ import { headers } from "next/headers"
 
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
-import { priceId, taxRateId, isStripeConfigured, stripeGet, stripePost } from "@/lib/stripe/rest"
+import { priceId, taxRateId, isStripeConfigured, stripeDelete, stripeGet, stripePost } from "@/lib/stripe/rest"
 import { mirrorSubscription, type StripeSubscription } from "@/lib/subscriptions/mirror"
 import { ensureCustomer, resolveOwnedCompany } from "@/lib/subscriptions/owned-company"
 import { subscribeFromSetupIntent } from "@/lib/subscriptions/subscribe-from-setup"
@@ -143,7 +143,7 @@ export async function replacePaymentMethodAction(
 
   const service = createServiceRoleSupabaseClient()
   const { data: row } = await service
-    .from("subscriptions" as never)
+    .from("subscriptions")
     .select("stripe_subscription_id, stripe_customer_id")
     .eq("company_id", resolved.companyId)
     .maybeSingle()
@@ -246,8 +246,8 @@ export async function replacePaymentMethodAction(
         if (paid.status !== "paid") {
           const until = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString()
           await service
-            .from("subscriptions" as never)
-            .update({ collection_pending_until: until } as never)
+            .from("subscriptions")
+            .update({ collection_pending_until: until })
             .eq("company_id", resolved.companyId)
         }
 
@@ -295,7 +295,7 @@ export async function subscribeWithSavedMethodAction(
 
   const service = createServiceRoleSupabaseClient()
   const { data: row } = await service
-    .from("subscriptions" as never)
+    .from("subscriptions")
     .select("stripe_customer_id")
     .eq("company_id", resolved.companyId)
     .maybeSingle()
@@ -342,7 +342,7 @@ export async function subscribeWithSavedMethodAction(
 /** The subscription and the item on it, which a price change addresses. */
 async function liveSubscriptionItem(companyId: string) {
   const { data: row } = await createServiceRoleSupabaseClient()
-    .from("subscriptions" as never)
+    .from("subscriptions")
     .select("stripe_subscription_id")
     .eq("company_id", companyId)
     .maybeSingle()
@@ -586,7 +586,13 @@ export async function switchIntervalAction(
  * load, so anything still sitting in the form at that moment is gone.
  */
 export async function saveBillingIdentityAction(input: {
+  /** The name the invoice is made out to — a company's registered name
+   *  or, for a private buyer, their own. Stripe has one field for it
+   *  and so do we; what changes between the two is the VAT number, not
+   *  who the document names. */
   companyName?: string | null
+  /** Empty removes whatever is on file. A buyer who stops buying as a
+   *  business must be able to take their number off the invoice. */
   vatNumber?: string | null
   address?: { line1: string; city: string; postalCode?: string | null; country?: string | null } | null
 }): Promise<{ ok: true } | Failure> {
@@ -598,8 +604,12 @@ export async function saveBillingIdentityAction(input: {
   const customerId = await ensureCustomer(resolved.companyId, resolved.companyName, resolved.email)
 
   const payload: Record<string, unknown> = {}
-  const name = input.companyName?.trim()
-  if (name) payload.name = name
+  // Sent even when empty, so clearing works. Skipping a blank left the
+  // previous value in place: unticking "Ik koop zakelijk" changed the
+  // form and nothing else, and the company name stayed on the invoice
+  // of somebody who had just said they were not a company.
+  const name = input.companyName?.trim() ?? ""
+  if (input.companyName !== undefined) payload.name = name || null
   if (input.address?.line1) {
     payload.address = {
       line1: input.address.line1,
@@ -622,11 +632,25 @@ export async function saveBillingIdentityAction(input: {
     // module, so the two cannot disagree about what a VAT number is.
     const raw = input.vatNumber ? normaliseVatNumber(input.vatNumber) : ""
     const vat = raw && isValidVatNumber(raw) ? raw : ""
-    if (vat) {
+
+    if (input.vatNumber !== undefined) {
       const existing = await stripeGet<{ data: { id: string; value: string }[] }>(
         `/customers/${customerId}/tax_ids`,
       )
-      if (!existing.data.some((t) => t.value.toUpperCase() === vat)) {
+      const keep = existing.data.find((t) => t.value.toUpperCase() === vat)
+
+      // Anything that is not the number we were given goes. A tax ID is
+      // its own object, so leaving the old one behind put two on the
+      // customer and printed the wrong one — and for a buyer who is no
+      // longer a business, printed one at all.
+      for (const stale of existing.data) {
+        if (keep && stale.id === keep.id) continue
+        await stripeDelete(`/customers/${customerId}/tax_ids/${stale.id}`).catch((err) =>
+          logger.warn("Could not remove a stale tax id", { taxIdId: stale.id, error: String(err) }),
+        )
+      }
+
+      if (vat && !keep) {
         await stripePost(`/customers/${customerId}/tax_ids`, { type: "eu_vat", value: vat })
       }
     }

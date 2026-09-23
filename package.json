@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "next build",
+    "test": "node --test 'lib/**/*.test.ts'",
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start"
@@ -72,10 +73,19 @@
   },
   "packageManager": "pnpm@9.15.0",
   "pnpm": {
-    "onlyBuiltDependencies": ["sharp"],
+    "onlyBuiltDependencies": [
+      "sharp"
+    ],
     "supportedArchitectures": {
-      "os": ["current", "linux"],
-      "cpu": ["current", "x64", "arm64"]
+      "os": [
+        "current",
+        "linux"
+      ],
+      "cpu": [
+        "current",
+        "x64",
+        "arm64"
+      ]
     }
   }
 }

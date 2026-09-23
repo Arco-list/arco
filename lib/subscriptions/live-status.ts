@@ -32,7 +32,7 @@ export const LIVE_STATUSES = ["active", "trialing", "past_due", "unpaid"]
  */
 export async function hasLiveSubscription(companyId: string): Promise<boolean> {
   const { data } = await createServiceRoleSupabaseClient()
-    .from("subscriptions" as never)
+    .from("subscriptions")
     .select("status")
     .eq("company_id", companyId)
     .maybeSingle()

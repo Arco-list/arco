@@ -92,7 +92,7 @@ export async function ensureCustomer(
 
   // Older companies were only ever recorded on their subscription.
   const { data: mirrored } = await service
-    .from("subscriptions" as never)
+    .from("subscriptions")
     .select("stripe_customer_id")
     .eq("company_id", companyId)
     .maybeSingle()
@@ -101,7 +101,7 @@ export async function ensureCustomer(
   if (fromSubscription) {
     await service
       .from("companies")
-      .update({ stripe_customer_id: fromSubscription } as never)
+      .update({ stripe_customer_id: fromSubscription })
       .eq("id", companyId)
     return fromSubscription
   }
@@ -116,7 +116,7 @@ export async function ensureCustomer(
   // the whole point of the column.
   await service
     .from("companies")
-    .update({ stripe_customer_id: customer.id } as never)
+    .update({ stripe_customer_id: customer.id })
     .eq("id", companyId)
 
   return customer.id

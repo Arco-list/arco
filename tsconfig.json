@@ -6,6 +6,11 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    // Node runs the .test.ts files directly and its ESM loader wants
+    // the extension; TypeScript refuses it unless told. Safe with
+    // noEmit, which is how tsc is used here — Next does its own build
+    // and never reads this flag.
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",

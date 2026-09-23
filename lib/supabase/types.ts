@@ -355,9 +355,11 @@ export type Database = {
           longitude: number | null
           manually_unlisted: boolean
           name: string
+          nonpayment_cancellations: number
           onboarded_at: string | null
           owner_id: string | null
           phone: string | null
+          postal_code: string | null
           primary_service_id: string | null
           seo_canonical_chosen: string | null
           seo_clicks_28d: number | null
@@ -376,6 +378,7 @@ export type Database = {
           specialties: string[]
           state_region: string | null
           status: Database["public"]["Enums"]["company_status"]
+          stripe_customer_id: string | null
           team_size_max: number | null
           team_size_min: number | null
           translations: Json | null
@@ -411,9 +414,11 @@ export type Database = {
           longitude?: number | null
           manually_unlisted?: boolean
           name: string
+          nonpayment_cancellations?: number
           onboarded_at?: string | null
           owner_id?: string | null
           phone?: string | null
+          postal_code?: string | null
           primary_service_id?: string | null
           seo_canonical_chosen?: string | null
           seo_clicks_28d?: number | null
@@ -432,6 +437,7 @@ export type Database = {
           specialties?: string[]
           state_region?: string | null
           status?: Database["public"]["Enums"]["company_status"]
+          stripe_customer_id?: string | null
           team_size_max?: number | null
           team_size_min?: number | null
           translations?: Json | null
@@ -467,9 +473,11 @@ export type Database = {
           longitude?: number | null
           manually_unlisted?: boolean
           name?: string
+          nonpayment_cancellations?: number
           onboarded_at?: string | null
           owner_id?: string | null
           phone?: string | null
+          postal_code?: string | null
           primary_service_id?: string | null
           seo_canonical_chosen?: string | null
           seo_clicks_28d?: number | null
@@ -488,6 +496,7 @@ export type Database = {
           specialties?: string[]
           state_region?: string | null
           status?: Database["public"]["Enums"]["company_status"]
+          stripe_customer_id?: string | null
           team_size_max?: number | null
           team_size_min?: number | null
           translations?: Json | null
@@ -3694,6 +3703,123 @@ export type Database = {
         }
         Relationships: []
       }
+      stripe_events: {
+        Row: {
+          error: string | null
+          id: string
+          processed_at: string | null
+          received_at: string
+          type: string
+        }
+        Insert: {
+          error?: string | null
+          id: string
+          processed_at?: string | null
+          received_at?: string
+          type: string
+        }
+        Update: {
+          error?: string | null
+          id?: string
+          processed_at?: string | null
+          received_at?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          billing_interval: string | null
+          cancel_at_period_end: boolean
+          canceled_at: string | null
+          canceled_reason: string | null
+          collection_pending_until: string | null
+          company_id: string
+          created_at: string
+          current_period_end: string | null
+          first_payment_at: string | null
+          id: string
+          status: string
+          stripe_customer_id: string
+          stripe_price_id: string | null
+          stripe_subscription_id: string
+          trial_end: string | null
+          updated_at: string
+        }
+        Insert: {
+          billing_interval?: string | null
+          cancel_at_period_end?: boolean
+          canceled_at?: string | null
+          canceled_reason?: string | null
+          collection_pending_until?: string | null
+          company_id: string
+          created_at?: string
+          current_period_end?: string | null
+          first_payment_at?: string | null
+          id?: string
+          status: string
+          stripe_customer_id: string
+          stripe_price_id?: string | null
+          stripe_subscription_id: string
+          trial_end?: string | null
+          updated_at?: string
+        }
+        Update: {
+          billing_interval?: string | null
+          cancel_at_period_end?: boolean
+          canceled_at?: string | null
+          canceled_reason?: string | null
+          collection_pending_until?: string | null
+          company_id?: string
+          created_at?: string
+          current_period_end?: string | null
+          first_payment_at?: string | null
+          id?: string
+          status?: string
+          stripe_customer_id?: string
+          stripe_price_id?: string | null
+          stripe_subscription_id?: string
+          trial_end?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "company_metrics"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "subscriptions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id_full"]
+          },
+          {
+            foreignKeyName: "subscriptions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "subscriptions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ui_tour_seen: {
         Row: {
           seen_at: string
@@ -4262,6 +4388,7 @@ export type Database = {
         | "removed"
         | "verified"
         | "owned"
+        | "unlisted"
       review_moderation_status: "pending" | "approved" | "rejected"
     }
     CompositeTypes: {
@@ -4465,6 +4592,7 @@ export const Constants = {
         "removed",
         "verified",
         "owned",
+        "unlisted",
       ],
       review_moderation_status: ["pending", "approved", "rejected"],
     },
