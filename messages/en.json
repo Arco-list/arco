@@ -1371,7 +1371,10 @@
       "cycle_keep_month": "Stay monthly",
       "cycle_kept": "The switch has been undone.",
       "cycle_keep_failed": "That didn't work. Try again in a moment.",
-      "founding_body_undated": "{company} has founding access: Pro is free during the launch period."
+      "founding_body_undated": "{company} has founding access: Pro is free during the launch period.",
+      "identity_email": "Email for invoices",
+      "identity_email_note": "Can differ from your account — your bookkeeper, for instance.",
+      "identity_email_invalid": "That address does not look right."
     },
     "pricing_current_badge": "Current",
     "pricing_your_plan": "Your current plan",
@@ -2258,7 +2261,7 @@
     "label_holder": "Account holder name",
     "holder_placeholder": "Full name",
     "label_email": "Email address",
-    "email_note": "We confirm the mandate here and send your invoices to this address.",
+    "email_note": "This is where your invoices go. Your bookkeeper works too.",
     "billing_address": "Billing details",
     "label_address": "Address",
     "address_placeholder": "Street and number",

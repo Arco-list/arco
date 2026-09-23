@@ -43,6 +43,9 @@ export type BillingIdentity = {
   city: string | null
   country: string | null
   vatNumber: string | null
+  /** Where invoices are sent. Not the account address: a company can
+   *  put its bookkeeper here and keep the rest of its mail elsewhere. */
+  email: string | null
 }
 
 export type BillingDetails = {

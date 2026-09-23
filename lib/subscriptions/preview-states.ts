@@ -154,6 +154,7 @@ export function previewBillingDetails(state: PreviewState): BillingDetails {
       city: "Amsterdam",
       country: "NL",
       vatNumber: "NL001234567B01",
+      email: "boekhouding@voorbeeld-architecten.nl",
     },
       paymentMethod: { type: "sepa_debit", label: "SEPA-incasso", last4: "5264", expiry: null },
       invoices: [
@@ -213,6 +214,7 @@ export function previewBillingDetails(state: PreviewState): BillingDetails {
       city: "Amsterdam",
       country: "NL",
       vatNumber: "NL001234567B01",
+      email: "boekhouding@voorbeeld-architecten.nl",
     },
     paymentMethod: { type: "sepa_debit", label: "SEPA-incasso", last4: "5264", expiry: null },
     invoices,

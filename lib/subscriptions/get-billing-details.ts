@@ -115,6 +115,7 @@ export async function getBillingDetails(
       // record the document is built from, and a copy could disagree.
       stripeGet<{
         name?: string | null
+        email?: string | null
         address?: { line1?: string | null; postal_code?: string | null; city?: string | null; country?: string | null } | null
       }>(`/customers/${customerId}`),
       stripeGet<StripeList<{ value: string }>>(`/customers/${customerId}/tax_ids`),
@@ -130,6 +131,7 @@ export async function getBillingDetails(
         city: customer.address?.city ?? null,
         country: customer.address?.country ?? null,
         vatNumber: taxIds.data[0]?.value ?? null,
+        email: customer.email ?? null,
       },
       invoices: invoices.data
         // Drafts are Stripe's scratch space — not something a customer

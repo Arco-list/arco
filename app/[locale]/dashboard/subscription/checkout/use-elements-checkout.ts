@@ -247,6 +247,7 @@ export function useElementsCheckout({
       billing?: {
         companyName?: string | null
         vatNumber?: string | null
+        email?: string | null
         address?: { line1: string; city: string; postalCode?: string | null; country?: string | null } | null
       }
     }) => {

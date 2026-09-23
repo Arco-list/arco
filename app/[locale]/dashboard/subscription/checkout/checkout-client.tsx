@@ -368,6 +368,10 @@ export function CheckoutClient({
             bank,
             billing: {
               companyName,
+              // The address the form promises invoices to. It reached
+              // the mandate and stopped there, so the promise was only
+              // kept when it happened to match the account.
+              email,
               // Sent even when empty, so removing a number takes it off
               // the invoice rather than quietly leaving it there.
               vatNumber,

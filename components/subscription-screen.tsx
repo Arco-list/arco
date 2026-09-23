@@ -142,6 +142,7 @@ export function SubscriptionScreen({
   // a guess dressed as a fact, and it appeared above a form the reader
   // then had to search for the offending field.
   const [identityVatError, setIdentityVatError] = useState<string | null>(null)
+  const [identityEmailError, setIdentityEmailError] = useState<string | null>(null)
   const [editingAddress, setEditingAddress] = useState(false)
   const [identity, setIdentity] = useState({
     companyName: details.identity?.companyName ?? "",
@@ -149,6 +150,7 @@ export function SubscriptionScreen({
     postalCode: details.identity?.postalCode ?? "",
     city: details.identity?.city ?? "",
     vatNumber: details.identity?.vatNumber ?? "",
+    email: details.identity?.email ?? "",
   })
 
   const [confirmCancel, setConfirmCancel] = useState(false)
@@ -440,11 +442,19 @@ export function SubscriptionScreen({
       setIdentityVatError(tb("identity_vat_invalid"))
       return
     }
+    // Same shape the checkout accepts. An unreachable address here is
+    // worse than a blank one: invoices would go nowhere and nothing
+    // would say so.
+    if (identity.email.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(identity.email.trim())) {
+      setIdentityEmailError(tb("identity_email_invalid"))
+      return
+    }
     setBusy("identity")
     startTransition(async () => {
       const result = await saveBillingIdentityAction({
         companyName: identity.companyName,
         vatNumber: identity.vatNumber,
+        email: identity.email,
         address: identity.line1
           // Fixed, like the checkout's: we charge 21% Dutch VAT to
           // everyone, which is the wrong tax on a cross-border B2B
@@ -1134,12 +1144,12 @@ export function SubscriptionScreen({
 
       {editIdentity && (
         <div className="popup-overlay"
-          onClick={() => { if (!pending) { setEditIdentity(false); setIdentityVatError(null); setEditingAddress(false) } }}>
+          onClick={() => { if (!pending) { setEditIdentity(false); setIdentityVatError(null); setIdentityEmailError(null); setEditingAddress(false) } }}>
           <div className="popup-card" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
             <div className="popup-header">
               <h3 className="arco-section-title">{tb("identity_title")}</h3>
               <button type="button" className="popup-close"
-                onClick={() => { setEditIdentity(false); setIdentityVatError(null); setEditingAddress(false) }}
+                onClick={() => { setEditIdentity(false); setIdentityVatError(null); setIdentityEmailError(null); setEditingAddress(false) }}
                 aria-label={tb("method_close")}>✕</button>
             </div>
             <p className="arco-small-text" style={{ margin: "0 0 20px" }}>{tb("identity_intro")}</p>
@@ -1190,6 +1200,23 @@ export function SubscriptionScreen({
               </div>
             )}
 
+            {/* Last, because it is the field that least often changes —
+                and separate from the account address on purpose: an
+                invoice is filed by whoever does the books. Set at
+                checkout and, until now, never correctable. */}
+            <label className="form-label" htmlFor="bi-email">{tb("identity_email")}</label>
+            <input id="bi-email" type="email"
+              className={`form-input${identityEmailError ? " form-input--error" : ""}`}
+              value={identity.email}
+              onChange={(e) => {
+                setIdentity((v) => ({ ...v, email: e.target.value }))
+                setIdentityEmailError(null)
+              }}
+              style={{ marginBottom: 0 }} />
+            {identityEmailError
+              ? <p className="form-note form-note--error" style={{ marginBottom: 20 }}>{identityEmailError}</p>
+              : <p className="form-note" style={{ marginBottom: 20 }}>{tb("identity_email_note")}</p>}
+
             <label className="form-label" htmlFor="bi-vat">
               {tb("identity_vat")} <span style={{ color: "var(--arco-mid-grey)", fontWeight: 400 }}>{tb("identity_optional")}</span>
             </label>
@@ -1197,7 +1224,7 @@ export function SubscriptionScreen({
               placeholder="NL123456789B01" value={identity.vatNumber}
               onChange={(e) => {
                 setIdentity((v) => ({ ...v, vatNumber: e.target.value }))
-                setIdentityVatError(null); setEditingAddress(false)
+                setIdentityVatError(null); setIdentityEmailError(null); setEditingAddress(false)
               }}
               style={{ marginBottom: identityVatError ? 0 : 24 }} />
             {identityVatError && (
@@ -1206,7 +1233,7 @@ export function SubscriptionScreen({
 
             <div className="popup-actions">
               <button type="button" className="btn-tertiary" style={{ flex: 1 }}
-                onClick={() => { setEditIdentity(false); setIdentityVatError(null); setEditingAddress(false) }} disabled={pending}>
+                onClick={() => { setEditIdentity(false); setIdentityVatError(null); setIdentityEmailError(null); setEditingAddress(false) }} disabled={pending}>
                 {tb("cancel_confirm_keep")}
               </button>
               <button type="button" className="btn-primary" style={{ flex: 1 }}

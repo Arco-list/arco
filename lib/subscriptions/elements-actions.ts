@@ -594,6 +594,21 @@ export async function saveBillingIdentityAction(input: {
   /** Empty removes whatever is on file. A buyer who stops buying as a
    *  business must be able to take their number off the invoice. */
   vatNumber?: string | null
+  /**
+   * Where invoices go.
+   *
+   * The checkout asks for this and says what it is for — "hier sturen
+   * we je facturen naartoe" — and then sent it only to the payment
+   * method's billing_details, which Stripe uses for the mandate and
+   * for nothing else. Invoice mail follows the CUSTOMER's address, so
+   * somebody who entered their bookkeeper's got their own instead, and
+   * the form had promised otherwise.
+   *
+   * Deliberately separate from the account email: the rest of the
+   * subscription mail is about the product and goes to the person
+   * using it, while an invoice is a document for whoever files it.
+   */
+  email?: string | null
   address?: { line1: string; city: string; postalCode?: string | null; country?: string | null } | null
 }): Promise<{ ok: true } | Failure> {
   if (!isStripeConfigured()) return { error: "not_configured" }
@@ -610,6 +625,8 @@ export async function saveBillingIdentityAction(input: {
   // of somebody who had just said they were not a company.
   const name = input.companyName?.trim() ?? ""
   if (input.companyName !== undefined) payload.name = name || null
+  const email = input.email?.trim()
+  if (email) payload.email = email
   if (input.address?.line1) {
     payload.address = {
       line1: input.address.line1,
