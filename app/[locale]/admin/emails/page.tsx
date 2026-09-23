@@ -112,15 +112,24 @@ const INITIAL_TEMPLATES: EmailTemplate[] = [
   { id: "listed-professionals-contributor", name: "More Projects On Your Page", type: "marketing", audience: "contributor", description: "Ask the architects you worked with to put shared projects on Arco", trigger: "Drip queue · 3 business days after listing · variant resolved at send", subject: "Zo krijg je meer projecten op je pagina", sends: 0, deliveryRate: 100, active: true, drip: "listed-series", dripDay: 3, from: SENDERS.niek },
   { id: "listed-backlink", name: "Listed Backlink", type: "marketing", audience: "professional", description: "'Listed on Arco' badge for their own site — NOT enqueued until the /badges page exists", trigger: "Planned · +10 business days after listing · waiting for the badge page", subject: "Zet 'Listed on Arco' op je website", sends: 0, deliveryRate: 100, active: false, drip: "listed-series", dripDay: 10, from: SENDERS.niek },
   // ——— Subscription ————————————————————————————————————————————————
-  // Everything Stripe would otherwise send on our behalf, sent by us
-  // instead: the reader's relationship is with Arco, and a receipt in
-  // Stripe's voice about a product it cannot name is a worse document
-  // than one that says what they bought.
+  // What a paying company receives, and who actually sends it.
   //
-  // Rows only for now — the templates are not built. Each maps to an
-  // event the webhook already handles, so nothing here waits on new
-  // plumbing.
-  { id: "invoice-paid", name: "Invoice", type: "transactional", audience: "professional", description: "The charge, with the invoice PDF — and the only confirmation a subscription needs", trigger: "invoice.paid (every charge, first and renewal)", subject: "Je factuur van Arco — [Amount]", sends: 0, deliveryRate: 100, active: false, from: SENDERS.stripe },
+  // Most of it is ours. The reader's relationship is with Arco, and a
+  // notice in Stripe's voice about a product it cannot name is a worse
+  // document than one that says what they bought.
+  //
+  // Two are not ours, and SENDERS.stripe is not decoration: Stripe
+  // writes them, Stripe delivers them, and no open or click figure on
+  // this page will ever mean anything for those rows. They are listed
+  // anyway. A page that claims to show everything a subscriber gets,
+  // and then leaves out the two we did not write, is worse than no
+  // page — it is the omission that gets believed.
+  //
+  // Those two are the only ones that actually send today. The rest are
+  // rows without templates, each mapped to an event the webhook
+  // already handles, so nothing here waits on new plumbing.
+  { id: "sepa-prenotification", name: "SEPA Pre-notification", type: "transactional", audience: "professional", description: "Announces the debit before it leaves the account — the only mail that lets someone fix a mandate before the payment fails rather than after", trigger: "Before every SEPA debit, first and renewal. SEPA mandates only — a card subscription never gets this", subject: "Aankondiging van incasso — tekst van Stripe", sends: 0, deliveryRate: 100, active: true, from: SENDERS.stripe },
+  { id: "invoice-paid", name: "Invoice", type: "transactional", audience: "professional", description: "The charge, with the invoice PDF — and the only confirmation a subscription needs", trigger: "invoice.paid (every charge, first and renewal)", subject: "Je factuur van Arco — [Amount]", sends: 0, deliveryRate: 100, active: true, from: SENDERS.stripe },
   { id: "payment-failed", name: "Payment Failed", type: "transactional", audience: "professional", description: "A renewal could not be collected — names the deadline and what happens after it", trigger: "invoice.payment_failed AND first_payment_at is set — a renewal, never a first payment", subject: "We konden [Amount] niet afschrijven", sends: 0, deliveryRate: 100, active: false, from: SENDERS.arco },
   { id: "payment-method-expiring", name: "Card Expiring", type: "transactional", audience: "professional", description: "Prevents the failure rather than reporting it", trigger: "Stripe reports the card expires before the next renewal", subject: "Je betaalmethode verloopt binnenkort", sends: 0, deliveryRate: 100, active: false, from: SENDERS.arco },
   { id: "renewal-reminder", name: "Renewal Reminder", type: "transactional", audience: "professional", description: "Warning ahead of a yearly charge", trigger: "14 days before a yearly subscription renews", subject: "Je jaarabonnement wordt op [Date] verlengd", sends: 0, deliveryRate: 100, active: false, from: SENDERS.arco },
