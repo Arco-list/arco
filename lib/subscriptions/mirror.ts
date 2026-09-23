@@ -172,19 +172,3 @@ export async function mirrorSubscription(
   }
 }
 
-/**
- * Fetch a subscription by id and mirror it, swallowing failures.
- *
- * For the callers that are a safety net rather than the main path: the
- * reader is waiting on a page, and a mirror that did not take is not a
- * reason to tell them their payment failed. The webhook will do it
- * again anyway.
- */
-export async function mirrorSubscriptionById(subscriptionId: string): Promise<void> {
-  try {
-    const subscription = await stripeGet<StripeSubscription>(`/subscriptions/${subscriptionId}`)
-    await mirrorSubscription(createServiceRoleSupabaseClient(), subscription)
-  } catch (err) {
-    logger.error("Best-effort subscription mirror failed", { subscriptionId }, err as Error)
-  }
-}
