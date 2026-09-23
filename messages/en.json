@@ -1202,8 +1202,7 @@
       "current_plan": "Current plan",
       "plan_free": "Free",
       "founding_badge": "Founding",
-      "founding_body": "{company} has founding access: Pro is free during the launch period.",
-      "founding_next": "We'll tell you well in advance when billing goes live. You keep today's price.",
+      "founding_body": "Pro is free until {date} and stops by itself after that. Nothing is charged.",
       "free_body": "You're on the free plan. Publishing stays free and unlimited — Pro unlocks the projects others have credited you on.",
       "renews_yearly": "Renews annually on {date}.",
       "renews_monthly": "Renews monthly on {date}.",
@@ -1371,7 +1370,8 @@
       "cycle_keep_year": "Stay yearly",
       "cycle_keep_month": "Stay monthly",
       "cycle_kept": "The switch has been undone.",
-      "cycle_keep_failed": "That didn't work. Try again in a moment."
+      "cycle_keep_failed": "That didn't work. Try again in a moment.",
+      "founding_body_undated": "{company} has founding access: Pro is free during the launch period."
     },
     "pricing_current_badge": "Current",
     "pricing_your_plan": "Your current plan",
@@ -2259,13 +2259,11 @@
     "holder_placeholder": "Full name",
     "label_email": "Email address",
     "email_note": "We confirm the mandate here and send your invoices to this address.",
-    "billing_address": "Billing address",
+    "billing_address": "Billing details",
     "label_address": "Address",
     "address_placeholder": "Street and number",
     "change": "Change",
-    "business_checkbox": "I'm buying as a business",
     "label_company": "Company name",
-    "company_note": "As your company is registered with the Chamber of Commerce.",
     "label_vat": "VAT number",
     "optional": "(optional)",
     "due_today": "Due today",
@@ -2310,6 +2308,7 @@
     "saved_method_failed_desc": "{method} — the last debit failed",
     "saved_method_desc": "{method} — nothing to fill in",
     "saved_note": "We will use the mandate you gave us earlier.",
-    "saved_note_failed": "We will try the same mandate again. If it failed because the account was briefly short, that may now work — if not, pick another method above."
+    "saved_note_failed": "We will try the same mandate again. If it failed because the account was briefly short, that may now work — if not, pick another method above.",
+    "err_claim_failed": "Activating Pro didn't work. Try again in a moment."
   }
 }

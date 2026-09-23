@@ -7,7 +7,7 @@ import { stripeGet } from "@/lib/stripe/rest"
 import { mirrorSubscription, type StripeSubscription } from "@/lib/subscriptions/mirror"
 import { subscribeFromSetupIntent } from "@/lib/subscriptions/subscribe-from-setup"
 import { getCompanyBilling } from "@/lib/subscriptions/get-company-subscription"
-import { enforceCreditAllowance } from "@/lib/subscriptions/enforce-credit-allowance"
+import { enforceCreditAllowance, restoreHeldBackCredits } from "@/lib/subscriptions/enforce-credit-allowance"
 import {
   cancelUnpaidFirstPeriod,
   forgiveOutstandingInvoices,
@@ -154,7 +154,14 @@ export async function POST(request: NextRequest) {
         const companyForCredits = subscription.metadata?.company_id
         if (companyForCredits) {
           const billing = await getCompanyBilling(companyForCredits)
-          if (billing.plan !== "pro") await enforceCreditAllowance(companyForCredits)
+          if (billing.plan === "pro") {
+            // Bought the unlimited page; get the unlimited page. Leaving
+            // the credits where the free limit parked them would make
+            // the reader finish their own purchase, one menu at a time.
+            await restoreHeldBackCredits(companyForCredits)
+          } else {
+            await enforceCreditAllowance(companyForCredits)
+          }
         }
 
         // Remembered after the mirror, so the row exists to look the
@@ -171,7 +178,9 @@ export async function POST(request: NextRequest) {
           // already marked the invoice uncollectible by now, which is
           // the safe resting place if this never runs — but it reads as
           // a debt we gave up on, and we mean to withdraw it.
-          if (subscription.customer) await forgiveOutstandingInvoices(subscription.customer)
+          if (subscription.customer) {
+            await forgiveOutstandingInvoices(subscription.customer, subscription.latest_invoice)
+          }
         }
         break
       }

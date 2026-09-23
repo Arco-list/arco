@@ -48,7 +48,7 @@ export async function enforceCreditAllowance(companyId: string): Promise<string[
   for (const row of toDemote) {
     const { error } = await service
       .from("project_professionals")
-      .update({ status: "listed", updated_at: new Date().toISOString() } as never)
+      .update({ status: "listed", updated_at: new Date().toISOString() })
       .eq("id", row.id)
 
     if (error) {
@@ -64,4 +64,51 @@ export async function enforceCreditAllowance(companyId: string): Promise<string[
     logger.info("Demoted credits past the free allowance", { companyId, count: demoted.length })
   }
   return demoted
+}
+
+/**
+ * Put every held-back credit back on the page.
+ *
+ * The other half of the allowance, and the one a buyer notices. Paying
+ * for Pro and then finding the projects still off your page — each
+ * needing its own visit to a menu — is asking someone to finish a
+ * purchase by hand.
+ *
+ * Promotes `listed`, which is where the demotion above puts things and
+ * where the free limit leaves them. Not `unlisted`: that is somebody
+ * saying "not this one", and a plan change is no reason to overrule it.
+ * Not `invited` either — an unaccepted credit is not theirs to show.
+ */
+export async function restoreHeldBackCredits(companyId: string): Promise<string[]> {
+  const service = createServiceRoleSupabaseClient()
+
+  const { data: heldBack } = await service
+    .from("project_professionals")
+    .select("id")
+    .eq("company_id", companyId)
+    .eq("status", "listed")
+
+  const rows = (heldBack ?? []) as { id: string }[]
+  if (rows.length === 0) return []
+
+  const promoted: string[] = []
+  for (const row of rows) {
+    const { error } = await service
+      .from("project_professionals")
+      .update({ status: "live_on_page", updated_at: new Date().toISOString() })
+      .eq("id", row.id)
+
+    if (error) {
+      logger.error("Could not restore a held-back credit", {
+        companyId, projectProfessionalId: row.id, error: error.message,
+      })
+      continue
+    }
+    promoted.push(row.id)
+  }
+
+  if (promoted.length > 0) {
+    logger.info("Restored held-back credits on upgrade", { companyId, count: promoted.length })
+  }
+  return promoted
 }

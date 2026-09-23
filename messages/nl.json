@@ -1202,8 +1202,7 @@
       "current_plan": "Huidig abonnement",
       "plan_free": "Gratis",
       "founding_badge": "Founding",
-      "founding_body": "{company} heeft founding-toegang: Pro is gratis tijdens de lanceringsperiode.",
-      "founding_next": "Zodra de facturatie live gaat, laten we je ruim van tevoren weten wat er verandert. Je behoudt het tarief van nu.",
+      "founding_body": "Pro is gratis tot {date} en stopt daarna vanzelf. Er wordt niets afgeschreven.",
       "free_body": "Je gebruikt Arco gratis. Publiceren blijft altijd gratis en onbeperkt — Pro ontgrendelt de projecten waarop anderen je hebben vermeld.",
       "renews_yearly": "Wordt jaarlijks verlengd op {date}.",
       "renews_monthly": "Wordt maandelijks verlengd op {date}.",
@@ -1371,7 +1370,8 @@
       "cycle_keep_year": "Jaarlijks houden",
       "cycle_keep_month": "Maandelijks houden",
       "cycle_kept": "De overstap is teruggedraaid.",
-      "cycle_keep_failed": "Dat lukte niet. Probeer het zo nog eens."
+      "cycle_keep_failed": "Dat lukte niet. Probeer het zo nog eens.",
+      "founding_body_undated": "{company} heeft founding-toegang: Pro is gratis tijdens de lanceringsperiode."
     },
     "pricing_current_badge": "Huidig",
     "pricing_your_plan": "Je huidige abonnement",
@@ -2259,13 +2259,11 @@
     "holder_placeholder": "Volledige naam",
     "label_email": "E-mailadres",
     "email_note": "Hier bevestigen we de machtiging en sturen we je facturen naartoe.",
-    "billing_address": "Factuuradres",
+    "billing_address": "Factuurgegevens",
     "label_address": "Adres",
     "address_placeholder": "Straat en huisnummer",
     "change": "Wijzigen",
-    "business_checkbox": "Ik koop zakelijk",
     "label_company": "Bedrijfsnaam",
-    "company_note": "Zoals je bedrijf bij de KvK staat ingeschreven.",
     "label_vat": "Btw-nummer",
     "optional": "(optioneel)",
     "due_today": "Vandaag te betalen",
@@ -2310,6 +2308,7 @@
     "saved_method_failed_desc": "{method} — de vorige incasso is mislukt",
     "saved_method_desc": "{method} — niets in te vullen",
     "saved_note": "We gebruiken de machtiging die je eerder gaf.",
-    "saved_note_failed": "We proberen het opnieuw met dezelfde machtiging. Werkte hij niet omdat de rekening even krap stond, dan kan dat lukken — zo niet, kies dan hierboven een andere methode."
+    "saved_note_failed": "We proberen het opnieuw met dezelfde machtiging. Werkte hij niet omdat de rekening even krap stond, dan kan dat lukken — zo niet, kies dan hierboven een andere methode.",
+    "err_claim_failed": "Pro activeren lukte niet. Probeer het zo nog eens."
   }
 }

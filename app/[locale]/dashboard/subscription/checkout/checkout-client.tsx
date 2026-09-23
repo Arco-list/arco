@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useState, useTransition, type ReactNode } from "react"
 import { useTranslations } from "next-intl"
 import { AlertCircle, Check, CreditCard, Landmark, Lock, Repeat, Wallet, X } from "lucide-react"
 
@@ -15,6 +15,7 @@ import { isValidVatNumber } from "@/lib/subscriptions/vat-number"
 
 import { FREE_MONTHS, IDEAL_BANKS } from "./constants"
 import { useElementsCheckout } from "./use-elements-checkout"
+import { claimFoundingAccess } from "@/app/pricing/actions"
 
 /**
  * Design study: the subscribe page as it would look built on Stripe
@@ -39,9 +40,14 @@ import { useElementsCheckout } from "./use-elements-checkout"
  *     iDEAL fee at signup and then every renewal is a €0,35 direct
  *     debit anyway. What it buys for that is recognition — picking
  *     your bank instead of typing an IBAN from memory.
- *  3. "Ik koop zakelijk" starts checked, because every buyer of Pro is
- *     a company. It stays a checkbox rather than an assumption so a
- *     sole trader without a VAT number can still get through.
+ *  3. There is no "private buyer" path, because there is no private
+ *     buyer: everyone paying for Pro is selling services on a
+ *     marketplace for practices. A checkbox once offered one, though
+ *     it was really there so a sole trader without a VAT number could
+ *     get through — which the optional VAT field already allows. It
+ *     cost two screens that knew the choice differently, and it put
+ *     consumer sales, and their fourteen-day right of withdrawal,
+ *     one careless tick away.
  */
 
 type Method = "saved" | "sepa" | "ideal" | "card"
@@ -144,7 +150,6 @@ export function CheckoutClient({
   // form is optional.
   const [method, setMethod] = useState<Method>(savedMethod && !savedMethodFailed ? "saved" : "ideal")
   const usingSaved = method === "saved"
-  const [business, setBusiness] = useState(true)
   const [vatNumber, setVatNumber] = useState("")
   const [promoOpen, setPromoOpen] = useState(false)
   const [promoInput, setPromoInput] = useState("")
@@ -200,13 +205,13 @@ export function CheckoutClient({
       address: address ? null : t("err_address"),
       // Same reason as the address: a Dutch invoice must carry the
       // buyer's name, and only they know the registered one.
-      companyName: business && !companyName.trim() ? t("err_company") : null,
+      companyName: companyName.trim() ? null : t("err_company"),
       // Optional, so an empty field is fine — but a filled one has to
       // be right. Stripe refuses a malformed number when the tax ID is
       // written, and that write is best-effort on purpose, so without
       // this the number simply never reaches the invoice and nobody is
       // told.
-      vatNumber: business && vatNumber.trim() && !isValidVatNumber(vatNumber) ? t("err_vat") : null,
+      vatNumber: vatNumber.trim() && !isValidVatNumber(vatNumber) ? t("err_vat") : null,
       // Stripe's own errors cover wrong; these cover empty. Without
       // them an untouched IBAN produced a refusal from the payment
       // processor instead of a sentence under the field.
@@ -312,7 +317,14 @@ export function CheckoutClient({
     router.replace(`${returnTo}${sep}subscribed=${checkout.status === "active" ? "active" : "processing"}`)
   }, [checkout.phase, checkout.status, returnTo, router])
 
-  const busy = checkout.phase === "confirming" || checkout.phase === "mounting" || checkout.phase === "done"
+  // The founding claim has no Stripe object to watch, so it keeps its
+  // own flag rather than borrowing the checkout's phases.
+  const [claiming, setClaiming] = useState(false)
+  const [claimFailed, setClaimFailed] = useState(false)
+  const [, startTransition] = useTransition()
+
+  const busy = claiming
+    || checkout.phase === "confirming" || checkout.phase === "mounting" || checkout.phase === "done"
 
   const submitBlock = (
     <>
@@ -324,7 +336,27 @@ export function CheckoutClient({
         // an error left the reader with a dead button and no way back.
         disabled={busy}
         onClick={() => {
-          if (freeActivation) return
+          // A hundred percent off is not a cheaper purchase, it is a
+          // different one: no mandate, no Stripe subscription, nothing
+          // to charge later. It is the founding promise, and the claim
+          // that records it already existed — the button just never
+          // called it, so the code the launch depends on activated
+          // nothing at all.
+          if (freeActivation) {
+            if (claiming) return
+            setClaiming(true)
+            startTransition(async () => {
+              const result = await claimFoundingAccess()
+              if (!result.claimed) {
+                setClaiming(false)
+                setClaimFailed(true)
+                return
+              }
+              const sep = returnTo.includes("?") ? "&" : "?"
+              router.replace(`${returnTo}${sep}subscribed=active`)
+            })
+            return
+          }
           if (!validate()) return
           if (usingSaved) {
             checkout.confirmSaved(cycle)
@@ -335,8 +367,10 @@ export function CheckoutClient({
             email,
             bank,
             billing: {
-              companyName: business ? companyName : null,
-              vatNumber: business ? vatNumber : null,
+              companyName,
+              // Sent even when empty, so removing a number takes it off
+              // the invoice rather than quietly leaving it there.
+              vatNumber,
               address: address
                 ? { line1: address.streetAddress, city: address.city, postalCode: address.postalCode, country }
                 : null,
@@ -351,6 +385,12 @@ export function CheckoutClient({
           field could own ends up here — a declined card, a network that
           gave out. Everything the form can check itself is checked at
           the field it belongs to. */}
+      {claimFailed && (
+        <p className="form-note form-note--error" style={{ margin: "10px 0 0" }}>
+          {t("err_claim_failed")}
+        </p>
+      )}
+
       {checkout.phase === "error" && checkout.message && (
         <p className="form-note form-note--error" style={{ margin: "10px 0 0" }}>
           {OUR_CODES.includes(checkout.message) ? t(`err_${checkout.message}` as never) : checkout.message}
@@ -625,6 +665,28 @@ export function CheckoutClient({
             <section className="checkout-section">
               <h2 className="checkout-legend">{t("billing_address")}</h2>
 
+              {/* Prefilled from the company page and editable from
+                  there: the name on Arco is a brand, the name on an
+                  invoice is a registration, and on this platform they
+                  rarely match. */}
+              <label className="form-label" htmlFor="company">{t("label_company")}</label>
+              <input
+                id="company"
+                className={inputCls("companyName")}
+                value={companyName}
+                // Flat against its error, and otherwise spaced by the
+                // stylesheet like every other field. The zero used to
+                // be unconditional so a note could sit tight beneath
+                // it; with that note gone it left the next label
+                // resting on the box.
+                style={errOf("companyName") ? { marginBottom: 0 } : undefined}
+                onChange={(e) => {
+                  setCompanyName(e.target.value)
+                  setFieldErrors((prev) => ({ ...prev, companyName: null }))
+                }}
+              />
+              {note(errOf("companyName"))}
+
               {/* Land is a question about the address, so it only shows
                   while the address is being answered. Once one is
                   picked it says the country itself, and a field that
@@ -668,50 +730,21 @@ export function CheckoutClient({
                 </>
               )}
 
-              <label className="checkout-check">
-                <input type="checkbox" checked={business} onChange={(e) => setBusiness(e.target.checked)} />
-                {t("business_checkbox")}
+              <label className="form-label" htmlFor="vat">
+                {t("label_vat")} <span style={{ color: "var(--arco-mid-grey)", fontWeight: 400 }}>{t("optional")}</span>
               </label>
-
-              {business && (
-                <div style={{ marginTop: 20 }}>
-                  {/* Prefilled from the company page and editable from
-                      there: the name on Arco is a brand, the name on an
-                      invoice is a registration, and on this platform
-                      they rarely match. */}
-                  <label className="form-label" htmlFor="company">{t("label_company")}</label>
-                  <input
-                    id="company"
-                    className={inputCls("companyName")}
-                    value={companyName}
-                    style={{ marginBottom: 0 }}
-                    onChange={(e) => {
-                      setCompanyName(e.target.value)
-                      setFieldErrors((prev) => ({ ...prev, companyName: null }))
-                    }}
-                  />
-                  {note(errOf("companyName"))}
-                  {!errOf("companyName") && (
-                    <p className="form-note">{t("company_note")}</p>
-                  )}
-
-                  <label className="form-label" htmlFor="vat">
-                    {t("label_vat")} <span style={{ color: "var(--arco-mid-grey)", fontWeight: 400 }}>{t("optional")}</span>
-                  </label>
-                  <input
-                    id="vat"
-                    className={inputCls("vatNumber")}
-                    placeholder={t("vat_placeholder")}
-                    value={vatNumber}
-                    style={{ marginBottom: 0 }}
-                    onChange={(e) => {
-                      setVatNumber(e.target.value)
-                      setFieldErrors((prev) => ({ ...prev, vatNumber: null }))
-                    }}
-                  />
-                  {note(errOf("vatNumber"))}
-                </div>
-              )}
+              <input
+                id="vat"
+                className={inputCls("vatNumber")}
+                placeholder={t("vat_placeholder")}
+                value={vatNumber}
+                style={errOf("vatNumber") ? { marginBottom: 0 } : undefined}
+                onChange={(e) => {
+                  setVatNumber(e.target.value)
+                  setFieldErrors((prev) => ({ ...prev, vatNumber: null }))
+                }}
+              />
+              {note(errOf("vatNumber"))}
             </section>
           </div>
           )}
