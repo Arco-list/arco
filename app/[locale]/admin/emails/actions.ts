@@ -2,6 +2,7 @@
 
 import { Resend } from 'resend'
 import { createServiceRoleSupabaseClient } from '@/lib/supabase/server'
+import { isEntitledNow } from '@/lib/subscriptions/entitlement'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -891,6 +892,12 @@ export type ProspectFunnelCounts = {
   verified: number
   owned: number
   active: number
+  /** Companies paying for Pro, or holding founding access. Counted
+   *  from subscriptions rather than from `prospects`, which has no
+   *  such status — the sales funnel draws this stage as a hardcoded
+   *  zero for exactly that reason, and a monetization stage stuck on
+   *  nought is soon read as "nobody buys" rather than "nobody counts". */
+  subscribed: number
 }
 
 /**
@@ -963,8 +970,42 @@ export async function fetchClientFunnelCounts(sinceIso?: string): Promise<{ coun
  * since `sinceIso` — with a window the connectors read as cohort
  * conversion for prospects that entered in the period.
  */
+/**
+ * Companies on Pro right now.
+ *
+ * Two ways to be there and they must both count: a paid subscription
+ * in a status that still carries entitlements, or founding access,
+ * which is Pro with no Stripe object behind it at all. Counting only
+ * the first would report the launch period as no sales.
+ */
+async function countSubscribed(
+  supabase: ReturnType<typeof createServiceRoleSupabaseClient>,
+): Promise<number> {
+  const [{ data: paying }, { data: founding }] = await Promise.all([
+    supabase.from('subscriptions').select('company_id, status, collection_pending_until'),
+    supabase.from('companies').select('id').not('founding_claimed_at', 'is', null),
+  ])
+
+  // One set, so a founding company that later starts paying is one
+  // company and not two.
+  const companies = new Set<string>()
+
+  for (const row of (paying ?? []) as {
+    company_id?: string | null; status?: string | null; collection_pending_until?: string | null
+  }[]) {
+    if (row.company_id && isEntitledNow(row.status, row.collection_pending_until)) {
+      companies.add(row.company_id)
+    }
+  }
+  for (const row of (founding ?? []) as { id?: string | null }[]) {
+    if (row.id) companies.add(row.id)
+  }
+
+  return companies.size
+}
+
 export async function fetchProspectFunnelCounts(sinceIso?: string): Promise<{ counts: ProspectFunnelCounts; error?: string }> {
-  const empty: ProspectFunnelCounts = { contacted: 0, visitor: 0, verified: 0, owned: 0, active: 0 }
+  const empty: ProspectFunnelCounts = { contacted: 0, visitor: 0, verified: 0, owned: 0, active: 0, subscribed: 0 }
   try {
     const supabase = createServiceRoleSupabaseClient()
 
@@ -972,7 +1013,8 @@ export async function fetchProspectFunnelCounts(sinceIso?: string): Promise<{ co
       // All time: current inventory per stage. Per-status HEAD counts —
       // a plain select('status') silently caps at 1000 rows, which
       // zeroed out the rare stages and blanked the connectors.
-      const statuses = Object.keys(empty) as Array<keyof ProspectFunnelCounts>
+      // Every stage but the last is a prospect status.
+      const statuses = ['contacted', 'visitor', 'verified', 'owned', 'active'] as const
       const results = await Promise.all(
         statuses.map((s) =>
           supabase.from('prospects').select('id', { count: 'exact', head: true }).eq('status', s),
@@ -983,6 +1025,7 @@ export async function fetchProspectFunnelCounts(sinceIso?: string): Promise<{ co
         if (results[i].error) return { counts: empty, error: results[i].error!.message }
         counts[statuses[i]] = results[i].count ?? 0
       }
+      counts.subscribed = await countSubscribed(supabase)
       return { counts }
     }
 
@@ -1020,6 +1063,10 @@ export async function fetchProspectFunnelCounts(sinceIso?: string): Promise<{ co
         verified: dedupe(verifiedEv.data as never).size,
         owned: ownedIds.size,
         active: converted.count ?? 0,
+        // Not windowed: a subscription has no attainment event to
+        // count inside a period, so this is the standing number in
+        // both views. Saying so beats quietly reporting nought.
+        subscribed: await countSubscribed(supabase),
       },
     }
   } catch (e) {

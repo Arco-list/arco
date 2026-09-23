@@ -41,6 +41,12 @@ const SENDERS: Record<string, EmailSender> = {
   arco: { name: "Arco", email: "automated@arcolist.com", icon: "/arco-logo-square.png" },
   niek: { name: "Niek van Leeuwen", email: "niek@arcolist.com", icon: "/arco-logo-square.png" },
   team: { name: "Arco Team", email: "team@arcolist.com", icon: "/arco-logo-square.png" },
+  // Not ours to send. The invoice is a Stripe artefact — its PDF, its
+  // amount, always in step with what was actually charged — so Stripe
+  // mails it and this row exists to say so. Without the distinction the
+  // dashboard promises open and click rates for a mail we never touch,
+  // and a template nobody can edit here.
+  stripe: { name: "Stripe (namens Arco)", email: "via Stripe" },
 }
 
 const AUDIENCE_CONFIG: Record<UserAudience, { label: string; cls: string }> = {
@@ -105,6 +111,23 @@ const INITIAL_TEMPLATES: EmailTemplate[] = [
   { id: "listed-professionals-publisher", name: "Credit Your Professionals", type: "marketing", audience: "publisher", description: "The network motor: credit the pros you worked with — always sent, more credits = more reach", trigger: "Drip queue · 3 business days after listing · variant resolved at send", subject: "Vermeld de professionals waarmee je werkte", sends: 0, deliveryRate: 100, active: true, drip: "listed-series", dripDay: 3, from: SENDERS.niek },
   { id: "listed-professionals-contributor", name: "More Projects On Your Page", type: "marketing", audience: "contributor", description: "Ask the architects you worked with to put shared projects on Arco", trigger: "Drip queue · 3 business days after listing · variant resolved at send", subject: "Zo krijg je meer projecten op je pagina", sends: 0, deliveryRate: 100, active: true, drip: "listed-series", dripDay: 3, from: SENDERS.niek },
   { id: "listed-backlink", name: "Listed Backlink", type: "marketing", audience: "professional", description: "'Listed on Arco' badge for their own site — NOT enqueued until the /badges page exists", trigger: "Planned · +10 business days after listing · waiting for the badge page", subject: "Zet 'Listed on Arco' op je website", sends: 0, deliveryRate: 100, active: false, drip: "listed-series", dripDay: 10, from: SENDERS.niek },
+  // ——— Subscription ————————————————————————————————————————————————
+  // Everything Stripe would otherwise send on our behalf, sent by us
+  // instead: the reader's relationship is with Arco, and a receipt in
+  // Stripe's voice about a product it cannot name is a worse document
+  // than one that says what they bought.
+  //
+  // Rows only for now — the templates are not built. Each maps to an
+  // event the webhook already handles, so nothing here waits on new
+  // plumbing.
+  { id: "invoice-paid", name: "Invoice", type: "transactional", audience: "professional", description: "The charge, with the invoice PDF — and the only confirmation a subscription needs", trigger: "invoice.paid (every charge, first and renewal)", subject: "Je factuur van Arco — [Amount]", sends: 0, deliveryRate: 100, active: false, from: SENDERS.stripe },
+  { id: "payment-failed", name: "Payment Failed", type: "transactional", audience: "professional", description: "A renewal could not be collected — names the deadline and what happens after it", trigger: "invoice.payment_failed AND first_payment_at is set — a renewal, never a first payment", subject: "We konden [Amount] niet afschrijven", sends: 0, deliveryRate: 100, active: false, from: SENDERS.arco },
+  { id: "payment-method-expiring", name: "Card Expiring", type: "transactional", audience: "professional", description: "Prevents the failure rather than reporting it", trigger: "Stripe reports the card expires before the next renewal", subject: "Je betaalmethode verloopt binnenkort", sends: 0, deliveryRate: 100, active: false, from: SENDERS.arco },
+  { id: "renewal-reminder", name: "Renewal Reminder", type: "transactional", audience: "professional", description: "Warning ahead of a yearly charge", trigger: "14 days before a yearly subscription renews", subject: "Je jaarabonnement wordt op [Date] verlengd", sends: 0, deliveryRate: 100, active: false, from: SENDERS.arco },
+  { id: "founding-active", name: "Founding Access", type: "transactional", audience: "professional", description: "Pro without a payment method, free until a date", trigger: "founding_claimed_at stamped", subject: "Pro staat aan — gratis tot [Date]", sends: 0, deliveryRate: 100, active: false, from: SENDERS.niek },
+  { id: "founding-ending", name: "Founding Ending", type: "transactional", audience: "professional", description: "The mail that decides whether a founding member converts", trigger: "14 days before the founding period ends", subject: "Je founding-periode loopt af op [Date]", sends: 0, deliveryRate: 100, active: false, from: SENDERS.niek },
+  { id: "subscription-ended-nonpayment", name: "Back to Free", type: "transactional", audience: "professional", description: "Dunning ran out: the page is back to the free limit, and the way to undo it", trigger: "Subscription ends over an uncollected invoice — a refused first payment, or dunning running out", subject: "[Company] staat weer op Gratis", sends: 0, deliveryRate: 100, active: false, from: SENDERS.arco },
+
 ]
 
 // Small ⓘ with a native-title hover explaining the benchmark behind a
@@ -141,7 +164,7 @@ type FunnelLane = {
   key: string
   label: string
   dot: string
-  driver: "prospect" | "acquisition" | "retention"
+  driver: "prospect" | "acquisition" | "retention" | "monetization"
   meaning: string
   stop: string
   transactional: Array<{ templateId: string; note: string }>
@@ -232,6 +255,56 @@ const FUNNEL_LANES: FunnelLane[] = [
     // "Credit je team" / "Nodig je opdrachtgevers uit" placeholders are
     // built: the listed-professionals variants cover both.
     ghosts: [],
+  },
+  {
+    key: "subscribed",
+    label: "Subscribed",
+    dot: "#0f766e",
+    driver: "monetization",
+    meaning: "Betaalt voor Pro, of heeft founding-toegang",
+    stop: "Stopt bij: opzegging of einde founding-periode",
+    // Payment Failed en Back to Free sluiten elkaar uit, en de toets is
+    // dezelfde die de webhook al gebruikt om te beslissen of hij meteen
+    // opzegt: heeft dit abonnement ooit betaald?
+    //
+    // Een verlenging die stukloopt houdt Pro aan zolang de retries
+    // draaien — daar is een waarschuwing iets waard, en de afloop komt
+    // weken later. Een eerste incasso die stukloopt zeggen we op het
+    // moment zelf op, dus zou de waarschuwing in dezelfde seconde
+    // aankomen als het bericht dat het voorbij is. Twee mails, één
+    // gebeurtenis.
+    //
+    // Geen mail bij zelf opzeggen: dat zie je op het scherm, en je
+    // weet dat het gaat eindigen. Wel een mail als wanbetaling het
+    // beëindigt — dat is het omgekeerde geval. Niemand koos ervoor, de
+    // projecten zijn net van de pagina gegaan, en de oorzaak is vaak
+    // een machtiging die stilletjes stopte in plaats van een besluit.
+    //
+    // Geen aparte "je bent nu Pro"-mail. De factuur is de
+    // bevestiging — zo doen Apollo en Anthropic het, en twee berichten
+    // over hetzelfde moment maken allebei minder waard. Founding is de
+    // uitzondering: daar is geen factuur, dus geen bevestiging.
+    //
+    // Geen mail bij het plannen van een termijnwissel. Het scherm
+    // bevestigt het al, er beweegt geen geld, en één knop draait het
+    // terug. Het argument ervoor — over een jaar ben je het vergeten —
+    // pleit voor een bericht op het moment dat het ingaat, en dat moment
+    // levert een goedkoper bedrag op dan daarvoor. Elke mail die niet
+    // hoeft, maakt Payment Failed een beetje minder gelezen.
+    transactional: [
+      { templateId: "invoice-paid", note: "Door Stripe verstuurd, niet door ons — geen cijfers hier. Gaat naar het klantadres, dat de checkout apart uitvraagt: facturen mogen naar de boekhouding terwijl de rest naar de gebruiker gaat" },
+      { templateId: "founding-active", note: "Geen betaalmethode, dus geen factuur — dit is de enige bevestiging die founding krijgt" },
+      { templateId: "renewal-reminder", note: "Alleen jaarlijks: €566 hoort niet onaangekondigd binnen te komen" },
+      { templateId: "payment-method-expiring", note: "Voorkomt de storing in plaats van hem te melden" },
+      { templateId: "payment-failed", note: "Alleen bij een verlenging. Pro staat dan nog aan en er is tijd, dus dit noemt de afloop: lukt de incasso niet vóór [Date], dan gaat [Company] terug naar Gratis" },
+      { templateId: "founding-ending", note: "De mail die bepaalt of een founding member betaalt" },
+      { templateId: "subscription-ended-nonpayment", note: "Overkomt iemand, die kiest het niet — en zijn projecten zijn zojuist van zijn pagina gegaan. Bij een mislukte eerste incasso is dit de énige mail: daar zeggen we meteen op, dus er valt niets meer te waarschuwen" },
+    ],
+    sequences: [],
+    ghosts: [
+      { name: "Pro Onboarding", timing: "+0 en +7 dagen", condition: "Wat Pro opende: team crediteren, projecten toevoegen. Bewust nog niet gebouwd — een drip naar wie net betaald heeft is sneller irritant dan nuttig", audience: "Professional" },
+      { name: "Win-back", timing: "+30 dagen na opzegging", condition: "Alleen bij opzegging op eigen verzoek, nooit na wanbetaling — daar is de machtiging het probleem, niet de overtuiging", audience: "Professional" },
+    ],
   },
 ]
 
@@ -615,7 +688,7 @@ function AdminEmailsPage() {
                     {lanes.map((lane, i) => {
                       const sends = laneSends(lane)
                       const rate = i > 0 && cohorted[i - 1] > 0 ? `${Math.round((cohorted[i] / cohorted[i - 1]) * 100)}%` : ""
-                      const DRIVER_COLORS: Record<string, string> = { prospect: "#f59e0b", acquisition: "#2563eb", retention: "#7c3aed" }
+                      const DRIVER_COLORS: Record<string, string> = { prospect: "#f59e0b", acquisition: "#2563eb", retention: "#7c3aed", monetization: "#0f766e" }
                       const isDriverStart = i === 0 || lanes[i - 1].driver !== lane.driver
                       return (
                         <Fragment key={lane.key}>
