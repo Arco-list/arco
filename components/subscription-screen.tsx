@@ -1219,7 +1219,7 @@ export function SubscriptionScreen({
               {tb("identity_vat")} <span style={{ color: "var(--arco-mid-grey)", fontWeight: 400 }}>{tb("identity_optional")}</span>
             </label>
             <input id="bi-vat" className={`form-input${identityVatError ? " form-input--error" : ""}`}
-              placeholder="NL123456789B01" value={identity.vatNumber}
+              placeholder="NL…………B01" value={identity.vatNumber}
               onChange={(e) => {
                 setIdentity((v) => ({ ...v, vatNumber: e.target.value }))
                 setIdentityVatError(null); setIdentityEmailError(null); setEditingAddress(false)
@@ -1227,6 +1227,30 @@ export function SubscriptionScreen({
               style={{ marginBottom: identityVatError ? 0 : 24 }} />
             {identityVatError && (
               <p className="form-note form-note--error" style={{ marginBottom: 24 }}>{identityVatError}</p>
+            )}
+
+            {/* What Stripe's own check made of the number on file.
+                Shown, never enforced: VIES goes down, member states
+                answer late, and refusing a purchase because a European
+                registry is slow is the wrong trade. Only the two
+                answers a reader can act on say anything — the other
+                two are about VIES, not about them, and a warning there
+                would send somebody hunting for a problem they do not
+                have. Hidden entirely while the field is being edited:
+                the verdict belongs to the saved number, not the one
+                halfway through being typed. */}
+            {!identityVatError && identity.vatNumber === (details.identity?.vatNumber ?? "") && (
+              details.identity?.vatStatus === "unverified" ? (
+                <p className="form-note form-note--error" style={{ marginBottom: 24 }}>
+                  {tb("identity_vat_unverified")}
+                </p>
+              ) : details.identity?.vatStatus === "verified" ? (
+                <p className="form-note" style={{ marginBottom: 24 }}>
+                  {details.identity.vatVerifiedName
+                    ? tb("identity_vat_verified_name", { name: details.identity.vatVerifiedName })
+                    : tb("identity_vat_verified")}
+                </p>
+              ) : null
             )}
 
             <div className="popup-actions">

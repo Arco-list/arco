@@ -43,6 +43,25 @@ export type BillingIdentity = {
   city: string | null
   country: string | null
   vatNumber: string | null
+  /**
+   * What Stripe made of that VAT number.
+   *
+   * Stripe checks every EU VAT id against VIES the moment it is
+   * attached, at no cost and without being asked, and writes the
+   * answer onto the tax id. We were already paying for the check by
+   * making the call — we just never opened the envelope.
+   *
+   * Four answers, and only one of them is a problem the reader can
+   * fix: `unverified` means the number does not exist. `pending` and
+   * `unavailable` mean VIES is slow or a member state is down, which
+   * is nobody's fault and no reason to say anything alarming.
+   */
+  vatStatus: "verified" | "unverified" | "pending" | "unavailable" | null
+  /** The company name VIES has on file for a verified number. Worth
+   *  showing when it differs from the name on the invoice: then the
+   *  invoice is addressed to a different legal entity than the number
+   *  belongs to. */
+  vatVerifiedName: string | null
   /** Where invoices are sent. Not the account address: a company can
    *  put its bookkeeper here and keep the rest of its mail elsewhere. */
   email: string | null

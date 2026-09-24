@@ -1374,7 +1374,10 @@
       "founding_body_undated": "{company} has founding access: Pro is free during the launch period.",
       "identity_email": "Email for invoices",
       "identity_email_note": "Can differ from your account — your bookkeeper, for instance.",
-      "identity_email_invalid": "That address does not look right."
+      "identity_email_invalid": "That address does not look right.",
+      "identity_vat_unverified": "This number is not in the European VAT register (VIES). Check it — an incorrect number still ends up on your invoice.",
+      "identity_vat_verified": "Checked against the European VAT register.",
+      "identity_vat_verified_name": "Checked against the European VAT register, registered to {name}."
     },
     "pricing_current_badge": "Current",
     "pricing_your_plan": "Your current plan",
@@ -2293,7 +2296,7 @@
     "legal_and": "and",
     "mandate": "By providing your IBAN and confirming this payment, you authorise Arco and Stripe, our payment provider, to instruct your bank to debit the amount from your account. You are entitled to a refund from your bank under the terms of your agreement with it. A refund must be claimed within eight weeks.",
     "email_placeholder": "name@company.com",
-    "vat_placeholder": "NL123456789B01",
+    "vat_placeholder": "NL…………B01",
     "promo_placeholder": "PROMO CODE",
     "vat_line": "VAT (21%)",
     "promo_unknown": "We don't know this code, or it doesn't apply to this plan.",

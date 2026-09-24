@@ -1374,7 +1374,10 @@
       "founding_body_undated": "{company} heeft founding-toegang: Pro is gratis tijdens de lanceringsperiode.",
       "identity_email": "E-mailadres voor facturen",
       "identity_email_note": "Mag een ander adres zijn dan je account — bijvoorbeeld je boekhouding.",
-      "identity_email_invalid": "Dit adres lijkt niet te kloppen."
+      "identity_email_invalid": "Dit adres lijkt niet te kloppen.",
+      "identity_vat_unverified": "Dit nummer staat niet in het Europese btw-register (VIES). Controleer het — een onjuist nummer komt wel op je factuur te staan.",
+      "identity_vat_verified": "Gecontroleerd in het Europese btw-register.",
+      "identity_vat_verified_name": "Gecontroleerd in het Europese btw-register, op naam van {name}."
     },
     "pricing_current_badge": "Huidig",
     "pricing_your_plan": "Je huidige abonnement",
@@ -2293,7 +2296,7 @@
     "legal_and": "en",
     "mandate": "Door je IBAN op te geven en deze betaling te bevestigen, machtig je Arco en Stripe, onze betaaldienstverlener, om je bank opdracht te geven het bedrag van je rekening af te schrijven. Je hebt recht op terugbetaling door je bank volgens de voorwaarden van je overeenkomst met je bank. Een verzoek tot terugbetaling dien je binnen acht weken in.",
     "email_placeholder": "naam@bedrijf.nl",
-    "vat_placeholder": "NL123456789B01",
+    "vat_placeholder": "NL…………B01",
     "promo_placeholder": "ACTIECODE",
     "vat_line": "Btw (21%)",
     "promo_unknown": "Deze code kennen we niet, of hij geldt niet voor dit abonnement.",

@@ -118,7 +118,12 @@ export async function getBillingDetails(
         email?: string | null
         address?: { line1?: string | null; postal_code?: string | null; city?: string | null; country?: string | null } | null
       }>(`/customers/${customerId}`),
-      stripeGet<StripeList<{ value: string }>>(`/customers/${customerId}/tax_ids`),
+      // The verification comes back on the same object, free, and was
+      // the half we kept throwing away.
+      stripeGet<StripeList<{
+        value: string
+        verification?: { status?: string; verified_name?: string | null } | null
+      }>>(`/customers/${customerId}/tax_ids`),
     ])
 
     return {
@@ -131,6 +136,14 @@ export async function getBillingDetails(
         city: customer.address?.city ?? null,
         country: customer.address?.country ?? null,
         vatNumber: taxIds.data[0]?.value ?? null,
+        vatStatus: (() => {
+          const status = taxIds.data[0]?.verification?.status
+          return status === "verified" || status === "unverified"
+            || status === "pending" || status === "unavailable"
+            ? status
+            : null
+        })(),
+        vatVerifiedName: taxIds.data[0]?.verification?.verified_name ?? null,
         email: customer.email ?? null,
       },
       invoices: invoices.data
