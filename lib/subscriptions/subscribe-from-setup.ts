@@ -39,11 +39,37 @@ export async function subscribeFromSetupIntent(
       payment_method?: string | null
       customer?: string | null
       metadata?: Record<string, string> | null
-    }>(`/setup_intents/${setupIntentId}`)
+      latest_attempt?: {
+        payment_method_details?: {
+          type?: string
+          ideal?: { generated_sepa_debit?: string | null } | null
+        } | null
+      } | null
+    }>(`/setup_intents/${setupIntentId}`, { "expand[]": "latest_attempt" })
 
     // An id from a query string proves nothing on its own.
     if (intent.metadata?.company_id !== resolved.companyId) return { error: "failed" }
     if (intent.status !== "succeeded" || !intent.payment_method) return { error: "not_ready" }
+
+    // iDEAL hands back TWO payment methods, and only one of them is
+    // the mandate.
+    //
+    // `setup_intent.payment_method` stays the iDEAL object: the
+    // one-off trip to the bank, which is never attached to a customer
+    // and cannot be charged again. The recurring mandate is a separate
+    // sepa_debit method that Stripe generates from it, and THAT is
+    // what gets attached.
+    //
+    // Passing the iDEAL one as default_payment_method is refused with
+    // "The customer does not have a payment method with the ID …",
+    // which reads like a declined card and is really us handing over
+    // the wrong object. Card and SEPA produce a single method that is
+    // attached on success, so neither of them ever showed this — and
+    // iDEAL is the route the whole €0,35-per-renewal argument rests
+    // on.
+    const generatedSepa =
+      intent.latest_attempt?.payment_method_details?.ideal?.generated_sepa_debit
+    const mandateMethod = generatedSepa ?? intent.payment_method
 
     // The customer the mandate is actually attached to — never a fresh
     // ensureCustomer call. That looks the customer up in `subscriptions`,
@@ -94,14 +120,14 @@ export async function subscribeFromSetupIntent(
       customer: customerId,
       items: [{ price: priceId(interval) }],
       default_tax_rates: [taxRateId()],
-      default_payment_method: intent.payment_method,
+      default_payment_method: mandateMethod,
       metadata: { company_id: resolved.companyId, setup_intent: setupIntentId },
       expand: ["items.data.price"],
     }, { idempotencyKey: `sub:${setupIntentId}` })
 
     // The subscription's own charge is covered by the line above; this
     // covers everything else Stripe bills this customer.
-    await setDefaultPaymentMethod(customerId, intent.payment_method)
+    await setDefaultPaymentMethod(customerId, mandateMethod)
 
     // Written here rather than waiting for the webhook: the reader is
     // looking at the page now. The webhook confirms the same row later.
@@ -147,7 +173,7 @@ export async function subscribeFromSetupIntent(
       // and after that a declined card looks exactly like a failed
       // direct debit.
       const method = await stripeGet<{ type?: string }>(
-        `/payment_methods/${intent.payment_method}`,
+        `/payment_methods/${mandateMethod}`,
       ).catch(() => null)
       await cancelUnpaidFirstPeriod(customerId, subscription.id, method?.type)
       return { error: "payment_declined" }
@@ -156,6 +182,11 @@ export async function subscribeFromSetupIntent(
     return { status: subscription.status }
   } catch (err) {
     logger.error("Subscription creation after setup failed", { companyId: resolved.companyId }, err as Error)
-    return { error: "failed" }
+    // Stripe's own sentence, carried out rather than flattened into
+    // "failed". Twice today the real message was "No such tax rate"
+    // and "No such price", and both times it was only legible by
+    // opening Stripe's request log by hand — because everything here
+    // collapsed into one word before it reached anybody.
+    return { error: "failed", detail: (err as Error)?.message ?? String(err) }
   }
 }

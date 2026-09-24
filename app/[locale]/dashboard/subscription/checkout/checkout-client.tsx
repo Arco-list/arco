@@ -7,7 +7,7 @@ import { AlertCircle, Check, CreditCard, Landmark, Lock, Repeat, Wallet, X } fro
 import { AddressLookup } from "@/components/address-lookup"
 import { FormSelect } from "@/components/form-select"
 import { HeaderLanguageSwitcher } from "@/components/header-language-switcher"
-import { Link, useRouter } from "@/i18n/navigation"
+import { Link, usePathname, useRouter } from "@/i18n/navigation"
 
 import { PUBLISHABLE_KEY } from "@/lib/stripe/load-stripe"
 
@@ -145,6 +145,7 @@ export function CheckoutClient({
   // they were looking at is the price they arrive at.
   const t = useTranslations("checkout")
   const router = useRouter()
+  const pathname = usePathname()
   const [cycle, setCycle] = useState<"month" | "year">(interval)
   // A known mandate leads: for anyone who has one, the rest of this
   // form is optional.
@@ -235,7 +236,17 @@ export function CheckoutClient({
     method: usingSaved ? "ideal" : method,
     enabled: !usingSaved,
     interval: cycle,
-    returnPath: returnTo,
+    // Back to THIS page, not to where the reader is headed afterwards.
+    //
+    // It used to pass returnTo, which is the subscription screen — so
+    // an iDEAL buyer came back from their bank to a page that has no
+    // idea a mandate is waiting. `resumeSetupIntent` is read here, on
+    // the checkout, and nowhere else. The mandate was given, the money
+    // moved, and nothing built a subscription on it.
+    //
+    // returnTo rides along in the query so the resumed run can still
+    // send them onward when it finishes.
+    returnPath: `${pathname}?interval=${cycle}&returnTo=${encodeURIComponent(returnTo)}`,
     resumeSetupIntent,
   })
   // Fixed until reverse charge exists. The selector offered Belgium
