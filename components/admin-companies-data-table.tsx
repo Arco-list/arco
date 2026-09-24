@@ -1381,12 +1381,18 @@ export function AdminCompaniesDataTable({ data, serviceOptions, subscriberCount 
         filterFn: (row, columnId, filterValue) => {
           // Multi-select: filterValue is an array of statuses (or undefined = no filter).
           if (!filterValue) return true
+          // `subscribed` is in the list but never in `status`: it lives
+          // in subscriptions and arrives on the row as its own flag.
+          // Comparing it to the stored status matched nothing, so the
+          // option was selectable and did precisely nothing.
+          const effective = row.original.isSubscribed ? "subscribed" : row.original.status
           if (Array.isArray(filterValue)) {
             if (filterValue.length === 0) return true
-            return filterValue.includes(row.original.status)
+            return filterValue.includes(effective)
           }
           // Backwards-compat: single string filter still works (e.g. legacy "all" sentinel).
           if (filterValue === "all") return true
+          if (filterValue === "subscribed") return Boolean(row.original.isSubscribed)
           return row.original.status === filterValue
         },
       },
@@ -2397,7 +2403,7 @@ export function AdminCompaniesDataTable({ data, serviceOptions, subscriberCount 
                   }
                 }
 
-                const isActive = stage.status !== "subscribed" && statusFilter.includes(stage.status as CompanyStatusFilterValue)
+                const isActive = statusFilter.includes(stage.status as CompanyStatusFilterValue)
                 return (
                   <Fragment key={stage.status}>
                     {i > 0 && (
@@ -2419,11 +2425,14 @@ export function AdminCompaniesDataTable({ data, serviceOptions, subscriberCount 
                     <div style={{ gridRow: 2 }} className="flex flex-col">
                       <button
                         type="button"
-                        disabled={stage.status === "subscribed"}
-                        title={stage.status === "subscribed" ? "Subscription billing not live yet" : undefined}
-                        onClick={() => stage.status !== "subscribed" && toggleStatus(stage.status as CompanyStatusFilterValue)}
+                        // Was disabled with "Subscription billing not
+                        // live yet". It is live, it counts real
+                        // companies, and the filter now knows what
+                        // `subscribed` means — so the card behaves like
+                        // every other stage.
+                        onClick={() => toggleStatus(stage.status as CompanyStatusFilterValue)}
                         className={`rounded-[3px] border bg-white px-3 py-3 transition-colors hover:border-[#c4c4c2] ${isActive ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4]"}`}
-                        style={{ width: CARD_WIDTH, cursor: stage.status === "subscribed" ? "default" : undefined }}
+                        style={{ width: CARD_WIDTH }}
                       >
                         <div className="flex items-center gap-[6px] mb-1.5">
                           <span className="status-pill-dot shrink-0" style={{ background: stage.dotColor }} />
@@ -2666,6 +2675,26 @@ export function AdminCompaniesDataTable({ data, serviceOptions, subscriberCount 
               <span aria-hidden style={{ position: "fixed", left: statusMenu?.x ?? 0, top: statusMenu?.y ?? 0, width: 0, height: 0 }} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-[160px]">
+              {/* Subscribed is shown but never offered.
+                  It is not a stored status — it is what the
+                  subscriptions table says — so picking it here could
+                  not make it true. A menu item that looks like a
+                  choice and grants nothing is worse than an absence;
+                  this says what is the case and leaves the stored
+                  status, which IS an admin's to change, selectable
+                  underneath. Cancelling somebody's subscription
+                  belongs in Stripe, not in a row menu. */}
+              {company?.isSubscribed && (
+                <div className="px-2 py-1.5 border-b border-[#e5e5e4] mb-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full shrink-0 bg-[#0f766e]" />
+                    <span className="text-xs font-medium text-[#1c1c1a]">Subscribed</span>
+                  </div>
+                  <p className="text-[11px] text-[#6b6b68] mt-0.5">
+                    Set by the subscription, not here. The status below still applies.
+                  </p>
+                </div>
+              )}
               {company && COMPANY_STATUS_OPTIONS.map((option) => {
                 const isCurrent = company.status === option.value
                 const disabledReason = companyStatusDisabledReason(company, option.value)

@@ -77,8 +77,16 @@ const SUBSCRIBED_CONFIG = {
 
 // Statuses surfaced in the multi-select status filter. 'removed' is a soft-
 // delete marker — admin doesn't filter for it, the row is just hidden.
-const ALL_STATUSES: ProspectStatus[] = [
-  "prospect", "contacted", "visitor", "verified", "owned", "unlisted", "active",
+//
+// Furthest along first. The funnel reads left to right because that is
+// the journey; a filter list reads top to bottom because that is what
+// you reach for, and what you reach for most is the end of it.
+//
+// `subscribed` rides along as a value the dropdown can offer even
+// though it is not a ProspectStatus — it filters on its own flag, so
+// it is handled separately where the toggle happens.
+const ALL_STATUSES: (ProspectStatus | "subscribed")[] = [
+  "subscribed", "active", "unlisted", "owned", "verified", "visitor", "contacted", "prospect",
 ]
 
 export const SEQUENCE_CONFIG: Record<SequenceStatus, { label: string; dot: string }> = {
@@ -1146,22 +1154,28 @@ export function ProspectsClient({
               <button
                 type="button"
                 className={`w-[140px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 shrink-0 ${
-                  statusFilter.length > 0
+                  statusFilter.length > 0 || subscribedOnly
                     ? "border-[#1c1c1a] bg-[#fafaf9]"
                     : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
                 }`}
               >
+                {/* Subscribed counts towards the tally like any other
+                    selection: it is one more thing narrowing the list,
+                    and a button reading "All statuses" over a filtered
+                    table is the kind of small lie that costs an hour. */}
                 <span className="flex items-center gap-1.5 truncate">
-                  {statusFilter.length === 0 ? (
-                    <span className="text-[#6b6b68]">All statuses</span>
-                  ) : statusFilter.length === 1 ? (
-                    <>
-                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[statusFilter[0]].dot}`} />
-                      <span className="truncate">{STATUS_CONFIG[statusFilter[0]].label}</span>
-                    </>
-                  ) : (
-                    <span>{statusFilter.length} statuses</span>
-                  )}
+                  {(() => {
+                    const picked = statusFilter.length + (subscribedOnly ? 1 : 0)
+                    if (picked === 0) return <span className="text-[#6b6b68]">All statuses</span>
+                    if (picked > 1) return <span>{picked} statuses</span>
+                    const cfg = subscribedOnly ? SUBSCRIBED_CONFIG : STATUS_CONFIG[statusFilter[0]]
+                    return (
+                      <>
+                        <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${cfg.dot}`} />
+                        <span className="truncate">{cfg.label}</span>
+                      </>
+                    )
+                  })()}
                 </span>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
                   <path d="M6 9l6 6 6-6" />
@@ -1172,6 +1186,7 @@ export function ProspectsClient({
               <DropdownMenuItem
                 onClick={(e) => {
                   e.preventDefault()
+                  setSubscribedOnly(false)
                   if (statusFilter.length > 0) handleFilterChange({ statuses: [] })
                 }}
                 className="text-xs"
@@ -1179,20 +1194,27 @@ export function ProspectsClient({
                 Clear selection
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {ALL_STATUSES.map((s) => (
-                <DropdownMenuCheckboxItem
-                  key={s}
-                  checked={statusFilter.includes(s)}
-                  onCheckedChange={() => toggleStatus(s)}
-                  onSelect={(e) => e.preventDefault()}
-                  className="text-xs"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_CONFIG[s].dot}`} />
-                    {STATUS_CONFIG[s].label}
-                  </span>
-                </DropdownMenuCheckboxItem>
-              ))}
+              {ALL_STATUSES.map((s) => {
+                const cfg = s === "subscribed" ? SUBSCRIBED_CONFIG : STATUS_CONFIG[s]
+                const checked = s === "subscribed" ? subscribedOnly : statusFilter.includes(s)
+                return (
+                  <DropdownMenuCheckboxItem
+                    key={s}
+                    checked={checked}
+                    onCheckedChange={() => {
+                      if (s === "subscribed") setSubscribedOnly((v) => !v)
+                      else toggleStatus(s)
+                    }}
+                    onSelect={(e) => e.preventDefault()}
+                    className="text-xs"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${cfg.dot}`} />
+                      {cfg.label}
+                    </span>
+                  </DropdownMenuCheckboxItem>
+                )
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
           {/* Multi-select sequence filter — empty selection = all sequences. */}
