@@ -15,6 +15,7 @@ import {
   recordNonpaymentCancellation,
 } from "@/lib/subscriptions/nonpayment"
 import { notifySubscriber } from "@/lib/subscriptions/notify"
+import { refundIfAccessEnded, voidUncollectedInvoices } from "@/lib/subscriptions/settle-cancellation"
 import { cancelFoundingEnding, scheduleCardExpiry, scheduleRenewalReminder } from "@/lib/subscriptions/schedule-mail"
 
 /**
@@ -246,6 +247,13 @@ export async function POST(request: NextRequest) {
               hidden_count: demotedCount,
             })
           }
+        } else if (event.type === "customer.subscription.deleted" && subscription.customer) {
+          // An ordinary cancellation, and the other half of the same
+          // problem: Stripe leaves an issued invoice open with
+          // auto_advance on, so a subscription somebody ended today can
+          // still bill them next week. Void what has not been collected;
+          // what is already travelling is refunded when it lands.
+          await voidUncollectedInvoices(subscription.customer)
         }
         break
       }
@@ -303,6 +311,7 @@ export async function POST(request: NextRequest) {
         // The invoice moves the subscription's status (active ⇄
         // past_due), and that status is what the product reads.
         const invoice = event.data.object as {
+          id?: string
           subscription?: string
           customer?: string
           amount_due?: number
@@ -315,6 +324,11 @@ export async function POST(request: NextRequest) {
           next_payment_attempt?: number | null
         }
         const subscriptionId = invoice.subscription
+        if (event.type === "invoice.paid" && invoice.id) {
+          // The first moment a debit handed to a bank days ago becomes
+          // something we can act on.
+          await refundIfAccessEnded(invoice.id)
+        }
         if (subscriptionId) {
           const subscription = await stripeGet<StripeSubscription>(`/subscriptions/${subscriptionId}`)
           await mirrorSubscription(supabase, subscription)
