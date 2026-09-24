@@ -8,7 +8,6 @@ import { FormSelect } from "@/components/form-select"
 import { HeaderLanguageSwitcher } from "@/components/header-language-switcher"
 import { Link, useRouter } from "@/i18n/navigation"
 
-import { IDEAL_BANKS } from "../checkout/constants"
 import { useElementsCheckout } from "../checkout/use-elements-checkout"
 
 /**
@@ -41,7 +40,6 @@ export function PaymentMethodClient({
   const router = useRouter()
   const [method, setMethod] = useState<"ideal" | "sepa" | "card">("ideal")
   const [name, setName] = useState("")
-  const [bank, setBank] = useState("")
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({})
 
   const checkout = useElementsCheckout({
@@ -76,7 +74,6 @@ export function PaymentMethodClient({
   const validate = () => {
     const next: Record<string, string | null> = {
       name: name.trim() ? null : t("err_name"),
-      bank: method === "ideal" && !bank ? t("err_bank") : null,
       ...(method === "sepa" && !checkout.complete.iban ? { iban: t("err_iban") } : { iban: null }),
       ...(method === "card" ? cardErrors() : { cardNumber: null, cardExpiry: null, cardCvc: null }),
     }
@@ -195,28 +192,6 @@ export function PaymentMethodClient({
                 ))}
               </div>
 
-              {method === "ideal" && (
-                <>
-                  <label className="form-label" htmlFor="bank">{t("label_bank")}</label>
-                  <FormSelect
-                    id="bank"
-                    value={bank}
-                    className={fieldErrors.bank ? "form-input--error" : undefined}
-                    wrapStyle={fieldErrors.bank ? { marginBottom: 0 } : undefined}
-                    onChange={(e) => {
-                      setBank(e.target.value)
-                      setFieldErrors((prev) => ({ ...prev, bank: null }))
-                    }}
-                  >
-                    <option value="" disabled>{t("bank_placeholder")}</option>
-                    {IDEAL_BANKS.map((b) => (
-                      <option key={b.value} value={b.value}>{b.label}</option>
-                    ))}
-                  </FormSelect>
-                  {note(fieldErrors.bank)}
-                </>
-              )}
-
               {method === "sepa" && (
                 <>
                   <label className="form-label">{t("label_iban")}</label>
@@ -267,7 +242,7 @@ export function PaymentMethodClient({
                 disabled={busy}
                 onClick={() => {
                   if (!validate()) return
-                  checkout.confirm({ name, email: defaultEmail, bank })
+                  checkout.confirm({ name, email: defaultEmail })
                 }}
               >
                 {busy ? t("working") : t(collectionFailed ? "submit_repair" : "submit_change")}

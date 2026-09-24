@@ -13,7 +13,7 @@ import { PUBLISHABLE_KEY } from "@/lib/stripe/load-stripe"
 
 import { isValidVatNumber } from "@/lib/subscriptions/vat-number"
 
-import { FREE_MONTHS, IDEAL_BANKS, NET_CENTS, VAT_RATE } from "./constants"
+import { FREE_MONTHS, NET_CENTS, VAT_RATE } from "./constants"
 import { useElementsCheckout } from "./use-elements-checkout"
 import { claimFoundingAccess } from "@/app/pricing/actions"
 
@@ -108,6 +108,61 @@ const OUR_CODES = [
 const euro = (cents: number) =>
   new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(cents / 100)
 
+/**
+ * What the reader typed, kept across a trip to their bank.
+ *
+ * iDEAL takes the whole page with it, and coming back from a payment
+ * you decided not to make used to mean an empty form: name, address,
+ * VAT number, all of it, typed again to try a different method. The
+ * billing details are saved server-side before the redirect, but the
+ * form does not read them back — and the account holder's name was
+ * never saved anywhere.
+ *
+ * sessionStorage rather than localStorage: this belongs to the tab and
+ * to this attempt. It is cleared the moment a subscription exists, so
+ * a later visit starts clean rather than offering last month's
+ * answers.
+ *
+ * Every read and write is wrapped, because a private window or a
+ * browser set to block site data throws on access rather than
+ * returning nothing — and a checkout must not fall over on the way to
+ * remembering a postcode.
+ */
+const DRAFT_KEY = "arco.checkout.draft"
+
+type CheckoutDraft = {
+  name?: string
+  email?: string
+  companyName?: string
+  vatNumber?: string
+  address?: { streetAddress: string; city: string; postalCode?: string | null } | null
+}
+
+function readDraft(): CheckoutDraft | null {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY)
+    return raw ? (JSON.parse(raw) as CheckoutDraft) : null
+  } catch {
+    return null
+  }
+}
+
+function writeDraft(draft: CheckoutDraft): void {
+  try {
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
+  } catch {
+    /* nothing to do, and nothing worth interrupting a purchase for */
+  }
+}
+
+function clearDraft(): void {
+  try {
+    sessionStorage.removeItem(DRAFT_KEY)
+  } catch {
+    /* as above */
+  }
+}
+
 export function CheckoutClient({
   interval,
   returnTo,
@@ -159,7 +214,6 @@ export function CheckoutClient({
   // Billing details Stripe requires with every mandate.
   const [name, setName] = useState("")
   const [email, setEmail] = useState(defaultEmail)
-  const [bank, setBank] = useState("")
   const [companyName, setCompanyName] = useState(COMPANY_NAME)
   // The address is known, so it is stated rather than asked. The field
   // only appears for the rare reader who wants it somewhere else —
@@ -199,7 +253,6 @@ export function CheckoutClient({
         : /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())
           ? null
           : t("err_email_invalid"),
-      bank: method === "ideal" && !bank ? t("err_bank") : null,
       // Not Stripe's requirement but the tax office's: a Dutch invoice
       // must carry the buyer's name and address. Without one we cannot
       // issue a valid one.
@@ -258,6 +311,20 @@ export function CheckoutClient({
   const [address, setAddress] = useState<
     { streetAddress: string; city: string; postalCode?: string | null } | null
   >(companyAddress)
+
+  // Put back what a trip to the bank took with it. Once, on mount, and
+  // only for fields the reader actually filled — an empty draft value
+  // must not wipe a prop the page already had, like the company
+  // address it loaded from the record.
+  useEffect(() => {
+    const draft = readDraft()
+    if (!draft) return
+    if (draft.name) setName(draft.name)
+    if (draft.email) setEmail(draft.email)
+    if (draft.companyName) setCompanyName(draft.companyName)
+    if (draft.vatNumber) setVatNumber(draft.vatNumber)
+    if (draft.address) setAddress(draft.address)
+  }, [])
 
   // A code that covers the whole period leaves nothing to pay, and a
   // page with nothing to pay has no business asking how. Everything
@@ -325,6 +392,8 @@ export function CheckoutClient({
   useEffect(() => {
     if (checkout.phase !== "done") return
     const sep = returnTo.includes("?") ? "&" : "?"
+    // The purchase happened; the draft has nothing left to protect.
+    clearDraft()
     router.replace(`${returnTo}${sep}subscribed=${checkout.status === "active" ? "active" : "processing"}`)
   }, [checkout.phase, checkout.status, returnTo, router])
 
@@ -364,6 +433,8 @@ export function CheckoutClient({
                 return
               }
               const sep = returnTo.includes("?") ? "&" : "?"
+              // The purchase happened; the draft has nothing left to protect.
+              clearDraft()
               router.replace(`${returnTo}${sep}subscribed=active`)
             })
             return
@@ -373,10 +444,13 @@ export function CheckoutClient({
             checkout.confirmSaved(cycle)
             return
           }
+          // Saved here, at the last moment the page is still ours:
+          // iDEAL leaves and may not come back.
+          writeDraft({ name, email, companyName, vatNumber, address })
+
           checkout.confirm({
             name,
             email,
-            bank,
             billing: {
               companyName,
               // The address the form promises invoices to. It reached
@@ -564,27 +638,17 @@ export function CheckoutClient({
 
               {method === "ideal" && (
                 <>
-                  {/* Ours, not Stripe's: the bank travels to them as a
-                      plain value, so the control can be an ordinary
-                      Arco field with our own chevron and our own type. */}
-                  <label className="form-label" htmlFor="bank">{t("label_bank")}</label>
-                  <FormSelect
-                    id="bank"
-                    value={bank}
-                    className={fieldErrors.bank ? "form-input--error" : undefined}
-                    wrapStyle={fieldErrors.bank ? { marginBottom: 0 } : undefined}
-                    onChange={(e) => {
-                      setBank(e.target.value)
-                      setFieldErrors((prev) => ({ ...prev, bank: null }))
-                    }}
-                  >
-                    <option value="" disabled>{t("bank_placeholder")}</option>
-                    {IDEAL_BANKS.map((b) => (
-                      <option key={b.value} value={b.value}>{b.label}</option>
-                    ))}
-                  </FormSelect>
-                  {note(fieldErrors.bank)}
+                  {/* No bank selector. iDEAL 2.0 moved the issuer choice
+                      into iDEAL's own hub, and a bank named here no
+                      longer skips that step — Stripe still records it on
+                      the payment method, and the hub asks anyway.
+                      Verified against a live payment: Revolut picked
+                      here, Revolut asked for again there.
 
+                      So the field made someone answer twice, and the
+                      second answer was the only one that counted. The
+                      sentence below stays: it is the part that is still
+                      true and still worth saying. */}
                   <p className="checkout-mandate">
                     Je betaalt de eerste termijn bij je eigen bank. Daarmee machtig je ons meteen voor de
                     volgende termijnen via automatische incasso, zodat je dit niet elke keer opnieuw hoeft te

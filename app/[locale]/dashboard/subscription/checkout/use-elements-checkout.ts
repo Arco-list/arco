@@ -238,10 +238,9 @@ export function useElementsCheckout({
    * the page leaves here and the second half happens on the way back.
    */
   const confirm = useCallback(
-    async ({ name, email, bank, billing }: {
+    async ({ name, email, billing }: {
       name: string
       email: string
-      bank?: string
       /** Who the invoice is for. Saved before the mandate, because an
        *  iDEAL redirect takes the form with it. */
       billing?: {
@@ -286,12 +285,12 @@ export function useElementsCheckout({
             payment_method: { sepa_debit: fieldsRef.current.iban, billing_details },
           })
         } else {
-          // The bank comes from our own select rather than Stripe's
-          // element, so it travels as a value. Built first, confirmed
-          // by id — there is no element to hand over.
+          // No issuer hint: iDEAL 2.0 asks for the bank in its own
+          // hub whatever we send, so naming one here only made the
+          // reader answer twice. Built first, confirmed by id — there
+          // is no element to hand over.
           const built = await stripe.createPaymentMethod({
             type: "ideal",
-            ideal: bank ? { bank } : {},
             billing_details,
           })
           if (built?.error) {

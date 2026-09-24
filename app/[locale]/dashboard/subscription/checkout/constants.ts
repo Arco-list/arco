@@ -51,34 +51,3 @@ export function foundingEndsAt(claimedAt: string | null | undefined): Date | nul
   end.setMonth(end.getMonth() + FREE_MONTHS)
   return end
 }
-
-/**
- * The iDEAL issuers, with the codes Stripe accepts.
- *
- * Taken from the API's own validation error rather than transcribed
- * from a screen. Stripe also accepts adyen, buut, finom, handelsbanken,
- * mollie and moneyou, which its own bank list leaves out — those are
- * payment providers rather than the bank a person has an account with,
- * and offering more than Stripe's own UI does would only add ways to
- * pick wrong.
- *
- * Alphabetical, as every bank list is. Putting the big three on top
- * would help most people by one line of scanning and make the list look
- * broken to everyone who knows their alphabet.
- */
-export const IDEAL_BANKS: { value: string; label: string }[] = [
-  { value: "abn_amro", label: "ABN AMRO" },
-  { value: "asn_bank", label: "ASN Bank" },
-  { value: "bunq", label: "bunq" },
-  { value: "ing", label: "ING" },
-  { value: "knab", label: "Knab" },
-  { value: "n26", label: "N26" },
-  { value: "nn", label: "Nationale-Nederlanden" },
-  { value: "rabobank", label: "Rabobank" },
-  { value: "regiobank", label: "RegioBank" },
-  { value: "revolut", label: "Revolut" },
-  { value: "sns_bank", label: "SNS Bank" },
-  { value: "triodos_bank", label: "Triodos Bank" },
-  { value: "van_lanschot", label: "Van Lanschot Kempen" },
-  { value: "yoursafe", label: "Yoursafe" },
-]
