@@ -1280,13 +1280,17 @@ export function AdminCompaniesDataTable({ data, serviceOptions, subscriberCount 
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setEditingName({ id: company.id, value: company.name }) }}
-                      className="arco-table-primary arco-table-primary--wrap hover:text-[#016D75] transition-colors text-left cursor-pointer bg-transparent border-none p-0"
-                      title="Click to edit name"
+                      className="arco-table-primary hover:text-[#016D75] transition-colors text-left cursor-pointer bg-transparent border-none p-0 min-w-0"
+                      /* The name, not the affordance: without --wrap a
+                         long name is cut with an ellipsis, and a title
+                         explaining the click while hiding what was cut
+                         trades the useful hint for the obvious one. */
+                      title={company.name}
                     >
                       {company.name}
                     </button>
                   ) : (
-                    <span className="arco-table-primary arco-table-primary--wrap">{company.name}</span>
+                    <span className="arco-table-primary min-w-0" title={company.name}>{company.name}</span>
                   )}
                   {externalHref && (
                     <a
