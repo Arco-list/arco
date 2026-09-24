@@ -782,6 +782,9 @@ export function ProspectsClient({
   const [funnel, setFunnel] = useState(initialFunnel)
   const [totalEmailsSent, setTotalEmailsSent] = useState(initialEmailsSent)
   const [statusFilter, setStatusFilter] = useState<ProspectStatus[]>([])
+  // Its own flag, because `subscribed` is not a prospect status and
+  // cannot ride along in statusFilter.
+  const [subscribedOnly, setSubscribedOnly] = useState(false)
   const [sourceFilter, setSourceFilter] = useState<string[]>([])
   const [sequenceFilter, setSequenceFilter] = useState<SequenceFilterValue[]>([])
   // Toggle for the Call list button: when true, the table only renders
@@ -866,6 +869,7 @@ export function ProspectsClient({
     startTransition(async () => {
       const result = await fetchSalesCompanies({
         statuses: statusFilter,
+        subscribedOnly,
         sources: sourceFilter,
         sequences: sequenceFilter,
         search,
@@ -889,7 +893,7 @@ export function ProspectsClient({
       setOffset(off)
       setHasMore(result.totalCompanies > off + result.companies.length)
     })
-  }, [statusFilter, sourceFilter, sequenceFilter, search, callListOnly, sortBy, sortDir])
+  }, [statusFilter, subscribedOnly, sourceFilter, sequenceFilter, search, callListOnly, sortBy, sortDir])
 
   // Resend email backfill — pulls open/click events the webhook may have
   // missed. Cheap (throttled to once/hour server-side); refresh the table
@@ -933,7 +937,7 @@ export function ProspectsClient({
       // hidden selected row would still be picked up by bulk actions.
       setSelectedRowIds(new Set())
     })
-  }, [statusFilter, sourceFilter, sequenceFilter, search, callListOnly, sortBy, sortDir])
+  }, [statusFilter, subscribedOnly, sourceFilter, sequenceFilter, search, callListOnly, sortBy, sortDir])
 
   useEffect(() => {
     const wantCalls = barTab === "calls"
@@ -991,7 +995,7 @@ export function ProspectsClient({
     setSortDir(nextDir)
     startTransition(async () => {
       const result = await fetchSalesCompanies({
-        statuses: statusFilter, sources: sourceFilter, sequences: sequenceFilter, search,
+        statuses: statusFilter, subscribedOnly, sources: sourceFilter, sequences: sequenceFilter, search,
         offset: 0, limit: 50, sortBy: field, sortDir: nextDir,
       })
       setCompanies(result.companies)
@@ -1426,10 +1430,22 @@ export function ProspectsClient({
                       ) : (
                         <div style={{ height: 24 }} />
                       )}
+                      {/* Subscribed filters on its own flag rather than
+                          on a status, because it is not one. The card
+                          was disabled when the count could only be
+                          zero; it counts real companies now, and a
+                          number you cannot click is a number you cannot
+                          check. */}
                       <button
-                        onClick={stage.status === "subscribed" ? undefined : () => toggleStatus(stage.status as ProspectStatus)}
-                        disabled={stage.status === "subscribed"}
-                        className={`rounded-[3px] border bg-white px-3 py-3 transition-colors ${stage.status === "subscribed" ? "cursor-default opacity-60" : "hover:border-[#c4c4c2]"} ${statusFilter.includes(stage.status as ProspectStatus) ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4]"}`}
+                        onClick={() => {
+                          if (stage.status === "subscribed") setSubscribedOnly((v) => !v)
+                          else toggleStatus(stage.status as ProspectStatus)
+                        }}
+                        className={`rounded-[3px] border bg-white px-3 py-3 transition-colors hover:border-[#c4c4c2] ${
+                          (stage.status === "subscribed" ? subscribedOnly : statusFilter.includes(stage.status as ProspectStatus))
+                            ? "border-[#1c1c1a] bg-[#fafaf9]"
+                            : "border-[#e5e5e4]"
+                        }`}
                         style={{ width: 132 }}
                       >
                         <div className="flex items-center gap-[6px] mb-1.5">

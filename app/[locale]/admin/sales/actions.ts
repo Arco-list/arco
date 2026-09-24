@@ -619,6 +619,10 @@ type FetchSalesCompaniesFilters = {
   /** Call-list mode: ignore other filters and return today's ranked
    *  call queue (max 10 rows, tier order). */
   callListOnly?: boolean
+  /** Only companies that hold Pro. Not a status filter: `subscribed`
+   *  is not a prospect status, so it cannot ride along in `statuses`
+   *  and needs its own flag. */
+  subscribedOnly?: boolean
 }
 
 type SalesGroupShape = {
@@ -844,6 +848,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     sortBy = "last_contacted_at",
     sortDir = "desc",
     callListOnly = false,
+    subscribedOnly = false,
   } = filters
 
   // Explicit column list — SELECT * pulled ~40 columns per prospect
@@ -1340,6 +1345,13 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   if (statuses && statuses.length > 0) {
     const set = new Set<ProspectStatus>(statuses)
     rows = rows.filter((r) => set.has(r.status))
+  }
+
+  // Applied after the funnel is counted, like the status filter above:
+  // the funnel describes the whole set, and a filtered funnel would
+  // only ever show the stage you clicked.
+  if (subscribedOnly) {
+    rows = rows.filter((r) => r.isSubscribed)
   }
 
   // Call-list mode replaces the remaining filters + sort entirely: the
