@@ -24,10 +24,6 @@ export const NET_CENTS = { month: 4900, year: 46800 } as const
  *  because the drawing has to add up before Stripe ever sees it. */
 export const VAT_RATE = 0.21
 
-/** What actually leaves the bank account. */
-export function grossCents(net: number): number {
-  return net + Math.round(net * VAT_RATE)
-}
 
 /** The day the free period runs to, in words. */
 export function freeUntilLabel(from: Date = new Date()): string {

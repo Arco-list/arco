@@ -4,7 +4,7 @@ import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/l
 import { restoreHeldBackCredits } from "@/lib/subscriptions/enforce-credit-allowance"
 import { notifySubscriber } from "@/lib/subscriptions/notify"
 import { scheduleFoundingEnding } from "@/lib/subscriptions/schedule-mail"
-import { foundingEndsAt, grossCents, NET_CENTS } from "@/app/dashboard/subscription/checkout/constants"
+import { foundingEndsAt, NET_CENTS } from "@/app/dashboard/subscription/checkout/constants"
 
 /** Resolve the calling user's company id — owner first, then team
  *  membership via the legacy professionals table. */
@@ -85,7 +85,7 @@ export async function claimFoundingAccess(): Promise<{ claimed: boolean }> {
     await notifySubscriber(companyId, "founding-active", {
       until_at: foundingEndsAt(claimedAt)?.toISOString() ?? null,
     })
-    await scheduleFoundingEnding(companyId, claimedAt, grossCents(NET_CENTS.month))
+    await scheduleFoundingEnding(companyId, claimedAt, NET_CENTS.month)
   }
 
   // Unchanged for the caller: a second click by somebody who already

@@ -16,7 +16,6 @@ import {
 } from "@/lib/subscriptions/nonpayment"
 import { notifySubscriber } from "@/lib/subscriptions/notify"
 import { cancelFoundingEnding, scheduleCardExpiry, scheduleRenewalReminder } from "@/lib/subscriptions/schedule-mail"
-import { grossCents } from "@/app/dashboard/subscription/checkout/constants"
 
 /**
  * Stripe webhook — the only thing that writes a subscription.
@@ -193,10 +192,10 @@ export async function POST(request: NextRequest) {
             companyForCredits,
             billing.interval,
             billing.currentPeriodEnd,
-            // Gross, because the mail names what leaves the account
-            // and Stripe stores the price net of the tax rate it then
-            // applies. The same arithmetic the checkout draws.
-            netAmount === null ? null : grossCents(netAmount),
+            // Net, as every amount in these mails is: Stripe already
+            // stores the price before the tax rate is applied, so this
+            // is the figure straight off the plan.
+            netAmount,
             billing.plan === "pro" && !billing.cancelAtPeriodEnd,
           )
         }
@@ -271,6 +270,11 @@ export async function POST(request: NextRequest) {
           subscription?: string
           customer?: string
           amount_due?: number
+          /** The same total, before tax. Stripe reports both; the mail
+           *  quotes this one because the reader reclaims the 21% and
+           *  plans around the net figure. */
+          total_excluding_tax?: number | null
+          subtotal?: number | null
           attempt_count?: number
           next_payment_attempt?: number | null
         }
@@ -307,7 +311,13 @@ export async function POST(request: NextRequest) {
               // identical warnings, which is how people learn to ignore
               // the fourth.
               await notifySubscriber(subscription.metadata.company_id, "payment-failed", {
-                amount_cents: invoice.amount_due,
+                // total_excluding_tax is the post-discount, pre-tax
+                // figure — the right one. `subtotal` is the fallback
+                // for older invoices that predate the field; amount_due
+                // is the last resort and includes tax, so it only ever
+                // applies when Stripe told us nothing better.
+                amount_cents:
+                  invoice.total_excluding_tax ?? invoice.subtotal ?? invoice.amount_due,
                 next_attempt_at: invoice.next_payment_attempt
                   ? new Date(invoice.next_payment_attempt * 1000).toISOString()
                   : null,

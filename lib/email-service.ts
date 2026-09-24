@@ -2339,6 +2339,13 @@ function renderListedBacklink(vars: EmailVariables, locale: EmailLocale = 'nl'):
 //
 // The renderer is the only place that knows the locale for certain, so
 // it is the only place allowed to turn a number into words.
+//
+// EVERY AMOUNT HERE IS NET OF VAT, and labelled as such. These are
+// business-to-business transactions: the reader reclaims the 21%, so
+// the number they plan around, compare to the pricing page and put in
+// their books is the one without it. The gross figure is on the
+// invoice, which is where a figure that must match a bank statement
+// belongs.
 
 /** The one place these mails send people. */
 function subscriptionUrl(): string {
@@ -2395,7 +2402,7 @@ function renderPaymentFailed(vars: EmailVariables, locale: EmailLocale = 'nl'): 
     ? {
         subject: `We couldn't collect ${amount}`,
         h1: `Your payment didn't go through`,
-        intro: `We tried to collect ${amount} for your Arco Pro subscription, and the payment was refused. Usually that means an expired card or a mandate that was cancelled.`,
+        intro: `We tried to collect ${amount} excl. VAT for your Arco Pro subscription, and the payment was refused. Usually that means an expired card or a mandate that was cancelled.`,
         stillFine: `Nothing has changed on your page. Your projects stay visible while we retry.`,
         next: nextAttempt
           ? `The next attempt is on ${nextAttempt}. If it still doesn't go through over the coming weeks, the subscription ends and your page goes back to the free limit.`
@@ -2406,7 +2413,7 @@ function renderPaymentFailed(vars: EmailVariables, locale: EmailLocale = 'nl'): 
     : {
         subject: `We konden ${amount} niet afschrijven`,
         h1: `Je betaling is niet gelukt`,
-        intro: `We probeerden ${amount} af te schrijven voor je Arco Pro-abonnement, maar de betaling werd geweigerd. Meestal komt dat door een verlopen kaart of een ingetrokken machtiging.`,
+        intro: `We probeerden ${amount} excl. btw af te schrijven voor je Arco Pro-abonnement, maar de betaling werd geweigerd. Meestal komt dat door een verlopen kaart of een ingetrokken machtiging.`,
         stillFine: `Er is niets veranderd aan je pagina. Je projecten blijven zichtbaar zolang we het opnieuw proberen.`,
         next: nextAttempt
           ? `De volgende poging is op ${nextAttempt}. Lukt het de komende weken alsnog niet, dan stopt het abonnement en gaat je pagina terug naar de gratis limiet.`
@@ -2482,7 +2489,6 @@ function renderSubscriptionEndedNonpayment(vars: EmailVariables, locale: EmailLo
       ${body(copy.hidden)}
       ${body(copy.kept)}
       ${button(copy.button, subscriptionUrl())}
-      ${divider()}
       ${body(copy.noDebt)}
     `, locale),
   }
@@ -2507,14 +2513,14 @@ function renderPaymentMethodExpiring(vars: EmailVariables, locale: EmailLocale =
         subject: `Your payment method expires soon`,
         h1: `Your card expires in ${expiry}`,
         intro: `The card ${cardLabel} we use for your Arco Pro subscription expires in ${expiry} — before your next renewal.`,
-        why: `Replace it now and the renewal goes through as usual. Leave it, and the payment gets refused and your projects come off your page while it's sorted out.`,
+        why: `Replace it now and the renewal goes through as usual. Leave it, and the payment is refused and your page drops back to the free plan until it's sorted out.`,
         button: `Update payment method`,
       }
     : {
         subject: `Je betaalmethode verloopt binnenkort`,
         h1: `Je kaart verloopt in ${expiry}`,
         intro: `De kaart ${cardLabel} waarmee we je Arco Pro-abonnement incasseren verloopt in ${expiry} — vóór je volgende verlenging.`,
-        why: `Vervang hem nu en de verlenging gaat gewoon door. Doe je het niet, dan wordt de betaling geweigerd en gaan je projecten van je pagina tot het is opgelost.`,
+        why: `Vervang hem nu en de verlenging gaat gewoon door. Doe je het niet, dan wordt de betaling geweigerd en gaat je pagina terug naar het gratis plan tot het is opgelost.`,
         button: `Betaalmethode bijwerken`,
       }
 
@@ -2547,15 +2553,15 @@ function renderRenewalReminder(vars: EmailVariables, locale: EmailLocale = 'nl')
     ? {
         subject: `Your yearly subscription renews on ${date}`,
         h1: `Your subscription renews on ${date}`,
-        intro: `Your Arco Pro subscription runs for another year on ${date}. We'll collect ${amount} from the payment method on file.`,
-        change: `Want to switch to monthly, or stop? You can arrange both from your subscription page — up to the day before, and it takes effect without anything being charged first.`,
+        intro: `Your Arco Pro subscription runs for another year on ${date}. We'll collect ${amount} excl. VAT from the payment method on file.`,
+        change: `Want to switch to monthly, or stop? You can do either from your subscription page, up to the day before. Nothing is charged after that.`,
         button: `View your subscription`,
       }
     : {
         subject: `Je jaarabonnement wordt op ${date} verlengd`,
         h1: `Je abonnement wordt op ${date} verlengd`,
-        intro: `Je Arco Pro-abonnement loopt op ${date} een jaar door. We schrijven dan ${amount} af van je opgeslagen betaalmethode.`,
-        change: `Liever maandelijks, of wil je stoppen? Allebei regel je op je abonnementspagina — tot de dag ervoor, en het gaat in zonder dat er eerst iets wordt afgeschreven.`,
+        intro: `Je Arco Pro-abonnement loopt op ${date} een jaar door. We schrijven dan ${amount} excl. btw af van je opgeslagen betaalmethode.`,
+        change: `Liever maandelijks, of wil je stoppen? Dat regel je zelf op je abonnementspagina, tot de dag ervoor. Er wordt dan niets afgeschreven.`,
         button: `Bekijk je abonnement`,
       }
 
@@ -2593,14 +2599,16 @@ function renderFoundingActive(vars: EmailVariables, locale: EmailLocale = 'nl'):
         noCard: `There's no payment method on file and nothing renews by itself. When the period ends your page goes back to the free plan unless you choose to continue.`,
         ask: `Anything missing, or something that should work differently? Reply to this mail — I read them myself.`,
         button: `Open your page`,
+        signoffRole: 'Founder, Arco',
       }
     : {
         subject: `Pro staat aan — gratis tot ${until}`,
         h1: `Pro staat aan voor ${companyName}`,
-        intro: `Je bent een van de eerste bedrijven op Arco, dus Pro is tot ${until} van jou. Elk project waarop je vermeld wordt staat op je pagina, en dat blijft zo.`,
-        noCard: `Er staat geen betaalmethode klaar en er wordt niets automatisch verlengd. Loopt de periode af, dan gaat je pagina terug naar het gratis plan tenzij je zelf kiest om door te gaan.`,
+        intro: `Je bent een van de eerste bedrijven op Arco, dus Pro is tot ${until} gratis. Elk project waarop je vermeld wordt staat op je pagina, en dat blijft zo.`,
+        noCard: `Je hebt geen betaalgegevens opgegeven en er wordt niets automatisch verlengd. Loopt de periode af, dan gaat je pagina terug naar het gratis plan tenzij je zelf kiest om door te gaan.`,
         ask: `Mis je iets, of zou iets anders moeten werken? Antwoord gewoon op deze mail — ik lees ze zelf.`,
         button: `Bekijk je pagina`,
+        signoffRole: 'Oprichter, Arco',
       }
 
   return {
@@ -2611,6 +2619,10 @@ function renderFoundingActive(vars: EmailVariables, locale: EmailLocale = 'nl'):
       ${body(copy.noCard)}
       ${button(copy.button, vars.dashboard_link || subscriptionUrl())}
       ${body(copy.ask)}
+      <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
+        Niek van Leeuwen<br/>
+        <span style="color:#a1a1a0;">${copy.signoffRole}</span>
+      </p>
     `, locale),
   }
 }
@@ -2629,9 +2641,10 @@ function renderFoundingEnding(vars: EmailVariables, locale: EmailLocale = 'nl'):
   const companyName = vars.company_name || (locale === 'nl' ? 'je bedrijf' : 'your company')
   const endDate = longDate(vars.end_at, locale)
   // `price_cents`, not `amount_cents`: this one is a rate — the copy
-  // around it adds "per maand" — where every other mail here names a
-  // single charge. One variable doing both jobs reads correctly in one
-  // mail and wrong in the next.
+  // around it adds "per maand" — where the other two name a single
+  // charge. One variable doing both jobs reads correctly in one mail
+  // and wrong in the next. Both are net of VAT; see the note on
+  // amounts at the top of this section.
   const amount = euros(vars.price_cents, locale)
   const live = typeof vars.live_count === 'number' ? vars.live_count : null
   const copy = locale === 'en'
@@ -2644,9 +2657,10 @@ function renderFoundingEnding(vars: EmailVariables, locale: EmailLocale = 'nl'):
         after: live === null || live <= 1
           ? `After that your page goes back to the free plan: one project shown at a time.`
           : `After that your page goes back to the free plan: one project instead of ${live}. Nothing is deleted — the rest waits until Pro is back on.`,
-        price: `Continuing costs ${amount} a month, or less if you pay yearly. Same page, same projects, nothing to set up again.`,
+        price: `Continuing costs ${amount} a month excl. VAT, or less if you pay yearly. Same page, same projects, nothing to set up again.`,
         nothing: `Doing nothing is fine too. There's no payment method on file, so nothing will be charged.`,
         button: `Continue with Pro`,
+        signoffRole: 'Founder, Arco',
       }
     : {
         subject: `Je founding-periode loopt af op ${endDate}`,
@@ -2657,9 +2671,10 @@ function renderFoundingEnding(vars: EmailVariables, locale: EmailLocale = 'nl'):
         after: live === null || live <= 1
           ? `Daarna gaat je pagina terug naar het gratis plan: één project tegelijk zichtbaar.`
           : `Daarna gaat je pagina terug naar het gratis plan: één project in plaats van ${live}. Er wordt niets verwijderd — de rest wacht tot Pro weer aanstaat.`,
-        price: `Doorgaan kost ${amount} per maand, of minder als je per jaar betaalt. Zelfde pagina, zelfde projecten, niets opnieuw in te stellen.`,
-        nothing: `Niets doen mag ook. Er staat geen betaalmethode klaar, dus er wordt niets afgeschreven.`,
+        price: `Doorgaan kost ${amount} per maand excl. btw, of minder als je per jaar betaalt. Zelfde pagina, zelfde projecten, niets opnieuw in te stellen.`,
+        nothing: `Niets doen mag ook. Je hebt geen betaalgegevens opgegeven, dus er wordt niets afgeschreven.`,
         button: `Doorgaan met Pro`,
+        signoffRole: 'Oprichter, Arco',
       }
 
   return {
@@ -2671,6 +2686,10 @@ function renderFoundingEnding(vars: EmailVariables, locale: EmailLocale = 'nl'):
       ${body(copy.price)}
       ${button(copy.button, subscriptionUrl())}
       ${body(copy.nothing)}
+      <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
+        Niek van Leeuwen<br/>
+        <span style="color:#a1a1a0;">${copy.signoffRole}</span>
+      </p>
     `, locale),
   }
 }

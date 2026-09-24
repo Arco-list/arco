@@ -50,8 +50,13 @@ const TEST_VARS = {
   // ex-VAT everywhere on the site, but a mail about money that names a
   // different number than the bank statement is the one place that is
   // never acceptable.
-  amount_cents: 5929,
-  price_cents: 5929,
+  // The yearly price, because Renewal Reminder is only ever sent for a
+  // yearly plan — a fixture showing €49 there is a mail that cannot
+  // exist. Payment Failed reads it too, where a failed yearly renewal
+  // is just as real a case as a monthly one.
+  amount_cents: 46800,
+  // The monthly rate, which is what Founding Ending quotes.
+  price_cents: 4900,
   next_attempt_at: '2026-10-14T00:00:00.000Z',
   renewal_at: '2027-03-03T00:00:00.000Z',
   until_at: '2027-01-01T00:00:00.000Z',
