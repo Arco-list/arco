@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import { toast } from "sonner"
 import { useLocale, useTranslations } from "next-intl"
 import { Header } from "@/components/header"
@@ -506,6 +506,34 @@ export function SubscriptionScreen({
       router.refresh()
     })
   }
+
+  /**
+   * Keep asking while VIES is still thinking.
+   *
+   * Saving a number creates the tax id at Stripe, and Stripe's check
+   * has not finished by the time the save returns — so the refresh
+   * that follows it always reads `pending`, and the screen kept saying
+   * so until the next page load. Paste a number that does not exist
+   * and you were told the check was running, indefinitely.
+   *
+   * Four seconds, six times. VIES normally answers inside one round;
+   * the cap is there because `pending` can also mean a member state is
+   * taking the afternoon off, and a page that refreshes itself forever
+   * is worse than one that stops asking.
+   */
+  const vatPolls = useRef(0)
+  useEffect(() => {
+    if (details.identity?.vatStatus !== "pending") {
+      vatPolls.current = 0
+      return
+    }
+    if (vatPolls.current >= 6) return
+    const timer = setTimeout(() => {
+      vatPolls.current += 1
+      router.refresh()
+    }, 4000)
+    return () => clearTimeout(timer)
+  }, [details.identity?.vatStatus, router])
 
   const refusePreview = () => {
     toast.error(tb("preview_readonly"))
@@ -1254,7 +1282,7 @@ export function SubscriptionScreen({
               {tb("identity_vat")} <span style={{ color: "var(--arco-mid-grey)", fontWeight: 400 }}>{tb("identity_optional")}</span>
             </label>
             <input id="bi-vat" className={`form-input${identityVatError ? " form-input--error" : ""}`}
-              placeholder="NL…………B01" value={identity.vatNumber}
+              placeholder="NL123456789B01" value={identity.vatNumber}
               onChange={(e) => {
                 setIdentity((v) => ({ ...v, vatNumber: e.target.value }))
                 setIdentityVatError(null); setIdentityEmailError(null); setEditingAddress(false)

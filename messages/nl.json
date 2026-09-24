@@ -2302,7 +2302,7 @@
     "legal_and": "en",
     "mandate": "Door je IBAN op te geven en deze betaling te bevestigen, machtig je Arco en Stripe, onze betaaldienstverlener, om je bank opdracht te geven het bedrag van je rekening af te schrijven. Je hebt recht op terugbetaling door je bank volgens de voorwaarden van je overeenkomst met je bank. Een verzoek tot terugbetaling dien je binnen acht weken in.",
     "email_placeholder": "naam@bedrijf.nl",
-    "vat_placeholder": "NL…………B01",
+    "vat_placeholder": "NL123456789B01",
     "promo_placeholder": "ACTIECODE",
     "vat_line": "Btw (21%)",
     "promo_unknown": "Deze code kennen we niet, of hij geldt niet voor dit abonnement.",

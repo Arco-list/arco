@@ -2302,7 +2302,7 @@
     "legal_and": "and",
     "mandate": "By providing your IBAN and confirming this payment, you authorise Arco and Stripe, our payment provider, to instruct your bank to debit the amount from your account. You are entitled to a refund from your bank under the terms of your agreement with it. A refund must be claimed within eight weeks.",
     "email_placeholder": "name@company.com",
-    "vat_placeholder": "NL…………B01",
+    "vat_placeholder": "NL123456789B01",
     "promo_placeholder": "PROMO CODE",
     "vat_line": "VAT (21%)",
     "promo_unknown": "We don't know this code, or it doesn't apply to this plan.",
