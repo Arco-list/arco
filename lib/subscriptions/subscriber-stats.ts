@@ -2,7 +2,6 @@ import "server-only"
 
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { isEntitledNow } from "@/lib/subscriptions/entitlement"
-import { isStripeLiveMode } from "@/lib/stripe/rest"
 import { NET_CENTS } from "@/app/dashboard/subscription/checkout/constants"
 
 /**
@@ -25,6 +24,22 @@ import { NET_CENTS } from "@/app/dashboard/subscription/checkout/constants"
  *
  * ONE COMPANY IS ONE SUBSCRIBER. A founding company that later starts
  * paying is the same company, so both sources go into one set.
+ *
+ * LIVE ONLY, WHATEVER KEY THIS IS RUNNING WITH. Everything here feeds
+ * admin reporting — the funnels, the model, the Subscribed pill on
+ * /companies and /sales — and reporting answers "what is this business"
+ * rather than "what can this environment do". A dev server showing a
+ * different customer count than production is a dashboard nobody can
+ * quote.
+ *
+ * That is the opposite of the rule in getCompanyBilling and
+ * hasLiveSubscription, and deliberately so: those two decide who gets
+ * Pro and who may buy, and there a test subscription must count on a
+ * dev server and must NOT count in production. The mode gate protects
+ * the product; it has no business in the reporting.
+ *
+ * The cost is that a test subscription never appears in these numbers.
+ * That is the right way round — a test sale is not a sale.
  */
 
 export type SubscriberStats = {
@@ -103,7 +118,7 @@ export async function getSubscriberFacts(): Promise<SubscriberFact[]> {
     livemode?: boolean | null
   }[]) {
     if (!row.company_id) continue
-    if ((row.livemode ?? true) !== isStripeLiveMode()) continue
+    if ((row.livemode ?? true) !== true) continue
     const alive = isEntitledNow(row.status, row.collection_pending_until)
     byCompany.set(row.company_id, {
       companyId: row.company_id,
@@ -191,7 +206,7 @@ export async function getSubscriberStats(sinceIso?: string): Promise<SubscriberS
   }[]) {
     if (!row.company_id) continue
     // A test subscription is not revenue. Same table, both modes.
-    if ((row.livemode ?? true) !== isStripeLiveMode()) continue
+    if ((row.livemode ?? true) !== true) continue
     if (!isEntitledNow(row.status, row.collection_pending_until)) continue
     seen.set(row.company_id, {
       paying: true,
