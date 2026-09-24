@@ -1375,9 +1375,11 @@
       "identity_email": "Email for invoices",
       "identity_email_note": "Can differ from your account — your bookkeeper, for instance.",
       "identity_email_invalid": "That address does not look right.",
-      "identity_vat_unverified": "This number is not in the European VAT register (VIES). Check it — an incorrect number still ends up on your invoice.",
+      "identity_vat_unverified": "Not found in the European VAT register. Check the number — it still goes on your invoice.",
       "identity_vat_verified": "Checked against the European VAT register.",
-      "identity_vat_verified_name": "Checked against the European VAT register, registered to {name}."
+      "identity_vat_verified_name": "Checked against the European VAT register, registered to {name}.",
+      "identity_vat_pending": "The European VAT register has not answered yet. Your number is saved.",
+      "identity_vat_unavailable": "The European VAT register was unreachable, so the number was not checked. It is saved."
     },
     "pricing_current_badge": "Current",
     "pricing_your_plan": "Your current plan",

@@ -1375,9 +1375,11 @@
       "identity_email": "E-mailadres voor facturen",
       "identity_email_note": "Mag een ander adres zijn dan je account — bijvoorbeeld je boekhouding.",
       "identity_email_invalid": "Dit adres lijkt niet te kloppen.",
-      "identity_vat_unverified": "Dit nummer staat niet in het Europese btw-register (VIES). Controleer het — een onjuist nummer komt wel op je factuur te staan.",
+      "identity_vat_unverified": "Staat niet in het Europese btw-register. Controleer het nummer — het komt wel op je factuur.",
       "identity_vat_verified": "Gecontroleerd in het Europese btw-register.",
-      "identity_vat_verified_name": "Gecontroleerd in het Europese btw-register, op naam van {name}."
+      "identity_vat_verified_name": "Gecontroleerd in het Europese btw-register, op naam van {name}.",
+      "identity_vat_pending": "De controle bij het Europese btw-register loopt nog. Je nummer is opgeslagen.",
+      "identity_vat_unavailable": "Het Europese btw-register was niet bereikbaar, dus het nummer is niet gecontroleerd. Het is wel opgeslagen."
     },
     "pricing_current_badge": "Huidig",
     "pricing_your_plan": "Je huidige abonnement",

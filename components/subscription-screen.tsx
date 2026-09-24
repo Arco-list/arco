@@ -1239,19 +1239,34 @@ export function SubscriptionScreen({
                 have. Hidden entirely while the field is being edited:
                 the verdict belongs to the saved number, not the one
                 halfway through being typed. */}
-            {!identityVatError && identity.vatNumber === (details.identity?.vatNumber ?? "") && (
-              details.identity?.vatStatus === "unverified" ? (
-                <p className="form-note form-note--error" style={{ marginBottom: 24 }}>
-                  {tb("identity_vat_unverified")}
+            {!identityVatError && identity.vatNumber === (details.identity?.vatNumber ?? "") && (() => {
+              const status = details.identity?.vatStatus
+              if (!status) return null
+
+              // Only one of the four is the reader's problem. A number
+              // that is not in the register is wrong and fixable, so it
+              // is red. The other three are either good news or news
+              // about VIES, and colouring those red would send somebody
+              // hunting for a fault that is not theirs.
+              const isProblem = status === "unverified"
+              const text =
+                status === "unverified" ? tb("identity_vat_unverified")
+                : status === "verified"
+                  ? (details.identity?.vatVerifiedName
+                      ? tb("identity_vat_verified_name", { name: details.identity.vatVerifiedName })
+                      : tb("identity_vat_verified"))
+                : status === "pending" ? tb("identity_vat_pending")
+                : tb("identity_vat_unavailable")
+
+              return (
+                <p
+                  className={`form-note${isProblem ? " form-note--error" : ""}`}
+                  style={{ marginBottom: 24 }}
+                >
+                  {text}
                 </p>
-              ) : details.identity?.vatStatus === "verified" ? (
-                <p className="form-note" style={{ marginBottom: 24 }}>
-                  {details.identity.vatVerifiedName
-                    ? tb("identity_vat_verified_name", { name: details.identity.vatVerifiedName })
-                    : tb("identity_vat_verified")}
-                </p>
-              ) : null
-            )}
+              )
+            })()}
 
             <div className="popup-actions">
               <button type="button" className="btn-tertiary" style={{ flex: 1 }}
