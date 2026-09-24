@@ -1,7 +1,7 @@
 import "server-only"
 
 import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
-import { stripePost } from "@/lib/stripe/rest"
+import { stripeGet, stripePost } from "@/lib/stripe/rest"
 
 /**
  * Who is allowed to spend a company's money, and which Stripe customer
@@ -74,6 +74,34 @@ export async function resolveOwnedCompany(): Promise<OwnedCompany | OwnershipErr
  * Written the moment the customer is created, so the next caller finds
  * it whether or not anything was ever bought.
  */
+/**
+ * Does Stripe still have this customer?
+ *
+ * The stored id was trusted outright, and a customer that no longer
+ * exists is not hypothetical: they can be deleted from the dashboard,
+ * and a test-data wipe removes them all. Once that happens the id sits
+ * on the company forever, every SetupIntent built on it is refused,
+ * and the reader gets "Dat lukte niet. Probeer het zo nog eens." — an
+ * invitation to retry something that cannot work, on the screen where
+ * they were about to pay.
+ *
+ * Stripe reports a deleted customer as an ordinary object carrying
+ * `deleted: true`, so a 200 is not on its own an answer.
+ *
+ * A network blip answers false and costs a duplicate customer, which
+ * is the cheaper mistake: Stripe merges nothing automatically, but a
+ * spare customer is tidy-up, where a blocked checkout is lost revenue
+ * nobody reports.
+ */
+async function customerStillExists(customerId: string): Promise<boolean> {
+  try {
+    const customer = await stripeGet<{ deleted?: boolean }>(`/customers/${customerId}`)
+    return customer.deleted !== true
+  } catch {
+    return false
+  }
+}
+
 export async function ensureCustomer(
   companyId: string,
   companyName: string,
@@ -88,7 +116,7 @@ export async function ensureCustomer(
     .maybeSingle()
 
   const known = (company as { stripe_customer_id?: string | null } | null)?.stripe_customer_id
-  if (known) return known
+  if (known && (await customerStillExists(known))) return known
 
   // Older companies were only ever recorded on their subscription.
   const { data: mirrored } = await service
@@ -98,7 +126,7 @@ export async function ensureCustomer(
     .maybeSingle()
 
   const fromSubscription = (mirrored as { stripe_customer_id?: string } | null)?.stripe_customer_id
-  if (fromSubscription) {
+  if (fromSubscription && (await customerStillExists(fromSubscription))) {
     await service
       .from("companies")
       .update({ stripe_customer_id: fromSubscription })

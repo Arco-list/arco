@@ -28,9 +28,26 @@ import { cancelFoundingEnding, scheduleCardExpiry, scheduleRenewalReminder } fro
  *
  * Configure at Stripe → Developers → Webhooks:
  *   URL     https://www.arcolist.com/api/webhooks/stripe
- *   Events  checkout.session.completed,
- *           customer.subscription.created / .updated / .deleted,
- *           invoice.paid, invoice.payment_failed
+ *   Events  customer.subscription.created / .updated / .deleted
+ *           invoice.paid
+ *           invoice.payment_failed
+ *           setup_intent.succeeded
+ *
+ * setup_intent.succeeded is not optional and is the one most easily
+ * forgotten: it is the only way a mandate given at a bank and never
+ * returned from becomes a subscription. Leave it unsubscribed and an
+ * iDEAL buyer who closes the tab pays nothing and gets nothing, with
+ * no error anywhere.
+ *
+ * checkout.session.completed is handled below but no longer fires —
+ * buying moved to Elements and the Checkout path was removed. No need
+ * to subscribe to it.
+ *
+ * ONE SECRET PER MODE. The list is comma-separated so a deployed
+ * endpoint and a local `stripe listen` can both be accepted, which is
+ * a development convenience. Production must carry the live secret
+ * ONLY: a test-mode event accepted here is mirrored into the real
+ * subscriptions table, and a test subscription would hand out Pro.
  *
  * Locally: `stripe listen --forward-to localhost:3000/api/webhooks/stripe`
  * prints the whsec_… that goes in STRIPE_WEBHOOK_SECRET.
