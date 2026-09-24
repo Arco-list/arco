@@ -2,6 +2,7 @@ import "server-only"
 
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { isEntitledNow } from "@/lib/subscriptions/entitlement"
+import { isStripeLiveMode } from "@/lib/stripe/rest"
 import { NET_CENTS } from "@/app/dashboard/subscription/checkout/constants"
 
 /**
@@ -83,7 +84,7 @@ export async function getSubscriberFacts(): Promise<SubscriberFact[]> {
   const [{ data: subs }, { data: founding }] = await Promise.all([
     supabase
       .from("subscriptions")
-      .select("company_id, status, collection_pending_until, billing_interval, created_at, canceled_at"),
+      .select("company_id, status, collection_pending_until, billing_interval, created_at, canceled_at, livemode"),
     supabase
       .from("companies")
       .select("id, founding_claimed_at")
@@ -99,8 +100,10 @@ export async function getSubscriberFacts(): Promise<SubscriberFact[]> {
     billing_interval?: string | null
     created_at?: string | null
     canceled_at?: string | null
+    livemode?: boolean | null
   }[]) {
     if (!row.company_id) continue
+    if ((row.livemode ?? true) !== isStripeLiveMode()) continue
     const alive = isEntitledNow(row.status, row.collection_pending_until)
     byCompany.set(row.company_id, {
       companyId: row.company_id,
@@ -141,7 +144,7 @@ export async function getSubscriberStats(sinceIso?: string): Promise<SubscriberS
   const [{ data: subs }, { data: founding }] = await Promise.all([
     supabase
       .from("subscriptions")
-      .select("company_id, status, collection_pending_until, billing_interval, created_at"),
+      .select("company_id, status, collection_pending_until, billing_interval, created_at, livemode"),
     supabase
       .from("companies")
       .select("id, founding_claimed_at")
@@ -168,8 +171,11 @@ export async function getSubscriberStats(sinceIso?: string): Promise<SubscriberS
     collection_pending_until?: string | null
     billing_interval?: string | null
     created_at?: string | null
+    livemode?: boolean | null
   }[]) {
     if (!row.company_id) continue
+    // A test subscription is not revenue. Same table, both modes.
+    if ((row.livemode ?? true) !== isStripeLiveMode()) continue
     if (!isEntitledNow(row.status, row.collection_pending_until)) continue
     seen.set(row.company_id, {
       paying: true,

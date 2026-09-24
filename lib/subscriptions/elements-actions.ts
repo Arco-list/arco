@@ -60,6 +60,11 @@ export async function startSetupAction(
   /** "subscribe" needs there to be no subscription yet; "replace"
    *  needs there to be one. Same mandate, opposite precondition. */
   purpose: "subscribe" | "replace" = "subscribe",
+  /** Stamped on the intent so the webhook can finish the job when the
+   *  reader never comes back from their bank. Absent when replacing a
+   *  mandate: there is a subscription already, with a cycle of its
+   *  own, and nothing for the recovery path to build. */
+  interval?: "month" | "year",
 ): Promise<{ clientSecret: string; returnUrl: string } | Failure> {
   if (!isStripeConfigured()) return { error: "not_configured" }
 
@@ -85,7 +90,18 @@ export async function startSetupAction(
       // The whole point: this mandate is used again, months from now,
       // without the reader present.
       usage: "off_session",
-      metadata: { company_id: resolved.companyId },
+      // The interval rides along because the webhook needs it.
+      //
+      // setup_intent.succeeded is the only way a mandate given at a
+      // bank and never returned from becomes a subscription, and its
+      // handler reads the cycle from here. It was never written, so
+      // the guard never fired — the safety net has been hanging
+      // unattached since it was built, silently, because an `if` that
+      // does not match logs nothing.
+      metadata: {
+        company_id: resolved.companyId,
+        ...(purpose === "subscribe" && interval ? { interval } : {}),
+      },
     })
 
     return {

@@ -123,7 +123,7 @@ export function useElementsCheckout({
       const key = `${purpose}:${method}`
       let secret = secretByKey.current[key]
       if (!secret) {
-        const started = await startSetupAction(method, returnPath, purpose)
+        const started = await startSetupAction(method, returnPath, purpose, interval)
         if (!("clientSecret" in started)) {
           setMessage(started.error)
           setPhase("error")

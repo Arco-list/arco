@@ -34,6 +34,10 @@ export type StripeSubscription = {
   /** The mandate the recurring charge runs on. Read to warn before a
    *  card on it expires. */
   default_payment_method?: string | null
+  /** Stripe's own flag. Recorded because one database serves every
+   *  environment, so where a row is stored says nothing about which
+   *  Stripe it came from. */
+  livemode?: boolean
   /** Why it ended. `cancellation_requested` and `payment_failed` are
    *  very different facts about the mandate we still hold. */
   cancellation_details?: { reason?: string | null } | null
@@ -147,6 +151,10 @@ export async function mirrorSubscription(
         trial_end: toIso(subscription.trial_end),
         canceled_at: toIso(subscription.canceled_at),
         canceled_reason: subscription.cancellation_details?.reason ?? null,
+        // Absent only if Stripe ever stops sending it; true is the
+        // safer assumption, since it honours a subscription rather
+        // than silently revoking one.
+        livemode: subscription.livemode ?? true,
         // The grant exists only to cover the gap between a repair
         // payment leaving and Stripe hearing that it landed. Any status
         // but `unpaid` means that gap has closed — the money arrived,

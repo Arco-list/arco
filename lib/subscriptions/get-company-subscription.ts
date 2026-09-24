@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
+import { isStripeLiveMode } from "@/lib/stripe/rest"
 
 /**
  * The billing state of one company, as the product sees it.
@@ -66,7 +67,7 @@ export async function getCompanyBilling(companyId: string): Promise<CompanyBilli
   const [{ data: sub }, { data: company }] = await Promise.all([
     supabase
       .from("subscriptions")
-      .select("status, billing_interval, current_period_end, cancel_at_period_end, trial_end, stripe_customer_id, stripe_subscription_id, collection_pending_until")
+      .select("status, billing_interval, current_period_end, cancel_at_period_end, trial_end, stripe_customer_id, stripe_subscription_id, collection_pending_until, livemode")
       .eq("company_id", companyId)
       .maybeSingle(),
     supabase
@@ -85,12 +86,27 @@ export async function getCompanyBilling(companyId: string): Promise<CompanyBilli
     stripe_customer_id?: string | null
     stripe_subscription_id?: string | null
     collection_pending_until?: string | null
+    livemode?: boolean | null
   } | null
 
   const foundingClaimedAt =
     (company as { founding_claimed_at?: string | null } | null)?.founding_claimed_at ?? null
 
-  if (row?.status && ALIVE.has(row.status)) {
+  // A subscription from the other Stripe is not this app's to honour.
+  //
+  // One database serves localhost, preview and arcolist.com, and the
+  // checkout writes its own mirror row before any webhook — so a test
+  // checkout on a dev server put an `active` row in the table the live
+  // site reads, and the live site handed out Pro for it.
+  //
+  // Not "test never counts": on a dev server a test subscription MUST
+  // count, or the product cannot be tested. It counts where it belongs.
+  // Rows from the other mode are treated as absent rather than as
+  // cancelled, so the reader sees the free plan and no stale invoice
+  // history from a Stripe this app cannot reach.
+  const sameMode = (row?.livemode ?? true) === isStripeLiveMode()
+
+  if (row?.status && ALIVE.has(row.status) && sameMode) {
     return {
       // Access follows entitlement; everything else on this object
       // describes the subscription, which outlives it. An unpaid
@@ -132,14 +148,16 @@ export async function getCompanyBilling(companyId: string): Promise<CompanyBilli
     plan: "free",
     // A cancelled or expired subscription still leaves a Stripe customer
     // behind — worth keeping so the portal link and invoice history work.
+    // Not across modes though: an id from the other Stripe would send
+    // the reader's invoice list at an account this app cannot read.
     source: "none",
     status: (row?.status as StripeSubscriptionStatus | undefined) ?? null,
     interval: null,
     currentPeriodEnd: row?.current_period_end ?? null,
     cancelAtPeriodEnd: false,
     trialEnd: null,
-    stripeCustomerId: row?.stripe_customer_id ?? null,
-    stripeSubscriptionId: row?.stripe_subscription_id ?? null,
+    stripeCustomerId: sameMode ? row?.stripe_customer_id ?? null : null,
+    stripeSubscriptionId: sameMode ? row?.stripe_subscription_id ?? null : null,
     foundingClaimedAt: null,
     collectionPendingUntil: null,
   }
