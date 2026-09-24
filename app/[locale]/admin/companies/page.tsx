@@ -1,4 +1,5 @@
 import { AdminCompaniesDataTable, type AdminCompanyRow } from "@/components/admin-companies-data-table"
+import { getSubscriberStats } from "@/lib/subscriptions/subscriber-stats"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import type { Tables } from "@/lib/supabase/types"
 import { logger } from "@/lib/logger"
@@ -616,7 +617,13 @@ async function loadAdminCompaniesData() {
 }
 
 export default async function AdminProfessionalsPage() {
-  const { mergedRows, servicesOptions } = await loadAdminCompaniesData()
+  // Subscribers are counted here rather than in the table, because
+  // they are not a company status — the funnel's last stage lives in
+  // `subscriptions` and would otherwise keep drawing a zero.
+  const [{ mergedRows, servicesOptions }, subscribers] = await Promise.all([
+    loadAdminCompaniesData(),
+    getSubscriberStats(),
+  ])
 
   return (
     // Horizontal-overflow clip lives on the admin layout wrapper so
@@ -624,7 +631,7 @@ export default async function AdminProfessionalsPage() {
     <div className="min-h-screen bg-white">
       {/* The table renders the sticky full-bleed workbench bar and
           wraps its own content. */}
-      <AdminCompaniesDataTable data={mergedRows} serviceOptions={servicesOptions} />
+      <AdminCompaniesDataTable data={mergedRows} serviceOptions={servicesOptions} subscriberCount={subscribers.total} />
     </div>
   )
 }

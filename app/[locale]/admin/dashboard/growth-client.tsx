@@ -92,6 +92,18 @@ const ROLLING_LABEL: Record<string, string> = {
 // Signups → Drafts bridge that crosses the Clients / Professionals
 // divider). connDownHeight overrides the default G height of the down
 // connector when set.
+/**
+ * Cents as a figure you can scan.
+ *
+ * Whole euros: MRR is a projection, not a bank balance, and two
+ * decimals invite a precision the number does not have.
+ */
+function euroCents(cents: number): string {
+  return new Intl.NumberFormat("nl-NL", {
+    style: "currency", currency: "EUR", maximumFractionDigits: 0,
+  }).format(cents / 100)
+}
+
 function Card({ label, value, driver, connRight, connDown, connUp, connDownHeight, datapoints, metricKey, onCardClick, timeframe, dataName }: {
   label: string; value: number | string | null; driver: Driver
   connRight?: string; connDown?: string; connUp?: string
@@ -317,7 +329,12 @@ export function GrowthClient({ initialMetrics, initialLastSynced = null }: Props
       ],
       publishers: [
         { label: "← From active", value: cr.proActiveToPublisher },
-        { label: "→ Inviter", value: cr.proPublisherToInviter },
+        // Both rates are company-to-company — what share of listed
+        // companies published, and what share of those also invited —
+        // while the card above them now counts projects. Labelled with
+        // "publishers" in the words so the denominator is legible
+        // rather than assumed to be the headline number.
+        { label: "→ Inviter (of publishers)", value: cr.proPublisherToInviter },
       ],
       inviters: [
         { label: "← From publisher", value: cr.proPublisherToInviter },
@@ -759,13 +776,25 @@ export function GrowthClient({ initialMetrics, initialLastSynced = null }: Props
           <Card label="Visitors" value={posthogData.proVisitors} metricKey="pro_visitors" onCardClick={openDetail} driver="acquisition" connRight={proVisitorToDraft} timeframe={timeframe} datapoints={posthogData.proVisitorsSeries.length > 0 ? posthogData.proVisitorsSeries : dp("pro_visitors")} />
           <Card label="Created" value={metrics.draftCompanies} metricKey="drafts" onCardClick={openDetail} driver="acquisition" connRight={cr.proSignupToActive} dataName="drafts" timeframe={timeframe} datapoints={dp("open_drafts")} />
           <Card label="Listed" metricKey="actives" onCardClick={openDetail} value={metrics.listedCompanies} driver="retention" connRight={cr.proActiveToSubscriber} connUp="" connDown={cr.proActiveToPublisher} timeframe={timeframe} datapoints={dp("actives")} />
-          <Card label="Subscribers" metricKey="subscribers" onCardClick={openDetail} value={pr.subscribed} driver="monetization" connRight="" timeframe={timeframe} datapoints={dp("subscribers")} />
+          <Card label="New Subscribers" metricKey="subscribers" onCardClick={openDetail} value={metrics.newSubscribers} driver="monetization" connRight="" timeframe={timeframe} datapoints={dp("subscribers")} />
           <Card label="Churners" metricKey="churn" onCardClick={openDetail} value="—" driver="churn" timeframe={timeframe} datapoints={dp("churn")} />
           <Empty /><Empty />
 
-          {/* Row 3: Publishers only — Contractors removed. */}
+          {/* Row 3: Publishers only — Contractors removed. Total
+              Subscribers, MRR and Avg. MRR are supporting metrics on the
+              New Subscribers card rather than cards of their own: none
+              of them is a stage a company moves into, and a lifecycle
+              grid that gives them a column implies a flow between
+              them. */}
           <Empty /><Empty />
-          <Card label="Publishers" metricKey="publishers" onCardClick={openDetail} value={metrics.publisherCompanies} driver="retention" connUp="" connDown={cr.proPublisherToInviter} timeframe={timeframe} datapoints={dp("publishers")} />
+          {/* New Projects, with Publishers as a supporting metric —
+              same flip as /model, where published volume is the primary
+              retention signal and unique publisher count is context.
+              The label was the only part still saying "Publishers": the
+              metric definition and the detail query both counted
+              projects already, so the card was showing a company total
+              under a heading its own modal contradicted. */}
+          <Card label="New Projects" metricKey="publishers" onCardClick={openDetail} value={metrics.publishedProjects} driver="retention" connUp="" connDown={cr.proPublisherToInviter} timeframe={timeframe} datapoints={dp("publishers")} />
           <Empty /><Empty /><Empty /><Empty />
 
           {/* Row 4: Inviter */}
@@ -785,6 +814,18 @@ export function GrowthClient({ initialMetrics, initialLastSynced = null }: Props
         sources={detailMetric === "pro_visitors" ? posthogData.proSources : posthogData.clientSources}
         sourceSeries={detailMetric === "pro_visitors" ? posthogData.proSourceSeries : posthogData.clientSourceSeries}
         mainSeries={detailMetric === "pro_visitors" ? posthogData.proVisitorsSeries : detailMetric === "client_visitors" ? posthogData.clientVisitorsSeries : undefined}
+        subValues={
+          detailMetric === "subscribers" ? {
+            total_subscribers: String(metrics.totalSubscribers),
+            mrr: euroCents(metrics.mrrCents),
+            avg_mrr: euroCents(metrics.avgMrrCents),
+          }
+          : detailMetric === "publishers" ? {
+            publisher_companies: String(metrics.publisherCompanies),
+            projects: String(metrics.totalProjects),
+          }
+          : undefined
+        }
         timeframe={timeframe}
         onTimeframeChange={handleTimeframeChange}
         onClose={() => setDetailMetric(null)}

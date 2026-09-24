@@ -3,6 +3,7 @@
 import { Resend } from "resend"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { updateContactStage } from "@/lib/apollo-client"
+import { getSubscriberStats } from "@/lib/subscriptions/subscriber-stats"
 
 export type ProspectStatus =
   | "prospect"
@@ -94,6 +95,12 @@ export type ProspectFunnel = {
   company: number
   publisher: number
   active: number
+  /** Companies holding Pro — paid or founding. Not a `prospects`
+   *  status, so it is counted from the subscriptions side by
+   *  getSubscriberStats rather than tallied in the loop below. It used
+   *  to render as a hardcoded zero, which a monetization stage cannot
+   *  afford: nought reads as "nobody buys", not as "nobody counts". */
+  subscribed: number
   total_emails_sent: number
 }
 
@@ -332,7 +339,7 @@ async function attachResolvedContacts(
 const EMPTY_FUNNEL: ProspectFunnel = {
   total: 0, prospect: 0, contacted: 0, visitor: 0,
   signup: 0, company: 0, publisher: 0, active: 0,
-  total_emails_sent: 0,
+  subscribed: 0, total_emails_sent: 0,
 }
 
 export async function fetchFunnel(source?: string) {
@@ -344,14 +351,20 @@ export async function fetchFunnel(source?: string) {
     query = query.eq("source", source)
   }
 
-  const { data: allProspects, error } = await query
+  // Subscribers come from the other side of the house and are not
+  // filtered by prospect source: a company that pays us is a customer,
+  // whichever list it was scraped from.
+  const [{ data: allProspects, error }, subscribers] = await Promise.all([
+    query,
+    getSubscriberStats(),
+  ])
 
   if (error) {
     console.error("Failed to fetch funnel", error)
     return { funnel: EMPTY_FUNNEL }
   }
 
-  const funnel: ProspectFunnel = { ...EMPTY_FUNNEL }
+  const funnel: ProspectFunnel = { ...EMPTY_FUNNEL, subscribed: subscribers.total }
   const prospects = (allProspects ?? []) as Array<{ status: string; emails_sent: number; source: string }>
 
   for (const p of prospects) {

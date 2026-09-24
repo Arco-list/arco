@@ -170,14 +170,18 @@ export const METRIC_DEFS: Record<string, MetricDef> = {
   },
   publishers: {
     key: "publishers",
-    title: "Publishers",
-    definition: "Projects with status 'published' — live on the platform and visible to everyone.",
+    // Key stays `publishers` — it is what the card, the detail action
+    // and the conversion map all reach for, and it was never the part
+    // anybody read.
+    title: "New Projects",
+    definition: "Projects that went live in the period. Counted on publication, not on creation: a draft waiting for approval is not yet a project anyone can find.",
     source: "supabase",
     driver: "retention",
     user: "professional",
     supabaseTable: "projects",
     supabaseFilter: { status: "published" },
     subs: [
+      { key: "publisher_companies", label: "Publishers", definition: "Unique companies that published at least one project in the period. The denominator behind the conversion rates on this card, which are company-to-company.", source: "supabase" },
       { key: "projects", label: "Total projects", definition: "All projects regardless of status", source: "supabase" },
       { key: "ranked_projects", label: "Ranked projects", definition: "% of projects created in the period that are ranked (≥1 GSC impression in 28d)", source: "supabase" },
     ],
@@ -207,20 +211,28 @@ export const METRIC_DEFS: Record<string, MetricDef> = {
   },
   subscribers: {
     key: "subscribers",
-    title: "Subscribers",
-    definition: "Companies with an active paid subscription. Always 0 — plan tiers retired.",
+    title: "New Subscribers",
+    definition: "Companies that became subscribers inside the selected timeframe — a first paid subscription, or founding access claimed. One company counts once, on the earlier of the two.",
     source: "supabase",
     driver: "monetization",
     user: "professional",
-    supabaseTable: "companies",
-    supabaseFilter: { has_plan: true },
+    supabaseTable: "subscriptions",
+    // The three below are supporting metrics rather than stages of
+    // their own, because none of them is a thing a company converts
+    // INTO: two are stocks and one is money. A lifecycle grid that
+    // gives them cards implies a flow between them.
+    //
+    // No Paying / Founding split here. It would be two numbers saying
+    // one thing, and Avg. MRR already says it better: every founding
+    // member sits in that denominator at zero, so the gap between the
+    // average and the €49 list price IS the free share. One number
+    // that has to be read beats two that have to be compared.
     subs: [
-      { key: "mrr", label: "MRR", definition: "Monthly recurring revenue", source: "supabase" },
+      { key: "total_subscribers", label: "Total Subscribers", definition: "Companies holding Pro right now — paying, plus founding members whose period is still running. A stock, so it ignores the timeframe.", source: "supabase" },
+      { key: "mrr", label: "MRR", definition: "Monthly recurring revenue, net of VAT. A yearly plan counts as a twelfth of its price each month, so switching cycles does not make revenue jump. Founding members contribute nothing.", source: "supabase" },
+      { key: "avg_mrr", label: "Avg. MRR", definition: "MRR divided by total subscribers, so total × average = MRR. Reads below the €49 list price by exactly the share of subscribers paying nothing.", source: "supabase" },
     ],
   },
-  // renewals / expansions / contractions removed — these will return as
-  // supporting metrics on the Subscribers card once subscription billing
-  // is wired. They were placeholder definitions with no real data.
   churn: {
     key: "churn",
     title: "Churn",

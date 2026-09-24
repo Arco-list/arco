@@ -1,6 +1,7 @@
 "use server"
 
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
+import { getSubscriberStats } from "@/lib/subscriptions/subscriber-stats"
 
 export type Timeframe = "days" | "weeks" | "months" | "years"
 
@@ -49,7 +50,16 @@ export type GrowthMetrics = {
   publishedProjects: number
   publisherCompanies: number
   totalInvites: number
-  paidCompanies: number
+  /** Became a subscriber inside the selected timeframe. */
+  newSubscribers: number
+  /** Holding Pro right now — paid or founding, all-time. */
+  totalSubscribers: number
+  /** Monthly recurring revenue in cents, net of VAT. */
+  mrrCents: number
+  /** MRR per subscriber. Founding members sit in the denominator at
+   *  zero, so during the launch period this reads lower than the list
+   *  price — which is the true picture, not a rounding error. */
+  avgMrrCents: number
   signupsLast30d: number
   signupsLast7d: number
   companiesLast30d: number
@@ -171,7 +181,9 @@ export async function fetchGrowthMetrics(timeframe: Timeframe = "months"): Promi
   // Paid-subscription concept retired. Kept on the response shape as 0 so
   // downstream UIs (cards, conversion arrows) don't crash; remove the
   // surface entirely when those cards get redesigned.
-  const paidCompanies = 0
+  // One counter, shared with both funnels, so the monetization stage
+  // cannot say three different things on three screens.
+  const subscriberStats = await getSubscriberStats(cutoff?.toISOString())
 
   const signupsLast30d = allProfiles.filter((p: any) => new Date(p.created_at) > d30).length
   const signupsLast7d = allProfiles.filter((p: any) => new Date(p.created_at) > d7).length
@@ -235,8 +247,10 @@ export async function fetchGrowthMetrics(timeframe: Timeframe = "months"): Promi
     if (companiesWithInvites.has(id)) publishersWhoAlsoInvited.add(id)
   })
 
-  // Active → subscribed: paid-tier concept retired. Always 0.
-  const activeAndSubscribed = 0
+  // Of the companies that became listed in this window, how many now
+  // hold Pro. Both sides are real numbers again; this was pinned at
+  // zero while there was nothing to count.
+  const activeAndSubscribed = subscriberStats.newInPeriod
 
   // Cross-funnel signup → draft. Counts ALL signups (any role) whose user_id
   // maps to a claimed company. Captures the visit → signup → draft path
@@ -291,7 +305,7 @@ export async function fetchGrowthMetrics(timeframe: Timeframe = "months"): Promi
       const acceptedCount = allCompanies.filter((c: any) => invitedCompanyIds.has(c.id) && c.owner_id).length
       return invitedCompanyIds.size > 0 ? `${Math.round((acceptedCount / invitedCompanyIds.size) * 100)}%` : "0%"
     })(),
-    subscribed: paidCompanies,
+    subscribed: subscriberStats.total,
     savedProjects: 0,
     savesPerClient: 0,
     contactedProfessional: 0,
@@ -329,7 +343,10 @@ export async function fetchGrowthMetrics(timeframe: Timeframe = "months"): Promi
     publishedProjects,
     publisherCompanies,
     totalInvites: invites.length,
-    paidCompanies,
+    newSubscribers: subscriberStats.newInPeriod,
+    totalSubscribers: subscriberStats.total,
+    mrrCents: subscriberStats.mrrCents,
+    avgMrrCents: subscriberStats.avgMrrCents,
     signupsLast30d,
     signupsLast7d,
     companiesLast30d,

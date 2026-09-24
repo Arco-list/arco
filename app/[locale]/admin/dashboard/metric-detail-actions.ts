@@ -67,9 +67,17 @@ export async function fetchMetricTimeSeries(
       return query("project_professionals", "created_at")
     case "savers":
       return query("saved_projects", "created_at")
-    case "subscribers":
-      // Subscription concept retired with plan_tier removal.
-      return { timeSeries: [], total: 0 }
+    case "subscribers": {
+      // Not a `created_at` query like the others: a subscriber is a
+      // company, and it can become one down two roads — a paid
+      // subscription, or a founding claim. The shared counter knows
+      // which date each of those puts on the record.
+      const { getSubscriberFacts } = await import("@/lib/subscriptions/subscriber-stats")
+      const started = (await getSubscriberFacts())
+        .map((f) => (f.startedAt ? new Date(f.startedAt) : null))
+        .filter((d): d is Date => d !== null && !Number.isNaN(d.getTime()) && d >= from)
+      return { timeSeries: bucket6(started, from), total: started.length }
+    }
     default:
       return { timeSeries: [], total: 0 }
   }

@@ -129,12 +129,18 @@ interface MetricDetailModalProps {
   sources?: SourceData[]
   sourceSeries?: Record<string, number[]>
   mainSeries?: number[]
+  /** Real figures for the supporting metrics, keyed by sub key.
+   *  Supabase metrics render their subs as definitions with an em dash,
+   *  which is fine when the sub names a slice nobody has counted — and
+   *  useless for a supporting metric that IS a number, like MRR. A sub
+   *  without an entry here keeps the dash. */
+  subValues?: Record<string, string>
   timeframe: Timeframe
   onTimeframeChange: (tf: Timeframe) => void
   onClose: () => void
 }
 
-export function MetricDetailModal({ metricKey, currentValue, conversions, sources, sourceSeries, mainSeries, timeframe: tf, onTimeframeChange: setTf, onClose }: MetricDetailModalProps) {
+export function MetricDetailModal({ metricKey, currentValue, conversions, sources, sourceSeries, mainSeries, subValues, timeframe: tf, onTimeframeChange: setTf, onClose }: MetricDetailModalProps) {
   const [timeSeries, setTimeSeries] = useState<TimeSeriesPoint[]>([])
   const [total, setTotal] = useState<number>(0)
   const [isPending, startTransition] = useTransition()
@@ -269,7 +275,7 @@ export function MetricDetailModal({ metricKey, currentValue, conversions, source
                   key={sub.key}
                   title={sub.label}
                   definition={sub.definition}
-                  value="—"
+                  value={subValues?.[sub.key] ?? "—"}
                   data={effectiveTimeSeries}
                   color="#a1a1a0"
                 />

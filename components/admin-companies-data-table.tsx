@@ -321,6 +321,11 @@ type ServiceOption = {
 type Props = {
   data: AdminCompanyRow[]
   serviceOptions: ServiceOption[]
+  /** Companies holding Pro — paid or founding. Passed in rather than
+   *  derived from `data`, because it is not a company status: it lives
+   *  in `subscriptions`, and the funnel drew a hardcoded zero for as
+   *  long as that was true. */
+  subscriberCount?: number
 }
 
 type PendingStatusAction = {
@@ -785,7 +790,7 @@ function DomainCell({ company, onVerify, onRefresh }: { company: AdminCompanyRow
   )
 }
 
-export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
+export function AdminCompaniesDataTable({ data, serviceOptions, subscriberCount = 0 }: Props) {
   const router = useRouter()
   // Shared Contact Card slide-over — URL-driven via ?contact=<email>.
   // ContactsCell's "Details" items call contactParam.open(email); this
@@ -820,7 +825,8 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   // semantics as the previous "all" sentinel but enables OR'd multi-status
   // filtering. Funnel cards toggle in/out of the array; the dropdown uses
   // checkbox items.
-  // "subscribed" matches nothing until subscription billing lands.
+  // "subscribed" is a funnel stage, not a stored status: it filters
+  // nothing in this table and exists so the chain can show it.
   type CompanyStatusFilterValue = CompanyStatus | "invited" | "prospected" | "subscribed"
   const [statusFilter, setStatusFilter] = useState<CompanyStatusFilterValue[]>([])
   // Parked groups — hidden from the default table, each behind its own
@@ -1821,9 +1827,11 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
     // Same green as the dashboard's monetization driver.
     monetization: "#0f766e",
   }
-  // "subscribed" has no data source yet — subscription billing isn't
-  // wired. The card shows 0 until it is.
-  const companyCountAt = (status: string) => status === "subscribed" ? 0 : (companyStatusCounts[status] ?? 0)
+  // "subscribed" is not a company status, so it cannot come from the
+  // tally above — it is counted server-side from subscriptions and
+  // handed in.
+  const companyCountAt = (status: string) =>
+    status === "subscribed" ? subscriberCount : (companyStatusCounts[status] ?? 0)
   // Each cohort represents "everything currently in or past this stage on
   // the linear flow". Deactivated is a terminal leak so it doesn't
   // accumulate forward.

@@ -136,10 +136,11 @@ function getSuppressionState(contact: { bouncedAt: string | null; complainedAt: 
   return null
 }
 
-// Funnel stages aligned with Growth lifecycle model. 'subscribed' is a
-// forward-looking stage (no billing data yet — count stays 0, card
-// disabled), mirroring the companies funnel. 'unlisted' is NOT a chain
-// stage: it renders as a parked card under Listed, same as /companies.
+// Funnel stages aligned with Growth lifecycle model. 'subscribed' is
+// counted from subscriptions rather than from a prospect status —
+// there is no such status, which is why this stage read zero for as
+// long as it existed. 'unlisted' is NOT a chain stage: it renders as a
+// parked card under Listed, same as /companies.
 const FUNNEL_STAGES: { status: ProspectStatus | "subscribed"; label: string; driver: "prospect" | "acquisition" | "retention" | "monetization" }[] = [
   { status: "prospect", label: "Prospect", driver: "prospect" },
   { status: "contacted", label: "Contacted", driver: "prospect" },
@@ -1378,9 +1379,7 @@ export function ProspectsClient({
                 const count = (funnel as any)[stage.status] ?? 0
                 const prevCohort = i > 0 ? cohorted[i - 1] : funnel.total
                 const thisCohort = cohorted[i]
-                // No billing data yet: the connector into Subscribed shows
-                // the metric without a rate, same as /companies.
-                const rate = i === 0 ? "" : stage.status === "subscribed" ? "—" : conversionRate(prevCohort, thisCohort)
+                const rate = i === 0 ? "" : conversionRate(prevCohort, thisCohort)
                 // Cumulative conversion from the connector's left stage all
                 // the way to Listed — rendered under the line, below the
                 // single-stage rate. One decimal below 10% (6/1000 would
