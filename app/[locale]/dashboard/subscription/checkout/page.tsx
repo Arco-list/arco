@@ -65,8 +65,39 @@ export default async function CheckoutPage({
     status?: string
     canceled_reason?: string | null
   } | null
-  const customerId = mirrored?.stripe_customer_id ?? null
-  const details = customerId ? await getBillingDetails(customerId, "nl") : null
+
+  // The subscriptions row is not the only place a customer is known,
+  // and here it is the wrong one to ask first: it only exists AFTER a
+  // subscription succeeded, which is exactly the case this page is
+  // not in.
+  //
+  // Migration 247 put the id on the company for this reason, and
+  // ensureCustomer writes it there the moment the customer is made —
+  // before anything is collected on it. Reading only the mirror meant
+  // a mandate that was given but never turned into a subscription was
+  // invisible: the reader was sent back to their bank, paid the
+  // verification cent again, and produced a second orphaned mandate.
+  // That happened twice in one morning.
+  const { data: companyRow } = company
+    ? await service
+        .from("companies" as never)
+        .select("stripe_customer_id")
+        .eq("id", company.id)
+        .maybeSingle()
+    : { data: null }
+
+  const customerId =
+    mirrored?.stripe_customer_id
+    ?? (companyRow as { stripe_customer_id?: string | null } | null)?.stripe_customer_id
+    ?? null
+
+  // Never fatal. The id can point at a customer this Stripe cannot
+  // see — one deleted from the dashboard, or one belonging to the
+  // other mode — and a checkout that will not render is worse than one
+  // that forgets a saved mandate.
+  const details = customerId
+    ? await getBillingDetails(customerId, "nl").catch(() => null)
+    : null
   const pm = details?.paymentMethod ?? null
   const savedMethod = pm ? `${pm.label}${pm.last4 ? ` ···· ${pm.last4}` : ""}` : null
 
