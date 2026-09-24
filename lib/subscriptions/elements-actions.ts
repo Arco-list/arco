@@ -310,23 +310,52 @@ export async function subscribeWithSavedMethodAction(
   if (await hasLiveSubscription(resolved.companyId)) return { error: "already_subscribed" }
 
   const service = createServiceRoleSupabaseClient()
-  const { data: row } = await service
-    .from("subscriptions")
-    .select("stripe_customer_id")
-    .eq("company_id", resolved.companyId)
-    .maybeSingle()
+  const [{ data: row }, { data: companyRow }] = await Promise.all([
+    service
+      .from("subscriptions")
+      .select("stripe_customer_id")
+      .eq("company_id", resolved.companyId)
+      .maybeSingle(),
+    service
+      .from("companies")
+      .select("stripe_customer_id")
+      .eq("id", resolved.companyId)
+      .maybeSingle(),
+  ])
 
   // The customer survives the subscription; without one there was never
   // a mandate to reuse.
-  const customerId = (row as { stripe_customer_id?: string } | null)?.stripe_customer_id
+  //
+  // Both places, and the company is the one that matters here. The
+  // subscriptions row only exists after a subscription succeeded,
+  // while this action's whole purpose is to reuse a mandate that has
+  // not become one yet — the reader sees "Opgeslagen betaalmethode" on
+  // screen, presses it, and is told there is none.
+  const customerId =
+    (row as { stripe_customer_id?: string } | null)?.stripe_customer_id
+    ?? (companyRow as { stripe_customer_id?: string | null } | null)?.stripe_customer_id
   if (!customerId) return { error: "no_saved_method" }
 
   try {
+    // Asked by type, so the answer is deterministic. An unfiltered
+    // list with limit 1 returns whichever method Stripe happens to put
+    // first, and this action and the screen that offers the method
+    // each ran their own such query — two questions that must agree
+    // and nothing making them. SEPA before card because that is the
+    // mandate iDEAL leaves behind, and the cheaper one to charge.
     const methods = await stripeGet<{ data: { id: string }[] }>("/payment_methods", {
       customer: customerId,
+      type: "sepa_debit",
       limit: 1,
     })
-    const paymentMethod = methods.data?.[0]?.id
+    const card = methods.data?.[0]
+      ? null
+      : await stripeGet<{ data: { id: string }[] }>("/payment_methods", {
+          customer: customerId,
+          type: "card",
+          limit: 1,
+        })
+    const paymentMethod = methods.data?.[0]?.id ?? card?.data?.[0]?.id
     if (!paymentMethod) return { error: "no_saved_method" }
 
     const atStripe = await stripeGet<{ data: { status: string }[] }>("/subscriptions", {
