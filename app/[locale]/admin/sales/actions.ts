@@ -3,7 +3,7 @@
 import { Resend } from "resend"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { updateContactStage } from "@/lib/apollo-client"
-import { getSubscriberStats } from "@/lib/subscriptions/subscriber-stats"
+import { getSubscribedCompanyIds, getSubscriberStats } from "@/lib/subscriptions/subscriber-stats"
 
 export type ProspectStatus =
   | "prospect"
@@ -474,6 +474,11 @@ export type SalesCompanyRow = {
   claimedCompany: SalesClaimedCompany | null
   /** max(contacts.status) using the funnel rank below. */
   status: ProspectStatus
+  /** Holds Pro right now — paying or founding. Not a prospect status:
+   *  there is none, which is why the funnel counted it separately.
+   *  Shown on the row because a company that bought is the one fact
+   *  about it that outranks everything the sales ladder tracks. */
+  isSubscribed: boolean
   /** Single sequence value: active beats paused beats finished beats not_started. */
   sequenceStatus: SequenceStatus
   /** Distinct contact sources, sorted alphabetically for stable rendering. */
@@ -825,6 +830,10 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   error?: string
 }> {
   const supabase = createServiceRoleSupabaseClient()
+  // Read once for the whole page, from the same helper the funnel and
+  // /companies use. Three screens asking the same question three ways
+  // is how they end up disagreeing.
+  const subscribedIds = await getSubscribedCompanyIds()
   const {
     statuses,
     sources,
@@ -1189,6 +1198,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
       contacts: sortedContacts,
       claimedCompany: claimed,
       status: companyRowStatus ?? agg.status,
+      isSubscribed: g.companyId ? subscribedIds.has(g.companyId) : false,
       sequenceStatus: agg.sequenceStatus,
       sources: agg.sources,
       emailsSent: hasEventCoverage ? events.sent : agg.emailsSent,

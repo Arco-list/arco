@@ -1,5 +1,5 @@
 import { AdminCompaniesDataTable, type AdminCompanyRow } from "@/components/admin-companies-data-table"
-import { getSubscriberStats } from "@/lib/subscriptions/subscriber-stats"
+import { getSubscribedCompanyIds, getSubscriberStats } from "@/lib/subscriptions/subscriber-stats"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import type { Tables } from "@/lib/supabase/types"
 import { logger } from "@/lib/logger"
@@ -21,6 +21,12 @@ type AdminCompanyMetricsRow = {
 
 async function loadAdminCompaniesData() {
   const supabase = await createServerSupabaseClient()
+
+  // Who holds Pro. Read once for the whole table and handed to each
+  // row, rather than asked per company — and from the same helper the
+  // funnels use, so a company cannot read as subscribed on one screen
+  // and not on another.
+  const subscribedIds = await getSubscribedCompanyIds()
 
   // Parallel queries
   const [companiesQuery, metricsQuery, servicesQuery, projectProfessionalsQuery, unclaimedInvitesQuery, companyMembersQuery, companyContactsQuery] =
@@ -499,6 +505,7 @@ async function loadAdminCompaniesData() {
       logoUrl: company.logo_url ?? null,
       isVerified: Boolean(company.is_verified),
       isFeatured: Boolean(company.is_featured),
+      isSubscribed: subscribedIds.has(company.id),
       contactEmail: company.email ?? null,
       website: company.website ?? null,
       servicesOffered: serviceIds,

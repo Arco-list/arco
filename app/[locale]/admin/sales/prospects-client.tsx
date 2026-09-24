@@ -66,6 +66,15 @@ export const STATUS_CONFIG: Record<ProspectStatus, { label: string; cls: string;
   removed: { label: "Removed", cls: "bg-gray-50 text-gray-500", dot: "bg-[#a1a1a0]" },
 }
 
+/** Not a prospect status — there is none — so it sits beside the map
+ *  rather than in it. Same green the funnel gives the monetization
+ *  driver, so the pill and the stage read as one thing. */
+const SUBSCRIBED_CONFIG = {
+  label: "Subscribed",
+  cls: "bg-teal-50 text-teal-800 font-semibold",
+  dot: "bg-[#0f766e]",
+}
+
 // Statuses surfaced in the multi-select status filter. 'removed' is a soft-
 // delete marker — admin doesn't filter for it, the row is just hidden.
 const ALL_STATUSES: ProspectStatus[] = [
@@ -1984,7 +1993,12 @@ function CompanyRowView({
     clicked: Math.round(Math.min(row.emailsClicked, row.emailsSent) / row.emailsSent * 100),
   } : null
 
-  const statusCfg = STATUS_CONFIG[row.status] ?? STATUS_CONFIG.prospect
+  // Subscribed outranks the sales ladder. Everything that ladder
+  // tracks is about getting a company to the point of buying; once it
+  // has, "Listed" is the least interesting true thing to say.
+  const statusCfg = row.isSubscribed
+    ? SUBSCRIBED_CONFIG
+    : STATUS_CONFIG[row.status] ?? STATUS_CONFIG.prospect
   const sequenceCfg = SEQUENCE_CONFIG[row.sequenceStatus] ?? SEQUENCE_CONFIG.not_started
   // Suppression overrides the underlying sequence pill — when the
   // primary contact has bounced / complained / unsubscribed the

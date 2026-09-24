@@ -138,6 +138,22 @@ export async function getSubscriberFacts(): Promise<SubscriberFact[]> {
   return [...byCompany.values()]
 }
 
+/**
+ * Which companies hold Pro right now.
+ *
+ * For the admin tables, where "Subscribed" is a row's state rather
+ * than a number in a funnel. Derived from the same facts as everything
+ * else here, so a company cannot read as subscribed on one screen and
+ * not on another — the mistake this module exists to prevent.
+ *
+ * Paying and founding both count: the question the tables ask is what
+ * a company has, not what it pays.
+ */
+export async function getSubscribedCompanyIds(): Promise<Set<string>> {
+  const facts = await getSubscriberFacts()
+  return new Set(facts.filter((f) => !f.endedAt).map((f) => f.companyId))
+}
+
 export async function getSubscriberStats(sinceIso?: string): Promise<SubscriberStats> {
   const supabase = createServiceRoleSupabaseClient()
 

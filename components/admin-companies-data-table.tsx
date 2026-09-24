@@ -280,6 +280,11 @@ export type AdminCompanyRow = {
   logoUrl: string | null
   isVerified: boolean
   isFeatured: boolean
+  /** Holds Pro right now — paying or founding. Not a company status:
+   *  it lives in `subscriptions`, so it arrives alongside the row
+   *  rather than in it, and it outranks whatever `status` says because
+   *  it is the furthest stage a company can reach. */
+  isSubscribed?: boolean
   contactEmail: string | null
   website: string | null
   servicesOffered: string[]
@@ -1344,12 +1349,21 @@ export function AdminCompaniesDataTable({ data, serviceOptions, subscriberCount 
         accessorKey: "status",
         header: "Status",
         sortingFn: (rowA, rowB) => {
-          const order: Record<string, number> = { listed: 0, unlisted: 1, created: 2, invited: 3, deactivated: 4 }
-          return (order[rowA.original.status] ?? 4) - (order[rowB.original.status] ?? 4)
+          const order: Record<string, number> = { subscribed: -1, listed: 0, unlisted: 1, created: 2, invited: 3, deactivated: 4 }
+          const rank = (r: typeof rowA.original) => order[r.isSubscribed ? "subscribed" : r.status] ?? 4
+          return rank(rowA.original) - rank(rowB.original)
         },
         cell: ({ row }) => {
           const company = row.original
-          const status = company.status
+          // Subscribed outranks the stored status. A paying company is
+          // also listed, and showing "Listed" there hides the only
+          // thing about it that is new.
+          //
+          // The menu still opens on the stored status, because that is
+          // what an admin can change here. Cancelling somebody's
+          // subscription from a table cell is not an edit, it is an
+          // accident waiting for a mis-click.
+          const status = company.isSubscribed ? "subscribed" : company.status
           return (
             <button
               type="button"
