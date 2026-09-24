@@ -1,6 +1,7 @@
 "use server"
 
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
+import { getSubscriberFacts } from "@/lib/subscriptions/subscriber-stats"
 import {
   loadCachedMetric,
   type CachedMetricKey,
@@ -516,7 +517,6 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       && new Date(c.listed_at) <= bucketEnd,
     ).length,
   )
-  const totalListedSnapshot = listedSnapshotSeries[listedSnapshotSeries.length - 1] ?? 0
 
   // Publishable pros — same cumulative-listed snapshot, narrowed to
   // pros whose primary service can publish project portfolios
@@ -525,16 +525,35 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   // invited to projects but don't publish their own. Denominator for
   // the "% Publishing" CR: of pros currently eligible to publish, how
   // many published at least one project in the period.
-  const publishableProsSnapshotSeries = buckets.ends.map((bucketEnd) =>
+
+  // ── Total Listed Pros, and how many of them are contributors ─────────
+  //
+  // Demoted from a headline to a supporting metric when New Pros and
+  // Listed Pros merged. A cumulative count is not a conversion, and a
+  // funnel that leads with one invites the reader to celebrate
+  // accumulation — the number only ever goes up.
+  //
+  // Listed rather than all claimed pros, and deliberately: it is the
+  // same population % Ranked divides into, so the two supporting
+  // metrics can be read against each other instead of against two
+  // different denominators sitting one row apart.
+  //
+  // Contributors are pros whose primary service cannot publish a
+  // portfolio: contractors, suppliers, craftspeople. They reach the
+  // platform by being credited on somebody else's project rather than
+  // by publishing their own, so the share of them describes what kind
+  // of network this is becoming — and it is the same split that used
+  // to be read backwards off Publishable pros.
+  const totalListedSnapshot = listedSnapshotSeries[listedSnapshotSeries.length - 1] ?? 0
+  const contributorProsSnapshotSeries = buckets.ends.map((bucketEnd) =>
     companies.filter((c: any) =>
       c.status === "listed"
       && claimedCompanies(c)
       && c.listed_at != null
-      && publishableCategoryIds.has(c.primary_service_id)
+      && !publishableCategoryIds.has(c.primary_service_id)
       && new Date(c.listed_at) <= bucketEnd,
     ).length,
   )
-  const totalPublishableProsSnapshot = publishableProsSnapshotSeries[publishableProsSnapshotSeries.length - 1] ?? 0
 
   // Current totals and bucketed data for supporting metrics
   const totalListed = companies.filter((c: any) => c.status === "listed").length
@@ -589,49 +608,6 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     if (!p.published_at) continue
     publishedRows.push({ companyId, publishedAt: new Date(p.published_at) })
   }
-
-  // Publishers per bucket: count distinct company_ids whose published date
-  // falls inside the bucket window.
-  function bucketUniquePublishers(): number[] {
-    return buckets.starts.map((_, i) => {
-      const seen = new Set<string>()
-      for (const row of publishedRows) {
-        if (row.publishedAt >= buckets.starts[i] && row.publishedAt < buckets.ends[i]) {
-          seen.add(row.companyId)
-        }
-      }
-      return seen.size
-    })
-  }
-  const publishersBucketed = bucketUniquePublishers()
-  // Use the bucket8-shaped object so the existing rendering keeps working.
-  const publishers = { datapoints: publishersBucketed, labels: [] as string[] }
-
-  // Total unique publishers in the whole window
-  const allPublisherCompanyIds = new Set(
-    publishedRows
-      .filter((r) => r.publishedAt >= from)
-      .map((r) => r.companyId),
-  )
-  const totalPublishersInWindow = allPublisherCompanyIds.size
-  const publishedInRangeCount = publishedRows.filter((r) => r.publishedAt >= from).length
-  const projectsPerPublisher =
-    totalPublishersInWindow > 0
-      ? Math.round((publishedInRangeCount / totalPublishersInWindow) * 10) / 10
-      : 0
-
-  // Projects/publisher per bucket: avg published projects per unique
-  // publishing company *in that bucket*.
-  function bucketProjectsPerPublisher(): number[] {
-    return buckets.starts.map((_, i) => {
-      const inBucket = publishedRows.filter(
-        (r) => r.publishedAt >= buckets.starts[i] && r.publishedAt < buckets.ends[i],
-      )
-      const uniq = new Set(inBucket.map((r) => r.companyId))
-      return uniq.size > 0 ? Math.round((inBucket.length / uniq.size) * 10) / 10 : 0
-    })
-  }
-  const projectsPerPublisherSeries = bucketProjectsPerPublisher()
 
   // ── SEO indexation supporting metrics ─────────────────────────────────────
   // Indexed Listed Pros — cumulative snapshot at each bucket end. Counts
@@ -806,128 +782,6 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const nonOwnerInvites = invites.filter(
     (i: any) => !i.is_project_owner && !excludedFromInvitedCompanyIds.has(i.company_id),
   )
-  function bucketUniqueInviters(): number[] {
-    return buckets.starts.map((_, i) => {
-      const owners = new Set<string>()
-      for (const pp of nonOwnerInvites) {
-        if (!pp.created_at) continue
-        const d = new Date(pp.created_at)
-        if (d < buckets.starts[i] || d >= buckets.ends[i]) continue
-        const owner = projectIdToOwnerCompany.get(pp.project_id)
-        if (owner) owners.add(owner)
-      }
-      return owners.size
-    })
-  }
-  const invitersBucketed = bucketUniqueInviters()
-  const inviters = { datapoints: invitersBucketed, labels: [] as string[] }
-
-  // Companies that BOTH published a project AND invited at least one
-  // pro in the same period. Numerator for "% Inviting" under
-  // Publishers — of the companies that published this period, what
-  // share also reached for collaboration. Reuses the publishedRows
-  // and nonOwnerInvites datasets so we don't re-bucket from raw.
-  const publishersInvitingBucketed = buckets.starts.map((_, i) => {
-    const publisherIds = new Set<string>()
-    for (const row of publishedRows) {
-      if (row.publishedAt >= buckets.starts[i] && row.publishedAt < buckets.ends[i]) {
-        publisherIds.add(row.companyId)
-      }
-    }
-    const both = new Set<string>()
-    for (const pp of nonOwnerInvites) {
-      if (!pp.created_at) continue
-      const d = new Date(pp.created_at)
-      if (d < buckets.starts[i] || d >= buckets.ends[i]) continue
-      const owner = projectIdToOwnerCompany.get(pp.project_id)
-      if (owner && publisherIds.has(owner)) both.add(owner)
-    }
-    return both.size
-  })
-
-  // Total unique inviters across the whole window
-  const totalInvitersInWindow = (() => {
-    const owners = new Set<string>()
-    for (const pp of nonOwnerInvites) {
-      const owner = projectIdToOwnerCompany.get(pp.project_id)
-      if (owner) owners.add(owner)
-    }
-    return owners.size
-  })()
-
-  // Period-scope the invites for the supporting metrics — `invites` (and
-  // therefore `nonOwnerInvites`) is the unfiltered all-time array so the
-  // per-project map above could see owners correctly. Drop to the window
-  // for the in-period averages and totals.
-  const nonOwnerInvitesInPeriod = nonOwnerInvites.filter(
-    (pp: any) => pp.created_at && new Date(pp.created_at) >= from,
-  )
-
-  // Invites per published project — only count published projects that
-  // actually received at least one invite in the period, so the average
-  // reflects "how many pros does an inviting project end up with" rather
-  // than diluting across non-inviting projects.
-  const publishedProjectIds = new Set(projects.filter((p: any) => p.status === "published").map((p: any) => p.id))
-  const invitesByProject = new Map<string, number>()
-  for (const pp of nonOwnerInvitesInPeriod) {
-    if (!publishedProjectIds.has(pp.project_id)) continue
-    invitesByProject.set(pp.project_id, (invitesByProject.get(pp.project_id) ?? 0) + 1)
-  }
-  const projectsWithInvites = invitesByProject.size
-  const totalInvitesOnPublished = Array.from(invitesByProject.values()).reduce((a, b) => a + b, 0)
-  const invitesPerProject = projectsWithInvites > 0
-    ? Math.round((totalInvitesOnPublished / projectsWithInvites) * 10) / 10
-    : 0
-
-  // Sparkline: invites/project per bucket window — same denominator rule
-  // (only inviting projects in that bucket count).
-  function bucketInvitesPerProject(): number[] {
-    return buckets.starts.map((_, i) => {
-      const byProject = new Map<string, number>()
-      for (const pp of nonOwnerInvitesInPeriod) {
-        if (!publishedProjectIds.has(pp.project_id)) continue
-        const d = new Date(pp.created_at)
-        if (d < buckets.starts[i] || d >= buckets.ends[i]) continue
-        byProject.set(pp.project_id, (byProject.get(pp.project_id) ?? 0) + 1)
-      }
-      const projs = byProject.size
-      const total = Array.from(byProject.values()).reduce((a, b) => a + b, 0)
-      return projs > 0 ? Math.round((total / projs) * 10) / 10 : 0
-    })
-  }
-  const invitesPerProjectSeries = bucketInvitesPerProject()
-
-  // Total invited: count of invitations sent in the period.
-  const totalInvited = nonOwnerInvitesInPeriod.length
-
-  // Sparkline: total invited per bucket window.
-  function bucketTotalInvited(): number[] {
-    return buckets.starts.map((_, i) => {
-      let count = 0
-      for (const pp of nonOwnerInvitesInPeriod) {
-        const d = new Date(pp.created_at)
-        if (d >= buckets.starts[i] && d < buckets.ends[i]) count++
-      }
-      return count
-    })
-  }
-  const totalInvitedSeries = bucketTotalInvited()
-
-  // % Unique under Invites/project — of the invites sent in each bucket,
-  // how many reached a distinct company. Duplicate tags of the same firm
-  // (e.g. the same builder credited on two projects in one month) drag
-  // this below 100%. Rows without a linked company dedupe on the invited
-  // email instead.
-  const uniqueInvitedSeries = buckets.starts.map((_, i) => {
-    const uniq = new Set<string>()
-    for (const pp of nonOwnerInvitesInPeriod) {
-      const d = new Date(pp.created_at)
-      if (d < buckets.starts[i] || d >= buckets.ends[i]) continue
-      uniq.add(pp.company_id ?? (pp.invited_email ?? "").toLowerCase())
-    }
-    return uniq.size
-  })
-
   // Contributors accepted — non-owner invite rows whose status moved past
   // 'invited': the pro responded and picked how to appear (unlisted /
   // listed / live_on_page). None of the accept flows stamp responded_at
@@ -948,82 +802,186 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       }
       return n
     })
-  const acceptedSeries = bucketByAcceptance(acceptedRows)
-  const totalAccepted = acceptedRows.filter((pp: any) => {
+  // ── New contributors, and the invites they came from ─────────────────
+  //
+  // Unique COMPANIES, dated by their first acceptance — not accepted
+  // credit rows. A firm credited on four projects is one contributor
+  // who arrived once; counting rows made the funnel's last retention
+  // step rise with the enthusiasm of a single architect.
+  //
+  // These overlap New Pros on purpose, and it is worth knowing which
+  // half: accepting a credit on a published project auto-lists the
+  // company (lib/companies/sync-listed-status.ts), so a contributor
+  // that has CLAIMED its page is stamped with listed_at and shows up
+  // in New Pros too. One that never claimed has no owner, fails
+  // onboardingCompleted, and appears here only. The two rows are
+  // therefore not disjoint and were never meant to be — this is the
+  // same company arriving through a different door.
+  const firstAcceptanceByCompany = new Map<string, Date>()
+  for (const pp of acceptedRows as any[]) {
     const d = acceptanceDate(pp)
-    return d && d >= from
-  }).length
+    const cid = pp.company_id ? String(pp.company_id) : null
+    if (!d || !cid) continue
+    const prev = firstAcceptanceByCompany.get(cid)
+    if (!prev || d < prev) firstAcceptanceByCompany.set(cid, d)
+  }
 
-  // Contributors live — accepted rows whose credit is actually visible on
-  // the project page (status = live_on_page). NOT the same as the company
-  // being listed on /professionals.
-  const liveRows = acceptedRows.filter((pp: any) => pp.status === "live_on_page")
-  const liveSeries = bucketByAcceptance(liveRows)
-  const totalLive = liveRows.filter((pp: any) => {
-    const d = acceptanceDate(pp)
-    return d && d >= from
-  }).length
-
-  // Projects with contributors — cohorted by PUBLICATION date: of the
-  // projects published in each bucket, how many have since been credited
-  // with at least one contributor. Bucketing by credit date instead would
-  // let "% of published" exceed 100%, because a project published in
-  // January can be credited in August; this way the numerator and the
-  // publishedProjectsBuckets denominator describe the same cohort.
+  // Unique companies first invited in each bucket, and how many of
+  // them ever accepted. Per company rather than per invite: the rate
+  // asks whether a firm responded, and three tags of the same firm is
+  // one firm deciding once.
+  const firstInviteByCompany = new Map<string, Date>()
+  for (const pp of nonOwnerInvites as any[]) {
+    if (!pp.created_at || !pp.company_id) continue
+    const d = new Date(pp.created_at)
+    if (Number.isNaN(d.getTime())) continue
+    const cid = String(pp.company_id)
+    const prev = firstInviteByCompany.get(cid)
+    if (!prev || d < prev) firstInviteByCompany.set(cid, d)
+  }
+  const totalUniqueInvited = [...firstInviteByCompany.values()].filter((d) => d >= from).length
+  // Which projects carry a credit at all, how many each, and which
+  // were published inside a given bucket. Shared by the two series
+  // below; the rows that used to own these helpers are gone.
   const creditedProjectIds = new Set<string>(
     nonOwnerInvites.map((pp: any) => pp.project_id).filter(Boolean),
   )
+  const creditCountByProject = new Map<string, number>()
+  for (const pp of nonOwnerInvites as any[]) {
+    if (!pp.project_id) continue
+    creditCountByProject.set(pp.project_id, (creditCountByProject.get(pp.project_id) ?? 0) + 1)
+  }
   const publishedInBucket = (i: number): any[] =>
     projects.filter((p: any) => {
       if (p.status !== "published" || !p.published_at) return false
       const d = new Date(p.published_at)
       return d >= buckets.starts[i] && d < buckets.ends[i]
     })
-  // Cumulative snapshot, not a per-period count: every published project
-  // up to the bucket end that carries at least one contributor credit.
-  // Uses the same published_at → created_at fallback as
-  // totalPublishedSnapshotSeries so numerator and denominator line up.
-  const projectsWithContributorsSeries = buckets.ends.map((bucketEnd) =>
+
+  // ── Accepted credits, cumulative ─────────────────────────────────────
+  //
+  // Sits under Total Projects, so it is bucketed the way Total
+  // Projects is: every published project up to the bucket end, not
+  // the ones published inside it. A cumulative parent with a
+  // per-period child would have the rate wandering against a
+  // denominator that never moves the same way.
+  //
+  // ACCEPTED, not invited. The pair on the parent row counts credits
+  // sent; these count credits the other company said yes to. The gap
+  // between them is the acceptance rate doing its work, and reading
+  // both is how you tell "nobody is being credited" from "nobody is
+  // responding".
+  const acceptedProjectIds = new Set<string>(
+    acceptedRows.map((pp: any) => pp.project_id).filter(Boolean).map(String),
+  )
+  const acceptedCountByProject = new Map<string, number>()
+  for (const pp of acceptedRows as any[]) {
+    if (!pp.project_id) continue
+    const k = String(pp.project_id)
+    acceptedCountByProject.set(k, (acceptedCountByProject.get(k) ?? 0) + 1)
+  }
+  const publishedUpTo = (bucketEnd: Date): any[] =>
     projects.filter((p: any) => {
-      if (p.status !== "published" || !creditedProjectIds.has(p.id)) return false
+      if (p.status !== "published") return false
       const ts = publishedTsForBucket(p)
       return ts !== null && ts <= bucketEnd
-    }).length,
+    })
+  const projectsWithAcceptedSeries = buckets.ends.map((bucketEnd) =>
+    publishedUpTo(bucketEnd).filter((p: any) => acceptedProjectIds.has(String(p.id))).length,
   )
-  const totalProjectsWithContributors =
-    projectsWithContributorsSeries[projectsWithContributorsSeries.length - 1] ?? 0
-
-  // Contributors per crediting project, to one decimal. Denominator is
-  // the projects that were credited, not every published project — the
-  // question this answers is "when an owner does credit anyone, how many
-  // trades do they name", which is the lever prompting-by-trade attacks.
-  // Averaged across all published projects it would just restate the
-  // "% of published" rate above.
-  const creditCountByProject = new Map<string, number>()
-  for (const pp of nonOwnerInvites as any[]) {
-    if (!pp.project_id) continue
-    creditCountByProject.set(pp.project_id, (creditCountByProject.get(pp.project_id) ?? 0) + 1)
-  }
-  // Invites per CREDITED project, cumulative — total credits over the
-  // projects that carry at least one, both counted to the bucket end.
-  // Shares its denominator with the "Total projects with contributors
-  // invited" row it sits under, so the two read together: N projects
-  // credited, this many contributors each.
-  const creditsPerProjectSeries = buckets.ends.map((bucketEnd) => {
-    let credits = 0
-    let projs = 0
-    for (const p of projects as any[]) {
-      if (p.status !== "published" || !creditedProjectIds.has(p.id)) continue
-      const ts = publishedTsForBucket(p)
-      if (ts === null || ts > bucketEnd) continue
-      projs++
-      credits += creditCountByProject.get(p.id) ?? 0
-    }
-    return projs > 0 ? Math.round((credits / projs) * 10) / 10 : 0
+  // Averaged over every published project, including those with no
+  // accepted credit — the percentage beside it already says how many
+  // have one, so dividing by only those would make the two say the
+  // same thing twice.
+  const acceptedPerProjectSeries = buckets.ends.map((bucketEnd) => {
+    const published = publishedUpTo(bucketEnd)
+    if (published.length === 0) return 0
+    const credits = published.reduce(
+      (sum: number, p: any) => sum + (acceptedCountByProject.get(String(p.id)) ?? 0), 0,
+    )
+    // Two decimals, not one. At current volume this average is a few
+    // hundredths — 0.047 rounds to 0.0 on one decimal, and the table
+    // renders a bare 0 as "·", so the row appeared to have no value at
+    // all. A metric that reads as broken when it is merely small
+    // teaches the reader to distrust the column.
+    return Math.round((credits / published.length) * 100) / 100
   })
 
-  // Plan tiers retired — no companies pass the subscription filter.
-  const subscribers = bucket8([], buckets)
+  // ── Credits on the projects published in each period ─────────────────
+  //
+  // Per-period, not cumulative, because they hang under New Projects
+  // and New Projects is a flow. Both read the same cohort the parent
+  // counts — projects published INSIDE the bucket — so the rate cannot
+  // exceed 100% and the average is about the same projects.
+  //
+  // The pair answers two different questions and needs both. The
+  // average is depth: when an owner credits anyone, how many trades do
+  // they name. The percentage is breadth: how many owners credit
+  // anyone at all. A single number hides whichever half is failing —
+  // an average of 2.0 reads healthy whether every project credits two
+  // people or a fifth of them credit ten.
+  const newProjectsWithContributorsSeries = buckets.starts.map((_, i) =>
+    publishedInBucket(i).filter((p: any) => creditedProjectIds.has(p.id)).length,
+  )
+  const creditsPerNewProjectSeries = buckets.starts.map((_, i) => {
+    const published = publishedInBucket(i)
+    if (published.length === 0) return 0
+    const credits = published.reduce(
+      (sum: number, p: any) => sum + (creditCountByProject.get(p.id) ?? 0), 0,
+    )
+    return Math.round((credits / published.length) * 10) / 10
+  })
+  const creditsPerNewProjectTotal = (() => {
+    const all = projects.filter((p: any) =>
+      p.status === "published" && p.published_at && new Date(p.published_at) >= from,
+    )
+    if (all.length === 0) return 0
+    const credits = all.reduce(
+      (sum: number, p: any) => sum + (creditCountByProject.get(p.id) ?? 0), 0,
+    )
+    return Math.round((credits / all.length) * 10) / 10
+  })()
+
+  // ── Subscribers ───────────────────────────────────────────────────────
+  //
+  // Three shapes from one set of facts, and they are not the same
+  // shape. New Subscribers is a FLOW: who started inside each bucket.
+  // Total Subscribers and MRR are STOCKS: who was holding Pro at the
+  // END of each bucket, which is how Listed Pros is already counted.
+  // Mixing the two is how a monetization row ends up showing growth
+  // that is really just accumulation.
+  const subscriberFacts = await getSubscriberFacts()
+
+  const subscribers = bucket8(
+    subscriberFacts
+      .map((f) => (f.startedAt ? new Date(f.startedAt) : null))
+      .filter((d): d is Date => d !== null && !Number.isNaN(d.getTime())),
+    buckets,
+  )
+
+  const heldAtBucketEnd = (i: number) => {
+    const end = buckets.ends[i]
+    return subscriberFacts.filter((f) => {
+      if (!f.startedAt) return false
+      const start = new Date(f.startedAt)
+      if (Number.isNaN(start.getTime()) || start >= end) return false
+      if (!f.endedAt) return true
+      const stop = new Date(f.endedAt)
+      return Number.isNaN(stop.getTime()) || stop >= end
+    })
+  }
+
+  const totalSubscribersSeries = new Array(8).fill(0).map((_, i) => heldAtBucketEnd(i).length)
+  const mrrSeries = new Array(8).fill(0).map((_, i) =>
+    heldAtBucketEnd(i).reduce((sum, f) => sum + f.monthlyCents, 0),
+  )
+  // Rounded to whole euros here, because the table renders plain
+  // integers: handing it cents would print 5929 where the card prints
+  // €59.
+  const mrrEuroSeries = mrrSeries.map((c) => Math.round(c / 100))
+  const avgMrrEuroSeries = mrrSeries.map((c, i) =>
+    totalSubscribersSeries[i] > 0 ? Math.round(c / totalSubscribersSeries[i] / 100) : 0,
+  )
 
   // ── Client metrics ────────────────────────────────────────────────────
 
@@ -1383,11 +1341,6 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   // as New Pros; "% Listed (ever)" under the row shows how many made it
   // to listed, which is the metric to push.
   const onboardingCompleted = (c: any) => c.owner_id != null
-  const newProDates = companies
-    .filter(onboardingCompleted)
-    .map(onboardedTsForBucket)
-    .filter((d): d is Date => d !== null && d >= from)
-  const newPros = bucket8(newProDates, buckets)
 
   // ── Outbound metric ─────────────────────────────────────────────────
   // Sourced from manual logs in `outbound_contact_log` (the admin
@@ -1567,11 +1520,17 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     CLIENT_CHANNELS,
   )
 
-  // New pros by source — bucketed by companies.onboarded_at.
+  // New pros by source — bucketed by companies.listed_at, because the
+  // parent counts pros that went LIVE in the period. Channels bucketed
+  // by onboarding while the parent counted listings would have given
+  // subs that do not sum to their own total, which is the one thing
+  // this row has always guaranteed.
+  const listedTsForBucket = (c: any): Date | null =>
+    c.listed_at ? new Date(c.listed_at) : null
   const newProsBySource = bucketBySource(
     companies,
-    onboardedTsForBucket,
-    onboardingCompleted,
+    listedTsForBucket,
+    (c: any) => onboardingCompleted(c) && c.listed_at != null,
   )
 
   // Per-source totals: sum of the 8-period series for the "total" column.
@@ -1619,15 +1578,12 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   }
 
   function bucketNewProsByClickSet(clickerIds: Set<string>): number[] {
-    // Bucket by the SAME fallback timestamp the parent New Pros row and
-    // its channel subs use (onboarded_at ?? listed_at ?? created_at).
-    // Requiring strict onboarded_at here dropped Sales conversions that
-    // skipped the draft→listed trigger (NULL onboarded_at): they showed
-    // in the parent + Direct sub but never under Sales / Invites.
+    // Bucket by the SAME timestamp the parent New Pros row and its
+    // channel subs now use: listed_at, the moment the page went live.
     return buckets.starts.map((_, i) =>
       companies.filter((c: any) => {
         if (!onboardingCompleted(c) || !clickerIds.has(String(c.id))) return false
-        const ts = onboardedTsForBucket(c)
+        const ts = listedTsForBucket(c)
         return ts !== null && ts >= buckets.starts[i] && ts < buckets.ends[i]
       }).length,
     )
@@ -1671,13 +1627,6 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   // Unlisted snapshot at each bucket end: companies created before bucket
   // end that are currently in 'unlisted' status. Same v1 caveat as Open
   // drafts (approximates current state for past dates).
-  function bucketUnlistedAt(bucketEnd: Date): number {
-    return companies.filter((c: any) =>
-      c.status === "unlisted" && c.owner_id != null && new Date(c.created_at) < bucketEnd,
-    ).length
-  }
-  const unlistedSnapshotSeries = buckets.ends.map(bucketUnlistedAt)
-  const totalUnlistedSnapshot = unlistedSnapshotSeries[unlistedSnapshotSeries.length - 1] ?? 0
 
   // Pro-visitor channel remainder — the parent is raw PostHog uniques
   // (link-scanners included), while Sales/Invites deliberately use the
@@ -1772,50 +1721,51 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
 
   // Contributors invited → ever accepted (unit = invite row, cohort by
   // invite date; matches the row's displayed per-bucket denominator).
-  const invitedCohortDenom = buckets.starts.map(() => 0)
-  const invitedEverAcceptedNum = buckets.starts.map(() => 0)
-  for (const pp of nonOwnerInvites as any[]) {
-    if (!pp.created_at) continue
-    const i = bucketIndexOf(new Date(pp.created_at))
-    if (i === -1) continue
-    invitedCohortDenom[i]++
-    if (pp.status && pp.status !== "invited") invitedEverAcceptedNum[i]++
-  }
-  // Contributors accepted → ever live (cohort by acceptance date).
-  const acceptedCohortDenom = buckets.starts.map(() => 0)
-  const acceptedEverLiveNum = buckets.starts.map(() => 0)
-  for (const pp of acceptedRows as any[]) {
-    const d = acceptanceDate(pp)
-    if (!d) continue
+  // The per-INVITE cohort that fed the old "% Accepted (ever)" is gone.
+  // Its replacement below counts firms deciding rather than tags sent,
+  // which is the question the rate was always read as answering.
+  // Sits here rather than beside its own series: bucketIndexOf is
+  // declared further down, and the other cohort pairs already live
+  // together.
+  const uniqueInvitedCohortDenom = buckets.starts.map(() => 0)
+  const uniqueInvitedEverAcceptedNum = buckets.starts.map(() => 0)
+  for (const [cid, d] of firstInviteByCompany) {
     const i = bucketIndexOf(d)
     if (i === -1) continue
-    acceptedCohortDenom[i]++
-    if (pp.status === "live_on_page") acceptedEverLiveNum[i]++
+    uniqueInvitedCohortDenom[i]++
+    if (firstAcceptanceByCompany.has(cid)) uniqueInvitedEverAcceptedNum[i]++
   }
-  // New Pros → ever listed; Listed cohort → ever published.
-  const publisherCompanyIdsAllTime = new Set(publishedRows.map((r) => r.companyId))
-  const newProsCohortDenom = buckets.starts.map(() => 0)
-  const newProsEverListedNum = buckets.starts.map(() => 0)
+
+  // New Pros itself: claimed pros bucketed by listed_at, the moment
+  // their page went live. What used to be two cohort pairs here — one
+  // for "% Listed (ever)", one for "% Published (ever)" — went with
+  // the merge and with the removal of that second rate. The row keeps
+  // the count and lets the supporting metrics carry the ratios.
+  //
+  // New contributors is counted in the SAME loop, on the same
+  // conditions, plus one: the company holds an accepted credit. That
+  // makes it a strict subset of New Pros rather than an overlapping
+  // count — of the pros that went live this period, these are the ones
+  // that arrived by being credited on somebody else's project.
+  //
+  // Dated by listed_at, not by acceptance. A contributor that accepts
+  // and never claims its page has no listed_at, never becomes a pro,
+  // and no longer appears here: the loop it belongs to has not closed.
+  // Before, it did appear, which let the two rows disagree about how
+  // many companies the platform had gained.
   const listedCohortDenom = buckets.starts.map(() => 0)
-  const listedEverPublishedNum = buckets.starts.map(() => 0)
+  const newContributorsSeries = buckets.starts.map(() => 0)
   for (const c of companies as any[]) {
     if (!onboardingCompleted(c)) continue
-    const onboardTs = onboardedTsForBucket(c)
-    if (onboardTs) {
-      const i = bucketIndexOf(onboardTs)
-      if (i !== -1) {
-        newProsCohortDenom[i]++
-        if (c.listed_at != null) newProsEverListedNum[i]++
-      }
-    }
     if (c.listed_at) {
       const j = bucketIndexOf(new Date(c.listed_at))
       if (j !== -1) {
         listedCohortDenom[j]++
-        if (publisherCompanyIdsAllTime.has(String(c.id))) listedEverPublishedNum[j]++
+        if (firstAcceptanceByCompany.has(String(c.id))) newContributorsSeries[j]++
       }
     }
   }
+  const totalNewContributors = newContributorsSeries.reduce((a, b) => a + b, 0)
 
   const rows: MetricRow[] = [
     // ── Professionals ──────────────────────────────────────────────────
@@ -1937,13 +1887,19 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       ],
     },
     {
-      key: "new_pros", label: "New Pros", definition: "Unique pros that created their company page (signup flow ends with a complete page; it goes live once a project is approved)", source: "supabase" as MetricSource, driver: "acquisition",
-      total: newProDates.length, ...newPros,
-      extraCRs: [
-        { label: "% Listed (ever)", numerator: newProsEverListedNum, denominator: newProsCohortDenom,
-          definition: "Of pros whose company page was created in this period (drafts included), the share that has reached the listed state at any point since. " + COHORT_DEF,
-          immatureFromIndex: cohortImmatureFromIndex },
-      ],
+      // New Pros and Listed Pros merged. Listed Pros was a cumulative
+      // snapshot sitting in a conversion table: it could only rise, it
+      // answered a different question from every row around it, and it
+      // made the funnel read as a scoreboard. What remains is the flow
+      // — pros that went LIVE in this period — with the totals demoted
+      // to supporting metrics where a total belongs.
+      //
+      // "New" therefore means newly listed, not newly registered. A
+      // company page that exists but was never approved is not yet a
+      // pro anyone can find, which is the same line New Projects draws
+      // between a draft and a publication.
+      key: "new_pros", label: "New Pros", definition: "Pros whose page went live in the period. Counted on listing, not on registration: a company page still waiting for its first approved project is not yet findable.", source: "supabase" as MetricSource, driver: "acquisition",
+      total: listedCohortDenom.reduce((a: number, b: number) => a + b, 0), datapoints: listedCohortDenom, labels,
       // Channel breakdown counts companies grouped by
       // companies.first_touch_source (inherited from the owner's
       // profile at onboarding). Channels and parent are now both
@@ -1977,51 +1933,37 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
         { key: "outbound", label: "Outbound", definition: "New pros who were successfully reached via outbound before signup. Overlaps with other channels.",
           source: "supabase" as MetricSource,
           total: newProsOutboundBucketed.datapoints.reduce((a, b) => a + b, 0), datapoints: newProsOutboundBucketed.datapoints },
-      ],
-    },
-    {
-      key: "actives", label: "Listed Pros", definition: "Pros currently in listed state as of the end of each period (cumulative snapshot). Stamped by listed_at on the first transition into 'listed'.", source: "supabase" as MetricSource, driver: "retention",
-      total: totalListedSnapshot, datapoints: listedSnapshotSeries, labels,
-      // Parent-level CR — share of currently-listed pros that are
-      // currently indexed by Google. The earlier "to Publishers" CR
-      // moved underneath the Publishable pros sub, where the
-      // denominator (only pros eligible to publish) makes the rate
-      // meaningful — comparing publishers to ALL listed pros (incl.
-      // contractors / suppliers who can't publish anyway) understates
-      // the real publishing motion.
-      extraCRs: [
-        { label: "% Published (ever)", numerator: listedEverPublishedNum, denominator: listedCohortDenom,
-          definition: "Of pros first listed in this period, the share that ever published a project. " + COHORT_DEF,
-          immatureFromIndex: cohortImmatureFromIndex },
-        { label: "% Ranked Pros", numerator: indexedListedSnapshotSeries, denominator: listedSnapshotSeries },
-      ],
-      subs: [
+        // ── The two totals that used to be rows of their own ──────────
         {
-          key: "publishable_pros",
-          label: "Publishable pros",
-          definition: "Listed pros whose primary service can publish project portfolios (Architect, Interior Designer, Photographer, Garden designer). Cumulative snapshot at each bucket end.",
+          key: "total_pros",
+          label: "Total Listed Pros",
+          definition: "Every pro live on the platform at the end of each period. A cumulative snapshot, so it only ever rises — which is why it sits here rather than in the conversion line. Also the denominator for % Ranked below, so the two read against the same population.",
           source: "supabase" as MetricSource,
-          total: totalPublishableProsSnapshot,
-          datapoints: publishableProsSnapshotSeries,
+          total: totalListedSnapshot,
+          datapoints: listedSnapshotSeries,
           customCR: {
-            label: "% Publishing",
-            numerator: publishersBucketed,
-            denominator: publishableProsSnapshotSeries,
+            label: "% Contributor",
+            numerator: contributorProsSnapshotSeries,
+            denominator: listedSnapshotSeries,
           },
         },
-        { key: "unlisted_pros", label: "Unlisted pros", definition: "Pros currently in unlisted state", source: "supabase" as MetricSource, total: totalUnlistedSnapshot, datapoints: unlistedSnapshotSeries },
         {
-          // Ranked pros — listed pros that Google has actually indexed.
-          // Same cumulative snapshot series used by the parent-level
-          // % Ranked Pros CR, surfaced here as an absolute count with
-          // the supporting SEO metrics (Impressions / CTR / Clicks)
-          // rendered underneath as value rows.
+          // Ranked pros — listed pros Google has actually indexed. The
+          // % Ranked rate moved down here from the old parent row: its
+          // denominator is listed pros, not pros listed this period, so
+          // hanging it off the flow above would have divided two
+          // different populations.
           key: "ranked_pros",
           label: "Ranked pros",
-          definition: "Listed pros currently indexed by Google (cumulative snapshot at each bucket end). Numerator for the % Ranked Pros CR shown under Listed Pros.",
+          definition: "Listed pros currently indexed by Google (cumulative snapshot at each bucket end).",
           source: "supabase" as MetricSource,
           total: totalIndexedListedSnapshot,
           datapoints: indexedListedSnapshotSeries,
+          customCR: {
+            label: "% Ranked",
+            numerator: indexedListedSnapshotSeries,
+            denominator: listedSnapshotSeries,
+          },
           valueRows: [
             { label: "Impressions", values: seoImpressionsSeries, tone: "muted", format: "integer" },
             { label: "CTR",         values: seoCtrSeries,         tone: "accent", format: "percent" },
@@ -2031,59 +1973,75 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       ],
     },
     {
-      // Leading metric flipped to Published projects (Publishers demoted
-      // to a sub) — published volume is the primary retention signal,
-      // unique publisher count is supporting context.
-      key: "published_projects", label: "Published projects", definition: "Total projects published in the period", source: "supabase" as MetricSource, driver: "retention",
+      // Leading metric flipped to New Projects (Publishers demoted to a
+      // sub) — published volume is the primary retention signal, unique
+      // publisher count is supporting context.
+      //
+      // The key stays `published_projects`. It is internal, it is what
+      // the CR suppression list and two comments refer to, and renaming
+      // it would be three edits to change nothing anyone can see.
+      //
+      // "New" here means newly live, not newly drafted — the definition
+      // says so, because the name alone could be read either way and a
+      // draft nobody approved is not a project on the platform.
+      key: "published_projects", label: "New Projects", definition: "Projects that went live in the period. Counted on publication, not on creation: a draft waiting for approval is not yet a project anyone can find.", source: "supabase" as MetricSource, driver: "retention",
       total: publishedProjectDates.length, ...publishedProjectsBuckets,
       subs: [
         {
-          key: "publishers",
-          label: "Publishers",
-          definition: "Unique companies that published at least one project in the period",
-          total: totalPublishersInWindow,
-          datapoints: publishersBucketed,
-          // Of the publishers in this period, what % also invited at
-          // least one other professional to one of their projects.
-          // Numerator: companies that BOTH published AND invited in the
-          // same bucket. Denominator: publishers.
+          // The network motor, in one line. Publishers and
+          // Projects/publisher sat here before and answered a question
+          // about the publishing side; this answers the one that
+          // actually compounds — whether a new project brings other
+          // companies onto the platform with it.
+          key: "invites_per_project",
+          label: "Invites per new project",
+          definition: "Average number of contributors credited on the projects published in the period, counted across every new project including the ones that credit nobody.",
+          source: "supabase" as MetricSource,
+          total: creditsPerNewProjectTotal,
+          datapoints: creditsPerNewProjectSeries,
           customCR: {
-            label: "% Inviting",
-            numerator: publishersInvitingBucketed,
-            denominator: publishersBucketed,
+            label: "% Invited contributors",
+            numerator: newProjectsWithContributorsSeries,
+            denominator: publishedProjectsBuckets.datapoints,
           },
         },
-        { key: "projects_per_publisher", label: "Projects/publisher", definition: "Avg. published projects per publishing company", total: projectsPerPublisher, datapoints: projectsPerPublisherSeries },
-        // Cumulative snapshot — all published projects ever, as of
-        // each bucket end. The "% Ranked Projects" CR below this sub
-        // shows the share that's currently indexed by Google
-        // (numerator from the same projects table, filtered to
-        // seo_indexed=true).
+        // Cumulative snapshot — all published projects ever, as of each
+        // bucket end. Also the denominator for % Ranked below, so the
+        // two supporting metrics read against the same population.
         {
           key: "total_projects",
           label: "Total Projects",
-          definition: "Cumulative count of all published projects as of the end of each period",
+          definition: "Cumulative count of all published projects as of the end of each period. Also the denominator for % Ranked below, so the two supporting metrics read against the same population.",
           source: "supabase" as MetricSource,
           total: totalPublishedSnapshot,
           datapoints: totalPublishedSnapshotSeries,
           customCR: {
-            label: "% Ranked Projects",
-            numerator: indexedPublishedSnapshotSeries,
+            label: "% Contributors",
+            numerator: projectsWithAcceptedSeries,
             denominator: totalPublishedSnapshotSeries,
+            definition: "Share of all published projects to date carrying at least one credit a contributor ACCEPTED. An invite that was never answered does not count — this measures the loop closing, not the ask being made. Photographers are excluded, as they are from every invite metric: they are credited FOR the photography rather than being supply the network is trying to attract. At the moment they are most of the acceptances, so this reads far lower than the raw count would.",
           },
+          valueRows: [
+            { label: "Contributors per project (accepted)", values: acceptedPerProjectSeries, tone: "accent", format: "decimal" as const,
+              definition: "Accepted contributor credits per published project, cumulative to date, averaged across every project including those with none. The percentage above is breadth — how many projects credit anyone; this is depth — how many trades they name when they do. Photographers excluded, same as the rate above." },
+          ],
         },
         {
-          // Ranked projects — published projects that Google has indexed.
-          // Same cumulative series used by % Ranked Projects under Total
-          // Projects, exposed as an absolute count with supporting SEO
-          // metrics (Impressions / CTR / Clicks) underneath. Mirrors the
-          // Ranked pros sub under Listed Pros.
+          // Ranked projects — published projects Google has indexed.
+          // The % Ranked rate moved down here from Total Projects, the
+          // same way it did on New Pros: the count and the rate it
+          // produces belong on one line rather than a row apart.
           key: "ranked_projects",
           label: "Ranked projects",
-          definition: "Published projects currently indexed by Google (cumulative snapshot at each bucket end). Numerator for the % Ranked Projects CR shown under Total Projects.",
+          definition: "Published projects currently indexed by Google (cumulative snapshot at each bucket end).",
           source: "supabase" as MetricSource,
           total: totalIndexedPublishedSnapshot,
           datapoints: indexedPublishedSnapshotSeries,
+          customCR: {
+            label: "% Ranked",
+            numerator: indexedPublishedSnapshotSeries,
+            denominator: totalPublishedSnapshotSeries,
+          },
           valueRows: [
             { label: "Impressions", values: projectImpressionsSeries, tone: "muted", format: "integer" },
             { label: "CTR",         values: projectCtrSeries,         tone: "accent", format: "percent" },
@@ -2093,71 +2051,66 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       ],
     },
     {
-      // Leading metric flipped to Invited Pros (Inviters demoted to a
-      // sub) — invitation volume is the primary retention signal,
-      // unique inviter count is supporting context. Same shape as the
-      // Publishers→Published projects flip directly above.
-      // Contributor funnel step 1 — professionals tagged/invited on
-      // published projects. "% Accepted" (extraCRs) is the step-to-step
-      // rate into Contributors accepted below; the auto chain CR stays
-      // suppressed in model-client so this labelled one is the only CR.
-      key: "invited_pros", label: "Contributors invited", definition: "Professionals invited to be credited on a project in the period", source: "supabase" as MetricSource, driver: "retention",
-      total: totalInvited, datapoints: totalInvitedSeries, labels: [] as string[],
-      extraCRs: [
-        { label: "% Accepted (ever)", numerator: invitedEverAcceptedNum, denominator: invitedCohortDenom,
-          definition: "Of contributor invites sent in this period, the share the invitee ever responded to (chose how to appear). " + COHORT_DEF,
-          immatureFromIndex: cohortImmatureFromIndex },
-      ],
+      // Contributors invited and Contributors accepted merged. They
+      // were two rows describing one motion, and the chain rate
+      // between them was the only thing either said that the other
+      // did not — so the rate became the row's supporting metric and
+      // the second row went.
+      //
+      // Counted as unique COMPANIES, on exactly the conditions New Pros
+      // uses, plus one: the company holds an accepted credit. Every
+      // New Contributor is therefore a New Pro, and the row reads as
+      // "of the pros that went live, this many came in by being
+      // credited".
+      //
+      // Accepting a credit does NOT publish an unclaimed company —
+      // lib/invites/accept-credit.ts is explicit that the company
+      // stays 'invited' until somebody claims it. Claiming is what
+      // lists it, and it lists immediately because a live credit is
+      // already there. So a contributor that accepts and never claims
+      // has no listed_at and is not counted: the loop has not closed.
+      key: "contributors_accepted", label: "New contributors", definition: "Pros whose page went live in the period AND that hold an accepted credit — companies that arrived by being credited on somebody else's project rather than by publishing their own. A strict subset of New Pros, counted on the same day and the same conditions.", source: "supabase" as MetricSource, driver: "retention",
+      total: totalNewContributors, datapoints: newContributorsSeries, labels,
       subs: [
         {
-          key: "invites_per_project", label: "Invites/project", definition: "Avg. professionals invited per INVITING published project — projects with no credits are excluded from the denominator", total: invitesPerProject, datapoints: invitesPerProjectSeries,
-          // Of the invites sent this period, the share that reached a
-          // distinct company — repeat tags of the same firm dilute it.
-          customCR: { label: "% Unique", numerator: uniqueInvitedSeries, denominator: totalInvitedSeries,
-            definition: "Of the invites sent in this period, the share that reached a company not already invited. Crediting the same firm on three projects is 3 invites but 1 company." },
-        },
-        {
-          key: "projects_with_contributors", label: "Total projects with contributors invited",
-          definition: "Cumulative: every published project to date that carries at least one contributor credit",
-          total: totalProjectsWithContributors, datapoints: projectsWithContributorsSeries,
+          key: "invited_pros",
+          label: "Contributors Invited (unique)",
+          definition: "Companies invited to be credited on a project for the first time in the period. Crediting the same firm on three projects is three invites but one company, and the rate beside this counts firms deciding, not tags sent.",
+          // The rate is acceptance, which is one step short of the
+          // parent: a company can accept and still never claim its
+          // page. The gap between this percentage and the count above
+          // is exactly that step, and it is worth seeing separately —
+          // an invite that is accepted but never claimed is a
+          // different problem from one nobody answers.
+          source: "supabase" as MetricSource,
+          total: totalUniqueInvited,
+          datapoints: uniqueInvitedCohortDenom,
           customCR: {
-            label: "% of Total projects",
-            numerator: projectsWithContributorsSeries,
-            denominator: totalPublishedSnapshotSeries,
-            definition: "Share of all published projects to date that credit at least one contributor. Step 1 of the contributor-invite loop.",
+            label: "% Accepted (ever)",
+            numerator: uniqueInvitedEverAcceptedNum,
+            denominator: uniqueInvitedCohortDenom,
+            definition: "Of companies first invited in this period, the share that has since accepted a credit. " + COHORT_DEF,
           },
-          valueRowsFirst: true,
-          valueRows: [
-            { label: "Invites / Projects", values: creditsPerProjectSeries, tone: "accent", format: "decimal" as const,
-              definition: "Contributor credits per credited project, cumulative to date — the same denominator as the row above, so it reads as 'N projects credited, this many contributors each'. Excludes projects with no credits; Invites/project above answers the same question for the selected period only." },
-          ],
         },
       ],
     },
     {
-      // Contributor funnel step 2 — invited pros who responded and chose
-      // how to appear. "% Live" narrows to the ones whose credit is
-      // visible on the project page; "% Paying" under Contributors live
-      // stays 0 until subscription billing is wired (numerator empty8).
-      key: "contributors_accepted", label: "Contributors accepted", definition: "Invited professionals who responded and chose how to appear (unlisted, listed or live on the project page)", source: "supabase" as MetricSource, driver: "retention",
-      total: totalAccepted, datapoints: acceptedSeries, labels,
-      extraCRs: [
-        { label: "% Live (ever)", numerator: acceptedEverLiveNum, denominator: acceptedCohortDenom,
-          definition: "Of contributors who accepted in this period, the share whose credit is now live on the project page. " + COHORT_DEF,
-          immatureFromIndex: cohortImmatureFromIndex },
-      ],
+      key: "subscribers", label: "New Subscribers", definition: "Companies that became subscribers in the period — a first paid subscription, or founding access claimed. One company counts once, on the earlier of the two.", source: "supabase" as MetricSource, driver: "monetization",
+      total: subscribers.datapoints.reduce((a: number, b: number) => a + b, 0), ...subscribers,
+      // Supporting metrics, not stages. The parent is a FLOW — who
+      // arrived in each bucket — and these three are what the arrivals
+      // add up to: a stock at the end of each bucket, and what it
+      // earns. As sibling rows the chain drew conversion rates between
+      // a count of companies and a sum of euros.
+      //
+      // No Paying / Founding split: Avg. MRR already carries it. Every
+      // founding member sits in that denominator at zero, so the gap
+      // between the average and the €49 list price is the free share,
+      // read off one number instead of compared across two.
       subs: [
-        {
-          key: "contributors_live", label: "Contributors listed", definition: "Accepted contributors whose credit is visible on the project page (status live_on_page)", total: totalLive, datapoints: liveSeries,
-          customCR: { label: "% Paying (ever)", numerator: empty8, denominator: liveSeries },
-        },
-      ],
-    },
-    {
-      key: "subscribers", label: "Subscribers", definition: "Unique first time subscriptions", source: "supabase" as MetricSource, driver: "monetization",
-      total: 0, ...subscribers,
-      subs: [
-        { key: "mrr", label: "MRR", definition: "Monthly recurring revenue", total: 0, datapoints: empty8 },
+        { key: "total_subscribers", label: "Total Subscribers", definition: "Companies holding Pro at the end of each period — paying plus founding. A cumulative snapshot, counted the same way as Listed Pros, not a per-period flow.", total: totalSubscribersSeries[7] ?? 0, datapoints: totalSubscribersSeries },
+        { key: "mrr", label: "MRR", definition: "Monthly recurring revenue in euros, net of VAT, at the end of each period. A yearly plan counts as a twelfth of its price per month, so switching cycles does not make revenue jump. Founding members contribute nothing.", total: mrrEuroSeries[7] ?? 0, datapoints: mrrEuroSeries },
+        { key: "avg_mrr", label: "Avg. MRR", definition: "MRR divided by total subscribers, so total × average = MRR. Reads below the €49 list price by exactly the share of subscribers paying nothing.", total: avgMrrEuroSeries[7] ?? 0, datapoints: avgMrrEuroSeries },
       ],
     },
     // Renewers / Expanders / Contractors removed from the table view.

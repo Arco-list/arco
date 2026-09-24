@@ -650,24 +650,32 @@ export function GrowthModelClient({ initialRows, initialLabels, initialLastSynce
     "active_clients",
     "sharers",
     "savers",
-    // New Pros → Listed Pros: not a meaningful funnel rate. New Pros
-    // is a per-period flow ("onboarded this period"); Listed Pros is
-    // a cumulative snapshot ("currently listed"). The ratio doesn't
-    // describe a conversion.
+    // New Pros → New Projects: the rows either side are both flows
+    // now, but they count different things — companies going live and
+    // projects going live. A percentage between them reads as a
+    // conversion and is really a projects-per-pro ratio. The rate
+    // worth having is "% Published (ever)", set on the row itself via
+    // extraCRs.
+    //
+    // This used to say New Pros → Listed Pros, suppressed because one
+    // was a flow and the other a snapshot. That pair no longer exists:
+    // the two rows merged, and the snapshot became a supporting metric
+    // underneath.
     "new_pros",
-    // Listed Pros → Published Projects: replaced by the dedicated
-    // "to Publishers" / "% Ranked Pros" CRs under Listed Pros (set
-    // via extraCRs).
-    "actives",
     // Published Projects → Contributors invited: not a meaningful funnel
     // rate (the two are separate retention motions on the same pros,
     // not a sequential conversion).
     "published_projects",
-    // Contributors invited → Contributors accepted: replaced by the
-    // labelled "% Accepted" extraCR under Contributors invited.
-    "invited_pros",
-    // Contributors accepted → Subscribers: monetization is expressed as
-    // "% Paying" under the Contributors live sub, not as a chain CR.
+    // New contributors → New Subscribers: the two rows either side of
+    // this one count different populations. Contributors are companies
+    // credited on somebody else's project; subscribers are companies
+    // paying for a page. Plenty of subscribers were never contributors,
+    // so a percentage here would divide by the wrong denominator and
+    // read as a conversion rate that cannot be acted on.
+    //
+    // The Contributors-invited row this used to also suppress is gone:
+    // it merged into New contributors, and its rate became the
+    // supporting metric underneath.
     "contributors_accepted",
   ])
 
