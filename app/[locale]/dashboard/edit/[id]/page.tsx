@@ -61,6 +61,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { ListingStatusModal } from "@/components/listing-status-modal"
+import { RejectedNoticeModal } from "@/components/project/rejected-notice-modal"
 import {
   type ProjectStatus,
   PROJECT_STATUS_LABELS,
@@ -555,6 +556,12 @@ export default function ListingEditorPage() {
   // database and in their email, and nowhere on the screen where they
   // would fix it.
   const [storedRejectionReason, setStoredRejectionReason] = useState<string | null>(null)
+  const [showRejectedNotice, setShowRejectedNotice] = useState(false)
+  // Once per visit, not once per render. The project loads, the status
+  // arrives, and the notice opens — but switching between Details,
+  // Foto's and Professionals must not reopen a dialog somebody just
+  // closed, and neither must a save.
+  const rejectedNoticeShown = useRef(false)
   const [selectedRejectionReasons, setSelectedRejectionReasons] = useState<string[]>([])
   // Which reason has its "this is what the email says" popover open.
   const [openReasonInfo, setOpenReasonInfo] = useState<string | null>(null)
@@ -985,7 +992,7 @@ export default function ListingEditorPage() {
       const { data: project, error } = await supabase
         .from("projects")
         .select(
-          "id, client_id, title, description, translations, project_type, project_type_category_id, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_formatted, address_city, address_region, latitude, longitude, share_exact_location, updated_at, status, slug",
+          "id, client_id, title, description, translations, project_type, project_type_category_id, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_formatted, address_city, address_region, latitude, longitude, share_exact_location, updated_at, status, slug, rejection_reason",
         )
         .eq("id", projectId)
         .maybeSingle()
@@ -1080,7 +1087,13 @@ export default function ListingEditorPage() {
         setProjectSlug(project.slug ?? null)
         const status = (project.status as ProjectStatus | null) ?? null
         setProjectStatus(status)
-        setStoredRejectionReason((project as { rejection_reason?: string | null }).rejection_reason ?? null)
+        const storedReason = (project as { rejection_reason?: string | null }).rejection_reason ?? null
+        setStoredRejectionReason(storedReason)
+        // Admins reviewing somebody else's work do not need telling.
+        if (status === "rejected" && !isAdminReview && !rejectedNoticeShown.current) {
+          rejectedNoticeShown.current = true
+          setShowRejectedNotice(true)
+        }
         setDetailsForm(hydratedState)
         setSpecScope(project.project_type ?? "")
         setLocationData({
@@ -7118,6 +7131,12 @@ export default function ListingEditorPage() {
         onSubmitForReview={handleSubmitForReview}
         isSubmittingForReview={isSubmittingForReview}
         limitReachedForNewActivation={limitReachedForNewActivation}
+      />
+
+      <RejectedNoticeModal
+        open={showRejectedNotice}
+        onClose={() => setShowRejectedNotice(false)}
+        rejectionReason={storedRejectionReason}
       />
 
       {featurePhotoSelectorModal}

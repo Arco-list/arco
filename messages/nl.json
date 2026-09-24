@@ -1375,11 +1375,11 @@
       "identity_email": "E-mailadres voor facturen",
       "identity_email_note": "Mag een ander adres zijn dan je account — bijvoorbeeld je boekhouding.",
       "identity_email_invalid": "Dit adres lijkt niet te kloppen.",
-      "identity_vat_unverified": "Staat niet in het Europese btw-register. Controleer het nummer — het komt wel op je factuur.",
+      "identity_vat_unverified": "Staat niet in het Europese btw-register.",
       "identity_vat_verified": "Gecontroleerd in het Europese btw-register.",
-      "identity_vat_verified_name": "Gecontroleerd in het Europese btw-register, op naam van {name}.",
-      "identity_vat_pending": "De controle bij het Europese btw-register loopt nog. Je nummer is opgeslagen.",
-      "identity_vat_unavailable": "Het Europese btw-register was niet bereikbaar, dus het nummer is niet gecontroleerd. Het is wel opgeslagen."
+      "identity_vat_verified_name": "Geregistreerd op {name}.",
+      "identity_vat_pending": "Controle bij het btw-register loopt nog.",
+      "identity_vat_unavailable": "Het btw-register was niet bereikbaar."
     },
     "pricing_current_badge": "Huidig",
     "pricing_your_plan": "Je huidige abonnement",
@@ -1883,7 +1883,10 @@
       "rec_more_photos": "Voeg 20+ foto's toe voor een complete projectpresentatie",
       "rec_tag_photos": "Tag foto's aan ruimtes voor een geleide fototour",
       "rec_credit_more": "Voeg de professionals toe die meewerkten ({count, plural, =0 {nog niemand toegevoegd} one {# toegevoegd} other {# toegevoegd}})",
-      "invites_note": "Vermelde professionals worden uitgenodigd op Arco zodra je project is goedgekeurd en gepubliceerd."
+      "invites_note": "Vermelde professionals worden uitgenodigd op Arco zodra je project is goedgekeurd en gepubliceerd.",
+      "trigger_again": "Opnieuw indienen",
+      "rejected_title": "Dit project is afgewezen",
+      "rejected_what_now": "Je kan het project aanpassen en opnieuw indienen, zodat het opnieuw beoordeeld kan worden."
     },
     "low_res": {
       "title": "Foto's met lage resolutie",

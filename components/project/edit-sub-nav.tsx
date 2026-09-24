@@ -173,7 +173,12 @@ export function EditSubNav({
                 <span className="sub-nav-pill-label">{t("preview")}</span>
               </a>
             )}
-            {!isAdminReview && projectStatus === "draft" && onSubmitForReview && (
+            {/* The same button for a draft and for a rejected project.
+                They are the same act — putting work in front of a
+                reviewer — and a rejected project that can only be
+                resubmitted from inside a status dialog hides the one
+                thing its owner came here to do. */}
+            {!isAdminReview && (projectStatus === "draft" || projectStatus === "rejected") && onSubmitForReview && (
               <button
                 className="btn-primary setup-nav-cta"
                 data-tour="project-submit"
@@ -181,7 +186,9 @@ export function EditSubNav({
                 disabled={isSubmitting}
                 style={isSubmitting ? { opacity: 0.5 } : undefined}
               >
-                {isSubmitting ? tSubmit("submitting") : tSubmit("trigger")}
+                {isSubmitting
+                  ? tSubmit("submitting")
+                  : tSubmit(projectStatus === "rejected" ? "trigger_again" : "trigger")}
               </button>
             )}
             {isAdminReview && (

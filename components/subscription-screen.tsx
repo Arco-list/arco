@@ -142,6 +142,8 @@ export function SubscriptionScreen({
   // a guess dressed as a fact, and it appeared above a form the reader
   // then had to search for the offending field.
   const [identityVatError, setIdentityVatError] = useState<string | null>(null)
+
+
   const [identityEmailError, setIdentityEmailError] = useState<string | null>(null)
   const [editingAddress, setEditingAddress] = useState(false)
   const [identity, setIdentity] = useState({
@@ -152,6 +154,39 @@ export function SubscriptionScreen({
     vatNumber: details.identity?.vatNumber ?? "",
     email: details.identity?.email ?? "",
   })
+
+  /**
+   * What VIES made of the number that is SAVED.
+   *
+   * Gated on the field still matching what was stored: a verdict about
+   * the old number, sitting under a half-typed new one, is worse than
+   * no verdict. That also means nothing shows for a number the reader
+   * has typed but not saved yet — the check cannot have run.
+   *
+   * Only `unverified` is the reader's problem, so only that one is
+   * red. The other three are good news or news about VIES, and
+   * colouring those red sends somebody hunting for a fault that is not
+   * theirs.
+   */
+  const vatNote = (() => {
+    if (identityVatError) return null
+    if (identity.vatNumber !== (details.identity?.vatNumber ?? "")) return null
+    const status = details.identity?.vatStatus
+    if (!status) return null
+    if (status === "unverified") return { isProblem: true, text: tb("identity_vat_unverified") }
+    if (status === "verified") {
+      return {
+        isProblem: false,
+        text: details.identity?.vatVerifiedName
+          ? tb("identity_vat_verified_name", { name: details.identity.vatVerifiedName })
+          : tb("identity_vat_verified"),
+      }
+    }
+    return {
+      isProblem: false,
+      text: tb(status === "pending" ? "identity_vat_pending" : "identity_vat_unavailable"),
+    }
+  })()
 
   const [confirmCancel, setConfirmCancel] = useState(false)
   // The cycle being offered, and what Stripe says it costs today. The
@@ -1224,7 +1259,10 @@ export function SubscriptionScreen({
                 setIdentity((v) => ({ ...v, vatNumber: e.target.value }))
                 setIdentityVatError(null); setIdentityEmailError(null); setEditingAddress(false)
               }}
-              style={{ marginBottom: identityVatError ? 0 : 24 }} />
+              // Closed up whenever something is written underneath.
+              // A verdict floating 24px below the field it judges reads
+              // as a separate remark about nothing in particular.
+              style={{ marginBottom: identityVatError || vatNote ? 0 : 24 }} />
             {identityVatError && (
               <p className="form-note form-note--error" style={{ marginBottom: 24 }}>{identityVatError}</p>
             )}
@@ -1239,34 +1277,14 @@ export function SubscriptionScreen({
                 have. Hidden entirely while the field is being edited:
                 the verdict belongs to the saved number, not the one
                 halfway through being typed. */}
-            {!identityVatError && identity.vatNumber === (details.identity?.vatNumber ?? "") && (() => {
-              const status = details.identity?.vatStatus
-              if (!status) return null
-
-              // Only one of the four is the reader's problem. A number
-              // that is not in the register is wrong and fixable, so it
-              // is red. The other three are either good news or news
-              // about VIES, and colouring those red would send somebody
-              // hunting for a fault that is not theirs.
-              const isProblem = status === "unverified"
-              const text =
-                status === "unverified" ? tb("identity_vat_unverified")
-                : status === "verified"
-                  ? (details.identity?.vatVerifiedName
-                      ? tb("identity_vat_verified_name", { name: details.identity.vatVerifiedName })
-                      : tb("identity_vat_verified"))
-                : status === "pending" ? tb("identity_vat_pending")
-                : tb("identity_vat_unavailable")
-
-              return (
-                <p
-                  className={`form-note${isProblem ? " form-note--error" : ""}`}
-                  style={{ marginBottom: 24 }}
-                >
-                  {text}
-                </p>
-              )
-            })()}
+            {vatNote && (
+              <p
+                className={`form-note${vatNote.isProblem ? " form-note--error" : ""}`}
+                style={{ marginTop: 6, marginBottom: 24 }}
+              >
+                {vatNote.text}
+              </p>
+            )}
 
             <div className="popup-actions">
               <button type="button" className="btn-tertiary" style={{ flex: 1 }}

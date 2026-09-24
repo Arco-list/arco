@@ -25,6 +25,13 @@ export const PREVIEW_STATES = [
   "unpaid",
   "canceling",
   "returning",
+  // Two VIES verdicts that cannot be produced on demand: `pending`
+  // means the register has not answered, `unavailable` that a member
+  // state is down. Both are real and neither can be triggered, so the
+  // only way to read what they say is to draw them.
+  "vat_unverified",
+  "vat_pending",
+  "vat_unavailable",
 ] as const
 
 export type PreviewState = (typeof PREVIEW_STATES)[number]
@@ -40,6 +47,9 @@ export const PREVIEW_LABELS: Record<PreviewState, string> = {
   unpaid: "Unpaid",
   canceling: "Cancelling",
   returning: "Returning",
+  vat_unverified: "VAT · not in register",
+  vat_pending: "VAT · check pending",
+  vat_unavailable: "VAT · register down",
 }
 
 export const PREVIEW_NOTES: Record<PreviewState, string> = {
@@ -53,6 +63,9 @@ export const PREVIEW_NOTES: Record<PreviewState, string> = {
   unpaid: "Dunning has run out. Access is back to Free, the subscription is still there, and the open invoice is the way back.",
   canceling: "Cancelled but still inside the paid period. Access holds until the end date.",
   returning: "Paid once, on Free again, thinking about coming back. We still hold their mandate, so an upgrade should not ask for it twice.",
+  vat_unverified: "The number is not in VIES. The only one of the four that is red, because it is the only one the reader can fix."
+  ,vat_pending: "VIES has not answered yet. Neutral: the number is saved, and nobody did anything wrong."
+  ,vat_unavailable: "A member state is down. Also neutral — this is news about the register, not about the reader."
 }
 
 const daysFromNow = (days: number) =>
@@ -174,7 +187,15 @@ export function previewBillingDetails(state: PreviewState): BillingDetails {
     }
   }
 
-  const monthly = state === "pro_month"
+  // The two VAT states are an ordinary paying month; only the verdict
+  // under the number differs.
+  const vatStatus =
+    state === "vat_unverified" ? ("unverified" as const)
+    : state === "vat_pending" ? ("pending" as const)
+    : state === "vat_unavailable" ? ("unavailable" as const)
+    : ("verified" as const)
+
+  const monthly = state === "pro_month" || state.startsWith("vat_")
   const amount = monthly ? "€ 59,29" : "€ 566,28"
   const count = monthly ? 6 : 2
 
@@ -216,8 +237,8 @@ export function previewBillingDetails(state: PreviewState): BillingDetails {
       city: "Amsterdam",
       country: "NL",
       vatNumber: "NL001234567B01",
-      vatStatus: "unverified" as const,
-      vatVerifiedName: null,
+      vatStatus,
+      vatVerifiedName: vatStatus === "verified" ? "VOORBEELD ARCHITECTEN B.V." : null,
       email: "boekhouding@voorbeeld-architecten.nl",
     },
     paymentMethod: { type: "sepa_debit", label: "SEPA-incasso", last4: "5264", expiry: null },

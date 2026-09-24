@@ -1375,11 +1375,11 @@
       "identity_email": "Email for invoices",
       "identity_email_note": "Can differ from your account — your bookkeeper, for instance.",
       "identity_email_invalid": "That address does not look right.",
-      "identity_vat_unverified": "Not found in the European VAT register. Check the number — it still goes on your invoice.",
+      "identity_vat_unverified": "Not in the European VAT register.",
       "identity_vat_verified": "Checked against the European VAT register.",
-      "identity_vat_verified_name": "Checked against the European VAT register, registered to {name}.",
-      "identity_vat_pending": "The European VAT register has not answered yet. Your number is saved.",
-      "identity_vat_unavailable": "The European VAT register was unreachable, so the number was not checked. It is saved."
+      "identity_vat_verified_name": "Registered to {name}.",
+      "identity_vat_pending": "The VAT register has not answered yet.",
+      "identity_vat_unavailable": "The VAT register was unreachable."
     },
     "pricing_current_badge": "Current",
     "pricing_your_plan": "Your current plan",
@@ -1883,7 +1883,10 @@
       "rec_more_photos": "Add 20+ photos for a complete project showcase",
       "rec_tag_photos": "Tag photos to spaces for a guided photo tour",
       "rec_credit_more": "Credit the professionals who worked on it ({count, plural, =0 {none credited yet} one {# credited} other {# credited}})",
-      "invites_note": "Credited professionals will be invited to Arco once your project is approved and listed."
+      "invites_note": "Credited professionals will be invited to Arco once your project is approved and listed.",
+      "trigger_again": "Submit again",
+      "rejected_title": "This project was rejected",
+      "rejected_what_now": "You can edit the project and submit it again, so it can be reviewed once more."
     },
     "low_res": {
       "title": "Low resolution photos",
