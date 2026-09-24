@@ -549,6 +549,12 @@ export default function ListingEditorPage() {
   const [isApproving, setIsApproving] = useState(false)
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [rejectionReason, setRejectionReason] = useState("")
+  // The reason this project was rejected, as stored. Distinct from the
+  // field above, which is what an ADMIN types while rejecting — same
+  // word, opposite direction. The owner never saw this: it was in the
+  // database and in their email, and nowhere on the screen where they
+  // would fix it.
+  const [storedRejectionReason, setStoredRejectionReason] = useState<string | null>(null)
   const [selectedRejectionReasons, setSelectedRejectionReasons] = useState<string[]>([])
   // Which reason has its "this is what the email says" popover open.
   const [openReasonInfo, setOpenReasonInfo] = useState<string | null>(null)
@@ -1074,6 +1080,7 @@ export default function ListingEditorPage() {
         setProjectSlug(project.slug ?? null)
         const status = (project.status as ProjectStatus | null) ?? null
         setProjectStatus(status)
+        setStoredRejectionReason((project as { rejection_reason?: string | null }).rejection_reason ?? null)
         setDetailsForm(hydratedState)
         setSpecScope(project.project_type ?? "")
         setLocationData({
@@ -2075,7 +2082,11 @@ export default function ListingEditorPage() {
         // Auto-approve publishes but never stars: is_featured is a curated
         // quality tier (AI featured decision at import, admin-overridable),
         // not an approval side effect.
-        .update({ status: newStatus })
+        // The old reason goes with the resubmission. Leaving it would
+        // keep a rejected verdict attached to a project that is under
+        // review again — and if it is approved next time, the note
+        // would still be sitting there for the owner to find.
+        .update({ status: newStatus, rejection_reason: null })
         .eq("id", projectId)
 
       if (error) {
@@ -7102,6 +7113,8 @@ export default function ListingEditorPage() {
         saveDisabled={!canSaveStatus}
         isPendingAdminReview={isPendingAdminReview}
         isDraft={projectStatus === "draft"}
+        isRejected={projectStatus === "rejected"}
+        rejectionReason={storedRejectionReason}
         onSubmitForReview={handleSubmitForReview}
         isSubmittingForReview={isSubmittingForReview}
         limitReachedForNewActivation={limitReachedForNewActivation}

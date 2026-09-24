@@ -1405,7 +1405,8 @@
     "delete_modal_done_owner": "Project deleted.",
     "delete_modal_done_leave": "You're no longer on this project.",
     "menu_delete_project": "Delete project",
-    "menu_leave_project": "Remove from project"
+    "menu_leave_project": "Remove from project",
+    "status_modal_resubmit": "Submit again"
   },
   "listing_card": {
     "owner": "Owner",

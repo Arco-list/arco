@@ -182,7 +182,18 @@ export function ListingStatusModal<TStatus extends string>({
         )}
 
         <div className="popup-actions">
-          {isDraft && onSubmitForReview ? (
+          {/* A rejected project gets the same button as a draft.
+              Without it the dialog explained what was wrong and then
+              offered no way to act on it: the owner could edit the
+              project, but nothing put it back in front of a reviewer.
+              The only route left was asking someone.
+
+              handleSubmitForReview does not care what it is submitting
+              from — it reads the company's auto-approve setting and
+              moves the project to `in_progress` or straight to
+              `published`. So a resubmission is the same journey as a
+              first submission, which is what it should be. */}
+          {(isDraft || isRejected) && onSubmitForReview ? (
             <>
               <button type="button" className="btn-tertiary" onClick={onClose} style={{ flex: 1 }}>
                 {t("cancel")}
@@ -194,7 +205,9 @@ export function ListingStatusModal<TStatus extends string>({
                 disabled={isSubmittingForReview}
                 style={{ flex: 1, ...(isSubmittingForReview ? { opacity: 0.5 } : undefined) }}
               >
-                {isSubmittingForReview ? t("status_modal_submitting") : t("status_modal_submit")}
+                {isSubmittingForReview
+                  ? t("status_modal_submitting")
+                  : t(isRejected ? "status_modal_resubmit" : "status_modal_submit")}
               </button>
             </>
           ) : (
