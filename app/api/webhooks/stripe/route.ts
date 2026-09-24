@@ -143,6 +143,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "claim_failed" }, { status: 500 })
   }
 
+  // What the handler wants remembered on the event row. Null when
+  // everything went as intended; a sentence when it did not.
+  let handlerNote: string | null = null
+
   try {
     switch (event.type) {
       case "checkout.session.completed": {
@@ -268,10 +272,25 @@ export async function POST(request: NextRequest) {
         }
         const companyId = intent.metadata?.company_id
         const interval = intent.metadata?.interval
-        if (intent.id && companyId && (interval === "month" || interval === "year")) {
+        if (!companyId) {
+          handlerNote = "setup_intent without company_id"
+        } else if (interval !== "month" && interval !== "year") {
+          handlerNote = `setup_intent without a usable interval (${interval ?? "none"})`
+        } else if (intent.id) {
           const result = await subscribeFromSetupIntent(intent.id, interval, companyId)
           if ("error" in result && result.error !== "already_subscribed") {
-            logger.warn("Subscription from setup_intent.succeeded did not complete", {
+            // An error, not a warning, and written onto the event row.
+            //
+            // This is somebody who gave a mandate and got nothing. It
+            // was a logger.warn into a log nobody reads, and the event
+            // was stamped processed with a null error column — so the
+            // only evidence that a sale failed lived in Stripe's own
+            // request log, which takes a person and a dashboard to
+            // find. Twice today that cost an hour.
+            handlerNote = result.detail
+              ? `subscribeFromSetupIntent: ${result.error} — ${result.detail}`
+              : `subscribeFromSetupIntent: ${result.error}`
+            logger.error("A mandate produced no subscription", {
               setupIntentId: intent.id, companyId, reason: result.error,
             })
           }
@@ -353,7 +372,10 @@ export async function POST(request: NextRequest) {
 
     await supabase
       .from("stripe_events" as never)
-      .update({ processed_at: new Date().toISOString() } as never)
+      .update({
+        processed_at: new Date().toISOString(),
+        error: handlerNote,
+      } as never)
       .eq("id", event.id)
 
     return NextResponse.json({ received: true })

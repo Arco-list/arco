@@ -34,6 +34,22 @@ function secretKey(): string {
   return key
 }
 
+/**
+ * Which mode the key we are holding belongs to.
+ *
+ * One database sits behind localhost, preview and arcolist.com, so a
+ * subscription's mode is not implied by where it is stored. A checkout
+ * on a dev server with test keys writes the same table the live site
+ * reads, and without this the live site honoured it.
+ *
+ * Read from the key rather than from NODE_ENV: the key is what decides
+ * which Stripe the app is actually talking to, and a preview deploy
+ * with live keys is live whatever its environment says.
+ */
+export function isStripeLiveMode(): boolean {
+  return (process.env.STRIPE_SECRET_KEY?.trim() ?? "").startsWith("sk_live_")
+}
+
 /** Stripe takes nested params as bracketed keys: items[0][price]=… */
 function encode(params: Record<string, unknown>, prefix = ""): string[] {
   const out: string[] = []
@@ -133,7 +149,7 @@ export function isStripeConfigured(): boolean {
 }
 
 /** True when the key in use is a live one. */
-const isLiveKey = () => Boolean(process.env.STRIPE_SECRET_KEY?.trim().startsWith("sk_live"))
+
 
 /**
  * A Stripe object id from the environment, with a sandbox fallback.
@@ -147,10 +163,31 @@ const isLiveKey = () => Boolean(process.env.STRIPE_SECRET_KEY?.trim().startsWith
  * Resolved on use rather than at import, so a build never fails for a
  * variable no page on it needs.
  */
-function stripeObjectId(value: string | undefined, sandbox: string, name: string): string {
+function stripeObjectId(
+  value: string | undefined,
+  sandbox: string,
+  name: string,
+  /** What a value of this kind has to start with. Checked because the
+   *  guard below only ever asked whether the variable was SET, and a
+   *  variable set to the wrong thing passes that test happily.
+   *
+   *  STRIPE_TAX_RATE_NL once held a live secret key. It was present,
+   *  so it was returned, and it travelled into POST /v1/subscriptions
+   *  as default_tax_rates[0]. Stripe rejected every subscription with
+   *  "No such tax rate", which reads to everyone involved like a
+   *  declined payment — and the secret key went into Stripe's request
+   *  log on the way. */
+  prefix: string,
+): string {
   const v = value?.trim()
-  if (v) return v
-  if (isLiveKey()) {
+  if (v && v.startsWith(prefix)) return v
+
+  if (v) {
+    throw new StripeConfigError(
+      `${name} does not look like a ${prefix}… id. Check the value: a Stripe id of the wrong kind fails as a refused payment, not as a configuration error.`,
+    )
+  }
+  if (isStripeLiveMode()) {
     throw new StripeConfigError(
       `${name} must be set: a live Stripe key cannot use the sandbox fallback.`,
     )
@@ -161,11 +198,11 @@ function stripeObjectId(value: string | undefined, sandbox: string, name: string
 /** The price for a billing interval. */
 export function priceId(interval: "month" | "year"): string {
   return interval === "month"
-    ? stripeObjectId(process.env.STRIPE_PRICE_PRO_MONTHLY, "price_1UG2idP09r3Qx4apiyFL0Uvr", "STRIPE_PRICE_PRO_MONTHLY")
-    : stripeObjectId(process.env.STRIPE_PRICE_PRO_YEARLY, "price_1UG2fkP09r3Qx4apBFJZHSFu", "STRIPE_PRICE_PRO_YEARLY")
+    ? stripeObjectId(process.env.STRIPE_PRICE_PRO_MONTHLY, "price_1UG2idP09r3Qx4apiyFL0Uvr", "STRIPE_PRICE_PRO_MONTHLY", "price_")
+    : stripeObjectId(process.env.STRIPE_PRICE_PRO_YEARLY, "price_1UG2fkP09r3Qx4apBFJZHSFu", "STRIPE_PRICE_PRO_YEARLY", "price_")
 }
 
 /** Dutch VAT, as a Stripe tax rate. */
 export function taxRateId(): string {
-  return stripeObjectId(process.env.STRIPE_TAX_RATE_NL, "txr_1UG2g4P09r3Qx4ap3RqHHZvN", "STRIPE_TAX_RATE_NL")
+  return stripeObjectId(process.env.STRIPE_TAX_RATE_NL, "txr_1UG2g4P09r3Qx4ap3RqHHZvN", "STRIPE_TAX_RATE_NL", "txr_")
 }
