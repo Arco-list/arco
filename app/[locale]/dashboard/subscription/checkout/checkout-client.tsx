@@ -441,7 +441,19 @@ export function CheckoutClient({
           }
           if (!validate()) return
           if (usingSaved) {
-            checkout.confirmSaved(cycle)
+            // The same billing details the other path sends. Omitting
+            // them here meant the invoice address, company name and
+            // VAT number were dropped for anyone reusing a mandate —
+            // the quickest way through the form was also the one that
+            // threw away what the form asked for.
+            checkout.confirmSaved(cycle, {
+              companyName,
+              email,
+              vatNumber,
+              address: address
+                ? { line1: address.streetAddress, city: address.city, postalCode: address.postalCode, country }
+                : null,
+            })
             return
           }
           // Saved here, at the last moment the page is still ours:

@@ -177,10 +177,31 @@ export function useElementsCheckout({
     }
   }, [enabled, method, purpose, returnPath])
 
-  /** Subscribe on the mandate we already hold: one call, no elements. */
-  const confirmSaved = useCallback(async (interval2: "month" | "year") => {
+  /**
+   * Subscribe on the mandate we already hold: one call, no elements.
+   *
+   * Takes the billing details for the same reason `confirm` does. This
+   * path used to skip them entirely — it returned before the save ever
+   * ran — so a reader who used their saved mandate had their company
+   * name, VAT number, address and invoice address quietly dropped. The
+   * checkout promised the invoice would go to the address in the form
+   * and Stripe sent it to the account instead, which is the one
+   * failure this whole field was added to prevent.
+   */
+  const confirmSaved = useCallback(async (
+    interval2: "month" | "year",
+    billing?: {
+      companyName?: string | null
+      vatNumber?: string | null
+      email?: string | null
+      address?: { line1: string; city: string; postalCode?: string | null; country?: string | null } | null
+    },
+  ) => {
     setPhase("confirming")
     setMessage(null)
+    // Best effort, exactly as on the other path: a rejected VAT number
+    // is worth a wrong invoice line, not a lost subscription.
+    if (billing) await saveBillingIdentityAction(billing)
     const finished = await subscribeWithSavedMethodAction(interval2)
     if ("error" in finished) {
       setMessage(finished.error)
