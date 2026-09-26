@@ -138,6 +138,8 @@ export const CACHED_METRIC_KEYS = [
   // Email / Referral). Powers the Model's source sub-rows and the
   // Dashboard's "Top sources" card.
   "client_visitors_direct",
+  "client_visitors_ai",
+  "client_visitors_paid",
   "client_visitors_google",
   "client_visitors_social",
   "client_visitors_email",
@@ -377,6 +379,30 @@ async function queryPostHogPeriodicValues(
 // settings, so the two should agree (modulo identity-merge lag).
 const NOT_INTERNAL_TEAM = `(person.properties.email IS NULL OR person.properties.email NOT ILIKE '%@arcolist.com%')`
 
+/**
+ * Only the live site counts.
+ *
+ * NOT_INTERNAL_TEAM above recognises us by our own e-mail address,
+ * which requires being identified. Browsing a dev server signed out is
+ * anonymous, so it passed straight through — and it was not a rounding
+ * error: September had 203 "persons" and 1775 pageviews on
+ * localhost:3000, more pageviews than production's 1587. Every refresh
+ * of a local page minted another person, because PostHog runs on
+ * memory persistence until a visitor accepts cookies.
+ *
+ * An ALLOWLIST, deliberately, rather than excluding the hosts we know
+ * about. A blocklist has to be updated for every new preview URL, every
+ * colleague's machine, every staging domain — and the failure is
+ * silent, because the traffic simply appears in the numbers. This way
+ * the only thing that can go wrong is a second real domain being
+ * forgotten, which shows up as a metric that suddenly reads zero.
+ *
+ * Applied at query time, so a re-sync repairs the history too: the
+ * cache is rebuilt from the events table, which still holds every one
+ * of those local pageviews.
+ */
+const IS_PRODUCTION_HOST = `(coalesce(properties.$host, '') ILIKE '%arcolist.com%')`
+
 // Mail-scanner filter. Enterprise mail security (Microsoft SafeLinks
 // et al.) detonates every link in an outbound mail from EU datacenters
 // — one pageview per link, a fresh person per click, geolocated
@@ -457,8 +483,35 @@ function buildHogQLQuery(metric: CachedMetricKey, bucketExpr: string, sinceIso: 
   // /admin pages from client_visitors) don't fan out into all four.
   switch (metric) {
     case "client_visitors":
-      // Unfiltered — matches PostHog Web Analytics' "Unique visitors".
-      return uniqueVisitorsQuery(bucketExpr, sinceIso, "1 = 1")
+      /**
+       * Everyone who did NOT arrive through a pro door.
+       *
+       * This used to be `1 = 1` — every unique visitor, which matched
+       * PostHog Web Analytics' headline number and meant the row under
+       * the Clients track counted pros as well. Not a rounding error:
+       * in September 441 of roughly 1200 production visitors entered on
+       * a claim or outreach link, plus 23 on an invite. Nearly half the
+       * traffic on the client row was supply, not demand.
+       *
+       * They were also invisible. The six client channel keys have no
+       * bucket for 'sales' or 'invites', so those sessions sat in the
+       * parent and in no sub, and the difference showed up as an
+       * unexplained remainder that grew with outreach volume.
+       *
+       * 'outbound' and 'lifecycle' come out for the same reason, one
+       * step further along. Outbound is mail an admin wrote to a
+       * prospect; lifecycle is mail to somebody who is already what the
+       * funnel is trying to make them — a pro reading the Listed drip,
+       * a customer whose card is expiring. Neither is demand arriving,
+       * and counting them here would put pro retention inside a client
+       * acquisition channel.
+       *
+       * Excluding them fixes both at once: the row means clients again,
+       * and because parent and channels now run through the same
+       * classifier, the subs add up to it by construction rather than
+       * by hope.
+       */
+      return firstTouchChannelQuery(bucketExpr, sinceIso, `NOT IN ('sales', 'invites', 'outbound', 'lifecycle')`)
     case "pro_visitors":
       // Persons with a session that touched the /businesses recruitment
       // pages — session-scoped so internally-navigated visits count.
@@ -586,6 +639,10 @@ function buildHogQLQuery(metric: CachedMetricKey, bucketExpr: string, sinceIso: 
     // partition the parent client_visitors set. Sales / Invites are
     // pro-side channels — persons first-touched there don't appear in
     // any client-visitor sub (kept out of the catch-all Referral too).
+    case "client_visitors_ai":
+      return firstTouchChannelQuery(bucketExpr, sinceIso, `= 'ai'`)
+    case "client_visitors_paid":
+      return firstTouchChannelQuery(bucketExpr, sinceIso, `= 'paid'`)
     case "client_visitors_direct":
       return firstTouchChannelQuery(bucketExpr, sinceIso, `= 'direct'`)
     case "client_visitors_google":
@@ -655,6 +712,7 @@ function uniqueVisitorsQuery(bucketExpr: string, sinceIso: string, urlPredicate:
       AND timestamp >= toDateTime('${sinceIso}')
       AND (${urlPredicate})
       AND ${NOT_INTERNAL_TEAM}
+        AND ${IS_PRODUCTION_HOST}
         AND ${NOT_MAIL_SCANNER}
       AND ${NOT_SELF_REFERRAL}
     GROUP BY period
@@ -670,6 +728,7 @@ function uniqueActorsQuery(bucketExpr: string, sinceIso: string, eventPredicate:
     WHERE ${eventPredicate}
       AND timestamp >= toDateTime('${sinceIso}')
       AND ${NOT_INTERNAL_TEAM}
+        AND ${IS_PRODUCTION_HOST}
         AND ${NOT_MAIL_SCANNER}
     GROUP BY period
     ORDER BY period
@@ -705,6 +764,7 @@ function uniqueActorsQuery(bucketExpr: string, sinceIso: string, eventPredicate:
 const ENTRY_CHANNEL_EXPR = `
   multiIf(
     entry_utm = 'share', 'share',
+    entry_utm ILIKE 'paid_%' OR entry_utm = 'arco_paid', 'paid',
     entry_url ILIKE '%/businesses/architects%'
       AND (entry_url ILIKE '%ref=%' OR entry_url ILIKE '%inviteEmail=%'), 'sales',
     entry_url ILIKE '%/businesses/professionals%'
@@ -713,10 +773,36 @@ const ENTRY_CHANNEL_EXPR = `
     entry_utm ILIKE 'arco_claim_%', 'sales',
     entry_url ILIKE '%/claim?t=%'
       OR (entry_url ILIKE '%/claim%' AND entry_url ILIKE '%&t=%'), 'sales',
-    entry_utm ILIKE 'arco_%'
-      OR entry_ref ILIKE '%mail.%'
+    -- Our own mail, labelled by the loop that sent it. Mirrors
+    -- TEMPLATE_CHANNEL in lib/email-service.ts; keep the two in step.
+    entry_utm = 'arco_invite', 'invites',
+    entry_utm = 'arco_sales', 'sales',
+    entry_utm = 'arco_outbound', 'outbound',
+    entry_utm = 'arco_email', 'email',
+    entry_utm = 'arco_lifecycle', 'lifecycle',
+    entry_utm ILIKE '%chatgpt%'
+      OR entry_utm ILIKE '%perplexity%'
+      OR entry_utm ILIKE '%claude.ai%'
+      OR entry_utm ILIKE '%copilot%', 'ai',
+    -- Tags already out there: mail sent before the relabelling keeps
+    -- being clicked for months. arco_client was client marketing (what
+    -- arco_email means now); arco_pro was pro transactional, out of the
+    -- funnel then and now. Without these the catch-all below would sweep
+    -- both into lifecycle and the Email channel's history would go flat.
+    entry_utm = 'arco_client', 'email',
+    entry_utm = 'arco_pro', 'lifecycle',
+    -- Any other arco_* is a label nobody set yet: park it out of the
+    -- funnel rather than let it inflate a channel.
+    entry_utm ILIKE 'arco%', 'lifecycle',
+    entry_ref ILIKE '%mail.%'
       OR entry_ref ILIKE '%outlook.%', 'email',
     entry_ref IS NULL OR entry_ref = '' OR entry_ref = '$direct', 'direct',
+    entry_ref ILIKE '%chatgpt.%'
+      OR entry_ref ILIKE '%chat.openai.%'
+      OR entry_ref ILIKE '%perplexity.%'
+      OR entry_ref ILIKE '%claude.ai%'
+      OR entry_ref ILIKE '%gemini.google.%'
+      OR entry_ref ILIKE '%copilot.microsoft.%', 'ai',
     entry_ref ILIKE '%google.%'
       OR entry_ref ILIKE '%bing.%'
       OR entry_ref ILIKE '%duckduckgo.%'
@@ -775,6 +861,7 @@ function proSessionChannelQuery(
       WHERE event = '$pageview'
         AND timestamp >= toDateTime('${sinceIso}')
         AND ${NOT_INTERNAL_TEAM}
+        AND ${IS_PRODUCTION_HOST}
         AND ${NOT_MAIL_SCANNER}
       GROUP BY person_id, session_id
     )
@@ -804,6 +891,7 @@ function firstTouchChannelQuery(
         AND timestamp >= toDateTime('${sinceIso}')
         ${extra}
         AND ${NOT_INTERNAL_TEAM}
+        AND ${IS_PRODUCTION_HOST}
         AND ${NOT_MAIL_SCANNER}
         AND ${NOT_SELF_REFERRAL}
       GROUP BY period, person_id
@@ -822,6 +910,7 @@ function totalEventsQuery(bucketExpr: string, sinceIso: string, eventPredicate: 
     WHERE ${eventPredicate}
       AND timestamp >= toDateTime('${sinceIso}')
       AND ${NOT_INTERNAL_TEAM}
+        AND ${IS_PRODUCTION_HOST}
         AND ${NOT_MAIL_SCANNER}
     GROUP BY period
     ORDER BY period
@@ -844,6 +933,7 @@ function proSignupQuery(bucketExpr: string, sinceIso: string, firstTouchPredicat
       AND person.properties.user_types LIKE '%professional%'
       AND (${firstTouchPredicate})
       AND ${NOT_INTERNAL_TEAM}
+        AND ${IS_PRODUCTION_HOST}
         AND ${NOT_MAIL_SCANNER}
     GROUP BY period
     ORDER BY period

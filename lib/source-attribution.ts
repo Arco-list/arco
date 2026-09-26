@@ -27,7 +27,32 @@ export type FirstTouchSource =
   | "google"
   | "social"
   | "referral"
+  | "ai"
+  | "paid"
+  | "outbound"
+  | "lifecycle"
   | "direct"
+
+/**
+ * Assistants that answer a question and hand over a link.
+ *
+ * Carved out of Referral, where they were invisible: in September
+ * chatgpt.com was the second-largest external referrer after Google,
+ * and it made up the whole Referral channel on its own. Gemini needs
+ * naming before the search list, or `google.` claims it and an AI
+ * recommendation reads as organic search.
+ *
+ * A different acquisition motion from a magazine linking to us, and
+ * growing — worth its own row rather than a share of somebody else's.
+ */
+const AI_DOMAINS = [
+  "chatgpt.com",
+  "chat.openai.com",
+  "perplexity.ai",
+  "claude.ai",
+  "gemini.google.com",
+  "copilot.microsoft.com",
+]
 
 const SEARCH_DOMAINS = [
   "google.",
@@ -105,17 +130,66 @@ export function categorizeFirstTouch(
   const url = lc(currentUrl)
   const utm = lc(utmSource)
 
-  // Path / UTM wins.
+  // ── Signals the visitor carried with them ──────────────────────
+  //
+  // Everything in this block beats the referrer, because a tag says
+  // what we meant and a referrer only says what the last hop was. The
+  // order inside it matters once: a claim path has to win over a
+  // template label, since a mail can carry both.
+
   if (utm === "share") return "shares"
-  if (isSalesPath(url) || utm === "arco_sales" || utm === "arco_pro") {
-    // arco_pro: Arco transactional emails to pros — bucketed as Email
-    // for clients/visitors but as Sales for the pro acquisition funnel?
-    // Keep simple: arco_pro = email channel (Arco transactional).
-    if (utm === "arco_pro" || utm === "arco_client") return "email"
-    return "sales"
-  }
+
+  // Paid has no referrer signature worth trusting — an ad click looks
+  // like whatever network served it. It is only ever as reliable as
+  // the tagging, which is why the tagging exists before the spend.
+  if (utm.startsWith("paid_") || utm === "arco_paid") return "paid"
+
+  // Claim and landing paths first: a token URL names the loop it was
+  // minted for, and that outranks whichever template the link sat in.
+  if (isSalesPath(url)) return "sales"
   if (isInvitesPath(url)) return "invites"
-  if (utm.startsWith("arco_")) return "email"
+  if (utm === "arco_claim_invite") return "invites"
+  if (utm.startsWith("arco_claim_")) return "sales"
+
+  // Assistants tag their own handovers, so read the utm as well as the
+  // referrer: ChatGPT sets utm_source=chatgpt.com, and in roughly half
+  // the visits measured the referrer did not survive the hop. This sits
+  // above the direct check for that reason — without it those arrivals
+  // read as "came on their own".
+  if (matchesAny(utm, AI_DOMAINS)) return "ai"
+
+  // Our own mail, labelled by the loop that sent it. One value per
+  // label so nothing falls through to a referrer rule — which is what
+  // happened to the bare "arco" tag, and why 311 people we had mailed
+  // were counted as Direct.
+  if (utm === "arco_invite") return "invites"
+  if (utm === "arco_sales") return "sales"
+  if (utm === "arco_outbound") return "outbound"
+  if (utm === "arco_email") return "email"
+  if (utm === "arco_lifecycle") return "lifecycle"
+  // ── Tags that are already out there ────────────────────────────
+  //
+  // Mail sent before the relabelling carries the old audience tags, and
+  // those links keep getting clicked for months. Without these three the
+  // catch-all below would sweep them all into lifecycle, and the Email
+  // channel's own history would read as zero from the next sync on.
+  //
+  //   arco_client  was client lifecycle and marketing — what arco_email
+  //                means now, so it maps across.
+  //   arco_pro     was pro transactional: out of the acquisition funnel
+  //                then and now.
+  //   arco         was the 'neutral' tag, used where attribution came
+  //                from the URL path instead. When that path fired it
+  //                already won above; what is left cannot be resolved to
+  //                a loop, and "our mail, no loop" beats the Direct it
+  //                used to land in.
+  if (utm === "arco_client") return "email"
+  if (utm === "arco_pro") return "lifecycle"
+
+  // Any other arco_* is a label nobody set yet. Lifecycle, not email:
+  // an unlabelled mail should sit out of the funnel until somebody
+  // decides where it belongs, rather than quietly inflating a channel.
+  if (utm.startsWith("arco")) return "lifecycle"
 
   // Referrer-based.
   const isDirect = !ref || ref === "$direct"
@@ -130,6 +204,8 @@ export function categorizeFirstTouch(
     return "direct"
   }
 
+  // Before SEARCH_DOMAINS: gemini.google.com matches "google." too.
+  if (matchesAny(ref, AI_DOMAINS)) return "ai"
   if (matchesAny(ref, SEARCH_DOMAINS)) return "google"
   if (matchesAny(ref, SOCIAL_DOMAINS)) return "social"
   if (matchesAny(ref, WEBMAIL_DOMAINS)) return "email"
