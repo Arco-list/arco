@@ -172,6 +172,8 @@ export type SyncResult = {
   granularity: Granularity
   windowPeriods: number
   upserted: number
+  /** Stale periods removed from the refreshed window. */
+  cleared?: number
   error?: string
 }
 
@@ -261,8 +263,49 @@ async function syncMetric(
   const windowPeriods = hasData ? ROLLING_PERIODS[granularity] : Math.ceil(BACKFILL_DAYS / approxDaysPerPeriod(granularity))
 
   const rows = await queryPostHogPeriodicValues(apiKey, metric, granularity, lookbackDays)
+
+  /**
+   * Clear periods inside the refreshed window that came back empty.
+   *
+   * An upsert only writes what PostHog returned, so a bucket that used
+   * to have a value and now has none kept its old number for good.
+   * That is not hypothetical: splitting AI out of Referral took
+   * September's referral traffic to near zero, PostHog stopped
+   * returning a row for it, and the cache went on reporting 11 —
+   * through two syncs, with a timestamp from before the change to
+   * prove it had not been touched.
+   *
+   * Only inside the window this run actually refreshed, so older
+   * periods stay immutable. Safe when nothing came back at all: a
+   * failed query returns earlier, with its error, so reaching here
+   * empty means the window is genuinely zero.
+   */
+  const windowStart = new Date(Date.now() - lookbackDays * 86400000)
+    .toISOString()
+    .slice(0, 10)
+  const keep = new Set(rows.map((r) => r.periodStart))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: existing } = await (supabase as any)
+    .from("metric_cache")
+    .select("period_start")
+    .eq("metric_key", metric)
+    .eq("granularity", granularity)
+    .gte("period_start", windowStart)
+  const stale = ((existing ?? []) as { period_start: string }[])
+    .map((r) => r.period_start)
+    .filter((d) => !keep.has(d))
+  if (stale.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any)
+      .from("metric_cache")
+      .delete()
+      .eq("metric_key", metric)
+      .eq("granularity", granularity)
+      .in("period_start", stale)
+  }
+
   if (rows.length === 0) {
-    return { metric, granularity, windowPeriods, upserted: 0 }
+    return { metric, granularity, windowPeriods, upserted: 0, cleared: stale.length }
   }
 
   const now = new Date().toISOString()
@@ -282,7 +325,7 @@ async function syncMetric(
   if (error) {
     return { metric, granularity, windowPeriods, upserted: 0, error: error.message }
   }
-  return { metric, granularity, windowPeriods, upserted: rows.length }
+  return { metric, granularity, windowPeriods, upserted: rows.length, cleared: stale.length }
 }
 
 function rollingWindowDays(granularity: Granularity): number {
