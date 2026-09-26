@@ -156,18 +156,10 @@ export const METRIC_DEFS: Record<string, MetricDef> = {
       { key: "ranked_companies", label: "Ranked companies", definition: "% of companies created in the period whose page is ranked (≥1 GSC impression in 28d)", source: "supabase" },
     ],
   },
-  contributors_accepted: {
-    key: "contributors_accepted",
-    title: "Contributors accepted",
-    definition: "Invited professionals who responded and chose how to appear (unlisted, listed or live on the project page).",
-    source: "supabase",
-    driver: "retention",
-    user: "professional",
-    supabaseTable: "project_professionals",
-    subs: [
-      { key: "contributors_live", label: "Contributors listed", definition: "Accepted contributors whose credit is visible on the project page (live_on_page)", source: "supabase" },
-    ],
-  },
+  // contributors_accepted lived here until the count moved into the
+  // Invites channel under New Pros. No card reaches for the key any
+  // more, and leaving the entry behind would describe a metric the
+  // dashboard no longer shows.
   publishers: {
     key: "publishers",
     // Key stays `publishers` — it is what the card, the detail action

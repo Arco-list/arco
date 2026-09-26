@@ -456,7 +456,7 @@ function MetricRowComponent({
             key={i}
             value={v}
             prev={i > 0 ? row.datapoints[i - 1] : null}
-            textClassName="text-[12px] text-[#1c1c1a]"
+            textClassName="text-[11px] font-medium text-[#1c1c1a]"
           />
         ))}
         {/* Pad columns when row datapoints under-fill the header row. */}
@@ -532,7 +532,7 @@ function MetricRowComponent({
                   style={hasAttachedCR ? { borderBottom: "none" } : undefined}
                 >
                   <td>
-                    <div className="pl-7 text-[11px] text-[#6b6b68] flex items-center">
+                    <div className="pl-7 text-[11px] text-[#1c1c1a] flex items-center">
                       <span>{sub.label}</span>
                       <InfoIcon definition={sub.definition} />
                     </div>
@@ -542,7 +542,7 @@ function MetricRowComponent({
                       key={i}
                       value={v}
                       prev={i > 0 ? sub.datapoints[i - 1] : null}
-                      textClassName="text-[11px] text-[#a1a1a0]"
+                      textClassName="text-[11px] font-medium text-[#6b6b68]"
                     />
                   ))}
                   {sub.datapoints.length < columnCount
@@ -666,17 +666,12 @@ export function GrowthModelClient({ initialRows, initialLabels, initialLastSynce
     // rate (the two are separate retention motions on the same pros,
     // not a sequential conversion).
     "published_projects",
-    // New contributors → New Subscribers: the two rows either side of
-    // this one count different populations. Contributors are companies
-    // credited on somebody else's project; subscribers are companies
-    // paying for a page. Plenty of subscribers were never contributors,
-    // so a percentage here would divide by the wrong denominator and
-    // read as a conversion rate that cannot be acted on.
-    //
-    // The Contributors-invited row this used to also suppress is gone:
-    // it merged into New contributors, and its rate became the
-    // supporting metric underneath.
-    "contributors_accepted",
+    // The New contributors row this used to suppress is gone entirely:
+    // it became the Invites channel under New Pros, which is where a
+    // company credited on somebody else's project was always arriving.
+    // With it went the bad rate it used to sit above — contributors to
+    // subscribers divided two different populations, since plenty of
+    // subscribers were never credited by anyone.
   ])
 
   return (

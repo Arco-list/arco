@@ -73,7 +73,17 @@ async function fetchActivityEvents(lookbackStart: Date, userType: "client" | "pr
 
 export type Timeframe = "days" | "weeks" | "months" | "years"
 
-export type MetricSource = "posthog" | "supabase"
+/**
+ * Where a number comes from, shown as a pill beside its label.
+ *
+ * Not decoration: the three behave differently and the reader has to
+ * know which they are looking at. A PostHog count is anonymous browser
+ * identities, inflated while visitors sit on memory persistence. A
+ * server number is a row in our own tables. A residual is whatever the
+ * rows above did not claim, so every attribution failure lands in it
+ * and it reads high rather than low.
+ */
+export type MetricSource = "posthog" | "supabase" | "residual"
 
 export type MetricRow = {
   key: string
@@ -252,6 +262,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     savedProjectsResult,
     savedCompaniesResult,
     prospectsResult,
+    claimArrivalsResult,
     publishableCategoriesResult,
     outboundLogsResult,
     allContactsResult,
@@ -263,6 +274,8 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     fetchAllRows((f, t) => supabase.from("saved_projects").select("user_id, project_id, created_at").order("created_at").range(f, t)),
     fetchAllRows((f, t) => supabase.from("saved_companies").select("user_id, company_id, created_at").order("created_at").range(f, t)),
     fetchAllRows((f, t) => supabase.from("prospects").select("id, email, company_id, apollo_contact_id").order("id").range(f, t)),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fetchAllRows((f, t) => (supabase as any).from("claim_arrivals").select("channel, email, created_at").order("id").range(f, t)),
     supabase.from("categories").select("id, slug").in("slug", PUBLISHABLE_SERVICE_SLUGS),
     // Outbound metric inputs — manual logs from admin/companies and the
     // Sales page. 'note' is excluded (observations, not outbound
@@ -334,6 +347,8 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     "pro_visitors",
     "client_signups_share",
     "client_visitors_share",
+    "client_visitors_ai",
+    "client_visitors_paid",
     "pro_visitors_email",
     "pro_visitors_direct",
     "pro_visitors_google",
@@ -386,7 +401,16 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   // ballpark; when we add a window-grained cache row for the same
   // metric the total reads from that instead.
   const bucketize = (key: CachedMetricKey) => {
-    const map = cacheByKey[key]
+    // Empty map, not a crash, for a key this loader does not carry.
+    // CACHED_KEYS above and CACHED_METRIC_KEYS in growth-metric-cache
+    // are two hand-kept lists of the same thing: one says what gets
+    // synced, the other what gets loaded here. Adding a channel to the
+    // first and forgetting the second took the whole dashboard down
+    // with "Cannot read properties of undefined (reading 'get')" —
+    // a rendering bug reported as a blank page, for a metric nobody
+    // had asked for yet. A key that is missing, or simply never synced,
+    // should read as zero.
+    const map = cacheByKey[key] ?? new Map<string, number>()
     const series = buckets.starts.map((start) => map.get(periodKey(start)) ?? 0)
     const total = series.reduce((a, b) => a + b, 0)
     return { series, total }
@@ -411,6 +435,8 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   // Visitor source breakdowns — first-class sub-rows under the
   // Visitors leading metric.
   const clientVisitorsDirectBucketed = bucketize("client_visitors_direct")
+  const clientVisitorsAiBucketed = bucketize("client_visitors_ai")
+  const clientVisitorsPaidBucketed = bucketize("client_visitors_paid")
   const clientVisitorsGoogleBucketed = bucketize("client_visitors_google")
   const clientVisitorsSocialBucketed = bucketize("client_visitors_social")
   const clientVisitorsEmailBucketed = bucketize("client_visitors_email")
@@ -1423,19 +1449,9 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const prosContactedSeries = bucketUniqueByEmail(allContactEvents)
   const totalProsContacted = totalUniqueByEmail(allContactEvents)
 
-  // "New Pros from Outbound" — companies onboarded in the period whose
-  // owner person was contacted via outbound at any prior point.
-  const newProsOutboundDates = companies
-    .filter((c: any) => {
-      if (!onboardingCompleted(c)) return false
-      if (!c.owner_id) return false
-      const personId = personIdByAuthUserId.get(c.owner_id)
-      if (!personId) return false
-      return outboundDatesByPerson.has(personId)
-    })
-    .map(onboardedTsForBucket)
-    .filter((d): d is Date => d !== null && d >= from)
-  const newProsOutboundBucketed = bucket8(newProsOutboundDates, buckets)
+  // The old "New Pros from Outbound" series lived here, bucketed by
+  // onboarded_at. It is now outboundCompanyIds further down, bucketed
+  // by listed_at like every other channel on that row.
 
   // Apollo channel: companies whose id is referenced by a prospect with an
   // apollo_contact_id (i.e. they came in via the Apollo outbound sequence).
@@ -1466,8 +1482,12 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   // company inherits from owner). Counting rows grouped by
   // first_touch_source means channels and parent measure the same
   // thing — channels sum to parent by construction.
-  type FirstTouchKey = "sales" | "invites" | "email" | "shares" | "google" | "social" | "referral" | "direct"
-  const FIRST_TOUCH_KEYS: FirstTouchKey[] = ["sales", "invites", "email", "shares", "google", "social", "referral", "direct"]
+  // Mirrors FirstTouchSource in lib/source-attribution.ts. Order here
+  // is rendering order for the client rows: Direct, SEO, Social, AI,
+  // Shares, Referral, Email, Paid. Sales and Invites are pro-side and
+  // never render on a client row.
+  type FirstTouchKey = "sales" | "invites" | "direct" | "google" | "social" | "ai" | "shares" | "referral" | "email" | "paid"
+  const FIRST_TOUCH_KEYS: FirstTouchKey[] = ["sales", "invites", "direct", "google", "social", "ai", "shares", "referral", "email", "paid"]
 
   function bucketBySource(
     items: any[],
@@ -1482,9 +1502,10 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     const allowedSet = new Set<FirstTouchKey>(allowed)
     const out: Record<FirstTouchKey, number[]> = {
       sales: new Array(8).fill(0), invites: new Array(8).fill(0),
-      email: new Array(8).fill(0), shares: new Array(8).fill(0),
-      google: new Array(8).fill(0), social: new Array(8).fill(0),
-      referral: new Array(8).fill(0), direct: new Array(8).fill(0),
+      direct: new Array(8).fill(0), google: new Array(8).fill(0),
+      social: new Array(8).fill(0), ai: new Array(8).fill(0),
+      shares: new Array(8).fill(0), referral: new Array(8).fill(0),
+      email: new Array(8).fill(0), paid: new Array(8).fill(0),
     }
     for (const it of items) {
       if (!filter(it)) continue
@@ -1512,7 +1533,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   // of 'sales' or 'invites' arrived on /businesses/* first and signed
   // up as a client later; roll them into Direct so the 6 channel
   // subs sum to the parent.
-  const CLIENT_CHANNELS: readonly FirstTouchKey[] = ["direct", "google", "social", "email", "referral", "shares"]
+  const CLIENT_CHANNELS: readonly FirstTouchKey[] = ["direct", "google", "social", "ai", "shares", "referral", "email", "paid"]
   const clientSignupsBySource = bucketBySource(
     profiles,
     (p) => p.created_at ? new Date(p.created_at) : null,
@@ -1527,11 +1548,10 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   // this row has always guaranteed.
   const listedTsForBucket = (c: any): Date | null =>
     c.listed_at ? new Date(c.listed_at) : null
-  const newProsBySource = bucketBySource(
-    companies,
-    listedTsForBucket,
-    (c: any) => onboardingCompleted(c) && c.listed_at != null,
-  )
+  // newProsBySource stood here — companies.first_touch_source split
+  // eight ways. New Pros no longer renders those channels (the field is
+  // NULL for 3138 of 3159 rows), and nothing else read it. bucketBySource
+  // itself stays: the client Signups row still uses it.
 
   // Per-source totals: sum of the 8-period series for the "total" column.
   function totalsBySource(s: Record<FirstTouchKey, number[]>): Record<FirstTouchKey, number> {
@@ -1541,7 +1561,6 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     }, {} as Record<FirstTouchKey, number>)
   }
   const clientSignupsBySourceTotals = totalsBySource(clientSignupsBySource)
-  const newProsBySourceTotals = totalsBySource(newProsBySource)
 
   // ── Click-through-based New Pros for Sales / Invites ─────────────
   // Count new pros (companies onboarded in the period) whose owner
@@ -1550,8 +1569,9 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   // Visitors funnel on /admin/sales. Replaces the first-touch-based
   // Sales/Invites counts under New Pros so this row reads "did our
   // outreach end-to-end work" rather than "first marketing touch".
-  // Direct is adjusted below to remove the overlap (most Sales /
-  // Invites clickers had first-touch = Direct).
+  // The Direct adjustment this used to mention is gone: the precedence
+  // chain below gives the partition for free, instead of subtracting one
+  // channel's count from another's to force the subs to add up.
 
   // prospect_id → company_id, for joining click events to companies.
   const prospectIdToCompanyId = new Map<string, string>()
@@ -1577,40 +1597,165 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     }
   }
 
-  function bucketNewProsByClickSet(clickerIds: Set<string>): number[] {
-    // Bucket by the SAME timestamp the parent New Pros row and its
-    // channel subs now use: listed_at, the moment the page went live.
+  // The Invites channel under New Pros is CREDITED, not clicked.
+  //
+  // It used to be the click set above, and that made the channel read
+  // as a tenth of itself. The stamp behind those clicks only fired on
+  // /businesses/professionals, and once invite mails started carrying
+  // a /claim link almost nobody passed the place that was watching:
+  // September had 58 claim tokens issued against 1 recorded visit,
+  // and 5 companies that arrived by credit showed up here as 1.
+  //
+  // Holding an accepted credit is the durable fact — written when the
+  // pro says yes, not when a particular URL happens to be the one they
+  // opened. The click signal stays exactly where it is honest: the
+  // visitor step, which is asking about clicks.
+  //
+  // This is what used to be the New contributors row, and it counts
+  // identically — same companies, same listed_at, same acceptance
+  // test — so folding it in here moved the number rather than
+  // redefining it.
+  const inviteCreditedCompanyIds = new Set<string>(firstAcceptanceByCompany.keys())
+
+  // Companies whose owner we reached by outbound at any point. Built as
+  // an id set like the other two so it can run through the same
+  // bucketing — the old version dated these by onboarded_at while every
+  // sibling used listed_at, which meant the Outbound sub answered a
+  // different question from the row it sat in.
+  const outboundCompanyIds = new Set<string>()
+  for (const c of companies as any[]) {
+    if (!onboardingCompleted(c) || !c.owner_id) continue
+    const personId = personIdByAuthUserId.get(c.owner_id)
+    if (personId && outboundDatesByPerson.has(personId)) outboundCompanyIds.add(String(c.id))
+  }
+
+  /**
+   * New pros in a bucket that belong to `member`, minus anything already
+   * claimed by a higher-priority loop.
+   *
+   * @param exclude  Sets that outrank this one. A company in both counts
+   *   once, there.
+   */
+  function bucketNewProsBySet(member: Set<string>, exclude: Set<string>[] = []): number[] {
+    // Bucket by the SAME timestamp the parent New Pros row uses:
+    // listed_at, the moment the page went live.
     return buckets.starts.map((_, i) =>
       companies.filter((c: any) => {
-        if (!onboardingCompleted(c) || !clickerIds.has(String(c.id))) return false
+        const id = String(c.id)
+        if (!onboardingCompleted(c) || !member.has(id)) return false
+        if (exclude.some((set) => set.has(id))) return false
         const ts = listedTsForBucket(c)
         return ts !== null && ts >= buckets.starts[i] && ts < buckets.ends[i]
       }).length,
     )
   }
-  const newProsSalesClickerSeries = bucketNewProsByClickSet(salesClickerCompanyIds)
-  const newProsSalesClickerTotal = newProsSalesClickerSeries.reduce((a, b) => a + b, 0)
-  const newProsInvitesClickerSeries = bucketNewProsByClickSet(inviteClickerCompanyIds)
-  const newProsInvitesClickerTotal = newProsInvitesClickerSeries.reduce((a, b) => a + b, 0)
 
-  // Direct adjusted: original first-touch direct minus Sales+Invites
-  // clickers (who currently fall into Direct because most have
-  // first_touch_source='direct' — they typed the URL before clicking
-  // our email). Floored at 0. Same shape as proVisitorsDirectAdjusted.
-  const newProsDirectAdjustedSeries = newProsBySource.direct.map((v, i) => {
-    const subtract = (newProsSalesClickerSeries[i] ?? 0) + (newProsInvitesClickerSeries[i] ?? 0)
-    return Math.max(0, v - subtract)
-  })
-  const newProsDirectAdjustedTotal = newProsDirectAdjustedSeries.reduce((a, b) => a + b, 0)
+  /**
+   * Invites › Sales › Organic, with Outbound beside them.
+   *
+   * The three loops genuinely overlap — since April, 4 of 27 new pros
+   * sit in both Invites and Sales, and 3 of the 4 we phoned were in
+   * Sales too. Without an order the subs would add up to more than the
+   * row they sit under, which is what the old Direct adjustment was
+   * patching around.
+   *
+   * Invites outranks Sales because a firm that accepted a credit
+   * arrived through that credit whatever else we were sending it.
+   *
+   * OUTBOUND IS NOT IN THE CHAIN. A phone call is not a channel a pro
+   * arrives through; it is something we did to a pro who was already
+   * somewhere in the funnel — usually one the other loops had reached
+   * first. Forcing it into the split would make it look small (one
+   * company, the only one no other loop touched) while hiding that we
+   * had actually called four. So it counts everyone it touched,
+   * overlaps included, and sits after the split rather than inside it.
+   *
+   * Which means Organic reads "neither Invites nor Sales reached them",
+   * not "we did nothing" — and the Outbound figure beside it says how
+   * many of those we phoned anyway. Read Outbound as "touched by",
+   * never as "thanks to": it works on firms that were already
+   * converting, so its rate flatters itself.
+   */
+  const newProsInvitesSeries = bucketNewProsBySet(inviteCreditedCompanyIds)
+  const newProsInvitesTotal = newProsInvitesSeries.reduce((a, b) => a + b, 0)
+  const newProsSalesSeries = bucketNewProsBySet(salesClickerCompanyIds, [inviteCreditedCompanyIds])
+  const newProsSalesTotal = newProsSalesSeries.reduce((a, b) => a + b, 0)
+  const newProsOutboundSeries = bucketNewProsBySet(outboundCompanyIds)
+  const newProsOutboundTotal = newProsOutboundSeries.reduce((a, b) => a + b, 0)
+
+  // The residual, and deliberately computed last: every attribution
+  // failure above lands here, so it reads high rather than low, and it
+  // is only trustworthy while the two loops are measured well.
+  const newProsOrganicSeries = buckets.starts.map((_, i) =>
+    companies.filter((c: any) => {
+      const id = String(c.id)
+      if (!onboardingCompleted(c) || !c.listed_at) return false
+      if (inviteCreditedCompanyIds.has(id) || salesClickerCompanyIds.has(id)) return false
+      const ts = listedTsForBucket(c)
+      return ts !== null && ts >= buckets.starts[i] && ts < buckets.ends[i]
+    }).length,
+  )
+  const newProsOrganicTotal = newProsOrganicSeries.reduce((a, b) => a + b, 0)
 
   // Parent client_signups series — count client profiles bucketed by
   // created_at. Same denominator the channels derive from, so subs
   // sum to parent exactly.
-  const clientSignupDates = profiles
-    .filter((p: any) => p.user_types?.includes("client") && p.created_at)
-    .map((p: any) => new Date(p.created_at))
-    .filter((d: Date) => d >= from)
+  /**
+   * Signups, in three layers, because one number could not carry it.
+   *
+   * THE PARENT COUNTS ACCOUNTS, matching /users exactly — that page
+   * filters on 'client' or 'admin' too. Keeping them equal is the
+   * point: the two screens are read side by side, and a headline that
+   * disagreed would cost more than it explained.
+   *
+   * But 'client' does not mean demand. It means "has an account":
+   * everyone who signs up gets it, and the claim flow APPENDS
+   * 'professional' later (app/[locale]/claim/actions.ts). So of the 36
+   * profiles carrying 'client', 27 are pros — 25 of them owning a
+   * company. Left whole, Visitors → Signups would divide by a
+   * population that is mostly supply.
+   *
+   * Hence the middle layer: owns a company or not. That is a fact about
+   * what somebody did, not a flag that accumulated on their profile.
+   *
+   * Then three states under the client half, not eight channels. Seven
+   * of those eight read zero and will keep reading zero until the
+   * first-touch stamp exists; shown as rows they say "nobody comes from
+   * here", which is a different claim from "we never looked". What the
+   * three say instead is how much of this we can attribute at all —
+   * the question that has an answer at this volume.
+   */
+  const companyOwnerIds = new Set<string>(
+    companies.filter((c: any) => c.owner_id).map((c: any) => String(c.owner_id)),
+  )
+  const accountProfiles = profiles.filter((p: any) =>
+    p.created_at
+    && (p.user_types?.includes("client") || p.user_types?.includes("admin")),
+  )
+  const datesOf = (rows: any[]): Date[] =>
+    rows.map((p: any) => new Date(p.created_at)).filter((d: Date) => d >= from)
+
+  const clientSignupDates = datesOf(accountProfiles)
   const clientSignupsBucketedDb = bucket8(clientSignupDates, buckets)
+
+  const proAccountProfiles = accountProfiles.filter((p: any) => companyOwnerIds.has(String(p.id)))
+  const clientOnlyProfiles = accountProfiles.filter((p: any) => !companyOwnerIds.has(String(p.id)))
+  const proAccountsBucketed = bucket8(datesOf(proAccountProfiles), buckets)
+  const clientOnlyBucketed = bucket8(datesOf(clientOnlyProfiles), buckets)
+
+  // Attributed / Direct / Unknown. Anything that is neither empty nor
+  // 'direct' counts as attributed, so the three add up to the client
+  // half exactly — including the odd pro-loop value on a profile that
+  // never owned a company.
+  const signupStateBucketed = (want: "attributed" | "direct" | "unknown") =>
+    bucket8(datesOf(clientOnlyProfiles.filter((p: any) => {
+      const src = p.first_touch_source ? String(p.first_touch_source) : ""
+      const state = !src ? "unknown" : src === "direct" ? "direct" : "attributed"
+      return state === want
+    })), buckets)
+  const signupsAttributed = signupStateBucketed("attributed")
+  const signupsDirect = signupStateBucketed("direct")
+  const signupsUnknown = signupStateBucketed("unknown")
 
   // Open drafts (snapshot at each bucket end): companies created before
   // bucket end that are still in 'created' status today. Approximate — we
@@ -1651,7 +1796,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   // denominator, so rates can't exceed 100% and don't bleed across
   // cohorts. Young cohorts under-read — buckets ending within the last
   // 30 days are flagged immature and rendered grey by the table view.
-  const COHORT_DEF = "Cohorted: counted in the period of the first touch; conversions counted whenever they happen. Grey percentages = cohort still maturing (period ended less than 30 days ago)."
+  const COHORT_DEF = "Cohorted by first touch; conversions counted whenever they happen. Grey = cohort still maturing."
   const cohortImmatureFromIndex = (() => {
     const cutoff = Date.now() - 30 * DAY_MS
     const idx = buckets.ends.findIndex((end) => end.getTime() > cutoff)
@@ -1686,7 +1831,23 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const everVisitedEmails = new Set([...everVisitedSalesEmails, ...everVisitedInviteEmails])
 
   // Pros contacted → ever visited (parent + per-channel cohorts).
-  const contactedCohort = cohortByFirstTouch(allContactEvents, everVisitedEmails)
+  // Sales + Invites only, NOT allContactEvents.
+  //
+  // Outbound is a phone call, a meeting, a LinkedIn message — there is
+  // no landing to arrive at and no click to log, so an outbound-
+  // contacted pro can never appear in everVisitedEmails. Including them
+  // in the denominator meant dividing by a population that was
+  // structurally unable to convert on this step, which pushed the rate
+  // down by exactly as much as outbound grew.
+  //
+  // Outbound is not missing a number because of that: it runs straight
+  // from contacted to New Pros on its own sub, which is the honest
+  // shape. A funnel step only means something when the order is fixed,
+  // and outbound deliberately works on firms that are already visitors
+  // — measuring "contacted → visitor" there would mostly be recording
+  // a conversion that happened before the call.
+  const clickableContactEvents = [...salesContactEvents, ...inviteContactEvents]
+  const contactedCohort = cohortByFirstTouch(clickableContactEvents, everVisitedEmails)
   const salesContactedCohort = cohortByFirstTouch(salesContactEvents, everVisitedSalesEmails)
   const inviteContactedCohort = cohortByFirstTouch(inviteContactEvents, everVisitedInviteEmails)
 
@@ -1742,67 +1903,122 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   // the merge and with the removal of that second rate. The row keeps
   // the count and lets the supporting metrics carry the ratios.
   //
-  // New contributors is counted in the SAME loop, on the same
-  // conditions, plus one: the company holds an accepted credit. That
-  // makes it a strict subset of New Pros rather than an overlapping
-  // count — of the pros that went live this period, these are the ones
-  // that arrived by being credited on somebody else's project.
-  //
-  // Dated by listed_at, not by acceptance. A contributor that accepts
-  // and never claims its page has no listed_at, never becomes a pro,
-  // and no longer appears here: the loop it belongs to has not closed.
-  // Before, it did appear, which let the two rows disagree about how
-  // many companies the platform had gained.
+  // The contributor count that used to be computed in this same loop
+  // is now the Invites channel sub, built from inviteCreditedCompanyIds
+  // above. Same companies on the same conditions — it reads as a
+  // channel rather than as a row of its own, which is what it always
+  // was: of the pros that went live, these arrived by being credited
+  // on somebody else's project.
   const listedCohortDenom = buckets.starts.map(() => 0)
-  const newContributorsSeries = buckets.starts.map(() => 0)
   for (const c of companies as any[]) {
     if (!onboardingCompleted(c)) continue
     if (c.listed_at) {
       const j = bucketIndexOf(new Date(c.listed_at))
-      if (j !== -1) {
-        listedCohortDenom[j]++
-        if (firstAcceptanceByCompany.has(String(c.id))) newContributorsSeries[j]++
-      }
+      if (j !== -1) listedCohortDenom[j]++
     }
   }
-  const totalNewContributors = newContributorsSeries.reduce((a, b) => a + b, 0)
+
+  /**
+   * Pro visitors — arrivals on /claim.
+   *
+   * The step used to be "a session that touched /businesses", counted
+   * in PostHog, with rates underneath it computed from server-side
+   * click logs. Two systems, two units, one percentage: that is how the
+   * Invites channel came to show nineteen visitors above a rate worked
+   * out on one.
+   *
+   * /claim fixes that by knowing the channel at the door — a signed
+   * token carries it, and its absence is the platform route — so all
+   * three channels are one event in one table. It also measures a
+   * better thing: /businesses/architects is a page you can land on by
+   * accident, while "put your firm on Arco" is a button you press on
+   * purpose.
+   *
+   * Outbound has no channel here, deliberately. A phone call has no
+   * landing, and outbound works on firms that are already visitors, so
+   * a visitor step for it would mostly record a conversion that
+   * happened before the call. Its rate runs straight from contacted to
+   * New Pros instead.
+   *
+   * UNITS DIFFER BY NECESSITY, and this is the one seam left: the token
+   * channels dedupe by the address the token was issued to, while the
+   * platform route has no identity to dedupe on and counts arrivals.
+   * A refresh on the organic side therefore counts twice. Closing that
+   * needs either a cookie (consent) or an IP-derived key (a decision
+   * about personal data), so it stays an open question rather than a
+   * silent choice.
+   */
+  const claimArrivals = (claimArrivalsResult.data ?? []) as {
+    channel?: string | null; email?: string | null; created_at?: string | null
+  }[]
+
+  type ArrivalChannel = "invites" | "sales" | "organic"
+  const arrivalChannelOf = (row: { channel?: string | null }): ArrivalChannel => {
+    const c = String(row.channel ?? "")
+    if (c === "invite") return "invites"
+    if (c === "outreach" || c === "showcase") return "sales"
+    return "organic"
+  }
+
+  const bucketArrivals = (channel: ArrivalChannel | "all"): number[] =>
+    buckets.starts.map((_, i) => {
+      const seenEmails = new Set<string>()
+      let anonymous = 0
+      for (const row of claimArrivals) {
+        if (!row.created_at) continue
+        if (channel !== "all" && arrivalChannelOf(row) !== channel) continue
+        const d = new Date(row.created_at)
+        if (Number.isNaN(d.getTime()) || d < buckets.starts[i] || d >= buckets.ends[i]) continue
+        const email = row.email?.trim().toLowerCase()
+        if (email) seenEmails.add(email)
+        else anonymous++
+      }
+      return seenEmails.size + anonymous
+    })
+
+  const proVisitorsSeries = bucketArrivals("all")
+  const proVisitorsTotal = proVisitorsSeries.reduce((a, b) => a + b, 0)
+  const claimInvitesSeries = bucketArrivals("invites")
+  const claimSalesSeries = bucketArrivals("sales")
+  const claimOrganicSeries = bucketArrivals("organic")
+  const sumOf = (xs: number[]) => xs.reduce((a, b) => a + b, 0)
 
   const rows: MetricRow[] = [
     // ── Professionals ──────────────────────────────────────────────────
     {
-      key: "pros_contacted", label: "Pros contacted", definition: "Unique pros contacted via Sales, Invites or Outbound", source: "supabase" as MetricSource, driver: "acquisition",
+      key: "pros_contacted", label: "Pros Contacted", definition: "Unique pros contacted via Sales, Invites or Outbound", source: "supabase" as MetricSource, driver: "acquisition",
       total: totalProsContacted, datapoints: prosContactedSeries, labels,
-      // Auto-inline "to Pro visitors" CR compares against Sales + Invites
-      // visitors only (email-keyed, deduped). Outbound touches aren't
-      // wired to server-side visit tracking (no ?ref=outbound landing),
-      // so the CR is a lower bound: the numerator misses any Outbound-
-      // driven visits. Still the most honest signal we can compute
-      // today without adding an outbound-attribution query param.
+      // Both rates below count Sales + Invites only — the two loops that
+      // send somebody to a page. Outbound is excluded from the
+      // denominator as well as the numerator, so this stopped being a
+      // "lower bound" and became a rate over the population it actually
+      // describes. Outbound's own conversion lives on its sub, running
+      // straight to New Pros.
       inlineCRNumerator: { total: 0, datapoints: contactedVisitorsSeries },
       cohortInlineCR: {
-        label: "to Pro visitors (ever)",
+        label: "to Pro Visitors (ever)",
         numerator: contactedCohort.num,
         denominator: contactedCohort.denom,
-        definition: "Of pros first contacted in this period (Sales, Invites or Outbound), the share that ever clicked through to a landing. Outbound touches have no click tracking, so this is a lower bound. " + COHORT_DEF,
+        definition: "Of pros first contacted by Sales or Invites, the share that ever reached a landing. Outbound is left out on both sides: a phone call has no landing. " + COHORT_DEF,
         immatureFromIndex: cohortImmatureFromIndex,
       },
       subs: [
+        {
+          key: "invites_contacted", label: "Invites", definition: "Unique companies invited to be credited on a project. Counts firms, not invites — the same firm credited three times is one. Photographers carry no e-mail address and never appear.",
+          source: "supabase" as MetricSource,
+          total: totalInviteContacted, datapoints: inviteContactedSeries,
+          // Cohorted: of pros first invited in the bucket, the share
+          // that ever hit their invite landing (landing_visited_at,
+          // stamped server-side — scanner traffic can't inflate it).
+          customCR: { label: "to Pro Visitors (ever)", numerator: inviteContactedCohort.num, denominator: inviteContactedCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex },
+        },
         {
           key: "sales_contacted", label: "Sales", definition: "Unique pros contacted via Outreach (Apollo cold) or Showcase",
           source: "supabase" as MetricSource,
           total: totalSalesContacted, datapoints: salesContactedSeries,
           // Cohorted: of pros first Sales-contacted in the bucket, the
           // share that ever clicked through to a landing.
-          customCR: { label: "to Pro visitors (ever) from Sales", numerator: salesContactedCohort.num, denominator: salesContactedCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex },
-        },
-        {
-          key: "invites_contacted", label: "Invites", definition: "Unique pros invited via project invites",
-          source: "supabase" as MetricSource,
-          total: totalInviteContacted, datapoints: inviteContactedSeries,
-          // Cohorted: of pros first invited in the bucket, the share
-          // that ever hit their invite landing (landing_visited_at,
-          // stamped server-side — scanner traffic can't inflate it).
-          customCR: { label: "to Pro visitors (ever) from Invites", numerator: inviteContactedCohort.num, denominator: inviteContactedCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex },
+          customCR: { label: "to Pro Visitors (ever)", numerator: salesContactedCohort.num, denominator: salesContactedCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex },
         },
         {
           key: "outbound_contacted", label: "Outbound",
@@ -1813,77 +2029,34 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
           // cohort converts straight to "ever created" — of pros first
           // outbound-touched in the bucket, the share whose company
           // ever completed onboarding.
-          customCR: { label: "to New Pros (ever) from Outbound", numerator: outboundCohort.num, denominator: outboundCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex },
+          customCR: { label: "to New Pros (ever)", numerator: outboundCohort.num, denominator: outboundCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex },
         },
+      
       ],
     },
     {
-      key: "pro_visitors", label: "Pro visitors", definition: "Unique visitors to /businesses pages", source: "posthog" as MetricSource, driver: "acquisition",
-      total: proVisitorsBucketed.total, datapoints: proVisitorsBucketed.series, labels,
+      // Pro visitors — landing on /claim, not browsing /businesses.
+      //
+      // The /businesses step is gone. It counted PostHog sessions in a
+      // different unit from every rate attached to it, it swept in
+      // anyone who wandered onto a marketing page, and its eight
+      // channel subs were six parts dead field. What replaced it is one
+      // server-side event with the channel already on it.
+      key: "pro_visitors", label: "Pro Visitors", definition: "Pros who landed on /claim. Recorded server-side the moment they arrive, before the page decides what to show; mail-scanner hits are filtered out by country and user agent.", source: "supabase" as MetricSource, driver: "acquisition",
+      total: proVisitorsTotal, datapoints: proVisitorsSeries, labels,
       subs: [
-        // Sales = Outreach (Apollo cold via ?ref=) + Showcase (prospect-*
-        // claim_url via ?inviteEmail= on /businesses/architects).
-        // Aggregated into a single sub here; the Outreach/Showcase split
-        // is implementation detail you don't usually want to scan past.
-        // Drill in by querying the apollo_visitors / showcase_visitors
-        // cache keys directly when needed.
-        // Each sub carries a crNumerator pointing at the matching
-        // new_pros_<channel> count. The Model renders a per-source CR
-        // row underneath ("to New Pros from Sales", etc.) so you can
-        // see channel-level visit→signup conversion.
-        // Sales and Invites under Pro visitors now use PostHog's
-        // $initial_channel_type via the Custom Channel Type rules.
-        // Each person belongs to exactly one channel — so the 8 subs
-        // sum to parent pro_visitors. The Pros contacted row still
-        // counts Supabase-sourced Sales/Invites visitors (email-keyed,
-        // matches the email-keyed contacted denominator); that's a
-        // different metric ("of the pros we emailed, how many clicked")
-        // and stays Supabase to avoid bot/scanner noise.
-        // Sales and Invites count actual click-throughs from the
-        // server-side logs (prospect_events.landing_visited /
-        // project_professionals.landing_visited_at). These are *any-
-        // visit* counts, not first-touch — measures the more useful
-        // "did the email work" signal. Direct below is reduced by
-        // these counts so the 8 subs still sum to parent.
-        // CR numerators all read `newProsBySource.<channel>` so the
-        // "to New Pros from X" rate matches the New Pros row's
-        // displayed sub value one row down. Both source from
-        // companies.first_touch_source (Supabase, populated via the
-        // FirstTouchStamper hook + onboarded trigger).
-        // Sales / Invites series now read the session-scoped PostHog
-        // cache keys (same system as the parent and the other 6 subs),
-        // so all 8 channels partition the parent by construction. The
-        // cohorted CRs still key off server-side click logs — cohort
-        // membership is prospect identity, not pageview attribution.
-        { key: "sales", label: "Sales", definition: "Pro sessions whose entry pageview was a Sales landing (Outreach ref= or Showcase inviteEmail= URL on /businesses/architects).",
-          total: proVisitorsSalesBucketed.total, datapoints: proVisitorsSalesBucketed.series,
-          customCR: { label: "to New Pros (ever) from Sales", numerator: salesClickerCohort.num, denominator: salesClickerCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex } },
-        { key: "invites", label: "Invites", definition: "Pro sessions whose entry pageview was an invite landing (/businesses/professionals with inviteEmail=).",
-          total: proVisitorsInvitesBucketed.total, datapoints: proVisitorsInvitesBucketed.series,
-          customCR: { label: "to New Pros (ever) from Invites", numerator: inviteClickerCohort.num, denominator: inviteClickerCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex } },
-        { key: "email", label: "Email", definition: "Pro visitors from Arco transactional emails (project-live, team-invite, domain-verification, etc.)",
-          total: proVisitorsEmailBucketed.total, datapoints: proVisitorsEmailBucketed.series,
-          crNumerator: { total: newProsBySourceTotals.email, datapoints: newProsBySource.email } },
-        { key: "direct", label: "Direct", definition: "Pro sessions entering with no referrer (typed URL, bookmark, app-to-app). Session-entry channels are mutually exclusive, so no overlap adjustment is needed.",
-          total: proVisitorsDirectBucketed.total, datapoints: proVisitorsDirectBucketed.series,
-          crNumerator: { total: newProsDirectAdjustedTotal, datapoints: newProsDirectAdjustedSeries } },
-        { key: "google", label: "SEO", definition: "Pro visitors from search engines (Google, Bing, DuckDuckGo, Yahoo, Ecosia, Brave, Qwant, Startpage)",
-          total: proVisitorsGoogleBucketed.total, datapoints: proVisitorsGoogleBucketed.series,
-          crNumerator: { total: newProsBySourceTotals.google, datapoints: newProsBySource.google } },
-        { key: "social", label: "Social", definition: "Pro visitors from social networks (LinkedIn, Facebook, Instagram, X, Pinterest)",
-          total: proVisitorsSocialBucketed.total, datapoints: proVisitorsSocialBucketed.series,
-          crNumerator: { total: newProsBySourceTotals.social, datapoints: newProsBySource.social } },
-        { key: "referral", label: "Referral", definition: "Pro visitors from other websites linking to Arco",
-          total: proVisitorsReferralBucketed.total, datapoints: proVisitorsReferralBucketed.series,
-          crNumerator: { total: newProsBySourceTotals.referral, datapoints: newProsBySource.referral } },
-        { key: "shares", label: "Shares", definition: "Pro visitors from a tagged share URL (utm_source=share)",
-          total: proVisitorsShareBucketed.total, datapoints: proVisitorsShareBucketed.series,
-          crNumerator: { total: newProsBySourceTotals.shares, datapoints: newProsBySource.shares } },
-        { key: "other", label: "Other / unattributed", definition: "Parent total minus the 8 attributed channels — since all 9 rows share the session-scoped PostHog definition, this is near-zero by construction except for sessions whose entry channel defies classification (mostly link-scanners and bots executing JS). A large value here means noise, not a hidden channel.",
-          total: proVisitorsOtherTotal, datapoints: proVisitorsOtherSeries },
-        // Outbound moved to Pros contacted — it's an outreach signal
-        // (we reached out), not a visit signal (they landed). See the
-        // pros_contacted.subs[].outbound_contacted row above.
+        { key: "invites", label: "Invites", definition: "Claim links from a project-invite mail. Deduped by the address the token was issued to.", source: "supabase" as MetricSource,
+          total: sumOf(claimInvitesSeries), datapoints: claimInvitesSeries ,
+          customCR: { label: "to New Pros", numerator: newProsInvitesSeries, denominator: claimInvitesSeries, definition: "Share of this period's claim arrivals that became a New Pro. A period ratio, not a cohort — arrivals and listings are counted in the same bucket." }},
+        { key: "sales", label: "Sales", definition: "Claim links from Outreach or Showcase mail. Deduped by the address the token was issued to.", source: "supabase" as MetricSource,
+          total: sumOf(claimSalesSeries), datapoints: claimSalesSeries ,
+          customCR: { label: "to New Pros", numerator: newProsSalesSeries, denominator: claimSalesSeries, definition: "Share of this period's claim arrivals that became a New Pro. A period ratio, not a cohort — arrivals and listings are counted in the same bucket." }},
+        { key: "organic", label: "Organisch", definition: "Arrivals with no token — the platform route. No identity to dedupe on, so this counts arrivals where the two above count people.", source: "supabase" as MetricSource,
+          total: sumOf(claimOrganicSeries), datapoints: claimOrganicSeries ,
+          customCR: { label: "to New Pros", numerator: newProsOrganicSeries, denominator: claimOrganicSeries, definition: "Share of this period's claim arrivals that became a New Pro. A period ratio, not a cohort — arrivals and listings are counted in the same bucket." }},
+        // No Outbound sub, deliberately: a phone call has no landing,
+        // and outbound targets firms that are already visitors. Its
+        // conversion runs from contacted straight to New Pros.
       ],
     },
     {
@@ -1912,32 +2085,38 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       // down by the Sales+Invites click count to remove the overlap
       // — same trick used on the Pro visitors row.
       subs: [
-        { key: "sales", label: "Sales", definition: "New pros whose owner clicked through a Sales landing (Outreach or Showcase) at some point. Server-side click signal, not first-touch attribution.", source: "supabase" as MetricSource,
-          total: newProsSalesClickerTotal, datapoints: newProsSalesClickerSeries },
-        { key: "invites", label: "Invites", definition: "New pros whose owner clicked through a project-invite landing. Server-side click signal.", source: "supabase" as MetricSource,
-          total: newProsInvitesClickerTotal, datapoints: newProsInvitesClickerSeries },
-        { key: "email", label: "Email", definition: "New pros whose first touch was an Arco transactional email (utm_source=arco_pro)", source: "supabase" as MetricSource,
-          total: newProsBySourceTotals.email, datapoints: newProsBySource.email },
-        { key: "direct", label: "Direct", definition: "New pros whose first touch was Direct (typed URL, bookmark, or no referrer), excluding those who later clicked an Outreach or Invite email (counted under Sales / Invites instead).", source: "supabase" as MetricSource,
-          total: newProsDirectAdjustedTotal, datapoints: newProsDirectAdjustedSeries },
-        { key: "google", label: "SEO", definition: "New pros whose first touch was a search engine", source: "supabase" as MetricSource,
-          total: newProsBySourceTotals.google, datapoints: newProsBySource.google },
-        { key: "social", label: "Social", definition: "New pros whose first touch was a social network", source: "supabase" as MetricSource,
-          total: newProsBySourceTotals.social, datapoints: newProsBySource.social },
-        { key: "referral", label: "Referral", definition: "New pros whose first touch was another website", source: "supabase" as MetricSource,
-          total: newProsBySourceTotals.referral, datapoints: newProsBySource.referral },
-        { key: "shares", label: "Shares", definition: "New pros whose first touch was a tagged share URL", source: "supabase" as MetricSource,
-          total: newProsBySourceTotals.shares, datapoints: newProsBySource.shares },
-        // Outbound — new pros whose person was contacted via outbound
-        // at any point. Overlaps with the first-touch channels above.
-        { key: "outbound", label: "Outbound", definition: "New pros who were successfully reached via outbound before signup. Overlaps with other channels.",
-          source: "supabase" as MetricSource,
-          total: newProsOutboundBucketed.datapoints.reduce((a, b) => a + b, 0), datapoints: newProsOutboundBucketed.datapoints },
-        // ── The two totals that used to be rows of their own ──────────
+        // Invites › Sales › Outbound › Organic. One pro, one loop:
+        // each sub counts only what the loops above it did not claim,
+        // so the four add up to the row exactly and no company is
+        // counted twice.
+        //
+        // The five first-touch channels that used to sit here — Email,
+        // SEO, Social, Referral, Shares — are gone. They read from
+        // companies.first_touch_source, which is NULL for 3138 of 3159
+        // rows, so all five were structurally zero and Direct silently
+        // absorbed every unknown. Five channels reading "nobody comes
+        // from here" is a worse answer than not asking. They come back
+        // when the first-touch stamp is captured server-side.
+        { key: "invites", label: "Invites", definition: "New pros that went live holding an accepted credit. Dated by listed_at, so a firm that accepts and never claims does not count. Photographers excluded.", source: "supabase" as MetricSource,
+          total: newProsInvitesTotal, datapoints: newProsInvitesSeries },
+        { key: "sales", label: "Sales", definition: "New pros whose owner clicked a Sales landing and hold no accepted credit.", source: "supabase" as MetricSource,
+          total: newProsSalesTotal, datapoints: newProsSalesSeries },
+        { key: "outbound", label: "Outbound", definition: "New pros we reached by outbound. OVERLAPPING — not part of the split above, so the four do not add up. Read as 'touched by', never 'thanks to'.", source: "supabase" as MetricSource,
+          total: newProsOutboundTotal, datapoints: newProsOutboundSeries },
+        { key: "organic", label: "Organisch", definition: "New pros that neither Invites nor Sales reached. A residual, so every attribution failure above lands here and it reads high rather than low.", source: "residual" as MetricSource,
+          total: newProsOrganicTotal, datapoints: newProsOrganicSeries },
+        // ── Supporting, not channels ──────────────────────────────
+        //
+        // Both are cumulative snapshots: they count every pro live at
+        // the end of each period, not the ones that arrived in it. That
+        // is why they sit under the flow rather than in it — a rate
+        // between a flow and a stock divides two different populations,
+        // which is the mistake % Ranked used to make from the parent
+        // row.
         {
           key: "total_pros",
           label: "Total Listed Pros",
-          definition: "Every pro live on the platform at the end of each period. A cumulative snapshot, so it only ever rises — which is why it sits here rather than in the conversion line. Also the denominator for % Ranked below, so the two read against the same population.",
+          definition: "Every pro live at the end of each period. A cumulative snapshot, and the denominator for % Ranked below.",
           source: "supabase" as MetricSource,
           total: totalListedSnapshot,
           datapoints: listedSnapshotSeries,
@@ -1948,13 +2127,8 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
           },
         },
         {
-          // Ranked pros — listed pros Google has actually indexed. The
-          // % Ranked rate moved down here from the old parent row: its
-          // denominator is listed pros, not pros listed this period, so
-          // hanging it off the flow above would have divided two
-          // different populations.
           key: "ranked_pros",
-          label: "Ranked pros",
+          label: "Ranked Pros",
           definition: "Listed pros currently indexed by Google (cumulative snapshot at each bucket end).",
           source: "supabase" as MetricSource,
           total: totalIndexedListedSnapshot,
@@ -1965,9 +2139,9 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
             denominator: listedSnapshotSeries,
           },
           valueRows: [
-            { label: "Impressions", values: seoImpressionsSeries, tone: "muted", format: "integer" },
-            { label: "CTR",         values: seoCtrSeries,         tone: "accent", format: "percent" },
-            { label: "Clicks",      values: seoClicksSeries,      tone: "muted", format: "integer" },
+            { label: "Impressions", values: seoImpressionsSeries, tone: "muted", format: "integer" as const },
+            { label: "CTR",         values: seoCtrSeries,         tone: "accent", format: "percent" as const },
+            { label: "Clicks",      values: seoClicksSeries,      tone: "muted", format: "integer" as const },
           ],
         },
       ],
@@ -1994,13 +2168,13 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
           // actually compounds — whether a new project brings other
           // companies onto the platform with it.
           key: "invites_per_project",
-          label: "Invites per new project",
+          label: "Invites per New Project",
           definition: "Average number of contributors credited on the projects published in the period, counted across every new project including the ones that credit nobody.",
           source: "supabase" as MetricSource,
           total: creditsPerNewProjectTotal,
           datapoints: creditsPerNewProjectSeries,
           customCR: {
-            label: "% Invited contributors",
+            label: "% Invited Contributors",
             numerator: newProjectsWithContributorsSeries,
             denominator: publishedProjectsBuckets.datapoints,
           },
@@ -2019,11 +2193,11 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
             label: "% Contributors",
             numerator: projectsWithAcceptedSeries,
             denominator: totalPublishedSnapshotSeries,
-            definition: "Share of all published projects to date carrying at least one credit a contributor ACCEPTED. An invite that was never answered does not count — this measures the loop closing, not the ask being made. Photographers are excluded, as they are from every invite metric: they are credited FOR the photography rather than being supply the network is trying to attract. At the moment they are most of the acceptances, so this reads far lower than the raw count would.",
+            definition: "Share of published projects carrying a credit a contributor accepted — the loop closing, not the ask being made. Photographers excluded, and they are most of the acceptances.",
           },
           valueRows: [
-            { label: "Contributors per project (accepted)", values: acceptedPerProjectSeries, tone: "accent", format: "decimal" as const,
-              definition: "Accepted contributor credits per published project, cumulative to date, averaged across every project including those with none. The percentage above is breadth — how many projects credit anyone; this is depth — how many trades they name when they do. Photographers excluded, same as the rate above." },
+            { label: "Contributors per Project (accepted)", values: acceptedPerProjectSeries, tone: "accent", format: "decimal" as const,
+              definition: "Accepted credits per published project, averaged over every project including those with none. Breadth is the percentage above; this is depth." },
           ],
         },
         {
@@ -2032,7 +2206,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
           // same way it did on New Pros: the count and the rate it
           // produces belong on one line rather than a row apart.
           key: "ranked_projects",
-          label: "Ranked projects",
+          label: "Ranked Projects",
           definition: "Published projects currently indexed by Google (cumulative snapshot at each bucket end).",
           source: "supabase" as MetricSource,
           total: totalIndexedPublishedSnapshot,
@@ -2047,50 +2221,6 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
             { label: "CTR",         values: projectCtrSeries,         tone: "accent", format: "percent" },
             { label: "Clicks",      values: projectClicksSeries,      tone: "muted", format: "integer" },
           ],
-        },
-      ],
-    },
-    {
-      // Contributors invited and Contributors accepted merged. They
-      // were two rows describing one motion, and the chain rate
-      // between them was the only thing either said that the other
-      // did not — so the rate became the row's supporting metric and
-      // the second row went.
-      //
-      // Counted as unique COMPANIES, on exactly the conditions New Pros
-      // uses, plus one: the company holds an accepted credit. Every
-      // New Contributor is therefore a New Pro, and the row reads as
-      // "of the pros that went live, this many came in by being
-      // credited".
-      //
-      // Accepting a credit does NOT publish an unclaimed company —
-      // lib/invites/accept-credit.ts is explicit that the company
-      // stays 'invited' until somebody claims it. Claiming is what
-      // lists it, and it lists immediately because a live credit is
-      // already there. So a contributor that accepts and never claims
-      // has no listed_at and is not counted: the loop has not closed.
-      key: "contributors_accepted", label: "New contributors", definition: "Pros whose page went live in the period AND that hold an accepted credit — companies that arrived by being credited on somebody else's project rather than by publishing their own. A strict subset of New Pros, counted on the same day and the same conditions.", source: "supabase" as MetricSource, driver: "retention",
-      total: totalNewContributors, datapoints: newContributorsSeries, labels,
-      subs: [
-        {
-          key: "invited_pros",
-          label: "Contributors Invited (unique)",
-          definition: "Companies invited to be credited on a project for the first time in the period. Crediting the same firm on three projects is three invites but one company, and the rate beside this counts firms deciding, not tags sent.",
-          // The rate is acceptance, which is one step short of the
-          // parent: a company can accept and still never claim its
-          // page. The gap between this percentage and the count above
-          // is exactly that step, and it is worth seeing separately —
-          // an invite that is accepted but never claimed is a
-          // different problem from one nobody answers.
-          source: "supabase" as MetricSource,
-          total: totalUniqueInvited,
-          datapoints: uniqueInvitedCohortDenom,
-          customCR: {
-            label: "% Accepted (ever)",
-            numerator: uniqueInvitedEverAcceptedNum,
-            denominator: uniqueInvitedCohortDenom,
-            definition: "Of companies first invited in this period, the share that has since accepted a credit. " + COHORT_DEF,
-          },
         },
       ],
     },
@@ -2135,101 +2265,63 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       key: "client_visitors", label: "Visitors", definition: "Unique visitors across the entire site (matches PostHog Web Analytics)", source: "posthog" as MetricSource, driver: "acquisition",
       total: clientVisitorsBucketed.total, datapoints: clientVisitorsBucketed.series, labels,
       subs: [
-        // Each source sub carries its visitor volume (denominator) +
-        // a crNumerator with source-attributed signups (numerator).
-        // The model-client renders a per-source CR row underneath
-        // using these two series. Signup numerators come from the SAME
-        // Supabase profiles.first_touch_source breakdown the Signups
-        // row uses — previously they were a separate PostHog-cached
-        // series that could disagree with the parent total (a profile
-        // created without a matched PostHog signup event dropped out),
-        // making a sub's rate diverge from the parent's on identical
-        // denominators.
-        {
-          key: "direct", label: "Direct", definition: "Typed URL, bookmark, or no referrer",
-          total: clientVisitorsDirectBucketed.total, datapoints: clientVisitorsDirectBucketed.series,
-          crNumerator: { total: clientSignupsBySourceTotals.direct, datapoints: clientSignupsBySource.direct },
-        },
-        {
-          key: "google", label: "SEO", definition: "Visitors from search engines (Google, Bing, DuckDuckGo, Yahoo, Ecosia, Brave, Qwant, Startpage)",
-          total: clientVisitorsGoogleBucketed.total, datapoints: clientVisitorsGoogleBucketed.series,
-          crNumerator: { total: clientSignupsBySourceTotals.google, datapoints: clientSignupsBySource.google },
-        },
-        {
-          key: "social", label: "Social", definition: "LinkedIn, Facebook, Instagram, X, Pinterest",
-          total: clientVisitorsSocialBucketed.total, datapoints: clientVisitorsSocialBucketed.series,
-          crNumerator: { total: clientSignupsBySourceTotals.social, datapoints: clientSignupsBySource.social },
-        },
-        {
-          key: "email", label: "Email", definition: "Visitors from Arco client emails (utm_source=arco_client) OR other email clients (Gmail, Outlook web)",
-          total: clientVisitorsEmailBucketed.total, datapoints: clientVisitorsEmailBucketed.series,
-          crNumerator: { total: clientSignupsBySourceTotals.email, datapoints: clientSignupsBySource.email },
-        },
-        {
-          key: "referral", label: "Referral", definition: "Other websites linking to Arco",
-          total: clientVisitorsReferralBucketed.total, datapoints: clientVisitorsReferralBucketed.series,
-          crNumerator: { total: clientSignupsBySourceTotals.referral, datapoints: clientSignupsBySource.referral },
-        },
-        // Shares — share-driven traffic regardless of channel. Sits
-        // alongside the 5 channel categories rather than inside them
-        // because share visits overlap (a Direct-bucketed visit can
-        // also be a Share visit if the user came via a copied link).
-        // crNumerator = share-attributed signups (utm_source=share on
-        // person.properties.$initial_utm_source) for the
-        // "to Signups from Shares" CR rendered underneath.
-        {
-          key: "share", label: "Shares", definition: "Visitors arriving from a tagged share URL (utm_source=share). Overlaps the channel categories above — a share visit also has a referrer.",
-          total: clientVisitorsShareBucketed.total, datapoints: clientVisitorsShareBucketed.series,
-          crNumerator: { total: clientSignupsBySourceTotals.shares, datapoints: clientSignupsBySource.shares },
-        },
+        { key: "direct", label: "Direct", definition: "Client visitors with no referrer (typed URL, bookmark, app-to-app)", total: clientVisitorsDirectBucketed.total, datapoints: clientVisitorsDirectBucketed.series },
+        { key: "google", label: "SEO", definition: "Client visitors from search engines", total: clientVisitorsGoogleBucketed.total, datapoints: clientVisitorsGoogleBucketed.series },
+        { key: "social", label: "Social", definition: "Client visitors from social networks (LinkedIn, Facebook, Instagram, X, Pinterest)", total: clientVisitorsSocialBucketed.total, datapoints: clientVisitorsSocialBucketed.series },
+        { key: "ai", label: "AI", definition: "Visitors handed over by an assistant: ChatGPT, Perplexity, Claude, Gemini, Copilot. Matched before the search list, so Gemini does not read as organic search.", total: clientVisitorsAiBucketed.total, datapoints: clientVisitorsAiBucketed.series },
+        { key: "shares", label: "Shares", definition: "Client visitors arriving via a tagged share URL (utm_source=share)", total: clientVisitorsShareBucketed.total, datapoints: clientVisitorsShareBucketed.series },
+        { key: "referral", label: "Referral", definition: "Client visitors from another website", total: clientVisitorsReferralBucketed.total, datapoints: clientVisitorsReferralBucketed.series },
+        { key: "email", label: "Email", definition: "Client visitors from Arco email (utm_source=arco_*) or a webmail referrer", total: clientVisitorsEmailBucketed.total, datapoints: clientVisitorsEmailBucketed.series },
+        { key: "paid", label: "Paid", definition: "Visitors from paid placement (utm_source=paid_* or arco_paid). No spend yet; the slot exists so the first campaign lands in its own row.", total: clientVisitorsPaidBucketed.total, datapoints: clientVisitorsPaidBucketed.series },
       ],
     },
     {
-      key: "client_signups", label: "Signups", definition: "Client profiles created in the period. Channel subs count the same rows grouped by profiles.first_touch_source so they sum to this total by construction.", source: "supabase" as MetricSource, driver: "acquisition",
+      key: "client_signups", label: "Signups", definition: "Accounts created in the period — 'client' or 'admin', the same filter /users uses. Note that 'client' means 'has an account', not 'is demand'.", source: "supabase" as MetricSource, driver: "acquisition",
       total: clientSignupDates.length, ...clientSignupsBucketedDb,
       subs: [
-        { key: "direct", label: "Direct", definition: "Signups whose first touch was direct (no referrer)", source: "supabase" as MetricSource,
-          total: clientSignupsBySourceTotals.direct, datapoints: clientSignupsBySource.direct },
-        { key: "google", label: "SEO", definition: "Signups whose first touch was a search engine", source: "supabase" as MetricSource,
-          total: clientSignupsBySourceTotals.google, datapoints: clientSignupsBySource.google },
-        { key: "social", label: "Social", definition: "Signups whose first touch was a social network", source: "supabase" as MetricSource,
-          total: clientSignupsBySourceTotals.social, datapoints: clientSignupsBySource.social },
-        { key: "email", label: "Email", definition: "Signups whose first touch was an email (webmail referrer or Arco email UTM)", source: "supabase" as MetricSource,
-          total: clientSignupsBySourceTotals.email, datapoints: clientSignupsBySource.email },
-        { key: "referral", label: "Referral", definition: "Signups whose first touch was another website", source: "supabase" as MetricSource,
-          total: clientSignupsBySourceTotals.referral, datapoints: clientSignupsBySource.referral },
-        { key: "share", label: "Shares", definition: "Signups whose first touch was a tagged share URL", source: "supabase" as MetricSource,
-          total: clientSignupsBySourceTotals.shares, datapoints: clientSignupsBySource.shares },
+        { key: "pro_accounts", label: "Pros", definition: "Accounts that own a company. Supply, and already counted on the pro track.", source: "supabase" as MetricSource,
+          total: datesOf(proAccountProfiles).length, datapoints: proAccountsBucketed.datapoints },
+        { key: "client_accounts", label: "Clients", definition: "Accounts that own no company. The denominator for Visitors → Signups.", source: "supabase" as MetricSource,
+          total: datesOf(clientOnlyProfiles).length, datapoints: clientOnlyBucketed.datapoints,
+          valueRows: [
+            { label: "Toegewezen", values: signupsAttributed.datapoints, tone: "muted", format: "integer" as const,
+              definition: "A channel is known: SEO, Social, AI, Shares, Referral, Email or Paid. Collapsed into one row while seven would all read zero." },
+            { label: "Direct", values: signupsDirect.datapoints, tone: "muted", format: "integer" as const,
+              definition: "We saw the arrival and it carried nothing — no referrer, no utm." },
+            { label: "Onbekend", values: signupsUnknown.datapoints, tone: "muted", format: "integer" as const,
+              definition: "We never saw the arrival. Everything from before the first-touch stamp lands here. Distinct from Direct on purpose." },
+          ],
+        },
       ],
     },
     {
-      key: "active_clients", label: "Monthly active clients", definition: "Unique clients active in the trailing 30 days", source: "posthog" as MetricSource, driver: "retention",
+      key: "active_clients", label: "Monthly Active Clients", definition: "Unique clients active in the trailing 30 days", source: "posthog" as MetricSource, driver: "retention",
       total: totalActiveClients, datapoints: activeClientsSeries, labels,
-      extraCRs: [
-        { label: "% Sharers", numerator: sharersBucketed.series, denominator: activeClientsSeries },
-        { label: "% Savers", numerator: uniqueSaversBucketed.datapoints, denominator: activeClientsSeries },
-        { label: "% Contacters", numerator: contactersBucketed.series, denominator: activeClientsSeries },
-      ],
+      // % Sharers / % Savers / % Contacters stood here. All three
+      // divided by the same denominator and said the same kind of
+      // thing three times, directly under a row that already carries
+      // four states of its own. The counts still exist as their own
+      // rows further down, where the denominator is visible.
       subs: [
         {
-          key: "new_active_clients", label: "New active clients",
+          key: "new_active_clients", label: "New Active Clients",
           definition: "First-time actives: clients active this period who weren't active last period and aren't re-engaged returns. Balancing item so MAU = Retained + New + Re-engaged.",
           source: "posthog" as MetricSource, total: totalNewActiveClients, datapoints: newActiveClientsSeries,
         },
         {
-          key: "retained_clients", label: "Retained clients",
+          key: "retained_clients", label: "Retained Clients",
           definition: "Clients active this period that were also active last period (MAU prior − Newly dormant)",
           source: "posthog" as MetricSource, total: totalRetainedClients, datapoints: retainedClientsSeries,
           customCR: { label: "% Retained", numerator: retainedClientsSeries, denominator: priorMACSeries },
         },
         {
-          key: "re_engaged_clients", label: "Re-engaged clients",
+          key: "re_engaged_clients", label: "Re-engaged Clients",
           definition: "Clients back after 30+ days inactive. % = Re-engaged ÷ (clients seen in last 12 months − prior MAU).",
           source: "posthog" as MetricSource, total: totalReEngagedClients, datapoints: reEngagedClientsSeries,
           customCR: { label: "% Re-activated", numerator: reEngagedClientsSeries, denominator: priorDormantSeries },
         },
         {
-          key: "newly_dormant_clients", label: "Newly dormant clients",
+          key: "newly_dormant_clients", label: "Newly Dormant Clients",
           definition: "Clients that crossed the 30-day inactivity threshold",
           source: "posthog" as MetricSource, total: totalDormantClients, datapoints: dormantClientsSeries,
           customCR: { label: "% Churn", numerator: dormantClientsSeries, denominator: priorMACSeries },
@@ -2240,18 +2332,18 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       key: "sharers", label: "Sharers", definition: "Unique clients that shared a project or professional", source: "posthog" as MetricSource, driver: "retention",
       total: sharersBucketed.total, datapoints: sharersBucketed.series, labels,
       subs: [
-        { key: "shares_per_client", label: "Shares/client", definition: "Average shares per active sharer", source: "posthog" as MetricSource, total: sharesPerClientTotal, datapoints: sharesPerClientSeries },
-        { key: "projects_shared", label: "Projects shared", definition: "Total projects shared", source: "posthog" as MetricSource, total: projectSharesBucketed.total, datapoints: projectSharesBucketed.series },
-        { key: "professionals_shared", label: "Professionals shared", definition: "Total professionals shared", source: "posthog" as MetricSource, total: professionalSharesBucketed.total, datapoints: professionalSharesBucketed.series },
+        { key: "shares_per_client", label: "Shares/Client", definition: "Average shares per active sharer", source: "posthog" as MetricSource, total: sharesPerClientTotal, datapoints: sharesPerClientSeries },
+        { key: "projects_shared", label: "Projects Shared", definition: "Total projects shared", source: "posthog" as MetricSource, total: projectSharesBucketed.total, datapoints: projectSharesBucketed.series },
+        { key: "professionals_shared", label: "Professionals Shared", definition: "Total professionals shared", source: "posthog" as MetricSource, total: professionalSharesBucketed.total, datapoints: professionalSharesBucketed.series },
       ],
     },
     {
       key: "savers", label: "Savers", definition: "Unique clients that saved a project or professional", source: "supabase" as MetricSource, driver: "retention",
       total: uniqueSavers, ...uniqueSaversBucketed,
       subs: [
-        { key: "saves_per_client", label: "Saves/client", definition: "Average saves per active saver", source: "supabase" as MetricSource, total: savesPerClient, datapoints: savesPerClientSeries },
-        { key: "projects_saved", label: "Projects saved", definition: "Total projects saved", source: "supabase" as MetricSource, total: savedProjectDates.length, datapoints: savers.datapoints },
-        { key: "pros_saved", label: "Professionals saved", definition: "Total professionals saved", source: "supabase" as MetricSource, total: savedCompanyDates.length, datapoints: savedPros.datapoints },
+        { key: "saves_per_client", label: "Saves/Client", definition: "Average saves per active saver", source: "supabase" as MetricSource, total: savesPerClient, datapoints: savesPerClientSeries },
+        { key: "projects_saved", label: "Projects Saved", definition: "Total projects saved", source: "supabase" as MetricSource, total: savedProjectDates.length, datapoints: savers.datapoints },
+        { key: "pros_saved", label: "Professionals Saved", definition: "Total professionals saved", source: "supabase" as MetricSource, total: savedCompanyDates.length, datapoints: savedPros.datapoints },
       ],
     },
     {
@@ -2262,7 +2354,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
         // unique target-pro counts per period — different person_id
         // axis than the actor cache (contacters counts senders, this
         // would count recipients). Leave as placeholder for now.
-        { key: "contacted", label: "Professionals contacted", definition: "Unique professionals contacted by clients", source: "posthog" as MetricSource, total: 0, datapoints: empty8 },
+        { key: "contacted", label: "Professionals Contacted", definition: "Unique professionals contacted by clients", source: "posthog" as MetricSource, total: 0, datapoints: empty8 },
       ],
     },
   ]

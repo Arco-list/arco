@@ -761,14 +761,13 @@ export function GrowthClient({ initialMetrics, initialLastSynced = null }: Props
         {/* ── Professionals ───────────────────────────────────────────────── */}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: G, overflow: "visible", alignItems: "stretch", marginTop: 24 }}>
-          {/* Row 1: Contributors accepted (was Responders — replaced by
-              the contributor funnel in the Model/Table views). Contacters
-              lives in the Clients grid (top, col 3 — same column as
-              Subscribers below). Expanders / Contractors removed — will be
-              folded back as supporting metrics on the Subscribers card. */}
-          <Empty /><Empty />
-          <Card label="Contributors accepted" metricKey="contributors_accepted" onCardClick={openDetail} value={(dp("contributors_accepted") ?? []).reduce((a, b) => a + b, 0)} driver="retention" connDown="" timeframe={timeframe} datapoints={dp("contributors_accepted")} />
-          <Empty /><Empty /><Empty /><Empty />
+          {/* Row 1 held Contributors accepted on its own. It has moved
+              into the Invites channel under New Pros, where it reads as
+              one of the ways a pro arrives rather than as a separate
+              population sitting above the flow — the same companies,
+              counted on the same day, in the row they belong to.
+              Contacters lives in the Clients grid (top, col 3 — same
+              column as Subscribers below). */}
 
           {/* Row 2: main flow. Renewers removed — Subscribers connects
               directly to Churners. Churners shifted from col 5 → col 4 so

@@ -15,8 +15,8 @@ const DRIVER_COLORS: Record<string, string> = {
 // Model page so users see the same affordance across views. Stops click
 // propagation so opening the tooltip on an expandable row doesn't also
 // toggle its expansion.
-function InfoIcon({ definition }: { definition?: string }) {
-  if (!definition) return null
+function InfoIcon({ definition, source }: { definition?: string; source?: string }) {
+  if (!definition && !source) return null
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -35,6 +35,21 @@ function InfoIcon({ definition }: { definition?: string }) {
         </button>
       </TooltipTrigger>
       <TooltipContent side="right" className="max-w-xs text-left">
+        {/* Source above the definition, not beside the label. It
+            qualifies what the number IS — anonymous browser identities,
+            a row in our own tables, or whatever the rows above did not
+            claim — so it belongs with the sentence that explains it,
+            where there is room to say so. Beside the label it was a
+            badge on every row competing with the numbers. */}
+        {/* Source first, definition straight after it: the source
+            qualifies the sentence, so they read as one line rather
+            than as a header above a paragraph. */}
+        {source && SOURCE_LABEL[source] && (
+          <span className="font-medium" style={{ color: SOURCE_LABEL[source].color }}>
+            {SOURCE_LABEL[source].label}
+            {definition ? " — " : ""}
+          </span>
+        )}
         {definition}
       </TooltipContent>
     </Tooltip>
@@ -101,59 +116,59 @@ function TrendlineCell({ datapoints, labels, color }: { datapoints: number[]; la
   )
 }
 
-// ─── Sub-metric trendline (smaller, grey) ─────────────────────────────────────
+/** Where the number comes from. The name only — the caveat that used
+ *  to follow it was the same sentence on every row, which is exactly
+ *  the kind of text people stop reading. */
+const SOURCE_LABEL: Record<string, { label: string; color: string }> = {
+  supabase: { label: "Server", color: "#016D75" },
+  posthog: { label: "PostHog", color: "#8a5a12" },
+  residual: { label: "Restpost", color: "#5f6866" },
+}
 
-function SubTrendlineCell({ datapoints }: { datapoints: number[] }) {
+// ─── Sub-metric as plain numbers ──────────────────────────────────────────────
+
+/**
+ * The same series without the line.
+ *
+ * Every sub row, everywhere. A supporting metric is read by comparing
+ * values or by pairing a count with its rate, not by following a shape
+ * — and a stack of small trendlines under one parent turned each block
+ * into a thicket where the parent's own line stopped standing out.
+ *
+ * The parent keeps its chart: there the shape IS the point. These keep
+ * the numbers on exactly the x-positions that chart uses, so a column
+ * still reads straight down from it.
+ *
+ * Same "·" for zero as everywhere else, and the rolling bucket stays
+ * grey because it is still incomplete.
+ */
+function SubNumbersCell({ datapoints }: { datapoints: number[] }) {
   const hasData = datapoints.some((v) => v > 0)
-
   if (!hasData) {
-    return <div className="w-full flex items-center" style={{ height: 40 }}>
+    return <div className="w-full flex items-center" style={{ height: 22 }}>
       <span className="text-[10px] text-[#c4c4c2] italic">No data yet</span>
     </div>
   }
-
-  const max = Math.max(...datapoints, 1)
   const n = datapoints.length
   const padX = 6
-  const padY = 10
   const w = 100
-  const h = 40
-  const lastCompleted = n - 2
-
-  const points = datapoints.map((v, i) => ({
-    x: padX + (i / Math.max(n - 1, 1)) * (w - padX * 2),
-    y: h - padY - (v / max) * (h - padY * 2),
-    v,
-    isRolling: i === n - 1,
-  }))
-
-  const solidPoints = points.slice(0, lastCompleted + 1).map((p) => `${p.x},${p.y}`).join(" ")
-  const dottedLine = points.length >= 2 ? { x1: points[lastCompleted].x, y1: points[lastCompleted].y, x2: points[n - 1].x, y2: points[n - 1].y } : null
-
   return (
-    <div className="relative w-full" style={{ height: 40 }}>
-      <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ position: "absolute", inset: 0 }}>
-        <polyline points={solidPoints} fill="none" stroke="#a1a1a0" strokeWidth="1" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
-        {dottedLine && (
-          <line x1={dottedLine.x1} y1={dottedLine.y1} x2={dottedLine.x2} y2={dottedLine.y2}
-            stroke="#a1a1a0" strokeWidth="1" strokeDasharray="3,3" vectorEffect="non-scaling-stroke" strokeLinecap="round" />
-        )}
-      </svg>
-      {points.map((p, i) => {
-        const leftPct = (p.x / w) * 100
-        const topPct = (p.y / h) * 100
+    <div className="relative w-full" style={{ height: 22 }}>
+      {datapoints.map((v, i) => {
+        const leftPct = ((padX + (i / Math.max(n - 1, 1)) * (w - padX * 2)) / w) * 100
+        const isRolling = i === n - 1
         return (
-          <div key={i} style={{ position: "absolute", left: `${leftPct}%`, top: `${topPct}%` }}>
-            <svg width="5" height="5" viewBox="0 0 5 5" style={{ display: "block", position: "absolute", left: "-2.5px", top: "-2.5px" }}>
-              <circle cx="2.5" cy="2.5" r="1.75" fill="white" stroke="#a1a1a0" strokeWidth="1" opacity={p.isRolling ? 0.5 : 1} />
-            </svg>
-            <span
-              className="absolute text-[10px] font-medium whitespace-nowrap"
-              style={{ bottom: 4, left: "50%", transform: "translateX(-50%)", color: p.isRolling ? "#c4c4c2" : "#1c1c1a" }}
-            >
-              {p.v > 0 ? p.v : ""}
-            </span>
-          </div>
+          <span
+            key={i}
+            className="absolute text-[11px] font-medium whitespace-nowrap"
+            style={{
+              left: `${leftPct}%`, top: "50%",
+              transform: "translate(-50%, -50%)",
+              color: isRolling ? "#c4c4c2" : "#6b6b68",
+            }}
+          >
+            {v > 0 ? v : "·"}
+          </span>
         )
       })}
     </div>
@@ -274,7 +289,15 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
     ...(row.inlineCR ? [row.inlineCR as CRSpec] : []),
     ...(row.extraCRs ?? []),
   ]
-  const hasAttachedCR = parentCRs.length > 0
+  // The CR block hides with the subs. Collapsed, a metric is its name
+  // and its line; the ratios are detail, and eight of them stacked down
+  // the page competed with the numbers they describe.
+  //
+  // A row that cannot expand keeps its CR visible: without a chevron
+  // there would be no way to reach it, and a rate nobody can open is
+  // worse than a rate that is always there.
+  const showParentCRs = parentCRs.length > 0 && (expanded || !hasSubs)
+  const hasAttachedCR = showParentCRs
 
   return (
     <>
@@ -294,7 +317,7 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
             ) : <div style={{ width: 10 }} />}
             <span className="status-pill-dot shrink-0" style={{ background: color }} />
             <span className="text-[12px] font-medium text-[#1c1c1a]">{row.label}</span>
-            <InfoIcon definition={row.definition} />
+            <InfoIcon definition={row.definition} source={row.source} />
           </div>
         </td>
         <td>
@@ -326,7 +349,7 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
           under the parent, like the Model view. Middle rows suppress
           their bottom border so the block reads as one section; the
           last row keeps it as the separator to the next metric. */}
-      {parentCRs.map((cr, idx) => {
+      {showParentCRs && parentCRs.map((cr, idx) => {
         const isLast = idx === parentCRs.length - 1
         // First CR row sits directly under the sparkline, which carries
         // ~19px of empty bottom padding — pull it up into that slack.
@@ -394,11 +417,11 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
             <td>
               <div className="flex items-center gap-2 pl-7">
                 <span className="text-[11px] text-[#1c1c1a]">{sub.label}</span>
-                <InfoIcon definition={sub.definition} />
+                <InfoIcon definition={sub.definition} source={sub.source} />
               </div>
             </td>
             <td>
-              <SubTrendlineCell datapoints={sub.datapoints} />
+              <SubNumbersCell datapoints={sub.datapoints} />
             </td>
           </tr>
           {/* Mobile sub-row */}
@@ -407,7 +430,7 @@ function MetricRowComponent({ row, labels }: { row: RowWithCR; labels: string[] 
               <div className="flex items-center gap-1.5 mb-0.5 pl-3">
                 <span className="text-[10px] text-[#6b6b68]">{sub.label}</span>
               </div>
-              <SubTrendlineCell datapoints={sub.datapoints} />
+              <SubNumbersCell datapoints={sub.datapoints} />
             </td>
           </tr>
           {(sub.valueRowsFirst ? [] : subCRs).map((cr, i) => {
