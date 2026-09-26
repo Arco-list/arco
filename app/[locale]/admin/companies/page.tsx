@@ -1,5 +1,5 @@
 import { AdminCompaniesDataTable, type AdminCompanyRow } from "@/components/admin-companies-data-table"
-import { getSubscribedCompanyIds, getSubscriberStats } from "@/lib/subscriptions/subscriber-stats"
+import { getSubscribedCompanyIds } from "@/lib/subscriptions/subscriber-stats"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import type { Tables } from "@/lib/supabase/types"
 import { logger } from "@/lib/logger"
@@ -624,13 +624,12 @@ async function loadAdminCompaniesData() {
 }
 
 export default async function AdminProfessionalsPage() {
-  // Subscribers are counted here rather than in the table, because
-  // they are not a company status — the funnel's last stage lives in
-  // `subscriptions` and would otherwise keep drawing a zero.
-  const [{ mergedRows, servicesOptions }, subscribers] = await Promise.all([
-    loadAdminCompaniesData(),
-    getSubscriberStats(),
-  ])
+  // isSubscribed already rides in on every row (getSubscribedCompanyIds
+  // above), and the funnel now counts Subscribed from those rows like
+  // every other stage — so it narrows with the channel filter instead
+  // of showing the platform-wide total. The separate getSubscriberStats
+  // round trip that used to feed that card is gone with it.
+  const { mergedRows, servicesOptions } = await loadAdminCompaniesData()
 
   return (
     // Horizontal-overflow clip lives on the admin layout wrapper so
@@ -638,7 +637,7 @@ export default async function AdminProfessionalsPage() {
     <div className="min-h-screen bg-white">
       {/* The table renders the sticky full-bleed workbench bar and
           wraps its own content. */}
-      <AdminCompaniesDataTable data={mergedRows} serviceOptions={servicesOptions} subscriberCount={subscribers.total} />
+      <AdminCompaniesDataTable data={mergedRows} serviceOptions={servicesOptions} />
     </div>
   )
 }

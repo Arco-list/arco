@@ -330,7 +330,6 @@ type Props = {
    *  derived from `data`, because it is not a company status: it lives
    *  in `subscriptions`, and the funnel drew a hardcoded zero for as
    *  long as that was true. */
-  subscriberCount?: number
 }
 
 type PendingStatusAction = {
@@ -795,7 +794,7 @@ function DomainCell({ company, onVerify, onRefresh }: { company: AdminCompanyRow
   )
 }
 
-export function AdminCompaniesDataTable({ data, serviceOptions, subscriberCount = 0 }: Props) {
+export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const router = useRouter()
   // Shared Contact Card slide-over — URL-driven via ?contact=<email>.
   // ContactsCell's "Details" items call contactParam.open(email); this
@@ -1816,9 +1815,16 @@ export function AdminCompaniesDataTable({ data, serviceOptions, subscriberCount 
     ].join(" ").toLowerCase()
     return haystack.includes(lowered)
   })
+  // Counted on the SAME effective status the table's own filter uses
+  // (isSubscribed outranks the stored status, see the status column
+  // below). Counting the raw status here put a paying company in both
+  // Listed and Subscribed: the card said 5 while the table it filters
+  // showed 4, and the Listed → Subscribed rate divided by a
+  // denominator its own numerator was sitting in.
   const companyStatusCounts: Record<string, number> = {}
   for (const c of funnelData) {
-    companyStatusCounts[c.status] = (companyStatusCounts[c.status] ?? 0) + 1
+    const effective = c.isSubscribed ? "subscribed" : c.status
+    companyStatusCounts[effective] = (companyStatusCounts[effective] ?? 0) + 1
   }
   type Driver = "prospect" | "acquisition" | "retention" | "monetization" | null
   // Main row runs Added → … → Listed → Subscribed. Unlisted and
@@ -1852,10 +1858,11 @@ export function AdminCompaniesDataTable({ data, serviceOptions, subscriberCount 
     monetization: "#0f766e",
   }
   // "subscribed" is not a company status, so it cannot come from the
-  // tally above — it is counted server-side from subscriptions and
-  // handed in.
-  const companyCountAt = (status: string) =>
-    status === "subscribed" ? subscriberCount : (companyStatusCounts[status] ?? 0)
+  // Subscribed now comes from the same tally as every other stage, so
+  // it narrows with the channel and service filters like they do. The
+  // handed-in subscriberCount was global: filter to Sales and the card
+  // still showed every subscriber on the platform.
+  const companyCountAt = (status: string) => companyStatusCounts[status] ?? 0
   // Each cohort represents "everything currently in or past this stage on
   // the linear flow". Deactivated is a terminal leak so it doesn't
   // accumulate forward.
