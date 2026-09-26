@@ -288,26 +288,117 @@ function extractImagesFromRawHtml(html: string, baseUrl: string): string[] {
   const seen = new Set<string>()
   const results: string[] = []
 
-  const add = (rawSrc: string) => {
+  /**
+   * @param identity  A second URL naming the same photograph, when the
+   *   one being imported is not the one to recognise it by. A page can
+   *   show the same picture twice — once in the gallery, once in some
+   *   smaller strip — and offer a different largest variant in each
+   *   place. The two would import as two photos. The fallback <img> is
+   *   the same in both, because it is the address the site itself keeps
+   *   for that picture, so that is what gets remembered.
+   */
+  const add = (rawSrc: string, identity?: string) => {
     try {
       const src = cleanImageSrc(rawSrc)
       const abs = new URL(src, baseUrl).toString()
       const fullRes = upgradeToFullRes(abs)
       const key = fullRes || abs
-      if (seen.has(key)) return
+
+      let idKey = key
+      if (identity) {
+        try {
+          const idAbs = new URL(cleanImageSrc(identity), baseUrl).toString()
+          idKey = upgradeToFullRes(idAbs) || idAbs
+        } catch {}
+      }
+
+      if (seen.has(key) || seen.has(idKey)) return
       if (/\.(svg|ico|gif)(\?|$)/i.test(key)) return
       if (/logo|icon|avatar|favicon|sprite|placeholder|gravatar/i.test(key)) return
       if (/\/elementor\/thumbs\//i.test(key)) return
       if (/data:image/i.test(key)) return
       seen.add(key)
+      // Both addresses are this one photograph, so either one turning
+      // up again — in any shape, from any part of the page — is a
+      // repeat and not a second picture.
+      seen.add(idKey)
       results.push(key)
     } catch {}
   }
 
+  /** Every candidate in a srcset, widest first. */
+  const srcsetCandidates = (tag: string): { url: string; width: number }[] => {
+    const m = tag.match(/srcset=["']([^"']+)["']/i)
+    if (!m?.[1]) return []
+    return m[1]
+      .split(",")
+      .map((entry) => entry.trim().split(/\s+/))
+      .filter((parts) => parts[0])
+      .map((parts) => ({
+        url: parts[0],
+        width: parseInt(parts[1]?.replace(/[wx]$/, "") ?? "0") || 0,
+      }))
+      .sort((a, b) => b.width - a.width)
+  }
+
+  /**
+   * <picture> first, and this is where the resolution was being lost.
+   *
+   * A modern page offers WebP through <source> and keeps a JPEG in the
+   * <img> as the fallback for browsers that cannot read it. The
+   * fallback is deliberately small — it is the compatibility copy, not
+   * the good one — and reading only <img> tags meant taking exactly
+   * that.
+   *
+   * Measured on paulderuiter.nl: the <img> offered 800w and the
+   * <source> beside it offered 1350, 1900, 2450 and 3000w of the same
+   * photograph. Every project imported from a site built this way came
+   * in at a quarter of the width available, and then read as "low
+   * resolution images" on review.
+   *
+   * So a <picture> is judged as a whole: every candidate from every
+   * <source> and from the <img>, widest wins. The block is then
+   * removed from the HTML the <img> loop below sees, otherwise that
+   * loop would add the small fallback again as a second photo.
+   */
+  let remaining = html
+  const pictureRegex = /<picture[^>]*>([\s\S]*?)<\/picture>/gi
+  const handled: string[] = []
+  let pictureMatch
+  while ((pictureMatch = pictureRegex.exec(html)) !== null) {
+    const before = results.length
+    const inner = pictureMatch[1]
+    const candidates = [
+      ...Array.from(inner.matchAll(/<source[^>]+>/gi)).flatMap((m) => srcsetCandidates(m[0])),
+      ...Array.from(inner.matchAll(/<img[^>]+>/gi)).flatMap((m) => srcsetCandidates(m[0])),
+    ].sort((a, b) => b.width - a.width)
+
+    const fallbackSrc = inner
+      .match(/<img[^>]+>/i)?.[0]
+      ?.match(/\bsrc=["']([^"']+)["']/i)?.[1]
+
+    if (candidates[0]) {
+      add(candidates[0].url, fallbackSrc)
+    } else if (fallbackSrc && !fallbackSrc.startsWith("data:")) {
+      // No srcset anywhere in the block: the plain src is all this
+      // picture offers, and is its own identity.
+      add(fallbackSrc)
+    }
+
+    // Only a block that yielded something is taken away from the <img>
+    // loop. One that yielded nothing is usually a lazy-loading <img>
+    // holding its real address in a data- attribute — which that loop
+    // knows how to read and this does not. Leaving it there costs a
+    // duplicate at worst, and `seen` settles those; removing it would
+    // lose the photograph outright.
+    if (results.length > before) handled.push(pictureMatch[0])
+  }
+  for (const block of handled) remaining = remaining.replace(block, "")
+
   // Match src, data-src, data-lazy-src, data-original attributes
   const imgTagRegex = /<img[^>]+>/gi
   let match
-  while ((match = imgTagRegex.exec(html)) !== null) {
+  while ((match = imgTagRegex.exec(remaining)) !== null) {
     const tag = match[0]
 
     // Skip small images
