@@ -1,6 +1,14 @@
 'use server'
 
 import { buildUnsubscribeUrl } from './unsubscribe-token'
+import { TEMPLATE_CHANNEL, utmSourceFor, type EmailChannel } from './email-channels'
+
+// Exhaustiveness lives here, because EmailTemplate lives here. If a new
+// template is added without a channel, this line stops the build rather
+// than letting the mail ship with an unlabelled link.
+const _everyTemplateHasAChannel: Record<EmailTemplate, EmailChannel> =
+  TEMPLATE_CHANNEL as Record<EmailTemplate, EmailChannel>
+void _everyTemplateHasAChannel
 import { REJECTION_REASON_EMAIL_COPY, REJECTION_REASON_KEYS } from './rejection-reasons'
 
 // Lazy-initialize Resend to avoid crashing at module load if RESEND_API_KEY is missing
@@ -209,89 +217,44 @@ export type EmailTemplate =
  * Per-template audience used to choose the utm_source on outbound link
  * tagging. Three values:
  *
- *   - 'pro'     → utm_source=arco_pro    Transactional emails sent to
- *                                        existing professionals (project-live,
- *                                        team-invite, domain-verification,
- *                                        etc.). Visits power the "Email"
- *                                        sub of pro_visitors.
- *   - 'client'  → utm_source=arco_client Lifecycle / marketing emails to
- *                                        clients (welcome-homeowner,
- *                                        discover-projects, find-pro).
- *                                        Visits power the "Email" sub of
- *                                        client_visitors.
- *   - 'neutral' → utm_source=arco        Emails that already have their
- *                                        own URL-path-based attribution
- *                                        (Sales / Invites), or audience
- *                                        is unclear (auth flows). Tagged
- *                                        so we know it was an Arco email,
- *                                        but not folded into the per-audience
- *                                        "Email" buckets.
+ *   - 'invite'    → utm_source=arco_invite     A pro credited by another
+ *                                              pro, asked to accept it.
+ *   - 'sales'     → utm_source=arco_sales      Cold sequences we start:
+ *                                              Outreach and Showcase.
+ *   - 'outbound'  → utm_source=arco_outbound   Mail an admin writes by
+ *                                              hand THROUGH the product.
+ *                                              Sent from a personal
+ *                                              mailbox it carries no tag
+ *                                              at all, which is exactly
+ *                                              why the product send is
+ *                                              the boundary.
+ *   - 'email'     → utm_source=arco_email      Lifecycle and marketing
+ *                                              mail to CLIENTS. The one
+ *                                              that shows up as the Email
+ *                                              channel under Visitors.
+ *   - 'lifecycle' → utm_source=arco_lifecycle  Everything to people who
+ *                                              already are what the
+ *                                              funnel is trying to make
+ *                                              them: pro transactional,
+ *                                              the Owned and Listed
+ *                                              drips, subscription mail,
+ *                                              auth. Still tagged, so
+ *                                              PostHog shows it was our
+ *                                              mail — but NOT counted as
+ *                                              an acquisition channel.
+ *
+ * Why by loop rather than by audience, which is what this was before:
+ * the funnel asks which motion brought somebody in, and 'pro' answered
+ * a different question. Its practical cost was that 24 of 41 templates
+ * — the ones going to people who are already supply — counted as
+ * visitors, and that plain 'arco' did not match the `arco_%` rule in
+ * the channel classifier, so 311 people we had mailed read as Direct.
+ *
+ * A claim link keeps its own utm: tagArcoEmailLinks skips any URL that
+ * already carries one, and the token URL carries the channel it was
+ * minted for. So verified-reminder, which deliberately goes to every
+ * channel, needs no special case — its CTA stays correct on its own.
  */
-type EmailAudience = 'pro' | 'client' | 'neutral'
-const TEMPLATE_AUDIENCE: Record<EmailTemplate, EmailAudience> = {
-  // Sales — path-based attribution via apollo_visitors / showcase_visitors
-  'prospect-intro': 'neutral',
-  'prospect-followup': 'neutral',
-  'prospect-final': 'neutral',
-  'outreach-intro': 'neutral',
-  'outreach-followup': 'neutral',
-  'outreach-final': 'neutral',
-  // Visitor-nudge — one drip step, three channel variants resolved at
-  // send (lib/visitor-nudge.ts). Path-based attribution like the rest
-  // of the claim family.
-  'visitor-nudge-invite': 'neutral',
-  'visitor-nudge-showcase': 'neutral',
-  'visitor-nudge-platform': 'neutral',
-  // Verified-reminder — cart-abandonment mail, +1 day after step 1
-  // without a commit. One template for every channel: the argument is
-  // "one step left", not the channel's asset.
-  'verified-reminder': 'neutral',
-  // Invites — path-based attribution via invite_visitors
-  'new-professional-invite': 'neutral',
-  'new-professional-followup': 'neutral',
-  'new-professional-final': 'neutral',
-  'professional-invite': 'neutral',
-  // Pro transactional
-  'project-live': 'pro',
-  'project-rejected': 'pro',
-  'team-invite': 'pro',
-  'domain-verification': 'pro',
-  // Owned reminder — one drip step, sent only when the claim did NOT
-  // convert to Listed; variant resolved at send (lib/owned-welcome.ts):
-  // publisher (publish your first project), contributor (get credited
-  // by a pro), invited (accept the waiting credit).
-  'owned-publisher': 'pro',
-  'owned-contributor': 'pro',
-  'owned-invited': 'pro',
-  // Listed series — company live (replaces the first project-live),
-  // the credits/network mail, and the backlink ask. Variants resolved
-  // at send (lib/listed-mails.ts).
-  'company-live-publisher': 'pro',
-  'company-live-contributor': 'pro',
-  'listed-professionals-publisher': 'pro',
-  'listed-professionals-contributor': 'pro',
-  'listed-backlink': 'pro',
-  // Subscription — sent to companies that pay (or had it free), so the
-  // same bucket as the rest of the pro transactional mail. A click here
-  // is a paying customer coming back to the product.
-  'payment-failed': 'pro',
-  'subscription-ended-nonpayment': 'pro',
-  'payment-method-expiring': 'pro',
-  'renewal-reminder': 'pro',
-  'founding-active': 'pro',
-  'founding-ending': 'pro',
-  // Client transactional / marketing
-  'welcome-homeowner': 'client',
-  'discover-projects': 'client',
-  'find-professionals': 'client',
-  'introduction-request': 'client',
-  // Auth — could be either user type; stays neutral
-  'auth-confirm-signup': 'neutral',
-  'auth-magic-link': 'neutral',
-  'auth-recovery': 'neutral',
-  'auth-email-change': 'neutral',
-  'auth-invite': 'neutral',
-}
 
 /**
  * Tag every Arco-domain CTA in the rendered HTML with utm_source /
@@ -309,12 +272,12 @@ const TEMPLATE_AUDIENCE: Record<EmailTemplate, EmailAudience> = {
  * Server routes (/api/unsubscribe, etc.) don't fire pageviews so the
  * UTM is harmless on them. Same for redirect endpoints.
  */
+
 function tagArcoEmailLinks(html: string, template: EmailTemplate): string {
-  const audience = TEMPLATE_AUDIENCE[template]
-  const utmSource =
-    audience === 'pro' ? 'arco_pro'
-    : audience === 'client' ? 'arco_client'
-    : 'arco'
+  // One label, one utm. No fallback to a bare 'arco': that string did
+  // not match the `arco_%` rule in the channel classifier, so anything
+  // landing on it read as Direct.
+  const utmSource = utmSourceFor(TEMPLATE_CHANNEL[template])
   return html.replace(/href="(https?:\/\/[^"]*arcolist\.com[^"]*)"/g, (match, rawUrl) => {
     try {
       const u = new URL(rawUrl)

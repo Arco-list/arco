@@ -1105,17 +1105,36 @@ export async function sendContactEmail(input: {
 
   const subject = input.subject.trim()
   if (!subject) return { success: false, error: "Subject is required for a new email" }
+  // Tag every Arco link in the draft as Outbound before it goes out.
+  // Without this the mail is indistinguishable from someone typing the
+  // address, and the click lands in Direct — which is also why sending
+  // THROUGH the product is what makes a mail count as Outbound. A link
+  // written by hand into a personal mailbox can never carry this.
+  const { tagArcoTextLinks } = await import("@/lib/email-channels")
+  const taggedBody = tagArcoTextLinks(bodyText, "arco_outbound")
+
   try {
     const { sendGmailReply } = await import("@/lib/gmail/send")
     // Personal founder mail goes out as niek@ — hello@ is the
     // transactional/support identity. Falls back to the oldest
     // connection if niek@ isn't connected.
-    await sendGmailReply(supabase, { to: email, subject, bodyText, preferredAddress: "niek@arcolist.com" })
+    await sendGmailReply(supabase, { to: email, subject, bodyText: taggedBody, preferredAddress: "niek@arcolist.com" })
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Send failed" }
   }
 
   if (input.prospectId) {
+    // Log it as an outbound CONTACT, not just as a prospect event.
+    // outbound_contact_log is what the Outbound funnel counts, and it
+    // held nothing but 'call' — so every hand-written mail sent from
+    // here was invisible to the row that exists to measure them.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from("outbound_contact_log").insert({
+      prospect_id: input.prospectId,
+      kind: "email",
+      outcome: "sent",
+      body: subject,
+    })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any).from("prospect_events").insert({
       prospect_id: input.prospectId,

@@ -6,6 +6,85 @@ import { fetchRecentEmails, fetchTemplateStats, fetchCachedStats, fetchProspectF
 import { useAuth } from "@/contexts/auth-context"
 import { AdminTabs, useAdminTab } from "@/components/admin/admin-tabs"
 import { clickedRateColor, deliveredRateColor, openedRateColor, unsubscribedRateColor, RATE_BENCHMARKS } from "@/lib/email-rate-colors"
+import { TEMPLATE_CHANNEL, utmSourceFor, type EmailChannel } from "@/lib/email-channels"
+
+/**
+ * Two inline pills, sitting with the e-mail's name instead of in
+ * columns of their own.
+ *
+ * Both were columns for about an hour, and both were mostly empty: the
+ * channel says "Lifecycle" for 24 of 41 templates, and on the Pro
+ * funnel the audience is "professional" for every row. Two columns
+ * spending width on a value you already know from which tab you are
+ * standing in.
+ *
+ * So each pill now appears only when it tells you something:
+ *
+ *   AUDIENCE, only when narrower than the tab you are on. Pro funnel is
+ *   professional throughout, Client funnel is client, Transactional is
+ *   everything — so a pill means "this one is not like its neighbours".
+ *
+ *   CHANNEL, only for the loops that count. Lifecycle is the majority
+ *   and the default, and labelling it would put a pill on most rows to
+ *   say "no loop". Its absence says that more quietly.
+ *
+ * Three hues, kept apart on purpose: blue for the drip day, amber for
+ * audience, teal for channel. The legend beside Status guide names the
+ * last two.
+ */
+const CHANNEL_LABEL: Record<EmailChannel, string> = {
+  invite: "Invite",
+  sales: "Sales",
+  outbound: "Outbound",
+  email: "Email",
+  lifecycle: "Lifecycle",
+}
+
+const CHANNEL_NOTE: Record<EmailChannel, string> = {
+  invite: "Invite — a pro credited by another pro, asked to accept it.",
+  sales: "Sales — a cold sequence we started (Outreach or Showcase).",
+  outbound: "Outbound — written by hand, sent through the product. From a personal mailbox it carries no tag at all.",
+  email: "Email — lifecycle and marketing mail to clients. The Email channel under Visitors.",
+  lifecycle: "Lifecycle — mail to people who already are what the funnel is trying to make them. Tagged, but not counted as an acquisition channel.",
+}
+
+/** Loops worth naming. Lifecycle is the default and stays unlabelled. */
+const LABELLED_CHANNELS = new Set<EmailChannel>(["invite", "sales", "outbound", "email"])
+
+const PILL_AUDIENCE = { borderColor: "#fcd9a8", color: "#b45309" } as const
+const PILL_CHANNEL = { borderColor: "#b5d5d6", color: "#016D75" } as const
+
+function ChannelPill({ templateId }: { templateId: string }) {
+  const channel = TEMPLATE_CHANNEL[templateId]
+  if (!channel || !LABELLED_CHANNELS.has(channel)) return null
+  return (
+    <span className="status-pill" style={PILL_CHANNEL} title={CHANNEL_NOTE[channel]}>
+      {CHANNEL_LABEL[channel]}
+    </span>
+  )
+}
+
+/** The audience each tab is already about; a pill only breaks the rule. */
+const TAB_AUDIENCE: Record<string, UserAudience> = {
+  funnel: "professional",
+  "client-funnel": "client",
+  transactional: "all",
+  marketing: "all",
+}
+
+function AudiencePill({ audience, tab }: { audience: UserAudience; tab: string }) {
+  const base = TAB_AUDIENCE[tab] ?? "all"
+  // Narrower only. "All" on the Pro funnel is BROADER than the tab —
+  // a sign-in code goes to everyone — and a pill there would read as
+  // "note this one" for the least noteworthy row on the page.
+  if (audience === base || audience === "all") return null
+  return (
+    <span className="status-pill" style={PILL_AUDIENCE} title={`Audience: ${AUDIENCE_CONFIG[audience].label}`}>
+      {AUDIENCE_CONFIG[audience].label}
+    </span>
+  )
+}
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -612,16 +691,29 @@ function AdminEmailsPage() {
       {/* Status guide — floats in the gap under the sticky bar, same
           treatment as the tour-replay link on company edit. */}
       <div className="wrap" style={{ position: "relative", height: 0 }}>
-      {(activeTab === "funnel" || activeTab === "client-funnel") && (
-          <button
-          type="button"
-          onClick={() => setShowStageGuide(true)}
-          className="arco-text-link arco-text-link--primary absolute right-5 md:right-[60px]"
-          style={{ top: 12, fontSize: 12 }}
-          >
-            Status guide
-          </button>
-      )}
+        {/* Legend for the two inline pills, in the pills' own colours —
+            the quickest way to say what a stray amber or teal chip in a
+            row of e-mail names means. Audience only appears when it is
+            narrower than the tab; Channel only for the loops that
+            count. Lifecycle is the default and stays unlabelled, so it
+            gets no entry here either. */}
+        <div
+          className="absolute right-5 md:right-[60px] flex flex-wrap items-center gap-3"
+          style={{ top: 12 }}
+        >
+          <span className="status-pill" style={PILL_AUDIENCE}>Audience</span>
+          <span className="status-pill" style={PILL_CHANNEL}>Channel</span>
+          {(activeTab === "funnel" || activeTab === "client-funnel") && (
+            <button
+              type="button"
+              onClick={() => setShowStageGuide(true)}
+              className="arco-text-link arco-text-link--primary"
+              style={{ fontSize: 12 }}
+            >
+              Status guide
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="wrap" style={{ paddingTop: 52, paddingBottom: 48 }}>
@@ -778,23 +870,29 @@ function AdminEmailsPage() {
                           columns per lane's content, so Audience/Subject
                           would sit at a different x in each lane. Fixed
                           geometry lines all five lanes up. */}
-                      <table className="arco-table" style={{ minWidth: 850, width: "100%", tableLayout: "fixed" }}>
+                      <table className="arco-table" style={{ minWidth: 1080, width: "100%", tableLayout: "fixed" }}>
+                        {/* One <col> per column, in order. A colgroup
+                            outranks any width on the <th> in a
+                            fixed-layout table, so these are the widths
+                            that actually apply — and when a column was
+                            removed without removing its col, every
+                            slot shifted one to the left and Subject
+                            inherited the 110px meant for Audience.
+                            Eight cols, eight columns. */}
                         <colgroup>
-                          <col />
-                          <col style={{ width: 110 }} />
-                          <col style={{ width: 270 }} />
-                          <col style={{ width: 80 }} />
-                          <col style={{ width: 90 }} />
-                          <col style={{ width: 80 }} />
-                          <col style={{ width: 80 }} />
-                          <col style={{ width: 80 }} />
-                          <col style={{ width: 70 }} />
+                          <col />{/* Email — takes the remainder */}
+                          <col style={{ width: 300 }} />{/* Subject */}
+                          <col style={{ width: 80 }} />{/* Sends */}
+                          <col style={{ width: 90 }} />{/* Delivered */}
+                          <col style={{ width: 80 }} />{/* Opened */}
+                          <col style={{ width: 80 }} />{/* Clicked */}
+                          <col style={{ width: 80 }} />{/* Unsubs */}
+                          <col style={{ width: 70 }} />{/* Active */}
                         </colgroup>
                         <thead>
                           <tr>
                             <th>Email</th>
-                            <th>Audience</th>
-                            <th>Subject</th>
+                            <th style={{ width: "34%" }}>Subject</th>
                             <th style={{ textAlign: "right" }}>Sends</th>
                             <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Delivered<InfoTip text={RATE_BENCHMARKS.delivered} /></th>
                             <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Opened<InfoTip text={RATE_BENCHMARKS.opened} /></th>
@@ -814,12 +912,13 @@ function AdminEmailsPage() {
                                     <div className="flex items-center gap-2">
                                       <span className="arco-table-primary">{t.name}</span>
                                       <span className="status-pill">Transactioneel</span>
+                                      <AudiencePill audience={t.audience} tab={activeTab} />
+                                      <ChannelPill templateId={templateId} />
                                     </div>
                                     <div className="arco-table-secondary" style={{ marginTop: 2 }}>{note}</div>
                                   </div>
                                 </td>
-                                <td className="text-xs text-[#c4c4c2]">—</td>
-                                <td style={{ maxWidth: 250 }} className="text-xs text-[#6b6b68] truncate">{t.subject}</td>
+                                <td className="text-xs text-[#6b6b68] truncate">{t.subject}</td>
                                 {statCells(templateId)}
                                 {/* Transactional stays locked: a receipt-class mail
                                     can't be switched off from the funnel view. */}
@@ -840,12 +939,13 @@ function AdminEmailsPage() {
                                         {t.dripDay !== undefined && (
                                           <span className="status-pill" style={{ borderColor: "#bfdbfe", color: "#2563eb" }}>Day {t.dripDay}</span>
                                         )}
+                                        <AudiencePill audience={t.audience} tab={activeTab} />
+                                        <ChannelPill templateId={id} />
                                       </div>
                                       <div className="arco-table-secondary" style={{ marginTop: 2 }}>{t.trigger}</div>
                                     </div>
                                   </td>
-                                  <td className="text-xs text-[#6b6b68]">{seq.channel}</td>
-                                  <td style={{ maxWidth: 250 }} className="text-xs text-[#6b6b68] truncate">{t.subject}</td>
+                                  <td className="text-xs text-[#6b6b68] truncate">{t.subject}</td>
                                   {statCells(id)}
                                   <td style={{ textAlign: "center" }} onClick={e => e.stopPropagation()}>
                                     <button
@@ -906,8 +1006,7 @@ function AdminEmailsPage() {
                   <tr>
                     <th style={{ minWidth: 220 }}>Email</th>
                     <th>From</th>
-                    <th>User</th>
-                    <th>Subject</th>
+                    <th style={{ width: "34%" }}>Subject</th>
                     <th style={{ textAlign: "right" }}>Sends</th>
                     <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Delivered<InfoTip text={RATE_BENCHMARKS.delivered} /></th>
                     <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Opened<InfoTip text={RATE_BENCHMARKS.opened} /></th>
@@ -951,6 +1050,8 @@ function AdminEmailsPage() {
                               {t.dripDay !== undefined && (
                                 <span className="status-pill" style={{ borderColor: "#bfdbfe", color: "#2563eb" }}>Day {t.dripDay}</span>
                               )}
+                              <AudiencePill audience={t.audience} tab={activeTab} />
+                              <ChannelPill templateId={t.id} />
                             </div>
                             <div className="arco-table-secondary" style={{ marginTop: 2 }}>{t.trigger}</div>
                           </div>
@@ -977,10 +1078,7 @@ function AdminEmailsPage() {
                           <span className="arco-table-secondary" style={{ marginTop: 0 }}>—</span>
                         )}
                       </td>
-                      <td>
-                        {AUDIENCE_CONFIG[t.audience].label}
-                      </td>
-                      <td style={{ maxWidth: 250 }} className="text-xs text-[#6b6b68] truncate">
+                      <td className="text-xs text-[#6b6b68] truncate">
                         {t.subject}
                       </td>
                       {(() => {
@@ -1039,6 +1137,8 @@ function AdminEmailsPage() {
                                 {child.dripDay !== undefined && (
                                   <span className="status-pill" style={{ borderColor: "#bfdbfe", color: "#2563eb" }}>Day {child.dripDay}</span>
                                 )}
+                                <AudiencePill audience={child.audience} tab={activeTab} />
+                                <ChannelPill templateId={child.id} />
                               </div>
                               <div className="arco-table-secondary" style={{ marginTop: 2 }}>{child.trigger}</div>
                             </div>
@@ -1065,10 +1165,7 @@ function AdminEmailsPage() {
                             <span className="arco-table-secondary" style={{ marginTop: 0 }}>—</span>
                           )}
                         </td>
-                        <td>
-                          {AUDIENCE_CONFIG[child.audience].label}
-                        </td>
-                        <td style={{ maxWidth: 250 }} className="text-xs text-[#6b6b68] truncate">{child.subject}</td>
+                        <td className="text-xs text-[#6b6b68] truncate">{child.subject}</td>
                         {(() => {
                           const s = templateStats[child.id]
                           const sends = s?.sends ?? 0
@@ -1120,7 +1217,7 @@ function AdminEmailsPage() {
                     <tr>
                       <th>To</th>
                       <th style={{ minWidth: 220 }}>Email</th>
-                      <th>Subject</th>
+                      <th style={{ width: "34%" }}>Subject</th>
                       <th>Status</th>
                       <th style={{ textAlign: "right" }}>Sent</th>
                     </tr>
