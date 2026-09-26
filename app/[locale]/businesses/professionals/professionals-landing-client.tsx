@@ -18,9 +18,7 @@ import {
   getProfessionalFAQ,
 } from "./data"
 import { useAuth } from "@/contexts/auth-context"
-import { useLoginModal } from "@/contexts/login-modal-context"
-import { useCreateCompanyModal } from "@/contexts/create-company-modal-context"
-import { Link } from "@/i18n/navigation"
+import { Link, useRouter } from "@/i18n/navigation"
 import { trackPageView } from "@/lib/tracking"
 import type { PreloadedCompany } from "@/app/businesses/actions"
 
@@ -36,8 +34,7 @@ export default function ProfessionalsLandingClient({
   recentProfessionals = [],
 }: ProfessionalsLandingClientProps) {
   const { user } = useAuth()
-  const { openLoginModal } = useLoginModal()
-  const { openCreateCompanyModal } = useCreateCompanyModal()
+  const router = useRouter()
   const t = useTranslations("business.professionals")
   const tBusiness = useTranslations("business")
   const autoOpenedRef = useRef(false)
@@ -54,31 +51,42 @@ export default function ProfessionalsLandingClient({
     }
   }, [inviteEmail])
 
-  // Auto-open the claim modal when user is logged in and we have preloaded company data
-  // (happens after auth redirect back to this page)
+  /**
+   * One door, and it is /claim.
+   *
+   * This page used to run its own signup: a login modal, then a
+   * create-company modal, with /create-company as the fallback
+   * destination. That made it a second entrance next to the claim
+   * funnel — invisible to anything that counts arrivals on /claim, so a
+   * pro who came in this way appeared in no channel at all.
+   *
+   * A preloaded company here is a Google Places result, not an Arco
+   * row, so it travels as ?p= — the parameter /claim resolves
+   * client-side. No login modal either: /claim asks for an account on
+   * its own last step, and asking twice was never the point.
+   */
+  const claimHref = preloadedCompany?.placeId
+    ? `/claim?p=${encodeURIComponent(preloadedCompany.placeId)}`
+    : "/claim"
+
+  // A signed-in visitor arriving with company data in hand has already
+  // chosen; send them on to the funnel rather than showing the pitch
+  // again. Fires once — the ref guards against the effect re-running
+  // when auth state settles.
   useEffect(() => {
     if (user && preloadedCompany && !autoOpenedRef.current) {
       autoOpenedRef.current = true
-      openCreateCompanyModal(preloadedCompany)
+      router.push(claimHref)
     }
-  }, [user, preloadedCompany, openCreateCompanyModal])
+  }, [user, preloadedCompany, router, claimHref])
 
   const professionalBenefits = getProfessionalBenefits(t)
   const professionalSteps = getProfessionalSteps(t)
   const professionalFAQ = getProfessionalFAQ(t)
 
-  // Build the redirect URL that preserves the inviteEmail param
-  const selfUrl = inviteEmail
-    ? `/businesses/professionals?inviteEmail=${encodeURIComponent(inviteEmail)}`
-    : "/create-company"
-
   const handleCTA = useCallback(() => {
-    if (!user) {
-      openLoginModal(selfUrl)
-      return
-    }
-    openCreateCompanyModal(preloadedCompany ?? undefined)
-  }, [user, openLoginModal, openCreateCompanyModal, preloadedCompany, selfUrl])
+    router.push(claimHref)
+  }, [router, claimHref])
 
   const ctaLabel = preloadedCompany
     ? t("cta_claim_button", { company: preloadedCompany.name })

@@ -1,5 +1,7 @@
 import { getLocale } from "next-intl/server"
+import { headers } from "next/headers"
 import { lookupCompanyByEmailDomain } from "@/app/businesses/actions"
+import { trackInviteLandingVisit } from "@/lib/invites/track-invite-landing"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { translateProfessionalService } from "@/lib/project-translations"
 import ProfessionalsLandingClient from "./professionals-landing-client"
@@ -61,25 +63,16 @@ export default async function ProfessionalsPage({ searchParams }: PageProps) {
       console.error("[ProfessionalsPage] Prospect tracking failed:", e)
     }
 
-    // Track invite-side landing visit: stamp landing_visited_at on
-    // every project_professionals row matching this email that hasn't
-    // been visited yet. Email-keyed and server-side, so the Growth
-    // Model's "Pro visitors from Invites" sub can reconcile against
-    // the email-keyed invite-contacted denominator without
-    // link-scanner noise. Best-effort; never blocks render.
-    try {
-      const serviceClient = createServiceRoleSupabaseClient()
-      // Cast through `any` until lib/supabase/types.ts is regenerated
-      // to include the new landing_visited_at column on
-      // project_professionals (added in migration 161).
-      await (serviceClient as any)
-        .from("project_professionals")
-        .update({ landing_visited_at: new Date().toISOString() })
-        .eq("invited_email", inviteEmail)
-        .is("landing_visited_at", null)
-    } catch (e) {
-      console.error("[ProfessionalsPage] Invite tracking failed:", e)
-    }
+    // Track invite-side landing visit. Shared with /claim, which is
+    // where these links now point — the stamp used to live inline here
+    // and nowhere else, so it stopped firing when the claim funnel took
+    // the traffic. Moving it into one function also gave this entrance
+    // the mail-scanner gate it never had.
+    const h = await headers()
+    await trackInviteLandingVisit(inviteEmail, {
+      country: h.get("x-vercel-ip-country"),
+      userAgent: h.get("user-agent"),
+    })
   }
 
   // Fetch recently added professionals — STARRED ones only: this page is

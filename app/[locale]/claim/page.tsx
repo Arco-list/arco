@@ -80,11 +80,59 @@ export default async function ClaimPage({
         ? invalid(t("expired_title"), t("expired_body"))
         : invalid(t("invalid_title"), t("invalid_body"))
     }
+    // Funnel stage, recorded BEFORE the page decides what to show.
+    //
+    // A signed token that verifies means this person clicked the link
+    // in their e-mail, and that is the whole of what the visitor step
+    // asks. Whether they then get the claim form, "already claimed" or
+    // "link already used" is the product answering a different
+    // question, and it used to decide the measurement too: this block
+    // sat below three early returns, so a second click on the same
+    // link, or a company a colleague had claimed in the meantime, was
+    // a real arrival that no ledger recorded. The funnel read those as
+    // people who never opened the mail.
+    //
+    // Geo + UA guard: SafeLinks-style scanners render this page too,
+    // from foreign datacenters — those must not stamp Visitor.
+    // Read off the narrowed token here: `parsed` is a let, so inside the
+    // callbacks below TypeScript can no longer prove it is the ok variant.
+    const prospectEmail = parsed.email
+    const tokenChannel = parsed.channel
+    const tokenCompanyId = parsed.companyId
+    const h = await headers()
+    const visitCtx = { country: h.get("x-vercel-ip-country"), userAgent: h.get("user-agent") }
+    // Fire-and-forget, both of them: rendering never waits on
+    // bookkeeping, and a failed write must not cost the visitor a page.
+    void import("@/lib/prospect-ref")
+      .then(({ trackProspectLandingVisit }) => trackProspectLandingVisit(prospectEmail, visitCtx))
+      .catch(() => {})
+    // The same arrival, recorded on the credit rather than on the
+    // prospect. Two ledgers because they answer to different funnels:
+    // Sales counts people it mailed, Invites counts pros another pro
+    // credited, and a visitor can be one without being the other.
+    // Before this, only the Sales half was written from here and the
+    // Invites funnel's middle step sat at nearly zero.
+    void import("@/lib/invites/track-invite-landing")
+      .then(({ trackInviteLandingVisit }) => trackInviteLandingVisit(prospectEmail, visitCtx))
+      .catch(() => {})
+    // And the arrival itself, which is the funnel step. The two ledgers
+    // above answer "did this prospect / this credit respond"; this one
+    // answers "how many pros reached the claim page, and through which
+    // loop" — the same question for all four channels, in one unit.
+    void import("@/lib/claim/track-arrival")
+      .then(({ trackClaimArrival }) => trackClaimArrival({
+        channel: tokenChannel,
+        email: prospectEmail,
+        companyId: tokenCompanyId,
+        ctx: visitCtx,
+      }))
+      .catch(() => {})
+
     // /login is a dead redirect to "/" — sign-in lives in the modal,
-  // which the login-modal provider auto-opens whenever a redirectTo
-  // param is present. So: home + redirectTo = modal open, and after
-  // signing in they land on their company dashboard.
-  if (parsed.consumed) return invalid(t("used_title"), t("used_body"), { href: "/?redirectTo=/dashboard/company", label: t("used_cta") })
+    // which the login-modal provider auto-opens whenever a redirectTo
+    // param is present. So: home + redirectTo = modal open, and after
+    // signing in they land on their company dashboard.
+    if (parsed.consumed) return invalid(t("used_title"), t("used_body"), { href: "/?redirectTo=/dashboard/company", label: t("used_cta") })
 
     ctx = await loadClaimContext({
       companyId: parsed.companyId,
@@ -93,18 +141,6 @@ export default async function ClaimPage({
     })
     if (!ctx) return invalid(t("invalid_title"), t("invalid_body"))
     if (ctx.company.ownerId) return invalid(t("claimed_title"), t("claimed_body"))
-
-    // Funnel stage: a valid token opened = the e-mail link was clicked.
-    // Advances the prospect to Visitor (forward-only, fire-and-forget —
-    // rendering never waits on CRM bookkeeping).
-    // Geo + UA guard: SafeLinks-style scanners render this page too,
-    // from foreign datacenters — those must not stamp Visitor.
-    const prospectEmail = parsed.email
-    const h = await headers()
-    const visitCtx = { country: h.get("x-vercel-ip-country"), userAgent: h.get("user-agent") }
-    void import("@/lib/prospect-ref")
-      .then(({ trackProspectLandingVisit }) => trackProspectLandingVisit(prospectEmail, visitCtx))
-      .catch(() => {})
   } else {
     // A pick carried in the querystring (written by the client so a
     // locale switch survives) rehydrates SERVER-side for Arco rows —
@@ -118,6 +154,17 @@ export default async function ClaimPage({
       }
     }
     if (!ctx) ctx = await loadPlatformStartContext()
+
+    // The platform route: no token, so no e-mail and no scanner risk —
+    // nobody was mailed this link. Counted here rather than beside the
+    // token branch because that branch returns early on a broken link,
+    // and a broken link is not a platform arrival.
+    void import("@/lib/claim/track-arrival")
+      .then(({ trackClaimArrival }) => trackClaimArrival({
+        channel: "platform",
+        companyId: pickedCompanyId ?? null,
+      }))
+      .catch(() => {})
   }
 
   // An existing session changes what step 2 asks: someone already signed
