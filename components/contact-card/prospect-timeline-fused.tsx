@@ -28,7 +28,6 @@ import {
   formatDateShort,
   templateDisplayName,
 } from "@/app/admin/sales/prospects-client"
-import { LogOutboundModal } from "@/app/admin/sales/log-outbound-modal"
 import {
   getTransactionalEmails,
   type TransactionalEmailRow,
@@ -65,14 +64,13 @@ type Props = {
    *  transactional sends are looked up across all of them. Falls back
    *  to [email] when omitted. */
   emails?: string[]
-  /** LogOutboundModal fields — passed through from the parent card
+  /** Outbound popup banner fields — passed through from the parent card
    *  so we don't need a second server round-trip inside the timeline
    *  component just for the modal's contact banner. */
   contactLabel?: string
   companyLabel?: string | null
-  contactPhone?: string | null
   /** Fired after any successful mutation inside the panel (sequence
-   *  action, logged outbound) — host refreshes card + table. */
+   *  action, outbound send) — host refreshes card + table. */
   onMutated?: () => void
 }
 
@@ -86,14 +84,13 @@ type Bundle = {
   transactional: TransactionalEmailRow[]
 }
 
-export function ProspectTimelineFused({ prospectId, email, emails, contactLabel, companyLabel, contactPhone, onMutated }: Props) {
+export function ProspectTimelineFused({ prospectId, email, emails, contactLabel, companyLabel, onMutated }: Props) {
   const [state, setState] = useState<
     | { kind: "loading" }
     | { kind: "error"; message: string }
     | { kind: "ready"; bundle: Bundle }
   >({ kind: "loading" })
   const [preview, setPreview] = useState<{ template: string; lang: "en" | "nl" } | null>(null)
-  const [logOpen, setLogOpen] = useState(false)
   const [emailOpen, setEmailOpen] = useState(false)
   // Bumped whenever the modal saves a new log — the outbound_contact_log
   // trigger updates prospects.last_outbound_at, so re-firing the bundle
@@ -156,9 +153,8 @@ export function ProspectTimelineFused({ prospectId, email, emails, contactLabel,
       <ActivitySection
         bundle={bundle}
         prospectId={prospectId}
-        onLogOutbound={() => setLogOpen(true)}
         onSequenceActionComplete={() => { setReloadTick((n) => n + 1); onMutated?.() }}
-        onEmail={() => setEmailOpen(true)}
+        onOutbound={() => setEmailOpen(true)}
       />
       <div>
         <SectionLabel>Timeline</SectionLabel>
@@ -175,28 +171,13 @@ export function ProspectTimelineFused({ prospectId, email, emails, contactLabel,
           onClose={() => setPreview(null)}
         />
       )}
-      {logOpen && (
-        <LogOutboundModal
-          open
-          onOpenChange={(open) => { if (!open) setLogOpen(false) }}
-          prospectId={prospectId}
-          contactLabel={contactLabel || email}
-          companyLabel={companyLabel ?? ""}
-          contactEmail={email}
-          contactPhone={contactPhone ?? null}
-          contactAvatarUrl={null}
-          onLogged={() => {
-            setLogOpen(false)
-            setReloadTick((n) => n + 1)
-            onMutated?.()
-          }}
-        />
-      )}
       {emailOpen && (
         <EmailComposeModal
           email={email}
           emails={emailsKey.split("\n")}
           contactLabel={contactLabel ?? null}
+          companyLabel={companyLabel ?? null}
+          companyId={bundle.prospect?.company_id ?? null}
           prospectId={prospectId}
           onClose={() => setEmailOpen(false)}
           onSent={() => { setReloadTick((n) => n + 1); onMutated?.() }}
@@ -211,14 +192,12 @@ export function ProspectTimelineFused({ prospectId, email, emails, contactLabel,
 function ActivitySection({
   bundle,
   prospectId,
-  onLogOutbound,
-  onEmail,
+  onOutbound,
   onSequenceActionComplete,
 }: {
   bundle: Bundle
   prospectId: string
-  onLogOutbound?: () => void
-  onEmail?: () => void
+  onOutbound?: () => void
   onSequenceActionComplete?: () => void
 }) {
   const p = bundle.prospect
@@ -283,24 +262,14 @@ function ActivitySection({
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <SectionLabel>Activity</SectionLabel>
-        {onLogOutbound && (
+        {onOutbound && (
           <button
             type="button"
-            onClick={onLogOutbound}
+            onClick={onOutbound}
             className="shrink-0 rounded-[12px] border border-[#016D75] text-[#016D75] text-[10px] font-medium px-2 py-[2px] leading-normal cursor-pointer hover:bg-[#f0f7f6] transition-colors"
-            title="Log outbound"
+            title="Send an outbound email — the send is the log"
           >
-            Log
-          </button>
-        )}
-        {onEmail && (
-          <button
-            type="button"
-            onClick={onEmail}
-            className="shrink-0 rounded-[12px] border border-[#016D75] text-[#016D75] text-[10px] font-medium px-2 py-[2px] leading-normal cursor-pointer hover:bg-[#f0f7f6] transition-colors"
-            title="Send email"
-          >
-            Email
+            Outbound
           </button>
         )}
       </div>

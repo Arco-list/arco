@@ -5,18 +5,8 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { updateContactStage } from "@/lib/apollo-client"
 import { getSubscribedCompanyIds, getSubscriberStats } from "@/lib/subscriptions/subscriber-stats"
 
-export type ProspectStatus =
-  | "prospect"
-  | "contacted"
-  | "visitor"
-  | "verified"
-  | "owned"
-  // Mirror of companies.status 'unlisted' — claimed, page currently
-  // hidden. Written only by the company→prospect mirror in
-  // syncPlatformProspects; parked under Listed in the funnel.
-  | "unlisted"
-  | "active"
-  | "removed"
+import type { ProspectStatus } from "@/lib/sales/prospect-status"
+export type { ProspectStatus }
 
 export type SequenceStatus = "not_started" | "active" | "paused" | "finished" | "replied"
 
@@ -86,27 +76,6 @@ export type ProspectEvent = {
   created_at: string
 }
 
-export type ProspectFunnel = {
-  total: number
-  prospect: number
-  contacted: number
-  visitor: number
-  signup: number
-  company: number
-  publisher: number
-  active: number
-  /** Companies holding Pro — paid or founding. Not a `prospects`
-   *  status, so it is counted from the subscriptions side by
-   *  getSubscriberStats rather than tallied in the loop below. It used
-   *  to render as a hardcoded zero, which a monetization stage cannot
-   *  afford: nought reads as "nobody buys", not as "nobody counts". */
-  subscribed: number
-  total_emails_sent: number
-}
-
-export type ProspectSortBy = "created_at" | "last_email_sent_at"
-export type ProspectSortDir = "asc" | "desc"
-
 /**
  * Sequence-filter values surfaced in the /admin/sales sequence dropdown.
  * Real sequence_status values plus the three suppression states (which
@@ -119,94 +88,6 @@ export type SequenceFilterValue =
   | "unsubscribed"
   | "not_interested"
 
-type FetchProspectsFilters = {
-  /** Empty / undefined = no status filter (all statuses). Multi-select. */
-  statuses?: ProspectStatus[]
-  /** Empty / undefined = no source filter. Multi-select. */
-  sources?: string[]
-  /** Empty / undefined = no sequence filter. Multi-select. */
-  sequences?: SequenceFilterValue[]
-  search?: string
-  offset?: number
-  limit?: number
-  /** Defaults to `created_at` desc to preserve historical behaviour. */
-  sortBy?: ProspectSortBy
-  sortDir?: ProspectSortDir
-}
-
-export async function fetchProspects(filters: FetchProspectsFilters = {}) {
-  const supabase = createServiceRoleSupabaseClient()
-  const {
-    statuses,
-    sources,
-    sequences,
-    search,
-    offset = 0,
-    limit = 50,
-    sortBy = "created_at",
-    sortDir = "desc",
-  } = filters
-
-  let query = supabase
-    .from("prospects")
-    .select("*")
-    // Soft-removed contacts sit on the row but never render in the funnel.
-    // Cast: 'removed' was added in migration 152 but lib/supabase/types.ts
-    // hasn't been regenerated yet — the enum is correct in Postgres.
-    .neq("status", "removed" as never)
-    // nullsFirst:false so prospects with no contact date sink to the bottom
-    // when sorting by last_email_sent_at — desc would otherwise float every
-    // never-contacted row to the top, which is the opposite of useful.
-    .order(sortBy, { ascending: sortDir === "asc", nullsFirst: false })
-    .range(offset, offset + limit - 1)
-
-  if (statuses && statuses.length > 0) {
-    query = query.in("status", statuses as never[])
-  }
-
-  if (sources && sources.length > 0) {
-    query = query.in("source", sources as never[])
-  }
-
-  if (sequences && sequences.length > 0) {
-    // Suppression states are derived columns, not sequence_status values —
-    // so build an OR clause that mixes both. Real sequence_status filters
-    // exclude suppressed prospects (a 'finished' contact that bounced
-    // displays as 'Bounced', so filtering 'finished' shouldn't match it).
-    const realStatuses = sequences.filter(
-      (s): s is SequenceStatus =>
-        s === "not_started" || s === "active" || s === "paused" || s === "finished",
-    )
-    const orParts: string[] = []
-    if (realStatuses.length > 0) {
-      const list = realStatuses.map((s) => `"${s}"`).join(",")
-      // sequence_status in (...) AND not suppressed
-      orParts.push(`and(sequence_status.in.(${list}),bounced_at.is.null,complained_at.is.null,unsubscribed_at.is.null,not_interested_at.is.null)`)
-    }
-    if (sequences.includes("bounced")) orParts.push("bounced_at.not.is.null")
-    if (sequences.includes("complained")) orParts.push("complained_at.not.is.null")
-    if (sequences.includes("unsubscribed")) orParts.push("unsubscribed_at.not.is.null")
-    if (sequences.includes("not_interested")) orParts.push("not_interested_at.not.is.null")
-    if (orParts.length > 0) {
-      query = query.or(orParts.join(","))
-    }
-  }
-
-  if (search) {
-    query = query.or(`email.ilike.%${search}%,company_name.ilike.%${search}%,contact_name.ilike.%${search}%`)
-  }
-
-  const { data, error } = await query
-
-  if (error) {
-    console.error("Failed to fetch prospects", error)
-    return { prospects: [] as Prospect[], error: error.message }
-  }
-
-  const rows = (data ?? []) as unknown as Omit<Prospect, "resolvedContact">[]
-  const prospects = await attachResolvedContacts(supabase, rows)
-  return { prospects }
-}
 
 /**
  * Resolve the Contact cell per prospect based on its funnel stage.
@@ -336,48 +217,6 @@ async function attachResolvedContacts(
   })
 }
 
-const EMPTY_FUNNEL: ProspectFunnel = {
-  total: 0, prospect: 0, contacted: 0, visitor: 0,
-  signup: 0, company: 0, publisher: 0, active: 0,
-  subscribed: 0, total_emails_sent: 0,
-}
-
-export async function fetchFunnel(source?: string) {
-  const supabase = createServiceRoleSupabaseClient()
-
-  // Query prospects directly with optional source filter
-  let query = supabase.from("prospects").select("status, emails_sent, source")
-  if (source && source !== "all") {
-    query = query.eq("source", source)
-  }
-
-  // Subscribers come from the other side of the house and are not
-  // filtered by prospect source: a company that pays us is a customer,
-  // whichever list it was scraped from.
-  const [{ data: allProspects, error }, subscribers] = await Promise.all([
-    query,
-    getSubscriberStats(),
-  ])
-
-  if (error) {
-    console.error("Failed to fetch funnel", error)
-    return { funnel: EMPTY_FUNNEL }
-  }
-
-  const funnel: ProspectFunnel = { ...EMPTY_FUNNEL, subscribed: subscribers.total }
-  const prospects = (allProspects ?? []) as Array<{ status: string; emails_sent: number; source: string }>
-
-  for (const p of prospects) {
-    funnel.total++
-    const key = p.status as keyof ProspectFunnel
-    if (key in funnel && typeof (funnel as any)[key] === "number") {
-      (funnel as any)[key] = ((funnel as any)[key] || 0) + 1
-    }
-    funnel.total_emails_sent += p.emails_sent || 0
-  }
-
-  return { funnel }
-}
 
 // ─── One-row-per-company aggregation ────────────────────────────────────────
 //
@@ -1205,7 +1044,17 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
       status: companyRowStatus ?? agg.status,
       isSubscribed: g.companyId ? subscribedIds.has(g.companyId) : false,
       sequenceStatus: agg.sequenceStatus,
-      sources: agg.sources,
+      // SHOWCASE IS A CHANNEL THIS ROW IS IN, not a label beside it.
+      // Membership comes from the company's lifecycle rather than any
+      // contact's source, and the table used to add the pill in the
+      // client — so a row reading "Outreach · Showcase" disappeared the
+      // moment you filtered on Showcase, and the funnel above never
+      // counted it either. Putting it in sources answers the question
+      // once: the pills, the filter and the funnel all read this.
+      sources:
+        claimed?.status === "prospected" && !agg.sources.includes("arco")
+          ? [...agg.sources, "arco"].sort()
+          : agg.sources,
       emailsSent: hasEventCoverage ? events.sent : agg.emailsSent,
       emailsDelivered: hasEventCoverage ? events.delivered : agg.emailsDelivered,
       emailsOpened: hasEventCoverage ? events.opened : agg.emailsOpened,

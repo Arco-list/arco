@@ -6,6 +6,7 @@ import { fetchRecentEmails, fetchTemplateStats, fetchCachedStats, fetchProspectF
 import { useAuth } from "@/contexts/auth-context"
 import { AdminTabs, useAdminTab } from "@/components/admin/admin-tabs"
 import { clickedRateColor, deliveredRateColor, openedRateColor, unsubscribedRateColor, RATE_BENCHMARKS } from "@/lib/email-rate-colors"
+import { OutboundTemplateEditor } from "./outbound-template-editor"
 import { TEMPLATE_CHANNEL, utmSourceFor, type EmailChannel } from "@/lib/email-channels"
 
 /**
@@ -454,6 +455,7 @@ function AdminEmailsPage() {
   const [clientCounts, setClientCounts] = useState<ClientFunnelCounts | null>(null)
   const [collapsedLanes, setCollapsedLanes] = useState<Set<string>>(new Set())
   const [showStageGuide, setShowStageGuide] = useState(false)
+  const [showOutreachEditor, setShowOutreachEditor] = useState(false)
 
   const toggleLane = (key: string) => {
     setCollapsedLanes((prev) => {
@@ -713,6 +715,17 @@ function AdminEmailsPage() {
               Status guide
             </button>
           )}
+          {/* The hand-written half. Every other mail on this page is
+              sent by a sequence; these are the ones an admin writes in
+              the Outbound popup, and this is where their copy lives. */}
+          <button
+            type="button"
+            onClick={() => setShowOutreachEditor(true)}
+            className="arco-text-link arco-text-link--primary"
+            style={{ fontSize: 12 }}
+          >
+            Outreach emails
+          </button>
         </div>
       </div>
 
@@ -1270,6 +1283,9 @@ function AdminEmailsPage() {
           )}
 
           {/* Stage guide popup — same pattern as the Companies/Sales status guides */}
+          {showOutreachEditor && (
+            <OutboundTemplateEditor onClose={() => setShowOutreachEditor(false)} />
+          )}
           {showStageGuide && (
             <div className="popup-overlay" onClick={() => setShowStageGuide(false)}>
               <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560, maxHeight: "85vh", overflowY: "auto" }}>

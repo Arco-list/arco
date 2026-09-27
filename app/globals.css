@@ -5897,6 +5897,9 @@ body.no-scroll {
    survives a two-word label wrapping.
    Documented on /design → Form Elements → Services picker. */
 .service-pill-group:first-of-type { margin-top: 16px; }
+/* Directly under a popup header that already spaces itself — the 16px
+   above reads as a gap nobody put there. */
+.service-pills-flush .service-pill-group:first-of-type { margin-top: 0; }
 
 /* Eyebrow-styled group labels with the chevron directly after the name
    — no rules between groups, whitespace does the separating. */
@@ -5945,6 +5948,10 @@ body.no-scroll {
   gap: 7px;
 }
 .service-pill:hover { border-color: var(--arco-black); color: var(--arco-black); }
+
+/* No mark to make room for: the 2px the icon was owed on the left reads
+   as a lopsided pill once it is gone. */
+.service-pill--bare { padding-left: 14px; }
 .service-pill-icon {
   flex-shrink: 0;
   color: var(--arco-mid-grey);

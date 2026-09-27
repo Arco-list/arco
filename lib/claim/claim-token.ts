@@ -52,7 +52,16 @@ function hmac(message: string): Buffer {
   return createHmac("sha256", getSecret()).update(message).digest()
 }
 
-export type ClaimChannel = "invite" | "showcase" | "outreach" | "platform"
+/**
+ * Which funnel minted this link.
+ *
+ * 'outbound' is mail an admin wrote by hand in the contact card and
+ * sent through the product. It exists as its own channel rather than
+ * riding along with 'outreach' because the two are different motions
+ * with different costs — a sequence versus somebody's afternoon — and
+ * the funnel should be able to tell you whether the afternoon paid.
+ */
+export type ClaimChannel = "invite" | "showcase" | "outreach" | "outbound" | "platform"
 
 export type IssueClaimTokenInput = {
   companyId: string

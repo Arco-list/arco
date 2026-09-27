@@ -45,6 +45,8 @@ export function ServicePills({
   collapsible = true,
   fill = false,
   groupLabels = true,
+  icons = true,
+  counts = true,
 }: {
   groups: ServicePillGroup[]
   selectedIds: string[]
@@ -67,6 +69,20 @@ export function ServicePills({
    * they can see, and turns a three-item list into six lines.
    */
   groupLabels?: boolean
+  /**
+   * Off where the options are not services and have no mark to resolve.
+   * resolveProfessionalServiceIcon always returns SOMETHING, so leaving
+   * this on outside the taxonomy dresses every option in a house or a
+   * ruler that means nothing — worse than no icon, because a wrong mark
+   * still reads as information.
+   */
+  icons?: boolean
+  /**
+   * Off where only one option can be chosen: the badge can then only
+   * ever read 1, which tells the reader nothing the highlighted pill
+   * right below it does not already say.
+   */
+  counts?: boolean
 }) {
   const atMax = max != null && selectedIds.length >= max
 
@@ -79,20 +95,22 @@ export function ServicePills({
   const renderPill = (service: ServicePillService, group: ServicePillGroup) => {
     const on = selectedIds.includes(service.id)
     const blocked = atMax && !on
-    const Icon = resolveProfessionalServiceIcon(service.slug ?? service.label, group.slug ?? group.label)
+    const Icon = icons
+      ? resolveProfessionalServiceIcon(service.slug ?? service.label, group.slug ?? group.label)
+      : null
     return (
       <button
         key={service.id}
         type="button"
         aria-pressed={on}
         disabled={blocked}
-        className={`service-pill${on ? " service-pill--on" : ""}${blocked ? " service-pill--disabled" : ""}`}
+        className={`service-pill${on ? " service-pill--on" : ""}${blocked ? " service-pill--disabled" : ""}${Icon ? "" : " service-pill--bare"}`}
         onClick={() => {
           if (blocked) return
           onToggle(service.id)
         }}
       >
-        <Icon size={22} strokeWidth={1} className="service-pill-icon" aria-hidden />
+        {Icon && <Icon size={22} strokeWidth={1} className="service-pill-icon" aria-hidden />}
         {service.label}
       </button>
     )
@@ -122,7 +140,7 @@ export function ServicePills({
         const label = (
           <>
             <span>{group.label}</span>
-            {count > 0 && <span className="filter-pill-badge">{count}</span>}
+            {counts && count > 0 && <span className="filter-pill-badge">{count}</span>}
           </>
         )
 

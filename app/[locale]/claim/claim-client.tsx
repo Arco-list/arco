@@ -706,7 +706,13 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
   // The tokenless platform phase shows NO preview: before services and
   // address there is nothing to preview but an empty wash. The card
   // appears on the token company step, where the form brings it alive.
-  const proCardPreview = (channel === "showcase" || channel === "outreach" || (channel === "platform" && !isPlatform)) && (
+  // The fallback preview: this company's own card, shown whenever there
+  // is no project to lead with. Keyed on the tokenless platform phase
+  // alone — before services and address there is nothing to preview but
+  // an empty wash. It used to list the channels that qualified, which
+  // meant every new channel rendered NO card until someone remembered
+  // to add it, and a claim page that asks you to claim nothing.
+  const proCardPreview = !isPlatform && (
     <article className={styles.previewCard}>
       <div className="discover-card-image-wrap" style={{ aspectRatio: "3/2" }}>
         <div className="discover-card-image-layer" style={!heroSrc ? { display: "grid", placeItems: "center", background: "var(--arco-wash)" } : undefined}>
@@ -1223,7 +1229,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
             </div>
 
             <aside className={styles.side}>
-              {channel === "invite" ? (<>{projectCard}{rosterCard}</>) : proCardPreview}
+              {ctx.project ? (<>{projectCard}{rosterCard}</>) : proCardPreview}
             </aside>
           </div>
         </div></div>
@@ -1393,7 +1399,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
           </div>
 
           <aside className={styles.side}>
-            {channel === "invite" ? (<>{projectCard}{rosterCard}</>) : proCardPreview}
+            {ctx.project ? (<>{projectCard}{rosterCard}</>) : proCardPreview}
           </aside>
         </div>
       </div></div>

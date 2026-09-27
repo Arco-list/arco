@@ -3,9 +3,21 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
 
 /**
- * Daily outreach auto-release — pushes prospects from Prospect →
- * Contacted by starting their outreach sequence, without the manual
- * morning ritual on /admin/sales.
+ * Daily auto-release — pushes prospects from Prospect → Contacted by
+ * starting their sequence, without the manual morning ritual on
+ * /admin/sales.
+ *
+ * BOTH COLD TRACKS, ONE BUDGET. Outreach (apollo) and Showcase (arco)
+ * are released together and share one daily cap, because the cap
+ * protects one sending domain and that domain does not care which
+ * sequence spent it. Two independent caps would have been two ways to
+ * send twice as much. Which pitch a contact gets is decided by
+ * startProspectSequence, which upgrades an apollo contact at a
+ * showcased company to the showcase story.
+ *
+ * Invites are NOT here — they go out through dispatch-pending-invites
+ * hourly, uncapped, because an invite is a reply to something a pro
+ * already did on the platform rather than a cold approach.
  *
  * Pacing model:
  *   - Adaptive daily cap (20 -> 60 warm-up ramp), weekdays only (see vercel.json:
@@ -24,7 +36,7 @@ import { logger } from "@/lib/logger"
  * pushed bounce to 15%; this guard would have halted intros after
  * the first hour.)
  *
- * Selection: oldest un-started Apollo prospects first (FIFO), skipping
+ * Selection: oldest un-started prospects first (FIFO), skipping
  * bounced / unsubscribed / complained rows. Each successful start is
  * recorded as a prospect_events row (sequence_auto_started) — that
  * event count is also how the run knows how much of today's budget
@@ -107,16 +119,21 @@ export async function GET(request: NextRequest) {
   }
 
   // ── Budget: how much of today's cap is already spent ────────────────
-  // Counts ACTUAL outreach-intro sends today (email_events), not just
+  // Counts ACTUAL intro sends today (email_events), not just
   // cron-triggered ones — manual releases from /admin/sales spend the
   // same 20/day budget, so a hand-started morning batch can't be
   // doubled by the afternoon cron runs.
+  //
+  // BOTH INTROS COUNT. The cap protects one sending domain, so it is
+  // one budget: a showcase intro and an outreach intro cost the same
+  // reputation. Counting only outreach-intro here would let showcase
+  // sends ride along for free and quietly double the day's volume.
   const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
   const { count: startedToday } = await supabase
     .from("email_events")
     .select("id", { count: "exact", head: true })
     .eq("event_type", "sent")
-    .eq("template", "outreach-intro")
+    .in("template", ["outreach-intro", "prospect-intro"])
     .gte("occurred_at", dayStart)
   const remaining = dailyCap - (startedToday ?? 0)
   if (remaining <= 0) {
@@ -146,11 +163,15 @@ export async function GET(request: NextRequest) {
   const runsLeft = Math.max(1, LAST_RUN_HOUR_UTC - hour + 1)
   const perRun = Math.min(Math.ceil(remaining / runsLeft), PER_RUN_CAP, remaining)
 
-  // ── Candidates: oldest un-started Apollo prospects, clean addresses ─
+  // ── Candidates: oldest un-started prospects, clean addresses ────────
+  // Apollo AND Arco. Which pitch each one gets is not decided here:
+  // startProspectSequence reads the company's status and upgrades an
+  // apollo contact at a showcased company to the showcase story, so
+  // both sources arrive at the right mail through one path.
   const { data: candidates, error: candidateError } = await supabase
     .from("prospects")
-    .select("id, email, company_name, companies(status)")
-    .eq("source", "apollo")
+    .select("id, email, company_name, company_id, source, companies(status)")
+    .in("source", ["apollo", "arco"])
     .eq("status", "prospect")
     .eq("sequence_status", "not_started")
     .is("bounced_at", null)
@@ -163,16 +184,25 @@ export async function GET(request: NextRequest) {
   if (candidateError) {
     return NextResponse.json({ error: candidateError.message }, { status: 500 })
   }
-  // Showcased companies are excluded from AUTO-release: their sequence
-  // is the showcase pitch, started manually from the Sales table
-  // (promote pauses/withholds outreach until the admin decides).
-  // Verified-and-beyond companies too: the firm already converted, so
-  // cold outreach to a colleague there (contact stage rightly still
-  // 'prospect') would pitch a company that's already on Arco.
-  const INELIGIBLE_COMPANY_STATUS = new Set(["prospected", "verified", "owned", "listed", "unlisted"])
-  const eligible = (candidates ?? []).filter(
-    (p) => !INELIGIBLE_COMPANY_STATUS.has((p as { companies?: { status?: string | null } | null }).companies?.status ?? ""),
-  )
+  // Verified-and-beyond companies stay excluded: the firm already
+  // converted, so a cold pitch to a colleague there (contact stage
+  // rightly still 'prospect') would sell a company that is already on
+  // Arco.
+  //
+  // 'prospected' USED TO SIT IN THIS LIST, because the showcase pitch
+  // was started by hand. It is released automatically now, under the
+  // same cap and the same bounce guard — those protect a sending
+  // domain, and the domain does not care which sequence spent it.
+  const INELIGIBLE_COMPANY_STATUS = new Set(["verified", "owned", "listed", "unlisted"])
+  const eligible = (candidates ?? []).filter((p) => {
+    const row = p as { source?: string; company_id?: string | null; companies?: { status?: string | null } | null }
+    if (INELIGIBLE_COMPANY_STATUS.has(row.companies?.status ?? "")) return false
+    // The showcase pitch points at a company page, so it needs a
+    // company. An arco row without one cannot be sent and would only
+    // churn through the failure list every run.
+    if (row.source === "arco" && !row.company_id) return false
+    return true
+  })
   if (eligible.length === 0) {
     return NextResponse.json({ ok: true, released: 0, reason: "no eligible prospects" })
   }

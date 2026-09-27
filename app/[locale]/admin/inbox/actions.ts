@@ -790,7 +790,7 @@ export async function generateReplyDraft(
   const systemPrompt = [
     "You are Niek van Leeuwen, founder of Arco — a curated professional network for architects in the Netherlands.",
     "You're drafting a reply to an inbound email. Voice: friendly, direct, brief, founder-style. Short paragraphs. First person ('ik' or 'I').",
-    "Sign off with just 'Niek' on its own line — no full name, no title.",
+    "Close with exactly two lines: 'Niek', then 'Arco · www.arcolist.com'. No full name, no title, no other footer.",
     `MATCH THE LANGUAGE OF THE ORIGINAL EMAIL. The detected language is ${locale === "nl" ? "Dutch (write in Dutch)" : "English (write in English)"}.`,
     "Don't include a subject line. Don't include greetings beyond the opener (e.g. 'Hi Marieke,'). Return only the reply body.",
     "If the email asks to be removed / unsubscribed, confirm warmly and offer no further pitch.",
@@ -919,6 +919,9 @@ function stripHtml(html: string): string {
 export async function sendReply(
   id: string,
   bodyText: string,
+  /** HTML alternative, only passed by the Outbound popup — a reply typed
+   *  in the inbox stays text-only. */
+  bodyHtml?: string | null,
 ): Promise<{ success: boolean; error?: string }> {
   if (!bodyText.trim()) {
     return { success: false, error: "Reply body is empty" }
@@ -954,6 +957,7 @@ export async function sendReply(
       to: row.from_email,
       subject: replySubject,
       bodyText,
+      bodyHtml: bodyHtml ?? null,
       threadId: row.thread_id ?? null,
       inReplyTo,
       references,
@@ -1064,15 +1068,130 @@ export async function getContactEmailThread(email: string | string[]): Promise<{
   return { success: true, items, latestInboundId: rows.length > 0 ? rows[rows.length - 1].id : null }
 }
 
-/** Plain-text signature for manual composes. Gmail API raw sends skip
- *  Gmail's own signature settings, so we append one ourselves — after
- *  stripping the draft's bare "Niek" sign-off to avoid double-signing.
- *  ("--" is the standard sig separator; clients render it muted.) */
-const MANUAL_EMAIL_SIGNATURE = "--\nNiek van Leeuwen\nArco · www.arcolist.com"
+const escapeHtml = (t: string) =>
+  t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
 
-function applyManualSignature(body: string): string {
-  const trimmed = body.trim().replace(/\n\s*Niek[.,!]?\s*$/i, "").trimEnd()
-  return `${trimmed}\n\nNiek\n\n${MANUAL_EMAIL_SIGNATURE}`
+/** Escape, linkify bare URLs, then break lines. Order matters: escaping
+ *  first turns a URL's & into &amp;, which is exactly the encoding an
+ *  href attribute wants, so the same string serves as both link and
+ *  label. */
+const proseToHtml = (t: string) =>
+  escapeHtml(t)
+    .replace(/https?:\/\/[^\s<>"')\]]+/g, (u) => `<a href="${u}">${u}</a>`)
+    .replace(/\r?\n/g, "<br>\n")
+
+/**
+ * The mail in both forms, assembled from one set of pieces.
+ *
+ * ONE SOURCE, TWO RENDERINGS — never a plain mail converted to HTML
+ * afterwards. The CTA is the reason: in text it has to spell out a
+ * 255-character claim URL, in HTML it is three words with that URL
+ * behind them. Deriving one from the other means parsing a link back
+ * out of prose, and the two would drift the first time either changed.
+ *
+ * The link goes WHERE THE MARKER IS, so it can sit between the
+ * paragraphs that earn it instead of hanging off the end. No marker and
+ * a CTA to place? It goes last — the old behaviour, as a fallback
+ * rather than as the design.
+ *
+ * NOTHING IS APPENDED AFTER THE PROSE. The sign-off used to be bolted
+ * on here, which meant the admin could not touch the last four lines of
+ * their own mail. It now comes out of the drafter as ordinary text.
+ *
+ * The HTML part stays deliberately bare — an <a> and <br>, no styles,
+ * no tables, no images. That is what Gmail's own compose window emits,
+ * and it is the line between a mail from a person and a mail from a
+ * system. These go out from niek@ to one architect who may well reply;
+ * the moment they look designed, they stop reading as personal.
+ */
+function composeBodies(args: {
+  prose: string
+  ctaLabel?: string | null
+  ctaUrl?: string | null
+  marker: string
+}): { text: string; html: string } {
+  const hasCta = Boolean(args.ctaUrl && args.ctaLabel)
+  let prose = args.prose.trim()
+
+  if (!hasCta) {
+    // Marker with nothing to put in it — strip it and close the hole it
+    // leaves, or the mail goes out with a blank gap mid-paragraph.
+    prose = prose.split(args.marker).join("").replace(/\n{3,}/g, "\n\n").trim()
+    return { text: prose, html: proseToHtml(prose) }
+  }
+  if (!prose.includes(args.marker)) prose = `${prose}\n\n${args.marker}`
+
+  const segments = prose.split(args.marker)
+  return {
+    text: segments.join(`${args.ctaLabel}:\n${args.ctaUrl}`),
+    html: segments
+      .map(proseToHtml)
+      .join(`<a href="${escapeHtml(args.ctaUrl!)}">${escapeHtml(args.ctaLabel!)}</a>`),
+  }
+}
+
+/**
+ * What should this mail be about? Read from the company's state rather
+ * than chosen from a menu — see lib/outbound/resolve-situation.ts.
+ * Returns null when there is no company to read, which is the popup's
+ * cue that it can send but cannot track.
+ */
+export async function resolveOutboundSituationAction(
+  companyId: string | null | undefined,
+  email?: string | null,
+  prospectId?: string | null,
+): Promise<import("@/lib/outbound/resolve-situation").OutboundSituationResolution | null> {
+  if (!companyId) return null
+  const { resolveOutboundSituation } = await import("@/lib/outbound/resolve-situation")
+  try {
+    return await resolveOutboundSituation(companyId, email ?? null, prospectId ?? null)
+  } catch (err) {
+    console.error("[outbound] situation resolution failed", err)
+    return null
+  }
+}
+
+/**
+ * Where does this mail's CTA land? Opened from the popup, in a new tab.
+ *
+ * A SEPARATE TOKEN from the one the mail will carry, because that one
+ * does not exist until Send — the whole point of minting at send is
+ * that the 48h clock starts when the mail actually goes out. This one
+ * is identical in every way that matters (same company, same address,
+ * same credit) so the page renders exactly what the recipient will see.
+ *
+ * It carries preview=1, which tells /claim to record nothing. Without
+ * it the sender's own check would book a Pro Visitor — inflating the
+ * number the mail exists to move, with the one person who must not.
+ */
+export async function previewOutboundLinkAction(input: {
+  companyId: string
+  email: string
+  situationId?: string | null
+  creditId?: string | null
+}): Promise<{ url: string | null; error?: string }> {
+  const { outboundSituation } = await import("@/lib/outbound/templates")
+  const situation = outboundSituation(input.situationId)
+  if (!situation || !input.companyId) return { url: null }
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.arcolist.com"
+  if (situation.linkKind === "dashboard") {
+    return {
+      url: `${siteUrl}/dashboard/company?company_id=${encodeURIComponent(input.companyId)}&utm_source=arco_lifecycle&utm_medium=email`,
+    }
+  }
+  try {
+    const { issueClaimToken } = await import("@/lib/claim/claim-token")
+    const issued = await issueClaimToken({
+      companyId: input.companyId,
+      email: input.email.trim().toLowerCase(),
+      channel: "outbound",
+      creditId: input.creditId ?? null,
+    })
+    return { url: `${issued.url}&preview=1` }
+  } catch (err) {
+    return { url: null, error: err instanceof Error ? err.message : "Preview failed" }
+  }
 }
 
 export async function sendContactEmail(input: {
@@ -1082,11 +1201,134 @@ export async function sendContactEmail(input: {
   prospectId?: string | null
   subject: string
   bodyText: string
+  /** Which resolved situation this was written from, if any. */
+  situationId?: string | null
+  /** Hangs the project and roster on the claim landing. */
+  creditId?: string | null
+  /** The company the CTA should point at. Required for a claim link. */
+  companyId?: string | null
+  /**
+   * Where to log the send when the contact has no prospect row — a
+   * direct signup opened from Users or Companies. Ignored when
+   * prospectId is present; a contact with both belongs on the funnel
+   * timeline, which is where the prospect ledger is read from.
+   */
+  companyContactId?: string | null
 }): Promise<{ success: boolean; error?: string }> {
   const email = input.email.trim()
-  const bodyText = input.bodyText.trim() ? applyManualSignature(input.bodyText) : ""
-  if (!email || !bodyText) return { success: false, error: "Missing recipient or body" }
+  if (!email || !input.bodyText.trim()) return { success: false, error: "Missing recipient or body" }
   const supabase = createServiceRoleSupabaseClient()
+
+  // The CTA, minted per send. A real claim token rather than a plain
+  // /claim URL, because the token is what carries the channel and the
+  // company through to the landing; composeBodies drops it at the
+  // marker the drafter placed.
+  //
+  // A failure here must not block the send. A mail that goes out
+  // untracked is worth more than a mail that does not go out.
+  const { outboundSituation } = await import("@/lib/outbound/templates")
+  const template = outboundSituation(input.situationId)
+
+  // Two kinds of link, and the difference is not cosmetic.
+  //
+  // A CLAIM link carries a token, lands on /claim and books a Pro
+  // Visitor: that is the acquisition funnel, and 'outbound' is the
+  // channel that gets the credit. The creditId rides along so the
+  // landing can lead with their project without the arrival being
+  // counted as Invites.
+  //
+  // A DASHBOARD link goes to somebody who already owns their page.
+  // Nothing about acquisition is being measured, so it is tagged
+  // LIFECYCLE — tag it arco_outbound and every activation mail would
+  // inflate the Outbound visitor count with people who arrived months
+  // ago.
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.arcolist.com"
+  const linkTag = template?.linkKind === "dashboard" ? "arco_lifecycle" : "arco_outbound"
+  let ctaUrl: string | null = null
+  if (template && input.companyId) {
+    if (template.linkKind === "dashboard") {
+      ctaUrl = `${siteUrl}/dashboard/company?company_id=${encodeURIComponent(input.companyId)}&utm_source=${linkTag}&utm_medium=email`
+    } else {
+      try {
+        const { issueClaimToken } = await import("@/lib/claim/claim-token")
+        const issued = await issueClaimToken({
+          companyId: input.companyId,
+          email,
+          channel: "outbound",
+          creditId: input.creditId ?? null,
+        })
+        ctaUrl = issued.url
+      } catch (err) {
+        console.error("[outbound] claim link issuance failed", err)
+      }
+    }
+  }
+  // Tag every Arco link as Outbound before it goes out. Without this
+  // the mail is indistinguishable from someone typing the address and
+  // the click lands in Direct — which is also why sending THROUGH the
+  // product is what makes a mail count as Outbound. A link written by
+  // hand into a personal mailbox can never carry this.
+  const { tagArcoTextLinks } = await import("@/lib/email-channels")
+  const { LINK_MARKER } = await import("@/lib/outbound/templates")
+  const { text: bodyText, html: bodyHtml } = composeBodies({
+    marker: LINK_MARKER,
+    // Tag the prose BEFORE either rendering, so an Arco link the admin
+    // typed by hand carries the same utm in both parts. The CTA is
+    // already tagged by issueClaimToken, and tagArcoTextLinks leaves a
+    // url that has a utm_source alone.
+    prose: tagArcoTextLinks(input.bodyText.trim(), linkTag),
+    ctaLabel: template?.cta ?? null,
+    ctaUrl,
+  })
+
+  /**
+   * The send happened — write it down. Runs for BOTH paths below.
+   *
+   * outbound_contact_log is what the Outbound funnel counts, and the
+   * threaded path used to return before reaching it: a mail to anyone
+   * who had ever replied to us was sent, delivered, and invisible to
+   * the row that exists to measure exactly that.
+   */
+  const recordSend = async (subject: string) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = supabase as any
+
+    // Contacts without a prospect row (direct signups opened from Users
+    // or Companies) log against their company_contacts row instead —
+    // the same column the retired Log popup wrote. Without this branch
+    // those sends went out and counted as nothing.
+    if (!input.prospectId) {
+      if (input.companyContactId) {
+        await db.from("outbound_contact_log").insert({
+          company_contact_id: input.companyContactId,
+          kind: "email",
+          outcome: "sent",
+          body: subject,
+        })
+      }
+      return
+    }
+
+    await db.from("outbound_contact_log").insert({
+      prospect_id: input.prospectId,
+      kind: "email",
+      outcome: "sent",
+      body: subject,
+    })
+    await db.from("prospect_events").insert({
+      prospect_id: input.prospectId,
+      event_type: "email_sent",
+      event_source: "admin",
+      metadata: {
+        template: template?.id ?? "manual-compose",
+        subject,
+        email,
+        tracked: ctaUrl !== null,
+        linkKind: template?.linkKind ?? null,
+      },
+    })
+    await db.from("prospects").update({ last_outbound_at: new Date().toISOString() }).eq("id", input.prospectId)
+  }
 
   // Existing thread → the proven reply path (threading, replied status,
   // few-shot voice memory). Matched across all the contact's addresses;
@@ -1101,50 +1343,26 @@ export async function sendContactEmail(input: {
     .order("received_at", { ascending: false })
     .limit(1)
     .maybeSingle()
-  if (latest?.id) return await sendReply(latest.id, bodyText)
+  if (latest?.id) {
+    const replied = await sendReply(latest.id, bodyText, bodyHtml)
+    if (replied.success) await recordSend(input.subject.trim() || "Re: (threaded)")
+    return replied
+  }
 
   const subject = input.subject.trim()
   if (!subject) return { success: false, error: "Subject is required for a new email" }
-  // Tag every Arco link in the draft as Outbound before it goes out.
-  // Without this the mail is indistinguishable from someone typing the
-  // address, and the click lands in Direct — which is also why sending
-  // THROUGH the product is what makes a mail count as Outbound. A link
-  // written by hand into a personal mailbox can never carry this.
-  const { tagArcoTextLinks } = await import("@/lib/email-channels")
-  const taggedBody = tagArcoTextLinks(bodyText, "arco_outbound")
 
   try {
     const { sendGmailReply } = await import("@/lib/gmail/send")
     // Personal founder mail goes out as niek@ — hello@ is the
     // transactional/support identity. Falls back to the oldest
     // connection if niek@ isn't connected.
-    await sendGmailReply(supabase, { to: email, subject, bodyText: taggedBody, preferredAddress: "niek@arcolist.com" })
+    await sendGmailReply(supabase, { to: email, subject, bodyText, bodyHtml, preferredAddress: "niek@arcolist.com" })
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Send failed" }
   }
 
-  if (input.prospectId) {
-    // Log it as an outbound CONTACT, not just as a prospect event.
-    // outbound_contact_log is what the Outbound funnel counts, and it
-    // held nothing but 'call' — so every hand-written mail sent from
-    // here was invisible to the row that exists to measure them.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from("outbound_contact_log").insert({
-      prospect_id: input.prospectId,
-      kind: "email",
-      outcome: "sent",
-      body: subject,
-    })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from("prospect_events").insert({
-      prospect_id: input.prospectId,
-      event_type: "email_sent",
-      event_source: "admin",
-      metadata: { template: "manual-compose", subject, email },
-    })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from("prospects").update({ last_outbound_at: new Date().toISOString() }).eq("id", input.prospectId)
-  }
+  await recordSend(subject)
   return { success: true }
 }
 
@@ -1161,6 +1379,13 @@ export async function generateComposeDraft(input: {
   prospectId?: string | null
   subject?: string
   userEdit?: string
+  /**
+   * The chosen template's brief. Steers what the mail is FOR; the voice
+   * still comes from the few-shot examples below. Without one the model
+   * invents a purpose, which is how a first-touch mail ends up claiming
+   * a phone call that never happened.
+   */
+  intent?: string
 }): Promise<{ success: boolean; draft?: string; suggestedSubject?: string; error?: string }> {
   if (!process.env.ANTHROPIC_API_KEY) {
     return { success: false, error: "ANTHROPIC_API_KEY not set" }
@@ -1220,23 +1445,30 @@ export async function generateComposeDraft(input: {
 
   const subjectGiven = (input.subject ?? "").trim()
   const userEditTrimmed = (input.userEdit ?? "").trim()
+  const intentTrimmed = (input.intent ?? "").trim()
+  const { LINK_MARKER } = await import("@/lib/outbound/templates")
 
   const systemPrompt = [
     "You are Niek van Leeuwen, founder of Arco — a curated professional network for architects in the Netherlands.",
     "You're drafting a NEW outbound email to a professional (no prior thread). Voice: friendly, direct, brief, founder-style. Short paragraphs. First person.",
-    "Sign off with just 'Niek' on its own line — no full name, no title.",
+    "Close with exactly two lines: 'Niek', then 'Arco · www.arcolist.com'. No full name, no title, no other footer.",
     `Write in ${locale === "nl" ? "Dutch" : "English"}.`,
     "Keep it short — 3 to 6 sentences. One clear purpose, one clear next step. No pressure tactics.",
     subjectGiven
       ? "A subject is already chosen by the admin — write the body for that topic. Return only the email body."
       : 'No subject chosen yet: return the email as a first line "SUBJECT: <short subject>" followed by an empty line, then the body.',
     "Open with the contact's first name when known (e.g. 'Hi Marieke,').",
+    "Do not write a URL or a 'click here' line yourself.",
+    intentTrimmed
+      ? `Put the line ${LINK_MARKER} on its own line where a link to their page belongs — after the sentence that makes them want to see it, NOT at the very end and never in the closing lines. The sender swaps it for a real link. Use it exactly once.`
+      : "",
     fewShot.length > 0
       ? "The assistant turns below are real Niek-written emails. Match tone, length, and how Niek opens/closes — don't copy phrasing verbatim."
       : "",
   ].filter(Boolean).join("\n")
 
   const userMessage = [
+    intentTrimmed ? `What this mail is for:\n${intentTrimmed}\n` : null,
     prospectContext ? `Recipient context:\n${prospectContext}\n` : `Recipient: ${contactName ?? email}\n`,
     `To: ${email}`,
     subjectGiven ? `Subject (chosen): ${subjectGiven}` : "Subject: (propose one)",

@@ -12,14 +12,14 @@ import { updateProspectById } from "@/lib/contacts/update-prospect-by-id"
 import { markProspectNotInterested, removeProspectFromFunnel } from "@/app/admin/sales/actions"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { ProspectTimelineFused, TransactionalOnlyTimeline } from "./prospect-timeline-fused"
-import { LogOutboundModal } from "@/app/admin/sales/log-outbound-modal"
+import { EmailComposeModal } from "./email-compose-modal"
 import { formatPhoneDisplay } from "@/lib/format-phone"
 
 /**
  * Shared Contact Card — right-anchored slide-over. The single detail
  * surface for a contact on /admin/sales: row clicks, contact clicks
  * and the +N-more picker all open this panel (the old center-modal
- * was retired). Per-contact actions live here too: Log outbound,
+ * was retired). Per-contact actions live here too: Outbound,
  * sequence transitions, and Remove from funnel (bottom link).
  *
  * Data model still keyed on normalized email. Timeline sub-bundle is
@@ -236,7 +236,7 @@ function CardBody({
       {primaryProspect ? (
         // ProspectTimelineFused now emits its own Activity + Timeline
         // sections; contact-card just drops it into the body stream.
-        // Pass contact + company + phone through so LogOutboundModal
+        // Pass contact + company through so the Outbound popup
         // (rendered inside Fused) doesn't need to refetch them.
         <ProspectTimelineFused
           prospectId={primaryProspect.id}
@@ -244,13 +244,12 @@ function CardBody({
           emails={[data.email, ...data.aliases]}
           contactLabel={pickDisplayName(data)}
           companyLabel={primaryProspect.company_name ?? data.companiesById[primaryProspect.company_id ?? ""]?.name ?? null}
-          contactPhone={data.profile?.phone ?? primaryProspect.phone ?? null}
           onMutated={onChanged}
         />
       ) : (
         // No prospect record — still show transactional sends (magic
         // links, project status, welcome…) so signed-up users who never
-        // went through the funnel get a timeline too. Log outbound stays
+        // went through the funnel get a timeline too. Outbound stays
         // available via the company-contact path when one exists.
         <NoProspectTimeline data={data} />
       )}
@@ -860,10 +859,9 @@ function CompanyRow({ entry, data }: { entry: GroupedCompany; data: ContactByEma
 }
 
 // ── Timeline for contacts without a prospect record ───────────────────
-// The Log pill on Sales panels comes from ProspectTimelineFused, which
-// needs a prospect. Contacts opened from Users/Companies without one
-// (direct signups) log against their company_contacts row instead —
-// LogOutboundModal already supports that path.
+// Same Outbound popup as the Sales panels, one rung down: with no
+// prospect to log against, the send is written to the contact's
+// company_contacts row instead.
 // Company lifecycle statuses → the same dots the Companies table uses.
 const COMPANY_STATUS_DOT: Record<string, string> = {
   added: "#dc2626",
@@ -896,9 +894,9 @@ function NoProspectTimeline({ data }: { data: ContactByEmailData }) {
               type="button"
               onClick={() => setLogOpen(true)}
               className="shrink-0 rounded-[12px] border border-[#016D75] text-[#016D75] text-[10px] font-medium px-2 py-[2px] leading-normal cursor-pointer hover:bg-[#f0f7f6] transition-colors"
-              title="Log outbound"
+              title="Send an outbound email — the send is the log"
             >
-              Log
+              Outbound
             </button>
           ) : undefined
         }
@@ -928,15 +926,15 @@ function NoProspectTimeline({ data }: { data: ContactByEmailData }) {
       <Section label="Timeline">
         <TransactionalOnlyTimeline emails={[data.email, ...data.aliases]} />
       </Section>
-      {companyContact && (
-        <LogOutboundModal
-          open={logOpen}
-          onOpenChange={setLogOpen}
-          companyContactId={companyContact.id}
+      {companyContact && logOpen && (
+        <EmailComposeModal
+          email={data.email}
+          emails={[data.email, ...data.aliases]}
           contactLabel={pickDisplayName(data)}
-          companyLabel={primaryCompany?.name ?? ""}
-          contactEmail={data.email}
-          contactPhone={data.profile?.phone ?? null}
+          companyLabel={primaryCompany?.name ?? null}
+          companyId={primaryCompanyId}
+          companyContactId={companyContact.id}
+          onClose={() => setLogOpen(false)}
         />
       )}
     </>

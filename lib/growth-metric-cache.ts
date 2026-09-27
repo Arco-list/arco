@@ -813,6 +813,7 @@ const ENTRY_CHANNEL_EXPR = `
     entry_url ILIKE '%/businesses/professionals%'
       AND entry_url ILIKE '%inviteEmail=%', 'invites',
     entry_utm = 'arco_claim_invite', 'invites',
+    entry_utm = 'arco_claim_outbound', 'outbound',
     entry_utm ILIKE 'arco_claim_%', 'sales',
     entry_url ILIKE '%/claim?t=%'
       OR (entry_url ILIKE '%/claim%' AND entry_url ILIKE '%&t=%'), 'sales',

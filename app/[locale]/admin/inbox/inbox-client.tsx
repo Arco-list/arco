@@ -41,7 +41,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { generateCompanyLoginLinkAction } from "@/app/admin/companies/actions"
 import { ContactCard } from "@/components/contact-card/contact-card"
-import { LogOutboundModal } from "@/app/admin/sales/log-outbound-modal"
+import { EmailComposeModal } from "@/components/contact-card/email-compose-modal"
 import { markProspectNotInterested, removeProspectFromFunnel } from "@/app/admin/sales/actions"
 
 // Mirrors the funnel-stage colours used on /admin/sales so the
@@ -237,12 +237,14 @@ export function InboxClient({
 
   // ── Contact machinery (mirrors /admin/sales' contact chip) ──
   const [contactCard, setContactCard] = useState<{ email: string; prospectId: string | null } | null>(null)
+  // The Outbound popup's target. Carries the company because the
+  // popup's CTA is a claim link for that company's page.
   const [logOutboundTarget, setLogOutboundTarget] = useState<{
     prospectId: string
     contactLabel: string
     companyLabel: string | null
+    companyId: string | null
     contactEmail: string
-    contactPhone: string | null
   } | null>(null)
 
   const handleNotInterested = useCallback(async (row: InboundEmailRow) => {
@@ -510,11 +512,11 @@ export function InboxClient({
                                 prospectId: row.prospectId!,
                                 contactLabel: row.prospectContactName?.trim() || personName || row.fromEmail,
                                 companyLabel: row.prospectCompanyName,
+                                companyId: row.companyId ?? null,
                                 contactEmail: row.fromEmail,
-                                contactPhone: row.prospectPhone,
                               })}
                             >
-                              Log outbound
+                              Outbound
                             </DropdownMenuItem>
                             <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => openRespond(row)}>
                               Send email
@@ -941,15 +943,15 @@ export function InboxClient({
       )}
 
       {logOutboundTarget && (
-        <LogOutboundModal
-          open
-          onOpenChange={(open: boolean) => { if (!open) setLogOutboundTarget(null) }}
-          prospectId={logOutboundTarget.prospectId}
+        <EmailComposeModal
+          email={logOutboundTarget.contactEmail}
+          emails={[logOutboundTarget.contactEmail]}
           contactLabel={logOutboundTarget.contactLabel}
-          companyLabel={logOutboundTarget.companyLabel ?? ""}
-          contactEmail={logOutboundTarget.contactEmail}
-          contactPhone={logOutboundTarget.contactPhone}
-          onLogged={() => { setLogOutboundTarget(null); reload() }}
+          companyLabel={logOutboundTarget.companyLabel}
+          companyId={logOutboundTarget.companyId}
+          prospectId={logOutboundTarget.prospectId}
+          onClose={() => setLogOutboundTarget(null)}
+          onSent={() => { setLogOutboundTarget(null); reload() }}
         />
       )}
 

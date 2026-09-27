@@ -1,5 +1,6 @@
 import "server-only"
 
+import { randomBytes } from "crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { getValidAccessToken } from "./sync"
 import { logger } from "@/lib/logger"
@@ -33,6 +34,21 @@ export type SendReplyArgs = {
   subject: string
   /** Plain-text body. UTF-8 OK; we base64-encode the body so accents pass through. */
   bodyText: string
+  /**
+   * Optional HTML alternative. When given, the message goes out as
+   * multipart/alternative and bodyText becomes the fallback part.
+   *
+   * OPT-IN ON PURPOSE. Every existing caller sends text only and keeps
+   * doing so — a reply typed in the inbox has nothing to gain from
+   * markup, and silently turning the whole mailbox into HTML mail is a
+   * change nobody asked for. Pass this only where the markup earns its
+   * place, i.e. a link whose anchor text beats a 255-character URL.
+   *
+   * Keep it plain: an <a> and <br>, no styles, no tables, no images.
+   * That is what Gmail's own compose window produces, and it is the
+   * difference between a mail from a person and a mail from a system.
+   */
+  bodyHtml?: string | null
   /** Gmail thread id to reply within. Optional but strongly preferred. */
   threadId?: string | null
   /** RFC 5322 Message-ID header from the email being replied to (e.g. "<abc@example.com>"). */
@@ -86,6 +102,7 @@ export async function sendGmailReply(
     to: args.to,
     subject: args.subject,
     bodyText: args.bodyText,
+    bodyHtml: args.bodyHtml ?? null,
     inReplyTo: args.inReplyTo ?? null,
     references: args.references ?? args.inReplyTo ?? null,
   })
@@ -119,11 +136,17 @@ export async function sendGmailReply(
  * 2047 encoded-word when it contains non-ASCII so threading clients
  * don't mangle it.
  */
+/** RFC 2045 hard-wrap: strict clients reject base64 lines over 76. */
+function wrapB64(text: string): string {
+  return Buffer.from(text, "utf8").toString("base64").replace(/(.{76})/g, "$1\r\n")
+}
+
 function buildRawRfc2822(args: {
   from: string
   to: string
   subject: string
   bodyText: string
+  bodyHtml?: string | null
   inReplyTo: string | null
   references: string | null
 }): string {
@@ -132,19 +155,40 @@ function buildRawRfc2822(args: {
     `To: ${args.to}`,
     `Subject: ${encodeMimeSubject(args.subject)}`,
     "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=utf-8",
-    "Content-Transfer-Encoding: base64",
   ]
   if (args.inReplyTo) headers.push(`In-Reply-To: ${args.inReplyTo}`)
   if (args.references) headers.push(`References: ${args.references}`)
 
-  const bodyB64 = Buffer.from(args.bodyText, "utf8")
-    .toString("base64")
-    // Hard-wrap at 76 chars per RFC 2045. Most clients tolerate longer
-    // but some strict ones reject.
-    .replace(/(.{76})/g, "$1\r\n")
-
-  const message = headers.join("\r\n") + "\r\n\r\n" + bodyB64
+  let message: string
+  if (args.bodyHtml) {
+    // Random boundary: a fixed one can appear verbatim in a body and
+    // split the message at the wrong place. Both parts are base64, so
+    // the boundary can never collide with encoded content either way.
+    const boundary = `=_arco_${randomBytes(12).toString("hex")}`
+    headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`)
+    // PLAIN FIRST, HTML LAST. Clients render the last part they
+    // understand, so this order means an HTML client shows the link and
+    // a text-only client falls back to the URL.
+    message = [
+      headers.join("\r\n"),
+      "",
+      `--${boundary}`,
+      "Content-Type: text/plain; charset=utf-8",
+      "Content-Transfer-Encoding: base64",
+      "",
+      wrapB64(args.bodyText),
+      `--${boundary}`,
+      "Content-Type: text/html; charset=utf-8",
+      "Content-Transfer-Encoding: base64",
+      "",
+      wrapB64(args.bodyHtml),
+      `--${boundary}--`,
+    ].join("\r\n")
+  } else {
+    headers.push("Content-Type: text/plain; charset=utf-8")
+    headers.push("Content-Transfer-Encoding: base64")
+    message = headers.join("\r\n") + "\r\n\r\n" + wrapB64(args.bodyText)
+  }
   return Buffer.from(message, "utf8")
     .toString("base64")
     .replace(/\+/g, "-")

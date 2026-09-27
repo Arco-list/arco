@@ -1952,11 +1952,15 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     channel?: string | null; email?: string | null; created_at?: string | null
   }[]
 
-  type ArrivalChannel = "invites" | "sales" | "organic"
+  type ArrivalChannel = "invites" | "sales" | "outbound" | "organic"
   const arrivalChannelOf = (row: { channel?: string | null }): ArrivalChannel => {
     const c = String(row.channel ?? "")
     if (c === "invite") return "invites"
     if (c === "outreach" || c === "showcase") return "sales"
+    // A hand-written mail sent through the product. It has a landing
+    // because we put one in it, which is what separates it from the
+    // phone call that has no visitor step.
+    if (c === "outbound") return "outbound"
     return "organic"
   }
 
@@ -1981,6 +1985,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const claimInvitesSeries = bucketArrivals("invites")
   const claimSalesSeries = bucketArrivals("sales")
   const claimOrganicSeries = bucketArrivals("organic")
+  const claimOutboundSeries = bucketArrivals("outbound")
   const sumOf = (xs: number[]) => xs.reduce((a, b) => a + b, 0)
 
   const rows: MetricRow[] = [
@@ -2051,12 +2056,16 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
         { key: "sales", label: "Sales", definition: "Claim links from Outreach or Showcase mail. Deduped by the address the token was issued to.", source: "supabase" as MetricSource,
           total: sumOf(claimSalesSeries), datapoints: claimSalesSeries ,
           customCR: { label: "to New Pros", numerator: newProsSalesSeries, denominator: claimSalesSeries, definition: "Share of this period's claim arrivals that became a New Pro. A period ratio, not a cohort — arrivals and listings are counted in the same bucket." }},
-        { key: "organic", label: "Organisch", definition: "Arrivals with no token — the platform route. No identity to dedupe on, so this counts arrivals where the two above count people.", source: "supabase" as MetricSource,
+        { key: "outbound", label: "Outbound", definition: "Claim links from a hand-written mail sent from the contact card. Deduped by the address the token was issued to.", source: "supabase" as MetricSource,
+          total: sumOf(claimOutboundSeries), datapoints: claimOutboundSeries },
+        { key: "organic", label: "Organisch", definition: "Arrivals with no token — the platform route. No identity to dedupe on, so this counts arrivals where the three above count people.", source: "supabase" as MetricSource,
           total: sumOf(claimOrganicSeries), datapoints: claimOrganicSeries ,
           customCR: { label: "to New Pros", numerator: newProsOrganicSeries, denominator: claimOrganicSeries, definition: "Share of this period's claim arrivals that became a New Pro. A period ratio, not a cohort — arrivals and listings are counted in the same bucket." }},
-        // No Outbound sub, deliberately: a phone call has no landing,
-        // and outbound targets firms that are already visitors. Its
-        // conversion runs from contacted straight to New Pros.
+        // Outbound carries no conversion to New Pros. The New Pros
+        // Outbound sub is an overlay ("touched by"), counted over
+        // every pro we ever mailed; these arrivals are a clean channel
+        // count. Dividing one by the other would put two different
+        // populations either side of the slash.
       ],
     },
     {

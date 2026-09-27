@@ -26,7 +26,7 @@ import { isLikelyMailScannerVisit, type ProspectVisitContext } from "@/lib/prosp
  * Never throws. A page must not fail because a counter did.
  */
 export async function trackClaimArrival(input: {
-  /** 'invite' | 'outreach' | 'showcase' from the token, 'platform' without one. */
+  /** 'invite' | 'outreach' | 'showcase' | 'outbound' from the token, 'platform' without one. */
   channel: string
   /** The address the token was issued to. Null for the platform route. */
   email?: string | null

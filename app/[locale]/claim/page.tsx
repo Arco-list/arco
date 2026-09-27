@@ -28,10 +28,15 @@ export default async function ClaimPage({
   searchParams,
 }: {
   params: Promise<{ locale: string }>
-  searchParams: Promise<{ t?: string; step?: string; c?: string; p?: string }>
+  searchParams: Promise<{ t?: string; step?: string; c?: string; p?: string; preview?: string }>
 }) {
   const { locale } = await params
-  const { t: token, step, c: pickedCompanyId, p: pickedPlaceId } = await searchParams
+  const { t: token, step, c: pickedCompanyId, p: pickedPlaceId, preview } = await searchParams
+  // An admin checking where their own link lands. Renders exactly
+  // what the recipient will see, but records nothing: previewing a
+  // mail is not a pro arriving, and counting it would let the sender
+  // inflate the very number the mail exists to move.
+  const isPreview = preview === "1"
   const t = await getTranslations({ locale, namespace: "claim" })
 
   // Dead-end states wear the same chrome as the funnel itself — the
@@ -101,6 +106,10 @@ export default async function ClaimPage({
     const tokenCompanyId = parsed.companyId
     const h = await headers()
     const visitCtx = { country: h.get("x-vercel-ip-country"), userAgent: h.get("user-agent") }
+    if (isPreview) {
+      // Skip all three ledgers at once. Guarding each call separately
+      // would be three chances to forget one later.
+    } else {
     // Fire-and-forget, both of them: rendering never waits on
     // bookkeeping, and a failed write must not cost the visitor a page.
     void import("@/lib/prospect-ref")
@@ -127,6 +136,7 @@ export default async function ClaimPage({
         ctx: visitCtx,
       }))
       .catch(() => {})
+    }
 
     // /login is a dead redirect to "/" — sign-in lives in the modal,
     // which the login-modal provider auto-opens whenever a redirectTo

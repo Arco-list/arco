@@ -149,6 +149,7 @@ export function categorizeFirstTouch(
   if (isSalesPath(url)) return "sales"
   if (isInvitesPath(url)) return "invites"
   if (utm === "arco_claim_invite") return "invites"
+  if (utm === "arco_claim_outbound") return "outbound"
   if (utm.startsWith("arco_claim_")) return "sales"
 
   // Assistants tag their own handovers, so read the utm as well as the

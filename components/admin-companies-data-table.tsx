@@ -46,10 +46,9 @@ import {
   updateCompanyEmailAction,
   updateCompanyContactRoleAction,
   removeCompanyContactAction,
-  logOutboundForCompanyContactAction,
 } from "@/app/admin/companies/actions"
 import { deleteProjectAction, updateProjectProfessionalStatusAction } from "@/app/admin/projects/actions"
-import { LogOutboundModal } from "@/app/admin/sales/log-outbound-modal"
+import { EmailComposeModal } from "@/components/contact-card/email-compose-modal"
 import { ContactCard } from "@/components/contact-card/contact-card"
 import { useContactParam } from "@/hooks/use-contact-param"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
@@ -564,8 +563,13 @@ function ContactActionMenuItems({
       <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => onDetails(contact)}>
         Details
       </DropdownMenuItem>
-      <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => onLogOutbound(contact)}>
-        Log outbound
+      <DropdownMenuItem
+        className="text-xs cursor-pointer"
+        disabled={!contact.email}
+        title={contact.email ? undefined : "Geen e-mailadres op dit contact"}
+        onClick={() => onLogOutbound(contact)}
+      >
+        Outbound
       </DropdownMenuItem>
       <DropdownMenuSub>
         <DropdownMenuSubTrigger className="text-xs">Change role</DropdownMenuSubTrigger>
@@ -680,22 +684,16 @@ function ContactsCell({
         </DropdownMenu>
       )}
 
-      {logOutboundTarget && (
-        <LogOutboundModal
-          open
-          onOpenChange={(open) => {
-            if (!open) setLogOutboundTarget(null)
-          }}
-          companyContactId={logOutboundTarget.id}
-          contactLabel={logOutboundTarget.name?.trim() || logOutboundTarget.email || "Unnamed contact"}
+      {logOutboundTarget?.email && (
+        <EmailComposeModal
+          email={logOutboundTarget.email}
+          emails={[logOutboundTarget.email]}
+          contactLabel={logOutboundTarget.name?.trim() || logOutboundTarget.email}
           companyLabel={companyName}
-          contactEmail={logOutboundTarget.email ?? null}
-          contactPhone={logOutboundTarget.phone ?? null}
-          contactAvatarUrl={null}
-          onLogged={() => {
-            setLogOutboundTarget(null)
-            onRefresh()
-          }}
+          companyId={companyId}
+          companyContactId={logOutboundTarget.id}
+          onClose={() => setLogOutboundTarget(null)}
+          onSent={() => { setLogOutboundTarget(null); onRefresh() }}
         />
       )}
     </div>
@@ -1791,7 +1789,16 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const filteredRows = table.getFilteredRowModel().rows
   const filteredCompanies = filteredRows.filter((r) => r.original.status !== "invited").length
   const filteredInvites = filteredRows.filter((r) => r.original.status === "invited").length
-  const isFiltered = columnFilters.length > 0 || table.getState().globalFilter
+  // Channel and service live in React state, not in the table's own
+  // filter model — they are applied upstream when filteredData is built.
+  // Leaving them out here let the count read the pre-filter universe
+  // while the rows below showed the filtered one: 121 companies over a
+  // table of 82.
+  const isFiltered =
+    columnFilters.length > 0
+    || Boolean(table.getState().globalFilter)
+    || channelFilter.length > 0
+    || serviceFilter.length > 0
 
   // Status funnel: Added → Showcased → Created → Listed → Unlisted, with
   // Deactivated as the off-path leak (analogous to Rejected on the projects
@@ -2723,13 +2730,18 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         )
       })()}
 
-      {/* Load more — replaces the previous Previous/Next pagination.
-          Shows total loaded vs total matched; button hidden when the
-          full result set is already on screen. */}
+      {/* Load more. The count here answers "is there more below?" —
+          loaded versus matched — which is a different question from the
+          line above the table, where the same N-of-M shape means matched
+          versus the whole set. With everything on screen it can only
+          ever read "8 of 8", so the whole block goes: a number that
+          cannot change is not a status, and next to the line above it
+          reads as the same fact told twice. */}
       {(() => {
         const total = table.getFilteredRowModel().rows.length
         const visible = Math.min(pagination.pageSize, total)
         const canLoadMore = visible < total
+        if (!canLoadMore) return null
         return (
           <div className="arco-table-pagination">
             <span className="arco-table-pagination-count">

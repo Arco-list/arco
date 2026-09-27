@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useRef, useState, useTransition, useCallback } from "react"
 import { ArrowUpRight } from "lucide-react"
 import { toast } from "sonner"
+import { PROSPECT_STATUS_CONFIG } from "@/lib/sales/prospect-status"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { EmailComposeModal } from "@/components/contact-card/email-compose-modal"
 import { AdminTabs, useAdminTab } from "@/components/admin/admin-tabs"
@@ -39,7 +40,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Checkbox } from "@/components/ui/checkbox"
 import { clickedRateColor, deliveredRateColor, openedRateColor } from "@/lib/email-rate-colors"
-import { LogOutboundModal } from "./log-outbound-modal"
 import { ContactCard } from "@/components/contact-card/contact-card"
 import { useContactParam } from "@/hooks/use-contact-param"
 
@@ -51,20 +51,11 @@ const ACTION_PILL_CLASS =
 
 // -- Status config -----------------------------------------------------------
 
-export const STATUS_CONFIG: Record<ProspectStatus, { label: string; cls: string; dot: string }> = {
-  prospect: { label: "Prospect", cls: "bg-amber-50 text-amber-700", dot: "bg-[#f59e0b]" },
-  contacted: { label: "Contacted", cls: "bg-amber-50 text-amber-700", dot: "bg-[#f59e0b]" },
-  visitor: { label: "Visitor", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
-  verified: { label: "Verified", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
-  owned: { label: "Owned", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]" },
-  // Mirror of companies 'unlisted' — claimed, page currently hidden.
-  unlisted: { label: "Unlisted", cls: "bg-gray-50 text-gray-600", dot: "bg-[#a1a1a0]" },
-  active: { label: "Listed", cls: "bg-purple-50 text-purple-800 font-semibold", dot: "bg-[#7c3aed]" },
-  // Removed never renders in the funnel — the row hides any contact with this
-  // status, and the company row drops entirely if every contact is removed.
-  // Kept here so per-contact rendering doesn't crash if a stray row slips in.
-  removed: { label: "Removed", cls: "bg-gray-50 text-gray-500", dot: "bg-[#a1a1a0]" },
-}
+/** One home for the funnel's stages — the Outbound popup shows the
+ *  same pill on the same contact. Re-exported so this file's own
+ *  importers keep working. */
+export { PROSPECT_STATUS_CONFIG as STATUS_CONFIG } from "@/lib/sales/prospect-status"
+const STATUS_CONFIG = PROSPECT_STATUS_CONFIG
 
 /** Not a prospect status — there is none — so it sits beside the map
  *  rather than in it. Same green the funnel gives the monetization
@@ -802,16 +793,18 @@ export function ProspectsClient({
   // source of truth; the effect below keeps callListOnly in step so tab
   // clicks, back/forward and deep links all apply the filter.
   const barTab = useAdminTab(["all", "calls"] as const)
-  // Log outbound modal target — opened from the black "Log" pill on a
-  // contact row. The panel has its own instance; this one serves the
-  // table without opening the panel first.
   // Companies-style row menu, opened AT the click position via a
   // zero-size fixed anchor. Only rows with a companies record get it;
   // company-less prospect rows keep opening the contact panel.
   const [rowMenu, setRowMenu] = useState<{ row: SalesCompanyRow; x: number; y: number } | null>(null)
   // Contact menu actions that live at table level: compose opens the
   // shared modal; the two funnel exits confirm, apply and reload.
-  const [emailTarget, setEmailTarget] = useState<SalesContact | null>(null)
+  // The Outbound popup's target. Carries the company because the
+  // popup's CTA is a claim link for that company's page — without it
+  // the mail still sends, just untracked.
+  const [emailTarget, setEmailTarget] = useState<
+    { contact: SalesContact; companyId: string | null; companyLabel: string | null } | null
+  >(null)
   const handleNotInterested = async (contact: SalesContact) => {
     const r = await markProspectNotInterested(contact.prospectId, true)
     if (r.success) { toast.success("Marked as not interested"); reload({ offset, append: false }) }
@@ -823,14 +816,6 @@ export function ProspectsClient({
     if (r.success) { toast.success("Removed from funnel"); reload({ offset, append: false }) }
     else toast.error(r.error ?? "Failed")
   }
-  const [logOutboundTarget, setLogOutboundTarget] = useState<{
-    prospectId: string
-    contactLabel: string
-    companyLabel: string
-    contactEmail: string | null
-    contactPhone: string | null
-    contactAvatarUrl: string | null
-  } | null>(null)
   // Multi-select row state — mirrors the /admin/companies pattern. Keyed
   // on row.rowId; bulk actions iterate the underlying contacts of every
   // selected row. Cleared on successful bulk action or filter change.
@@ -1672,19 +1657,9 @@ export function ProspectsClient({
                 selected={selectedRowIds.has(row.rowId)}
                 onToggleSelect={(v) => toggleRow(row.rowId, v)}
                 onOpenContactCard={openContactCard}
-                onLogOutbound={(contact) =>
-                  setLogOutboundTarget({
-                    prospectId: contact.prospectId,
-                    contactLabel: contact.resolvedContact.name?.trim() || contact.email || "Unnamed contact",
-                    companyLabel: row.companyName,
-                    contactEmail: contact.resolvedContact.email ?? contact.email ?? null,
-                    contactPhone: row.claimedCompany?.phone ?? null,
-                    contactAvatarUrl: contact.resolvedContact.avatarUrl ?? null,
-                  })
-                }
                 showCallColumn={callListOnly}
                 onOpenRowMenu={(e) => setRowMenu({ row, x: e.clientX, y: e.clientY })}
-                onSendEmail={(c) => setEmailTarget(c)}
+                onSendEmail={(c) => setEmailTarget({ contact: c, companyId: row.companyId ?? null, companyLabel: row.companyName ?? null })}
                 onNotInterested={handleNotInterested}
                 onRemoveFromFunnel={handleRemoveFromFunnel}
                 onRenamed={() => reload({ offset, append: false })}
@@ -1763,10 +1738,12 @@ export function ProspectsClient({
 
       {emailTarget && (
         <EmailComposeModal
-          email={emailTarget.email}
-          emails={[emailTarget.email]}
-          contactLabel={emailTarget.resolvedContact.name?.trim() || emailTarget.contactName || emailTarget.email}
-          prospectId={emailTarget.prospectId}
+          email={emailTarget.contact.email}
+          emails={[emailTarget.contact.email]}
+          contactLabel={emailTarget.contact.resolvedContact.name?.trim() || emailTarget.contact.contactName || emailTarget.contact.email}
+          companyLabel={emailTarget.companyLabel}
+          companyId={emailTarget.companyId}
+          prospectId={emailTarget.contact.prospectId}
           onClose={() => setEmailTarget(null)}
           onSent={() => { setEmailTarget(null); reload({ offset, append: false }) }}
         />
@@ -1908,25 +1885,6 @@ export function ProspectsClient({
       {/* Phase 1 shared Contact Card — mounted at page level so the
           URL param drives visibility. Row click opens; timeline modal
           (line 1588) is still reachable via the +N-more menu. */}
-      {/* Log outbound modal — opened from the black "Log" pill on rows */}
-      {logOutboundTarget && (
-        <LogOutboundModal
-          open
-          onOpenChange={(open) => { if (!open) setLogOutboundTarget(null) }}
-          prospectId={logOutboundTarget.prospectId}
-          contactLabel={logOutboundTarget.contactLabel}
-          companyLabel={logOutboundTarget.companyLabel}
-          contactEmail={logOutboundTarget.contactEmail}
-          contactPhone={logOutboundTarget.contactPhone}
-          contactAvatarUrl={logOutboundTarget.contactAvatarUrl}
-          initialValues={null}
-          onLogged={() => {
-            setLogOutboundTarget(null)
-            reload({ offset })
-          }}
-        />
-      )}
-
       <ContactCard
         email={contactParam.email}
         prospectId={contactParam.prospectId}
@@ -1961,7 +1919,6 @@ function CompanyRowView({
   selected,
   onToggleSelect,
   onOpenContactCard,
-  onLogOutbound,
   onSkip,
   showCallColumn,
   onOpenRowMenu,
@@ -1979,7 +1936,6 @@ function CompanyRowView({
   onOpenContactCard: (contact: SalesContact) => void
   /** Black "Log" pill next to the contact name — opens the Log
    *  outbound modal without opening the panel first. */
-  onLogOutbound: (contact: SalesContact) => void
   /** Call-list mode only: snooze this row out of today's queue. */
   onSkip: () => void
   /** True while the Call list toggle is active — renders the Reason column. */
@@ -2163,7 +2119,6 @@ function CompanyRowView({
         <ContactsCell
           row={row}
           onOpenContactCard={onOpenContactCard}
-          onLogOutbound={onLogOutbound}
           onSendEmail={onSendEmail}
           onNotInterested={onNotInterested}
           onRemoveFromFunnel={onRemoveFromFunnel}
@@ -2198,12 +2153,7 @@ function CompanyRowView({
           {row.sources.map((s) => (
             <span key={s} className="status-pill shrink-0">{sourceLabel(s)}</span>
           ))}
-          {/* Showcase membership comes from the company's lifecycle, not
-              a contact source — append unless an 'arco' source already
-              rendered the same label. */}
-          {row.claimedCompany?.status === "prospected" && !row.sources.includes("arco") && (
-            <span className="status-pill shrink-0">Showcase</span>
-          )}
+
           {row.lastOutboundAt && (
             <span className="status-pill shrink-0">Outbound</span>
           )}
@@ -2250,14 +2200,12 @@ function CompanyRowView({
 function ContactsCell({
   row,
   onOpenContactCard,
-  onLogOutbound,
   onSendEmail,
   onNotInterested,
   onRemoveFromFunnel,
 }: {
   row: SalesCompanyRow
   onOpenContactCard: (contact: SalesContact) => void
-  onLogOutbound: (contact: SalesContact) => void
   onSendEmail: (contact: SalesContact) => void
   onNotInterested: (contact: SalesContact) => void
   onRemoveFromFunnel: (contact: SalesContact) => void
@@ -2274,11 +2222,8 @@ function ContactsCell({
         <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => onOpenContactCard(contact)}>
           Details
         </DropdownMenuItem>
-        <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => onLogOutbound(contact)}>
-          Log outbound
-        </DropdownMenuItem>
         <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => onSendEmail(contact)}>
-          Send email
+          Outbound
         </DropdownMenuItem>
         {phone && (
           <DropdownMenuItem asChild>
