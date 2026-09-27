@@ -284,9 +284,51 @@ function extractImagesFromMarkdown(markdown: string, baseUrl: string, ogImage?: 
  * Extract images from raw HTML string — catches lazy-loaded images, srcset, data-src,
  * WordPress galleries, and other patterns missed by markdown extraction.
  */
-function extractImagesFromRawHtml(html: string, baseUrl: string): string[] {
+/**
+ * One photograph as this page offers it: the best variant found, plus
+ * the address the page itself keeps for it.
+ *
+ * The identity matters OUTSIDE this function too. Firecrawl's markdown
+ * flattens a <picture> to its <img src> — the small compatibility copy
+ * — so the markdown pass and this one describe the same photograph with
+ * two different URLs. Without the identity travelling alongside, the
+ * import can only compare strings, and the big version arrives as a
+ * SECOND photo rather than as a better one.
+ */
+type ExtractedImage = { url: string; identity: string }
+
+/**
+ * Fold what the HTML says into a list the markdown (or the DOM walker)
+ * built first — REPLACING, not only appending.
+ *
+ * Both of those front-runners see a <picture> as its <img src>: the
+ * small compatibility copy. Reading the HTML finds the same photograph
+ * at full width under a different URL, and a string comparison can only
+ * conclude "new photo". That left the small version in its place, the
+ * big one appended as a duplicate, and the two of them eating the
+ * 30-image budget between them — measured on paulderuiter.nl as 24
+ * photos at 800px beside 5 at 3000px, several the same picture twice.
+ *
+ * The page's own <img src> is what ties the two together, so an HTML
+ * image whose identity is already in the list takes that slot: the
+ * order the first pass chose, at the resolution the HTML found.
+ *
+ * dedupKeepLargest cannot do this job. It groups by URL shape — the
+ * WordPress -1024x768 suffix, /thumbs/, _headerLarge — and a CDN that
+ * gives every variant its own content hash produces keys that never
+ * meet.
+ */
+function mergeImagesByIdentity(into: string[], html: string, baseUrl: string): void {
+  for (const img of extractImagesWithIdentity(html, baseUrl)) {
+    const at = into.findIndex((u) => u === img.identity || u === img.url)
+    if (at === -1) into.push(img.url)
+    else if (into[at] !== img.url) into[at] = img.url
+  }
+}
+
+function extractImagesWithIdentity(html: string, baseUrl: string): ExtractedImage[] {
   const seen = new Set<string>()
-  const results: string[] = []
+  const results: ExtractedImage[] = []
 
   /**
    * @param identity  A second URL naming the same photograph, when the
@@ -322,7 +364,7 @@ function extractImagesFromRawHtml(html: string, baseUrl: string): string[] {
       // up again — in any shape, from any part of the page — is a
       // repeat and not a second picture.
       seen.add(idKey)
-      results.push(key)
+      results.push({ url: key, identity: idKey })
     } catch {}
   }
 
@@ -472,6 +514,12 @@ function extractImagesFromRawHtml(html: string, baseUrl: string): string[] {
   }
 
   return results.slice(0, 30)
+}
+
+/** Just the addresses, for callers that have nothing to merge against. */
+function extractImagesFromRawHtml(html: string, baseUrl: string): string[] {
+  return extractImagesWithIdentity(html, baseUrl).map((i) => i.url)
+
 }
 
 // ─── JSDOM fallback helpers ───────────────────────────────────────────────────
@@ -951,21 +999,29 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
       const ogImage = result.metadata?.ogImage ?? undefined
       imageUrls = extractImagesFromMarkdown(result.markdown ?? "", url.toString(), ogImage)
 
-      // Also extract images from raw HTML (catches lazy-loaded, srcset, data-src, JS galleries)
-      if (result.html) {
-        const htmlImages = extractImagesFromRawHtml(result.html, url.toString())
-        for (const img of htmlImages) {
-          if (!imageUrls.includes(img)) imageUrls.push(img)
-        }
-      }
-
-      // Extract from full raw HTML including script blocks (for AJAX-loaded galleries)
+      /**
+       * The HTML pass REPLACES, it does not only append.
+       *
+       * Firecrawl's markdown flattens a <picture> to its <img src>, so
+       * the list above already holds the small compatibility copy of
+       * every such photograph. Reading the HTML finds the same photo at
+       * full width under a different URL — and comparing strings, as
+       * this did, could only conclude "new photo". The result was the
+       * worst of both: the small version kept its place, the big one
+       * arrived as a duplicate, and between them they ate the 30-image
+       * budget. Measured on paulderuiter.nl after the <picture> fix
+       * shipped: 24 photos at 800px, 5 at 3000px, several of them the
+       * same photograph twice.
+       *
+       * So an HTML image whose identity matches something already in
+       * the list takes that slot, keeping the order the markdown gave
+       * us and the resolution the HTML found.
+       */
+      // Catches lazy-loaded, srcset, data-src and JS galleries.
+      if (result.html) mergeImagesByIdentity(imageUrls, result.html, url.toString())
+      // The full raw HTML, script blocks included, for AJAX galleries.
       if (result.rawHtml || result.html) {
-        const fullHtml = result.rawHtml ?? result.html
-        const rawHtmlImages = extractImagesFromRawHtml(fullHtml, url.toString())
-        for (const img of rawHtmlImages) {
-          if (!imageUrls.includes(img)) imageUrls.push(img)
-        }
+        mergeImagesByIdentity(imageUrls, result.rawHtml ?? result.html, url.toString())
       }
 
       // If we found very few images, try CMS-specific API discovery
@@ -1104,11 +1160,10 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
 
     // Augment DOM extraction with raw-HTML regex — catches anchor-wrapped
     // gallery thumbnails (e.g. `<a href="…jpg"><img …>`) that our DOM walker
-    // only captures via <img>, missing the full-res href.
-    const rawImages = extractImagesFromRawHtml(html, url.toString())
-    for (const img of rawImages) {
-      if (!imageUrls.includes(img)) imageUrls.push(img)
-    }
+    // only captures via <img>, missing the full-res href. Same merge as
+    // the Firecrawl path above: the DOM walker reads a <picture> as its
+    // small <img>, so this must be able to replace and not only add.
+    mergeImagesByIdentity(imageUrls, html, url.toString())
 
     // If few images found, try CMS-specific API discovery
     if (imageUrls.length < 10) {
