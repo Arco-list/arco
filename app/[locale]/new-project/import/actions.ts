@@ -143,9 +143,21 @@ function cleanImageSrc(src: string): string {
     .trim()
   // Strip surrounding quotes
   cleaned = cleaned.replace(/^["']|["']$/g, "")
-  // If the URL contains an embedded URL (e.g. from malformed HTML), extract the inner one
+  // Dig a URL out of something wrapped around it — `url(https://…)`,
+  // a stray attribute, malformed markup.
+  //
+  // ONLY WHEN IT IS ACTUALLY WRAPPED. The pattern stops at the first
+  // image extension it meets, which is a truncation as soon as the real
+  // address continues past one. zecc.nl serves
+  // `…/12Zecc_….JPG.img?size=projectimage-100-no-text`, and this
+  // "repair" handed back `…/12Zecc_….JPG` — a URL the server answers
+  // with 406, "Requested filename has wrong format". Twenty-one photos
+  // imported as links that were broken the moment they were written.
+  //
+  // A match starting at index 0 is not an embedded URL, it is this one
+  // with its tail cut off. Leave those alone.
   const embeddedMatch = cleaned.match(/(https?:\/\/[^\s"']+\.(?:jpe?g|png|webp)(?:\?[^\s"']*)?)/i)
-  if (embeddedMatch && embeddedMatch[1] !== cleaned) {
+  if (embeddedMatch && embeddedMatch.index !== 0 && embeddedMatch[1] !== cleaned) {
     cleaned = embeddedMatch[1]
   }
   return cleaned

@@ -7623,6 +7623,28 @@ body.no-scroll {
   padding-bottom: 4px;
 }
 
+/* ── /model's row rhythm ──────────────────────────────────────────
+   The dashboard draws a sub-row's numbers as one 22px overlay in a
+   single cell; /model gives every number its own cell, so the same
+   12px top-and-bottom padding builds a visibly taller row for the
+   same content. This brings the two back in line without restaging
+   the table — scoped to the model table so the dashboard, whose
+   rhythm is already right, is untouched. */
+.arco-table--model tbody td {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.arco-table--model tbody tr.arco-cr-attached > td {
+  /* 4px, like the dashboard: with the -10 lift below it the pair
+     closes to the same -4px effective gap. */
+  padding-bottom: 4px;
+}
+.arco-table--model tbody tr.arco-cr-row > td {
+  /* padding-top stays at the dashboard's 2px; the negative margin on
+     the cell contents does the closing, exactly as it does there. */
+  padding-bottom: 8px;
+}
+
 .arco-table-sort {
   display: inline-flex;
   align-items: center;

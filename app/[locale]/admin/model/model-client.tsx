@@ -187,7 +187,16 @@ function ConversionRowComponent({
       style={{ borderTop: "none", borderBottom: isLast ? undefined : "none" }}
     >
       <td>
-        <div className="flex items-center gap-2 pl-7">
+        {/* Lifted to sit against the metric above — the same move
+            the dashboard makes, and for the same reason: padding
+            alone bottoms out at zero, while these two lines need
+            to close to a NEGATIVE gap to read as one metric and
+            its ratio rather than two rows.
+
+            The values below carry the identical lift. Doing it to
+            the label only is what left "to Pro Visitors (ever)"
+            floating above its own percentages. */}
+        <div className="flex items-center gap-2 pl-7" style={{ marginTop: -10 }}>
           <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
             {label ?? `to ${to.label}`}
           </span>
@@ -196,11 +205,13 @@ function ConversionRowComponent({
       {fromArr.map((fromVal, i) => {
         const toVal = toArr[i] ?? 0
         return (
-          <td key={i} className="arco-table-nowrap" style={{ textAlign: "right" }}>
+          <td key={i} className="arco-table-nowrap" style={{ textAlign: "right", paddingTop: 0 }}>
+            <div style={{ marginTop: -10 }}>
             <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
               {formatConversion(toVal, fromVal)}
             </span>
             <GrowthGutter growth={null} />
+            </div>
           </td>
         )
       })}
@@ -247,7 +258,16 @@ function CustomCRRow({
       style={{ borderTop: "none", borderBottom: isLast ? undefined : "none" }}
     >
       <td>
-        <div className="flex items-center gap-2 pl-7">
+        {/* Lifted to sit against the metric above — the same move
+            the dashboard makes, and for the same reason: padding
+            alone bottoms out at zero, while these two lines need
+            to close to a NEGATIVE gap to read as one metric and
+            its ratio rather than two rows.
+
+            The values below carry the identical lift. Doing it to
+            the label only is what left "to Pro Visitors (ever)"
+            floating above its own percentages. */}
+        <div className="flex items-center gap-2 pl-7" style={{ marginTop: -10 }}>
           <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
             {label}
           </span>
@@ -258,11 +278,13 @@ function CustomCRRow({
         const num = numerator[i] ?? 0
         const immature = immatureFromIndex !== undefined && i >= immatureFromIndex
         return (
-          <td key={i} className="arco-table-nowrap" style={{ textAlign: "right" }}>
+          <td key={i} className="arco-table-nowrap" style={{ textAlign: "right", paddingTop: 0 }}>
+            <div style={{ marginTop: -10 }}>
             <span className="text-[10px] font-medium" style={{ color: immature ? "#a1a1a0" : "var(--primary, #016D75)" }}>
               {formatConversion(num, denom)}
             </span>
             <GrowthGutter growth={null} />
+            </div>
           </td>
         )
       })}
@@ -304,7 +326,16 @@ function ValueRow({
       style={{ borderTop: "none", borderBottom: isLast ? undefined : "none" }}
     >
       <td>
-        <div className="flex items-center gap-2 pl-7">
+        {/* Lifted to sit against the metric above — the same move
+            the dashboard makes, and for the same reason: padding
+            alone bottoms out at zero, while these two lines need
+            to close to a NEGATIVE gap to read as one metric and
+            its ratio rather than two rows.
+
+            The values below carry the identical lift. Doing it to
+            the label only is what left "to Pro Visitors (ever)"
+            floating above its own percentages. */}
+        <div className="flex items-center gap-2 pl-7" style={{ marginTop: -10 }}>
           <span className="text-[10px] font-medium" style={{ color }}>
             {label}
           </span>
@@ -316,11 +347,13 @@ function ValueRow({
           ? (v > 0 ? `${v}%` : "·")
           : formatNumber(v)
         return (
-          <td key={i} className="arco-table-nowrap" style={{ textAlign: "right" }}>
+          <td key={i} className="arco-table-nowrap" style={{ textAlign: "right", paddingTop: 0 }}>
+            <div style={{ marginTop: -10 }}>
             <span className="text-[10px] font-medium" style={{ color }}>
               {display}
             </span>
             <GrowthGutter growth={null} />
+            </div>
           </td>
         )
       })}
@@ -359,7 +392,16 @@ function PerSourceCRRow({
       style={{ borderTop: "none", borderBottom: isLast ? undefined : "none" }}
     >
       <td>
-        <div className="flex items-center gap-2 pl-7">
+        {/* Lifted to sit against the metric above — the same move
+            the dashboard makes, and for the same reason: padding
+            alone bottoms out at zero, while these two lines need
+            to close to a NEGATIVE gap to read as one metric and
+            its ratio rather than two rows.
+
+            The values below carry the identical lift. Doing it to
+            the label only is what left "to Pro Visitors (ever)"
+            floating above its own percentages. */}
+        <div className="flex items-center gap-2 pl-7" style={{ marginTop: -10 }}>
           <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
             to {toLabel} from {sourceLabel}
           </span>
@@ -368,11 +410,13 @@ function PerSourceCRRow({
       {denominator.map((denom, i) => {
         const num = numerator[i] ?? 0
         return (
-          <td key={i} className="arco-table-nowrap" style={{ textAlign: "right" }}>
+          <td key={i} className="arco-table-nowrap" style={{ textAlign: "right", paddingTop: 0 }}>
+            <div style={{ marginTop: -10 }}>
             <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
               {formatConversion(num, denom)}
             </span>
             <GrowthGutter growth={null} />
+            </div>
           </td>
         )
       })}
@@ -703,7 +747,7 @@ export function GrowthModelClient({ initialRows, initialLabels, initialLastSynce
           later months were otherwise unreachable. It has to be a class,
           not an inline style — this needs a media query. */}
       <div className="arco-table-wrap model-table-wrap rounded-[3px]">
-        <table className="arco-table" style={{ minWidth: 0 }}>
+        <table className="arco-table arco-table--model" style={{ minWidth: 0 }}>
           <thead>
             <tr>
               <th style={{ textAlign: "left", minWidth: 220 }}>Metric</th>
