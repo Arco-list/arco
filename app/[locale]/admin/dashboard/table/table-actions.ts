@@ -275,7 +275,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     fetchAllRows((f, t) => supabase.from("saved_companies").select("user_id, company_id, created_at").order("created_at").range(f, t)),
     fetchAllRows((f, t) => supabase.from("prospects").select("id, email, company_id, apollo_contact_id").order("id").range(f, t)),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    fetchAllRows((f, t) => (supabase as any).from("claim_arrivals").select("channel, email, created_at").order("id").range(f, t)),
+    fetchAllRows((f, t) => (supabase as any).from("claim_arrivals").select("channel, email, created_at, company_id").order("id").range(f, t)),
     supabase.from("categories").select("id, slug").in("slug", PUBLISHABLE_SERVICE_SLUGS),
     // Outbound metric inputs — manual logs from admin/companies and the
     // Sales page. 'note' is excluded (observations, not outbound
@@ -1826,8 +1826,83 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   }
 
   // Ever-visited sets from the email-keyed server-side click logs.
-  const everVisitedSalesEmails = new Set(salesVisitEmailEvents.map((ev) => ev.email))
-  const everVisitedInviteEmails = new Set(inviteVisitEvents.map((ev) => ev.email))
+  /**
+   * Pro visitors — arrivals on /claim.
+   *
+   * The step used to be "a session that touched /businesses", counted
+   * in PostHog, with rates underneath it computed from server-side
+   * click logs. Two systems, two units, one percentage: that is how the
+   * Invites channel came to show nineteen visitors above a rate worked
+   * out on one.
+   *
+   * /claim fixes that by knowing the channel at the door — a signed
+   * token carries it, and its absence is the platform route — so all
+   * three channels are one event in one table. It also measures a
+   * better thing: /businesses/architects is a page you can land on by
+   * accident, while "put your firm on Arco" is a button you press on
+   * purpose.
+   *
+   * Outbound has no channel here, deliberately. A phone call has no
+   * landing, and outbound works on firms that are already visitors, so
+   * a visitor step for it would mostly record a conversion that
+   * happened before the call. Its rate runs straight from contacted to
+   * New Pros instead.
+   *
+   * UNITS DIFFER BY NECESSITY, and this is the one seam left: the token
+   * channels dedupe by the address the token was issued to, while the
+   * platform route has no identity to dedupe on and counts arrivals.
+   * A refresh on the organic side therefore counts twice. Closing that
+   * needs either a cookie (consent) or an IP-derived key (a decision
+   * about personal data), so it stays an open question rather than a
+   * silent choice.
+   */
+  const claimArrivals = (claimArrivalsResult.data ?? []) as {
+    channel?: string | null; email?: string | null; created_at?: string | null; company_id?: string | null
+  }[]
+
+  type ArrivalChannel = "invites" | "sales" | "outbound" | "organic"
+  const arrivalChannelOf = (row: { channel?: string | null }): ArrivalChannel => {
+    const c = String(row.channel ?? "")
+    if (c === "invite") return "invites"
+    if (c === "outreach" || c === "showcase") return "sales"
+    // A hand-written mail sent through the product. It has a landing
+    // because we put one in it, which is what separates it from the
+    // phone call that has no visitor step.
+    if (c === "outbound") return "outbound"
+    return "organic"
+  }
+
+
+  /**
+   * Who ever reached the claim page, read from the one ledger that
+   * records it.
+   *
+   * These used to come from two older ledgers — prospect_events for
+   * Sales, project_professionals.landing_visited_at for Invites — and
+   * that is why "Pro visitor" counted one thing in the Contacted row
+   * and another in the row directly beneath it. Migration 259 copied
+   * both into claim_arrivals, so the phrase now means a single thing
+   * everywhere.
+   *
+   * It matters most to Invites: landing_visited_at was only stamped
+   * from this week, so it held four landings against 79 invited firms
+   * and the conversion rendered as a column of dots. The same visits
+   * were in the Sales click log all along, and the backfill brings 27
+   * of them across.
+   *
+   * The old ledgers keep being written — they serve the prospect
+   * timeline and the credit's own state. What changed is only where
+   * the funnel counts from.
+   */
+  const arrivalEmailsFor = (channel: ArrivalChannel): Set<string> =>
+    new Set(
+      claimArrivals
+        .filter((r) => arrivalChannelOf(r) === channel)
+        .map((r) => r.email?.trim().toLowerCase())
+        .filter((e): e is string => Boolean(e)),
+    )
+  const everVisitedSalesEmails = arrivalEmailsFor("sales")
+  const everVisitedInviteEmails = arrivalEmailsFor("invites")
   const everVisitedEmails = new Set([...everVisitedSalesEmails, ...everVisitedInviteEmails])
 
   // Pros contacted → ever visited (parent + per-channel cohorts).
@@ -1872,13 +1947,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     if (viaProspect && onboardedCompanyIds.has(viaProspect)) return true
     return (inviteEmailToCompanyIds.get(em) ?? []).some((cid) => onboardedCompanyIds.has(cid))
   }
-  const everCreatedSalesEmails = new Set([...everVisitedSalesEmails].filter(emailEverCreated))
-  const everCreatedInviteEmails = new Set([...everVisitedInviteEmails].filter(emailEverCreated))
-  const outboundEverCreatedEmails = new Set(outboundContactEvents.map((ev) => ev.email).filter(emailEverCreated))
-  const outboundCohort = cohortByFirstTouch(outboundContactEvents, outboundEverCreatedEmails)
   // Clicker cohorts (bucketed by FIRST VISIT) → ever created.
-  const salesClickerCohort = cohortByFirstTouch(salesVisitEmailEvents, everCreatedSalesEmails)
-  const inviteClickerCohort = cohortByFirstTouch(inviteVisitEvents, everCreatedInviteEmails)
 
   // Contributors invited → ever accepted (unit = invite row, cohort by
   // invite date; matches the row's displayed per-bucket denominator).
@@ -1918,52 +1987,6 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     }
   }
 
-  /**
-   * Pro visitors — arrivals on /claim.
-   *
-   * The step used to be "a session that touched /businesses", counted
-   * in PostHog, with rates underneath it computed from server-side
-   * click logs. Two systems, two units, one percentage: that is how the
-   * Invites channel came to show nineteen visitors above a rate worked
-   * out on one.
-   *
-   * /claim fixes that by knowing the channel at the door — a signed
-   * token carries it, and its absence is the platform route — so all
-   * three channels are one event in one table. It also measures a
-   * better thing: /businesses/architects is a page you can land on by
-   * accident, while "put your firm on Arco" is a button you press on
-   * purpose.
-   *
-   * Outbound has no channel here, deliberately. A phone call has no
-   * landing, and outbound works on firms that are already visitors, so
-   * a visitor step for it would mostly record a conversion that
-   * happened before the call. Its rate runs straight from contacted to
-   * New Pros instead.
-   *
-   * UNITS DIFFER BY NECESSITY, and this is the one seam left: the token
-   * channels dedupe by the address the token was issued to, while the
-   * platform route has no identity to dedupe on and counts arrivals.
-   * A refresh on the organic side therefore counts twice. Closing that
-   * needs either a cookie (consent) or an IP-derived key (a decision
-   * about personal data), so it stays an open question rather than a
-   * silent choice.
-   */
-  const claimArrivals = (claimArrivalsResult.data ?? []) as {
-    channel?: string | null; email?: string | null; created_at?: string | null
-  }[]
-
-  type ArrivalChannel = "invites" | "sales" | "outbound" | "organic"
-  const arrivalChannelOf = (row: { channel?: string | null }): ArrivalChannel => {
-    const c = String(row.channel ?? "")
-    if (c === "invite") return "invites"
-    if (c === "outreach" || c === "showcase") return "sales"
-    // A hand-written mail sent through the product. It has a landing
-    // because we put one in it, which is what separates it from the
-    // phone call that has no visitor step.
-    if (c === "outbound") return "outbound"
-    return "organic"
-  }
-
   const bucketArrivals = (channel: ArrivalChannel | "all"): number[] =>
     buckets.starts.map((_, i) => {
       const seenEmails = new Set<string>()
@@ -1986,6 +2009,77 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const claimSalesSeries = bucketArrivals("sales")
   const claimOrganicSeries = bucketArrivals("organic")
   const claimOutboundSeries = bucketArrivals("outbound")
+
+  // ── Outbound's own funnel: mailed → landed → live ─────────────────
+  //
+  // It could not have one before. Outbound meant a logged phone call,
+  // and a call has no landing, so the row converted straight from
+  // contacted to New Pros and the middle step was left out on both
+  // sides. Since the Log popup was retired there is only one kind of
+  // outbound touch left — a mail sent through the product, carrying a
+  // claim link — so every contact can now be followed to the page.
+  const outboundArrivalRows = claimArrivals.filter((r) => arrivalChannelOf(r) === "outbound")
+  const everVisitedOutboundEmails = new Set(
+    outboundArrivalRows
+      .map((r) => r.email?.trim().toLowerCase())
+      .filter((e): e is string => Boolean(e)),
+  )
+  const outboundVisitedCohort = cohortByFirstTouch(outboundContactEvents, everVisitedOutboundEmails)
+
+  /**
+   * Of the companies that first reached the claim page in this bucket,
+   * how many ever went live?
+   *
+   * COHORTED, AND ON THE COMPANY. The period ratio this replaces put
+   * this month's listings over this month's arrivals — two different
+   * groups of people, which is how a conversion column came to read
+   * 450%. Cohorting by first arrival fixes that; doing it on the
+   * company rather than the address fixes the rest, because five
+   * companies had two colleagues arrive and a single listing would
+   * otherwise be credited to both their cohorts.
+   *
+   * LISTED AFTER, NOT MERELY LISTED. A company already live when
+   * somebody landed did not convert — it was visited. Only two rows in
+   * the whole ledger are like that, but the guard costs nothing and the
+   * alternative is a rate that can only flatter.
+   *
+   * Anonymous arrivals cannot take part: the platform route carries no
+   * company at all, so Organisch gets no conversion rather than a
+   * denominator that quietly drops what it cannot follow.
+   */
+  const arrivalCohort = (channel: ArrivalChannel | "all"): { denom: number[]; num: number[] } => {
+    const firstByCompany = new Map<string, Date>()
+    for (const row of claimArrivals) {
+      if (!row.company_id || !row.created_at) continue
+      if (channel !== "all" && arrivalChannelOf(row) !== channel) continue
+      const d = new Date(row.created_at)
+      if (Number.isNaN(d.getTime())) continue
+      const id = String(row.company_id)
+      const cur = firstByCompany.get(id)
+      if (!cur || d < cur) firstByCompany.set(id, d)
+    }
+    const listedAtById = new Map<string, number | null>()
+    for (const c of companies as any[]) {
+      listedAtById.set(String(c.id), onboardingCompleted(c) ? listedTsForBucket(c)?.getTime() ?? null : null)
+    }
+    const denom = buckets.starts.map(() => 0)
+    const num = buckets.starts.map(() => 0)
+    firstByCompany.forEach((arrivedAt, id) => {
+      const i = bucketIndexOf(arrivedAt)
+      if (i === -1) return
+      denom[i]++
+      const listedAt = listedAtById.get(id) ?? null
+      if (listedAt !== null && listedAt >= arrivedAt.getTime()) num[i]++
+    })
+    return { denom, num }
+  }
+
+  const ARRIVAL_COHORT_DEF =
+    "Of the companies whose first claim-page arrival fell in this period, the share that went live afterwards. Cohorted, so a listing counts in the period the visit happened, not the period it was published. Grey = still maturing."
+  const proVisitorsCohort = arrivalCohort("all")
+  const invitesArrivalCohort = arrivalCohort("invites")
+  const salesArrivalCohort = arrivalCohort("sales")
+  const outboundArrivalCohort = arrivalCohort("outbound")
   const sumOf = (xs: number[]) => xs.reduce((a, b) => a + b, 0)
 
   const rows: MetricRow[] = [
@@ -1999,12 +2093,16 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       // "lower bound" and became a rate over the population it actually
       // describes. Outbound's own conversion lives on its sub, running
       // straight to New Pros.
-      inlineCRNumerator: { total: 0, datapoints: contactedVisitorsSeries },
+      // Same ledger as the cohort above it. /model renders this as the
+      // "to" values beside the rate, and it read from the old click
+      // logs while the rate read from claim_arrivals — two numbers on
+      // one line, counted from two places.
+      inlineCRNumerator: { total: 0, datapoints: bucketArrivals("all") },
       cohortInlineCR: {
         label: "to Pro Visitors (ever)",
         numerator: contactedCohort.num,
         denominator: contactedCohort.denom,
-        definition: "Of pros first contacted by Sales or Invites, the share that ever reached a landing. Outbound is left out on both sides: a phone call has no landing. " + COHORT_DEF,
+        definition: "Of pros first contacted by Sales or Invites, the share that ever reached a landing. Outbound is counted in its own row rather than here, because it overlaps with both. " + COHORT_DEF,
         immatureFromIndex: cohortImmatureFromIndex,
       },
       subs: [
@@ -2027,14 +2125,14 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
         },
         {
           key: "outbound_contacted", label: "Outbound",
-          definition: "Distinct pros reached via manual outbound activity (call, meeting, LinkedIn, manual email — excludes notes and no-answer attempts).",
+          definition: "Distinct pros we mailed by hand from the contact card. Every one carries a claim link, so unlike the retired call log this converts to a landing. OVERLAPPING with Invites and Sales — a pro reached twice sits in both rows.",
           source: "supabase" as MetricSource,
           total: totalOutboundContacted, datapoints: outboundContactedSeries,
           // No server-side "outbound visitor" event exists, so this
           // cohort converts straight to "ever created" — of pros first
           // outbound-touched in the bucket, the share whose company
           // ever completed onboarding.
-          customCR: { label: "to New Pros (ever)", numerator: outboundCohort.num, denominator: outboundCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex },
+          customCR: { label: "to Pro Visitors (ever)", numerator: outboundVisitedCohort.num, denominator: outboundVisitedCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex },
         },
       
       ],
@@ -2049,23 +2147,33 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       // server-side event with the channel already on it.
       key: "pro_visitors", label: "Pro Visitors", definition: "Pros who landed on /claim. Recorded server-side the moment they arrive, before the page decides what to show; mail-scanner hits are filtered out by country and user agent.", source: "supabase" as MetricSource, driver: "acquisition",
       total: proVisitorsTotal, datapoints: proVisitorsSeries, labels,
+      // Shipped ready-made, like Pros contacted's. table-view used to
+      // divide this row by New Pros itself — this period over that
+      // period — and printed 156% for a conversion.
+      cohortInlineCR: {
+        label: "to New Pros",
+        numerator: proVisitorsCohort.num,
+        denominator: proVisitorsCohort.denom,
+        definition: ARRIVAL_COHORT_DEF,
+        immatureFromIndex: cohortImmatureFromIndex,
+      },
       subs: [
         { key: "invites", label: "Invites", definition: "Claim links from a project-invite mail. Deduped by the address the token was issued to.", source: "supabase" as MetricSource,
           total: sumOf(claimInvitesSeries), datapoints: claimInvitesSeries ,
-          customCR: { label: "to New Pros", numerator: newProsInvitesSeries, denominator: claimInvitesSeries, definition: "Share of this period's claim arrivals that became a New Pro. A period ratio, not a cohort — arrivals and listings are counted in the same bucket." }},
+          customCR: { label: "to New Pros", numerator: invitesArrivalCohort.num, denominator: invitesArrivalCohort.denom, definition: ARRIVAL_COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex }},
         { key: "sales", label: "Sales", definition: "Claim links from Outreach or Showcase mail. Deduped by the address the token was issued to.", source: "supabase" as MetricSource,
           total: sumOf(claimSalesSeries), datapoints: claimSalesSeries ,
-          customCR: { label: "to New Pros", numerator: newProsSalesSeries, denominator: claimSalesSeries, definition: "Share of this period's claim arrivals that became a New Pro. A period ratio, not a cohort — arrivals and listings are counted in the same bucket." }},
-        { key: "outbound", label: "Outbound", definition: "Claim links from a hand-written mail sent from the contact card. Deduped by the address the token was issued to.", source: "supabase" as MetricSource,
-          total: sumOf(claimOutboundSeries), datapoints: claimOutboundSeries },
-        { key: "organic", label: "Organisch", definition: "Arrivals with no token — the platform route. No identity to dedupe on, so this counts arrivals where the three above count people.", source: "supabase" as MetricSource,
-          total: sumOf(claimOrganicSeries), datapoints: claimOrganicSeries ,
-          customCR: { label: "to New Pros", numerator: newProsOrganicSeries, denominator: claimOrganicSeries, definition: "Share of this period's claim arrivals that became a New Pro. A period ratio, not a cohort — arrivals and listings are counted in the same bucket." }},
-        // Outbound carries no conversion to New Pros. The New Pros
-        // Outbound sub is an overlay ("touched by"), counted over
-        // every pro we ever mailed; these arrivals are a clean channel
-        // count. Dividing one by the other would put two different
-        // populations either side of the slash.
+          customCR: { label: "to New Pros", numerator: salesArrivalCohort.num, denominator: salesArrivalCohort.denom, definition: ARRIVAL_COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex }},
+        { key: "outbound", label: "Outbound", definition: "Claim links from a hand-written mail sent from the contact card. Deduped by the address the token was issued to. OVERLAPPING — someone another loop already brought in can arrive again through an outbound link, so the subs can add up to more than the row above.", source: "supabase" as MetricSource,
+          total: sumOf(claimOutboundSeries), datapoints: claimOutboundSeries ,
+          customCR: { label: "to New Pros", numerator: outboundArrivalCohort.num, denominator: outboundArrivalCohort.denom, definition: ARRIVAL_COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex }},
+        // NO CONVERSION HERE, and it cannot have one. The platform
+        // route carries neither an address nor a company, so there is
+        // nothing to follow from the landing to a listing. It used to
+        // show a period ratio, which looked like an answer because the
+        // arithmetic ran — this leaves the column honestly empty.
+        { key: "organic", label: "Organisch", definition: "Arrivals with no token — the platform route. No identity to dedupe on, so this counts arrivals where the three above count people. Carries no company either, which is why it has no conversion.", source: "supabase" as MetricSource,
+          total: sumOf(claimOrganicSeries), datapoints: claimOrganicSeries },
       ],
     },
     {

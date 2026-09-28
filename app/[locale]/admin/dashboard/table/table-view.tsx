@@ -559,9 +559,7 @@ interface Props {
   rows: MetricRow[]
   labels: string[]
   isPending: boolean
-  proVisitors?: number | null
   clientVisitors?: number | null
-  proVisitorsSeries?: number[]
   clientVisitorsSeries?: number[]
   clientActives?: number | null
   clientActivesSeries?: number[]
@@ -583,7 +581,7 @@ interface Props {
 
 export function GrowthTableView({
   rows, labels, isPending,
-  proVisitors, clientVisitors, proVisitorsSeries, clientVisitorsSeries,
+  clientVisitors, clientVisitorsSeries,
   clientActives, clientActivesSeries,
   sharers, sharersSeries,
   projectShares, professionalShares, sharesPerClient,
@@ -650,24 +648,24 @@ export function GrowthTableView({
       return { ...r, inlineCR: r.cohortInlineCR }
     }
     if (r.key === "pro_visitors") {
-      // Same inline CR treatment as client Visitors: "to New Pros"
-      // under the parent, per-source CRs under each expanded sub.
-      const displayed = pad8(proVisitorsSeries)
-      const newProsRow = rows.find((x) => x.key === "new_pros")
-      return {
-        ...r,
-        total: proVisitors ?? 0,
-        datapoints: displayed,
-        // Subs intentionally NOT overridden: table-actions' series are
-        // canonical (server-side Sales/Invites click logs + entry-
-        // classified channel caches + the Other remainder). The old
-        // override swapped Invites for the legacy invite_visitors cache
-        // and carried a dead 'sales_apollo' key, so displayed subs
-        // diverged from the Model view's.
-        inlineCR: newProsRow
-          ? { label: `to ${newProsRow.label}`, targetLabel: newProsRow.label, numerator: newProsRow.datapoints, denominator: displayed }
-          : undefined,
-      }
+      // NOTHING OVERRIDDEN HERE ANY MORE — only the inline CR is added.
+      //
+      // The parent used to be stamped with PostHog's proVisitorsSeries
+      // while the subs kept table-actions' server-side series, on the
+      // reasoning that the subs were canonical. They were; so is the
+      // parent, and leaving the override one level up produced exactly
+      // the divergence it was meant to avoid: 447 above a row of subs
+      // adding to 9, and a Model view showing 9 for the same metric.
+      //
+      // Pro visitors is a SERVER-SIDE count now. It reads claim_arrivals
+      // — people who actually reached the claim page, deduped by the
+      // address their token was issued to — where PostHog counted
+      // sessions on /businesses and could not see the landing at all.
+      // Cohorted by first arrival, shipped ready-made by table-actions.
+      // Computing it here divided this period's listings by this
+      // period's arrivals — two different groups of people, and a
+      // column that read 156%.
+      return { ...r, inlineCR: r.cohortInlineCR }
     }
     return r
   })

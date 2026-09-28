@@ -1203,6 +1203,15 @@ export async function sendContactEmail(input: {
   bodyText: string
   /** Which resolved situation this was written from, if any. */
   situationId?: string | null
+  /**
+   * Called or cold — the one fact about this send that no query can
+   * recover. Since the Log popup was retired a phone call leaves no
+   * trace of its own, so this toggle is the only record that one
+   * happened. Stored rather than only used to steer the draft: whether
+   * a call before the mail converts better is a question you can only
+   * answer later if you wrote it down now.
+   */
+  tone?: string | null
   /** Hangs the project and roster on the claim landing. */
   creditId?: string | null
   /** The company the CTA should point at. Required for a claim link. */
@@ -1325,6 +1334,7 @@ export async function sendContactEmail(input: {
         email,
         tracked: ctaUrl !== null,
         linkKind: template?.linkKind ?? null,
+        tone: input.tone ?? null,
       },
     })
     await db.from("prospects").update({ last_outbound_at: new Date().toISOString() }).eq("id", input.prospectId)

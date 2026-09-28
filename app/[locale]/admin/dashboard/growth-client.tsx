@@ -661,8 +661,8 @@ export function GrowthClient({ initialMetrics, initialLastSynced = null }: Props
       {view === "table" ? (
         <GrowthTableView
           rows={tableRows} labels={tableLabels} isPending={isPending}
-          proVisitors={posthogData.proVisitors} clientVisitors={posthogData.clientVisitors}
-          proVisitorsSeries={posthogData.proVisitorsSeries} clientVisitorsSeries={posthogData.clientVisitorsSeries}
+          clientVisitors={posthogData.clientVisitors}
+          clientVisitorsSeries={posthogData.clientVisitorsSeries}
           clientActives={posthogData.clientActives} clientActivesSeries={posthogData.clientActivesSeries}
           sharers={posthogData.sharers} sharersSeries={posthogData.sharersSeries}
           projectShares={posthogData.projectShares} professionalShares={posthogData.professionalShares}

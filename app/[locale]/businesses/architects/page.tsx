@@ -55,11 +55,11 @@ export default async function ArchitectsPage({ params: paramsPromise, searchPara
       const serviceClient = createServiceRoleSupabaseClient()
 
       // Match prospect by company_id or email
-      let prospect = null
+      let prospect: { id: string; status: string; source: string | null; company_id: string | null } | null = null
       if (companyIdParam) {
         const { data } = await serviceClient
           .from("prospects")
-          .select("id, status")
+          .select("id, status, source, company_id")
           .eq("company_id", companyIdParam)
           .in("status", ["prospect", "contacted"])
           .maybeSingle()
@@ -68,7 +68,7 @@ export default async function ArchitectsPage({ params: paramsPromise, searchPara
       if (!prospect && inviteEmail) {
         const { data } = await serviceClient
           .from("prospects")
-          .select("id, status")
+          .select("id, status, source, company_id")
           .eq("email", inviteEmail)
           .in("status", ["prospect", "contacted"])
           .maybeSingle()
@@ -91,6 +91,30 @@ export default async function ArchitectsPage({ params: paramsPromise, searchPara
             previous_status: prospect.status,
           },
         })
+
+        // The same arrival, in the ledger the funnel reads.
+        //
+        // This page is the legacy mail destination: /claim replaced it,
+        // but links already sitting in inboxes still land here, and a
+        // landing is a landing. Without this the visit is stamped on
+        // the prospect and invisible to Pro visitors — the two ledgers
+        // drifting apart in exactly the way migration 259 was written
+        // to end.
+        //
+        // Channel from the prospect's own track, the same mapping the
+        // backfill used. Fire-and-forget: a counter must not cost a
+        // page render.
+        const arrivalChannel = prospect.source === "arco" ? "showcase"
+          : prospect.source === "invites" ? "invite"
+          : "outreach"
+        const arrivalCompanyId = prospect.company_id ?? null
+        void import("@/lib/claim/track-arrival")
+          .then(({ trackClaimArrival }) => trackClaimArrival({
+            channel: arrivalChannel,
+            email: inviteEmail,
+            companyId: arrivalCompanyId,
+          }))
+          .catch(() => {})
       }
     } catch {}
   }

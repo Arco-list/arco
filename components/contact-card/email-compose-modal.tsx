@@ -435,7 +435,7 @@ export function EmailComposeModal({
     setError(null)
     const result = await sendContactEmail({
       email, contactEmails: emails, prospectId, subject, bodyText: body,
-      situationId, creditId: resolution?.creditId ?? null,
+      situationId, tone, creditId: resolution?.creditId ?? null,
       companyId, companyContactId,
     })
     setSending(false)
