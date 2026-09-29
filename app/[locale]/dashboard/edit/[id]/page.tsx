@@ -771,12 +771,20 @@ export default function ListingEditorPage() {
     setCoverPhoto,
     reorderFeaturePhotos,
     deletePhoto,
+    deletePhotos,
     handlePhotoDragStart,
     handlePhotoDragOver,
     handlePhotoDropOnCard,
     handlePhotoDragEnd,
     resetModalUploadErrors,
   } = useProjectPhotoTour({ supabase, projectId: hasProjectAccess ? projectId : null })
+
+  // Multi-select on the photo grid. A Set of ids, the same shape the
+  // admin tables use — and the anchor for shift-click, so a range can
+  // be taken without clicking every tile in it.
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<Set<string>>(new Set())
+  const [lastPickedPhotoId, setLastPickedPhotoId] = useState<string | null>(null)
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
 
   const statusModalProject = useMemo(() => {
     const coverPhotoUrl =
@@ -4325,8 +4333,10 @@ export default function ListingEditorPage() {
 
     return (
       <>
-        {/* Room / feature tabs */}
-        <div className="category-tags" style={{ marginBottom: 24, flexWrap: "wrap" }}>
+        {/* Room / feature tabs, with the selection actions parked on
+            the same line — they belong to the grid below and there is
+            no second row to put them on. */}
+        <div className="category-tags" style={{ marginBottom: 24, flexWrap: "wrap", alignItems: "center" }}>
           <button
             className={`category-tag${activeEditFeature === null ? " active" : ""}`}
             onClick={() => setActiveEditFeature(null)}
@@ -4355,7 +4365,99 @@ export default function ListingEditorPage() {
               {tPhoto("untagged")} · {untaggedCount}
             </button>
           )}
+
         </div>
+
+
+        {/* Selection actions. Their own line rather than the tail of
+            the pill row — there they wrapped onto a second line and
+            inherited its 24px gap, leaving them floating between the
+            filters and the photos they act on. */}
+        {selectedPhotoIds.size > 0 && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, marginTop: -14, marginBottom: 10 }}>
+            <span style={{ fontSize: 12, color: "#6b6b68" }}>
+              {selectedPhotoIds.size} geselecteerd
+            </span>
+            <button
+              type="button"
+              onClick={() => setBulkDeleteOpen(true)}
+              style={{
+                height: 28, padding: "0 12px", fontSize: 12, fontWeight: 500,
+                color: "#b91c1c", background: "transparent",
+                border: "1px solid #e5b4b4", borderRadius: 14, cursor: "pointer",
+              }}
+            >
+              {tActions("delete")}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setSelectedPhotoIds(new Set()); setLastPickedPhotoId(null) }}
+              style={{
+                height: 28, padding: "0 12px", fontSize: 12,
+                color: "#6b6b68", background: "transparent",
+                border: "1px solid var(--arco-rule, #e5e5e4)", borderRadius: 14, cursor: "pointer",
+              }}
+            >
+              {tActions("cancel")}
+            </button>
+          </div>
+        )}
+
+        {/* Confirming a bulk delete. window.confirm renders the
+            browser's own dialog, which says "localhost:3000 meldt het
+            volgende" above the question — the one moment in this
+            screen that looks like it belongs to something else. */}
+        {bulkDeleteOpen && (
+          <div className="popup-overlay" onClick={() => setBulkDeleteOpen(false)}>
+            <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
+              <div className="popup-header">
+                <h3 className="arco-section-title">
+                  {selectedPhotoIds.size} {selectedPhotoIds.size === 1 ? "foto" : "foto's"} verwijderen?
+                </h3>
+                <button
+                  type="button"
+                  className="popup-close"
+                  onClick={() => setBulkDeleteOpen(false)}
+                  aria-label={tActions("close")}
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="arco-body-text" style={{ marginBottom: 20 }}>
+                Dit kan niet ongedaan worden gemaakt.
+              </p>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setBulkDeleteOpen(false)}
+                  style={{
+                    height: 34, padding: "0 14px", fontSize: 13,
+                    color: "#6b6b68", background: "transparent",
+                    border: "1px solid var(--arco-rule, #e5e5e4)", borderRadius: 3, cursor: "pointer",
+                  }}
+                >
+                  {tActions("cancel")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    deletePhotos(Array.from(selectedPhotoIds))
+                    setSelectedPhotoIds(new Set())
+                    setLastPickedPhotoId(null)
+                    setBulkDeleteOpen(false)
+                  }}
+                  style={{
+                    height: 34, padding: "0 16px", fontSize: 13, fontWeight: 500,
+                    color: "#fff", background: "#b91c1c",
+                    border: "none", borderRadius: 3, cursor: "pointer",
+                  }}
+                >
+                  {tActions("delete")}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Photo grid */}
         <DndContext
@@ -4434,8 +4536,45 @@ export default function ListingEditorPage() {
                 {...(photoIndex === 0 ? { "data-tour": "project-photo-tile", "data-photo-id": photo.id } : {})}
               >
                 <img src={photo.url} alt="" />
+
+                {/* Select — top left, opposite the delete icon.
+                    Shift-click takes the range from the last tile you
+                    picked, because a grid this long is mostly runs. */}
+                <label
+                  className="photo-select-box"
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedPhotoIds.has(photo.id)}
+                    aria-label={`Selecteer foto ${photoIndex + 1}`}
+                    onChange={(e) => {
+                      const nativeEvent = e.nativeEvent as unknown as { shiftKey?: boolean }
+                      setSelectedPhotoIds((prev) => {
+                        const next = new Set(prev)
+                        if (nativeEvent.shiftKey && lastPickedPhotoId) {
+                          const ids = filteredPhotos.map((p) => p.id)
+                          const from = ids.indexOf(lastPickedPhotoId)
+                          const to = ids.indexOf(photo.id)
+                          if (from !== -1 && to !== -1) {
+                            const [lo, hi] = from < to ? [from, to] : [to, from]
+                            for (let i = lo; i <= hi; i++) next.add(ids[i])
+                            return next
+                          }
+                        }
+                        if (next.has(photo.id)) next.delete(photo.id)
+                        else next.add(photo.id)
+                        return next
+                      })
+                      setLastPickedPhotoId(photo.id)
+                    }}
+                  />
+                  <span aria-hidden />
+                </label>
+
                 {isSpaceCover && (
-                  <div style={{ position: "absolute", left: 6, top: 6, background: "#016D75", color: "white", fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 3, textTransform: "uppercase", letterSpacing: "0.04em", zIndex: 2 }}>
+                  <div style={{ position: "absolute", left: 34, top: 6, background: "#016D75", color: "white", fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 3, textTransform: "uppercase", letterSpacing: "0.04em", zIndex: 2 }}>
                     {tPhoto("cover_badge")}
                   </div>
                 )}
@@ -5214,6 +5353,20 @@ export default function ListingEditorPage() {
         .photo-del-btn { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.45); color: #fff; border: 1px solid rgba(255,255,255,.2); cursor: pointer; opacity: 0; transition: opacity .15s, background .12s; z-index: 2; }
         .photo-edit-thumb:hover .photo-del-btn { opacity: 1; }
         .photo-del-btn:hover { background: rgba(210,40,40,.75) !important; border-color: transparent !important; }
+
+        /* Select checkbox — top left, mirroring the delete button.
+           Appears on hover like that one does, but a CHECKED box stays
+           visible: a selection you cannot see while the pointer is
+           elsewhere is a selection you will delete by accident. */
+        .photo-select-box { position: absolute; top: 8px; left: 8px; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: opacity .15s; z-index: 3; }
+        .photo-edit-thumb:hover .photo-select-box { opacity: 1; }
+        .photo-select-box:has(input:checked) { opacity: 1; }
+        .photo-select-box input { position: absolute; opacity: 0; width: 0; height: 0; }
+        .photo-select-box span { width: 18px; height: 18px; border-radius: 4px; background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.55); transition: background .12s, border-color .12s; }
+        .photo-select-box input:focus-visible + span { outline: 2px solid #fff; outline-offset: 2px; }
+        .photo-select-box input:checked + span { background: #016D75; border-color: #016D75; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'><path d='M2.5 6.2l2.4 2.4 4.6-5' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>"); background-size: 14px; background-position: center; background-repeat: no-repeat; }
+        /* The whole tile reads as picked, not just the corner. */
+        .photo-edit-thumb:has(.photo-select-box input:checked) { outline: 2px solid #016D75; outline-offset: -2px; }
 
         /* Reorder arrows — bottom center, visible on hover */
         .photo-reorder-arrows { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; opacity: 0; transition: opacity .15s; z-index: 3; }

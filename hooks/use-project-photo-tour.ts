@@ -137,6 +137,7 @@ export type UseProjectPhotoTourResult = {
   setCoverPhoto: (photoId: string) => void
   reorderFeaturePhotos: (featureId: string, reorderedPhotoIds: string[]) => Promise<void>
   deletePhoto: (photoId: string) => void
+  deletePhotos: (photoIds: string[]) => void
   setOpenMenuId: (menuId: string | null) => void
   setShowAddFeatureModal: (value: boolean) => void
   movePhotoToSpace: (photoId: string, spaceId: string) => Promise<void>
@@ -2226,6 +2227,145 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
     ],
   )
 
+  /**
+   * Delete a whole selection in one pass.
+   *
+   * NOT deletePhoto in a loop. That function rewrites the photo list,
+   * reassigns every feature cover that pointed at the removed photo,
+   * and writes to the database — all per photo. Twenty selected photos
+   * would be twenty round-trips and twenty re-renders, and the cover
+   * would hop from one doomed photo to the next before settling on a
+   * survivor, writing each hop to the database on the way.
+   *
+   * One pass: one state update, one delete, one storage removal, and a
+   * cover chosen from what is actually left.
+   */
+  const deletePhotos = useCallback(
+    (ids: string[]) => {
+      void (async () => {
+        if (!resolvedProjectId || ids.length === 0) return
+        const doomed = new Set(ids)
+        const photosToRemove = uploadedPhotos.filter((photo) => doomed.has(photo.id))
+        if (photosToRemove.length === 0) return
+
+        const previousPhotos = uploadedPhotos
+        const previousFeaturePhotos = featurePhotos
+        const previousFeatureCovers = featureCoverPhotos
+
+        // A cover only needs replacing when it is being deleted, and
+        // its replacement must be a photo that SURVIVES this batch —
+        // the reason a loop gets this wrong.
+        const featuresWithCoverUpdates = Object.entries(featureCoverPhotos).reduce<
+          Array<{ featureKey: string; dbId: string | null; nextCoverId: string | null }>
+        >((acc, [featureKey, photoId]) => {
+          if (photoId && doomed.has(photoId)) {
+            const remaining = (featurePhotos[featureKey] ?? []).filter((pid) => !doomed.has(pid))
+            acc.push({
+              featureKey,
+              dbId: featureIdMap[featureKey] ?? null,
+              nextCoverId: remaining[0] ?? null,
+            })
+          }
+          return acc
+        }, [])
+
+        const nextPhotos = normaliseCoverFlag(previousPhotos.filter((photo) => !doomed.has(photo.id)))
+        setUploadedPhotos(nextPhotos)
+
+        setFeaturePhotos((prev) => {
+          const next: Record<string, string[]> = {}
+          Object.entries(prev).forEach(([featureId, photoIds]) => {
+            const filtered = photoIds.filter((pid) => !doomed.has(pid))
+            if (featureId === BUILDING_FEATURE_ID || featureId === ADDITIONAL_FEATURE_ID) {
+              next[featureId] = filtered
+            } else if (filtered.length > 0) {
+              next[featureId] = filtered
+            }
+          })
+          if (!next[BUILDING_FEATURE_ID]) next[BUILDING_FEATURE_ID] = []
+          if (!next[ADDITIONAL_FEATURE_ID]) next[ADDITIONAL_FEATURE_ID] = []
+          return next
+        })
+
+        setFeatureCoverPhotos((prev) => {
+          const next = { ...prev }
+          featuresWithCoverUpdates.forEach(({ featureKey, nextCoverId }) => {
+            if (nextCoverId) next[featureKey] = nextCoverId
+            else delete next[featureKey]
+          })
+          return next
+        })
+
+        setOpenMenuId(null)
+        setTempSelectedPhotos((prev) => prev.filter((pid) => !doomed.has(pid)))
+        setTempCoverPhoto((prev) => (doomed.has(prev) ? "" : prev))
+
+        const rollback = () => {
+          setUploadedPhotos(previousPhotos)
+          setFeaturePhotos(previousFeaturePhotos)
+          setFeatureCoverPhotos(previousFeatureCovers)
+        }
+
+        const coverUpdateResults = await Promise.all(
+          featuresWithCoverUpdates
+            .filter(({ dbId }) => Boolean(dbId))
+            .map(async ({ dbId, nextCoverId }) => {
+              const { error } = await supabase
+                .from("project_features")
+                .update({ cover_photo_id: nextCoverId })
+                .eq("id", dbId)
+              return error
+            }),
+        )
+        if (coverUpdateResults.find((result) => result)) {
+          console.error("Failed to update feature cover photos")
+          setUploadErrors((prev) => [...prev, "We couldn't delete those photos. Please try again."])
+          rollback()
+          return
+        }
+
+        const { error } = await supabase
+          .from("project_photos")
+          .delete()
+          .in("id", photosToRemove.map((photo) => photo.id))
+        if (error) {
+          console.error("Failed to delete photos", error)
+          setUploadErrors((prev) => [...prev, "We couldn't delete those photos. Please try again."])
+          rollback()
+          return
+        }
+
+        const storagePaths = photosToRemove
+          .map((photo) => photo.storagePath)
+          .filter((path): path is string => Boolean(path))
+        if (storagePaths.length > 0) {
+          const { error: storageError } = await supabase.storage
+            .from("project-photos")
+            .remove(storagePaths)
+          if (storageError) {
+            // The rows are gone; an orphaned object costs space, not
+            // correctness, so this never rolls the delete back.
+            console.warn("Failed to remove photos from storage", storageError)
+          }
+        }
+
+        void persistPhotoOrder(nextPhotos, previousPhotos)
+      })()
+    },
+    [
+      featureCoverPhotos,
+      featureIdMap,
+      featurePhotos,
+      normaliseCoverFlag,
+      persistPhotoOrder,
+      resolvedProjectId,
+      setTempCoverPhoto,
+      setTempSelectedPhotos,
+      supabase,
+      uploadedPhotos,
+    ],
+  )
+
   // Reorder photos within a feature and set first as cover
   const reorderFeaturePhotos = useCallback(
     async (featureId: string, reorderedPhotoIds: string[]) => {
@@ -2373,6 +2513,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
     setCoverPhoto,
     reorderFeaturePhotos,
     deletePhoto,
+    deletePhotos,
     setOpenMenuId,
     setShowAddFeatureModal,
     appendUploadError,
