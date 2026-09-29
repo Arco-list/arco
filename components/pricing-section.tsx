@@ -2,14 +2,15 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Check, Info, Lock } from "lucide-react"
+import Image from "next/image"
+import { ArrowRight, Check, Info } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useAuth } from "@/contexts/auth-context"
 import { trackPageView, trackUpgradeIntent } from "@/lib/tracking"
-import { claimFoundingAccess, getFoundingClaimStatus } from "@/app/pricing/actions"
+import { claimFoundingAccess, getFoundingClaimStatus, getPricingExampleListings, type PricingExampleListing } from "@/app/pricing/actions"
 
 // Billing toggle + Free/Pro cards + architects-are-free note, extracted
 // from the dashboard pricing page so public surfaces (the /pricing route,
@@ -87,8 +88,9 @@ export function PricingContributorCta({ showLandingLink = true }: { showLandingL
         </Link>
         {showLandingLink && (
           <div style={{ marginTop: 14 }}>
-            <Link href="/businesses/professionals" className="text-link-plain">
-              {t("pricing_link_professionals")} →
+            <Link href="/businesses/professionals" className="arco-text-link">
+              <span className="arco-text-link-label">{t("pricing_link_professionals")}</span>
+              <span aria-hidden>→</span>
             </Link>
           </div>
         )}
@@ -132,6 +134,10 @@ export function PricingSection({
   actionsBusy?: boolean
 }) {
   const t = useTranslations("dashboard")
+  // The same namespace the project page reads it from — the key
+  // lives in project_detail, not common, and next-intl answers a
+  // miss by printing the key rather than failing.
+  const tProject = useTranslations("project_detail")
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("yearly")
   const { user, profile } = useAuth()
 
@@ -162,6 +168,15 @@ export function PricingSection({
   // (persisted on companies.founding_claimed_at, so the button state
   // survives reloads and other devices).
   const [foundingClaimed, setFoundingClaimed] = useState(false)
+  const [foundingOpen, setFoundingOpen] = useState(false)
+
+  // The example listings, fetched rather than drawn. Empty until they
+  // arrive and empty if fewer than two exist — the section hides
+  // itself rather than showing half an illustration.
+  const [examples, setExamples] = useState<PricingExampleListing[]>([])
+  useEffect(() => {
+    getPricingExampleListings().then(setExamples).catch(() => {})
+  }, [])
   useEffect(() => {
     if (!user || !hasProfessionalRole) return
     getFoundingClaimStatus().then((r) => setFoundingClaimed(r.claimed)).catch(() => {})
@@ -171,6 +186,14 @@ export function PricingSection({
   // willingness-to-pay signal (upgrade_intent) and route into the same
   // free claim flow. Logged-in professionals get their claim stamped
   // (durable counterpart of the PostHog event) + confirmation.
+  // The offer is explained before it is taken. Claiming used to happen
+  // on the click itself, which meant the reader agreed to something
+  // they had not been told: a code, six months, and what happens after.
+  const handleOpenFounding = () => {
+    trackUpgradeIntent(typeof window !== "undefined" ? window.location.pathname : "pricing", billingCycle)
+    setFoundingOpen(true)
+  }
+
   const handleClaimFounding = () => {
     trackUpgradeIntent(typeof window !== "undefined" ? window.location.pathname : "pricing", billingCycle)
     if (user && hasProfessionalRole) {
@@ -452,18 +475,80 @@ export function PricingSection({
               /* Outline, not primary: it goes to the same signup as the
                  Free card. Two equally loud buttons for one destination
                  is a choice the reader does not actually have. */
-              <button onClick={handleClaimFounding} style={{ width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)", background: "none", border: "1px solid var(--primary)", borderRadius: 3, color: "var(--primary)", cursor: "pointer" }}>
-                {t("pricing_claim_founding")}
+              <button onClick={handleOpenFounding} style={{ width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)", background: "none", border: "1px solid var(--primary)", borderRadius: 3, color: "var(--primary)", cursor: "pointer" }}>
+                {t("pricing_founding_cta")}
               </button>
             )}
             {!managing && (
               <p style={{ textAlign: "center", fontSize: 12, color: "var(--arco-light)", marginTop: 8, minHeight: 36 }}>
-                {t("pricing_coming_soon")}
+                {t("pricing_founding_limit")}
               </p>
             )}
           </div>
         </div>
       </div>
+
+      {/* The founding offer, explained before it is taken.
+          FOUNDING is a real code — checkout resolves it to 100% off
+          for FREE_MONTHS, which is six — so the headline and the
+          thing it promises cannot drift apart. */}
+      {foundingOpen && (
+        <div className="popup-overlay" onClick={() => setFoundingOpen(false)}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+            <div className="popup-header">
+              <h3 className="arco-section-title">{t("pricing_founding_modal_title")}</h3>
+              <button
+                type="button"
+                className="popup-close"
+                onClick={() => setFoundingOpen(false)}
+                aria-label="Sluiten"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="arco-eyebrow" style={{ marginBottom: 8 }}>
+              {t("pricing_founding_modal_code_label")}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard?.writeText("FOUNDING").then(
+                  () => toast.success(t("pricing_founding_modal_copied")),
+                  () => {},
+                )
+              }}
+              style={{
+                width: "100%", padding: "14px 16px", marginBottom: 16,
+                fontFamily: "var(--font-mono, ui-monospace), monospace",
+                fontSize: 20, letterSpacing: "0.12em", fontWeight: 500,
+                color: "var(--primary)", background: "#f0f7f6",
+                border: "1px dashed var(--primary)", borderRadius: 3,
+                cursor: "pointer",
+              }}
+            >
+              FOUNDING
+            </button>
+
+            <p className="arco-body-text" style={{ marginBottom: 20 }}>
+              {t("pricing_founding_modal_body")}
+            </p>
+
+            <button
+              type="button"
+              onClick={() => { setFoundingOpen(false); handleClaimFounding() }}
+              style={{
+                width: "100%", padding: "12px 24px", fontSize: 14,
+                fontFamily: "var(--font-sans)", background: "var(--primary)",
+                border: "1px solid var(--primary)", borderRadius: 3,
+                color: "#fff", cursor: "pointer",
+              }}
+            >
+              {t("pricing_founding_modal_cta")}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Credit example — the product is a credit on a photographed
           project; SHOW it, using the exact card design from the project
@@ -474,49 +559,47 @@ export function PricingSection({
           Left out inside the product: it exists to explain what a credit
           IS to someone who has never seen one. A company managing its
           own plan has them on its own page already. */}
-      <div hidden={managing} style={{ margin: "56px auto 0", maxWidth: 560 }}>
+      <div hidden={managing || examples.length < 2} style={{ margin: "56px auto 0", maxWidth: 560 }}>
         <h3 className="arco-section-title" style={{ textAlign: "center", marginBottom: 16 }}>{t("pricing_credit_example_title")}</h3>
-        {/* Same copy treatment as the body under the page header. */}
         <p className="arco-body-text" style={{ textAlign: "center", maxWidth: 480, margin: "0 auto 32px" }}>{t("pricing_credit_example_caption")}</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 40 }}>
-          {/* Live credit — mirrors the real credit-card. Dark circle with
-              a white mark, like a real company logo tile. */}
-          <div className="credit-card">
-            <span className="arco-eyebrow" style={{ marginBottom: 16, display: "flex", justifyContent: "center" }}>{t("pricing_mock_role_kitchen")}</span>
-            {/* Dummy letterform logo — geometric "v" mark in a dark
-                roundel, same visual language as real company logos
-                (cf. Kraal architecten's "k" roundel). */}
-            <div className="credit-icon" style={{ background: "#22304e" }}>
-              <svg viewBox="0 0 100 100" width="100" height="100" aria-hidden="true">
-                <rect x="34" y="29" width="13" height="42" rx="6.5" fill="#f5f3ee" transform="rotate(-20 40.5 50)" />
-                <rect x="53" y="29" width="13" height="42" rx="6.5" fill="#f5f3ee" transform="rotate(20 59.5 50)" />
-                <circle cx="73" cy="31" r="6" fill="#f5f3ee" />
-              </svg>
-            </div>
-            <h3 className="arco-label" style={{ marginBottom: 6 }}>Van Dijk Keukens</h3>
-            <p className="arco-card-subtitle" style={{ marginBottom: 12 }}>{t("pricing_mock_projects_live")}</p>
-            <span className="text-link-plain">{t("pricing_mock_view_portfolio")} →</span>
-          </div>
-          {/* Locked credit — same card, diminished: greyed logo mark with
-              a small lock badge on the circle. */}
-          <div className="credit-card" style={{ cursor: "default" }}>
-            <span className="arco-eyebrow" style={{ marginBottom: 16, display: "flex", justifyContent: "center", opacity: 0.55 }}>{t("pricing_mock_role_pool")}</span>
-            <div style={{ position: "relative", width: 100, margin: "0 auto 16px" }}>
-              {/* Dummy letterform logo — geometric "b" mark, greyed. */}
-              <div className="credit-icon" style={{ margin: 0, background: "#e8e8e6" }}>
-                <svg viewBox="0 0 100 100" width="100" height="100" aria-hidden="true">
-                  <rect x="34" y="26" width="13" height="48" rx="6.5" fill="#a1a1a0" />
-                  <circle cx="58" cy="59" r="14" fill="none" stroke="#a1a1a0" strokeWidth="10" />
-                </svg>
+          {examples.map((company) => (
+            /* The project page's credit card, same markup and the same
+               classes — this is the thing being explained, so it
+               should not be a drawing of it.
+               `object-contain`, not cover: a logo is a shape, and
+               cropping one to fill a circle cuts the name off.
+               Linked, and in a new tab: the card carries an arrow, and
+               a card that looks like a door and is not is worse than
+               one that promises nothing — but this is the page asking
+               for a signup, so proving the listing is real should not
+               cost the reader their place. */
+            <a
+              key={company.slug}
+              className="credit-card"
+              href={`/professionals/${company.slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span className="arco-eyebrow">{company.serviceLabel ?? ""}</span>
+
+              <div className="credit-icon">
+                {company.logoUrl && (
+                  <Image src={company.logoUrl} alt={company.name} fill className="object-contain" />
+                )}
               </div>
-              <div style={{ position: "absolute", right: 0, bottom: 0, width: 30, height: 30, borderRadius: "50%", background: "#ffffff", border: "1px solid #e8e8e6", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Lock size={14} style={{ color: "#6b6b68" }} />
-              </div>
-            </div>
-            <h3 className="arco-label" style={{ marginBottom: 6, color: "#a1a1a0" }}>B&amp;W Zwembadbouw</h3>
-            <p className="arco-card-subtitle" style={{ marginBottom: 12, opacity: 0.55 }}>1 project</p>
-            <span style={{ fontSize: 12, border: "1px solid var(--primary)", color: "var(--primary)", borderRadius: 999, padding: "4px 12px", display: "inline-block" }}>{t("pricing_mock_unlock")}</span>
-          </div>
+
+              <h3 className="arco-label">{company.name}</h3>
+              {company.projectCount > 0 && (
+                <p className="credit-card-projects">
+                  <span className="credit-card-projects-label">
+                    {tProject("projects_count", { count: company.projectCount })}
+                  </span>
+                  <ArrowRight className="credit-card-arrow" size={14} strokeWidth={1.5} aria-hidden />
+                </p>
+              )}
+            </a>
+          ))}
         </div>
       </div>
     </div>
@@ -534,8 +617,9 @@ export function PricingSection({
         <p className="arco-body-text" style={{ maxWidth: 480, margin: "0 auto 16px" }}>
           {t("pricing_publishing_free_body")}
         </p>
-        <Link href="/businesses/architects" className="text-link-plain">
-          {t("pricing_architect_strip_link")} →
+        <Link href="/businesses/architects" className="arco-text-link">
+          <span className="arco-text-link-label">{t("pricing_architect_strip_link")}</span>
+          <span aria-hidden>→</span>
         </Link>
       </div>
       </div>
