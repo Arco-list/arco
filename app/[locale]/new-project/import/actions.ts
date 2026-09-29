@@ -143,6 +143,21 @@ function cleanImageSrc(src: string): string {
     .trim()
   // Strip surrounding quotes
   cleaned = cleaned.replace(/^["']|["']$/g, "")
+
+  // A bare Wix media id is not a path on the site that shows it.
+  //
+  // Wix embeds its gallery as JSON in the page — `"mediaUrl":
+  // "8bb438_…~mv2_d_3000_1941_s_2.jpg"` — a media id with no host and
+  // no directory. Resolving that against the page URL invents
+  // `stats.nl/projecten/8bb438_….jpg`, which 404s, and the photo is
+  // stored as a link that never worked. The file itself lives on the
+  // Wix CDN and answers there at full size: 3000x1941.
+  //
+  // Keyed on `~mv2`, Wix's own marker, and only for a name with no
+  // slash in it — a real relative path is left alone.
+  if (!cleaned.includes("/") && /~mv2/.test(cleaned)) {
+    cleaned = `https://static.wixstatic.com/media/${cleaned}`
+  }
   // Dig a URL out of something wrapped around it — `url(https://…)`,
   // a stray attribute, malformed markup.
   //
@@ -192,14 +207,39 @@ function upgradeToFullRes(url: string): string {
   //   generic — /thumbs?|small|medium|large/ → /large/
   upgraded = upgraded.replace(/\/_header(?:Small|Medium|Large)\//, "/_headerExtraLarge/")
 
+  // Wix keeps its resize in the PATH, so the query-param rules below
+  // never see it: /media/<id>/v1/fill/w_25,h_25,…/file.png is a 25px
+  // crop of an image that is served whole at /media/<id>.
+  upgraded = upgraded.replace(
+    /(\/\/static\.wixstatic\.com\/media\/[^/]+)\/v1\/[^?]*/,
+    "$1",
+  )
   // WordPress: remove -WxH suffix before extension (e.g. image-1024x768.jpg → image.jpg)
   upgraded = upgraded.replace(/-\d+x\d+(\.\w+)(?:\?|$)/, "$1")
-  // Query-based resizing: remove w, width, h, height, resize, fit params
+  // Query-based resizing: drop the params that ASK FOR A SMALLER IMAGE,
+  // so the server falls back to the original.
+  //
+  // `size` is the exception, because it is used for two different
+  // things. `?size=800` is a width and dropping it helps. `?size=hero`
+  // names a preset the CMS defined, and dropping that does not mean
+  // "full resolution" — it means "whatever the default is", which is
+  // usually the smallest thing on the shelf.
+  //
+  // zecc.nl proved the difference: `?size=projectimage-100-no-text`
+  // serves 1919x1280 at 574 kB, and the same URL without it serves
+  // 100x67 at 2.4 kB. Thirty photos came in as page furniture because
+  // of this one delete.
+  //
+  // So a named preset is left where it is. A number is still dropped —
+  // that reading was right, it was only ever the name that was wrong.
+  const isDimension = (v: string) => /^\d+(x\d+)?$/.test(v.trim())
   try {
     const parsed = new URL(upgraded)
-    for (const param of ["w", "h", "width", "height", "resize", "fit", "quality", "q", "size"]) {
+    for (const param of ["w", "h", "width", "height", "resize", "fit", "quality", "q"]) {
       parsed.searchParams.delete(param)
     }
+    const size = parsed.searchParams.get("size")
+    if (size !== null && isDimension(size)) parsed.searchParams.delete("size")
     upgraded = parsed.toString()
   } catch { /* keep original */ }
   return upgraded
