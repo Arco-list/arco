@@ -9430,3 +9430,25 @@ body.no-scroll {
   max-width: 220px;
   opacity: 1;
 }
+
+/* Hero crossfade — the incoming photo rises over the outgoing one while
+   the progress bar above it runs out to full. Duration comes from the
+   component (SLIDE_MS), so the fade and the bar are the same length by
+   construction rather than by two numbers agreeing. */
+.hero-crossfade {
+  opacity: 0;
+  animation-name: heroCrossfade;
+  animation-timing-function: ease;
+  animation-fill-mode: forwards;
+}
+
+@keyframes heroCrossfade {
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-crossfade {
+    animation: none;
+    opacity: 1;
+  }
+}

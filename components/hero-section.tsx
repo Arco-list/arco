@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight, Settings2 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { HeroCoversEditor } from "@/components/hero-covers-editor"
+import { SLIDE_MS } from "@/components/landing/track-settled"
 
 export interface HeroProject {
   id: string
@@ -25,48 +26,98 @@ export function HeroSection({ projects, isSuperAdmin = false }: HeroSectionProps
   const t = useTranslations("home")
   const [currentIndex, setCurrentIndex] = useState(0)
   const [progress, setProgress] = useState(0)
-  const [isPaused, setIsPaused] = useState(false)
+  /** The slide fading in over the current one, or null when at rest. */
+  const [incomingIndex, setIncomingIndex] = useState<number | null>(null)
 
   const SLIDE_DURATION = 5000 // 5 seconds per slide
 
-  // Auto-advance with progress animation
+  const startRef = useRef(Date.now())
+  const rafRef = useRef<number | undefined>(undefined)
+  const settleRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  // `progress` mirrored into a ref, and the in-transition flag kept
+  // beside it. The frame loop below is rebuilt by an effect, so reading
+  // either from state would mean reading whatever it was when that
+  // effect last ran — and React commits the end of a slide before it
+  // re-runs the effect. That one-frame gap is enough for the loop to
+  // write 100% onto the bar of the slide that just began, which shows up
+  // as the next bar flashing full before it starts filling.
+  const progressRef = useRef(0)
+  const animatingRef = useRef(false)
+  const slideFromRef = useRef(0)
+  const slideStartRef = useRef(0)
+
+  const applyProgress = useCallback((pct: number) => {
+    progressRef.current = pct
+    setProgress(pct)
+  }, [])
+
+  /**
+   * Hand over to another slide: the photo crossfades, and the bar plays
+   * out whatever travel it had left over exactly that span.
+   *
+   * No pause afterwards. Stepping through used to stop the auto-advance
+   * for ten seconds — twice a slide's own length — leaving the bar empty
+   * and still for long enough to read as broken. The new slide starts
+   * its normal five seconds the moment the fade lands.
+   *
+   * Auto-advance comes through here too and costs nothing extra: it only
+   * ever fires at 100%, so there is no travel left and the bar simply
+   * holds full while the photo changes underneath it.
+   */
+  const beginTransition = useCallback((index: number) => {
+    if (animatingRef.current || index === currentIndex) return
+    slideFromRef.current = progressRef.current
+    slideStartRef.current = Date.now()
+    animatingRef.current = true
+    setIncomingIndex(index)
+
+    if (settleRef.current) clearTimeout(settleRef.current)
+    settleRef.current = setTimeout(() => {
+      animatingRef.current = false
+      setCurrentIndex(index)
+      setIncomingIndex(null)
+      applyProgress(0)
+      startRef.current = Date.now()
+    }, SLIDE_MS)
+  }, [currentIndex, applyProgress])
+
   useEffect(() => {
-    if (isPaused || projects.length <= 1) return
+    if (projects.length <= 1) return
 
-    const startTime = Date.now()
-    
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - startTime
-      const newProgress = (elapsed / SLIDE_DURATION) * 100
-
-      if (newProgress >= 100) {
-        // Move to next slide and reset progress
-        setProgress(0)
-        setCurrentIndex((prev) => (prev + 1) % projects.length)
+    const tick = () => {
+      if (animatingRef.current) {
+        // Mid-handover: run the bar out to full in step with the fade.
+        const k = Math.min((Date.now() - slideStartRef.current) / SLIDE_MS, 1)
+        const from = slideFromRef.current
+        applyProgress(from + (100 - from) * k)
       } else {
-        setProgress(newProgress)
+        const pct = Math.min(((Date.now() - startRef.current) / SLIDE_DURATION) * 100, 100)
+        applyProgress(pct)
+        if (pct >= 100) beginTransition((currentIndex + 1) % projects.length)
       }
-    }, 16) // Update ~60fps
+      rafRef.current = requestAnimationFrame(tick)
+    }
+    rafRef.current = requestAnimationFrame(tick)
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    }
+  }, [currentIndex, projects.length, beginTransition, applyProgress])
 
-    return () => clearInterval(interval)
-  }, [currentIndex, isPaused, projects.length, SLIDE_DURATION])
+  useEffect(() => {
+    return () => {
+      if (settleRef.current) clearTimeout(settleRef.current)
+    }
+  }, [])
 
-  const goToSlide = (index: number) => {
-    setCurrentIndex(index)
-    setProgress(0)
-    setIsPaused(true)
-    // Resume auto-play after 10 seconds of inactivity
-    setTimeout(() => setIsPaused(false), 10000)
-  }
+  const goToSlide = (index: number) => beginTransition(index)
 
   const goToPrevious = () => {
-    const newIndex = (currentIndex - 1 + projects.length) % projects.length
-    goToSlide(newIndex)
+    beginTransition((currentIndex - 1 + projects.length) % projects.length)
   }
 
   const goToNext = () => {
-    const newIndex = (currentIndex + 1) % projects.length
-    goToSlide(newIndex)
+    beginTransition((currentIndex + 1) % projects.length)
   }
 
   if (projects.length === 0) {
@@ -75,6 +126,7 @@ export function HeroSection({ projects, isSuperAdmin = false }: HeroSectionProps
 
   const safeIndex = currentIndex < projects.length ? currentIndex : 0
   const currentProject = projects[safeIndex]
+  const incomingProject = incomingIndex !== null ? projects[incomingIndex] : null
 
   return (
     <section className="relative w-full h-[600px] md:h-[700px] lg:h-[82vh] overflow-hidden bg-black" style={{ minHeight: '560px' }}>
@@ -88,6 +140,28 @@ export function HeroSection({ projects, isSuperAdmin = false }: HeroSectionProps
           priority={currentIndex === 0}
           quality={90}
         />
+      )}
+
+      {/* The next photo, fading in over the one above. A CSS animation
+          rather than a transition on purpose: a transition needs the
+          element to exist at opacity 0 for a frame before the change,
+          and a freshly mounted layer has no such frame — it would jump
+          in at full opacity. An animation starts from its own keyframe
+          on the first paint. */}
+      {incomingProject?.imageUrl && (
+        <div
+          className="absolute inset-0 hero-crossfade"
+          style={{ animationDuration: `${SLIDE_MS}ms` }}
+          aria-hidden
+        >
+          <Image
+            src={incomingProject.imageUrl}
+            alt=""
+            fill
+            className="object-cover"
+            quality={90}
+          />
+        </div>
       )}
 
       {/* Gradient Overlay */}

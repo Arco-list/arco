@@ -5,6 +5,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
 import Image from "next/image"
 import { useTranslations } from "next-intl"
 
+import { onTrackSettled, SLIDE_MS } from "./track-settled"
+
 export interface ProjectCard {
   id: string
   title: string
@@ -16,8 +18,6 @@ interface ProjectCarouselProps {
   projects: ProjectCard[]
   /** Auto-advance interval in ms (default 5000) */
   duration?: number
-  /** Pause duration after manual interaction in ms (default 8000) */
-  pauseDuration?: number
 }
 
 const GAP = 20
@@ -25,19 +25,59 @@ const GAP = 20
 export function ProjectCarousel({
   projects,
   duration = 5000,
-  pauseDuration = 8000,
 }: ProjectCarouselProps) {
   const count = projects.length
 
   const [current, setCurrent] = useState(0)
   const [progress, setProgress] = useState(0)
-  const [paused, setPaused] = useState(false)
   const [isAnimating, setIsAnimating] = useState(false)
 
   const trackRef = useRef<HTMLDivElement>(null)
   const startRef = useRef(Date.now())
   const rafRef = useRef<number>()
-  const pauseTimerRef = useRef<ReturnType<typeof setTimeout>>()
+
+  // `progress` mirrored into a ref. The slide starters below need the
+  // bar's value at the instant of a click, and as useCallbacks they would
+  // otherwise read whatever it was when they were last created.
+  const progressRef = useRef(0)
+  const applyProgress = useCallback((pct: number) => {
+    progressRef.current = pct
+    setProgress(pct)
+  }, [])
+
+  // Where the bar stood when the current slide began, and when that was.
+  const slideFromRef = useRef(0)
+  const slideStartRef = useRef(0)
+
+  /**
+   * The same flag as `isAnimating`, kept where the frame loop can read it
+   * without a render in between.
+   *
+   * The loop below is recreated by an effect, so it sees whatever
+   * `isAnimating` was when that effect last ran. React commits the end of
+   * a slide — new `current`, bar back to zero — before it re-runs the
+   * effect, which leaves a window of one frame where the loop still
+   * believes a slide is in progress while the NEW bar is already on
+   * screen. It writes 100% to it, and the next bar flashes full before it
+   * starts filling. A ref has no such window.
+   */
+  const animatingRef = useRef(false)
+
+  /**
+   * Start a slide, and let the bar finish at the speed the track moves.
+   *
+   * Pressing an arrow is a request to be done with this slide now, so the
+   * bar plays out its remaining travel over the length of the slide
+   * itself rather than freezing where it stood. Auto-advance runs through
+   * here too and costs nothing: it only ever fires at 100%, so there is
+   * no travel left and the bar simply stays full while the track moves.
+   */
+  const beginSlide = useCallback(() => {
+    slideFromRef.current = progressRef.current
+    slideStartRef.current = Date.now()
+    animatingRef.current = true
+    setIsAnimating(true)
+  }, [])
 
   // Triple the items for seamless looping: [...projects, ...projects, ...projects]
   // The "real" set is the middle copy (indices count..2*count-1)
@@ -67,7 +107,7 @@ export function ProjectCarousel({
   // Animate to position
   const animateTo = useCallback((index: number) => {
     if (!trackRef.current) return
-    trackRef.current.style.transition = "transform 0.55s cubic-bezier(0.25,0.1,0.25,1)"
+    trackRef.current.style.transition = `transform ${SLIDE_MS}ms cubic-bezier(0.25,0.1,0.25,1)`
     trackRef.current.style.transform = `translateX(${getTranslateX(index)}px)`
   }, [getTranslateX])
 
@@ -79,66 +119,54 @@ export function ProjectCarousel({
     return () => window.removeEventListener("resize", onResize)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* ── Pause helper ── */
-  const pauseAuto = useCallback(() => {
-    setPaused(true)
-    if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current)
-    pauseTimerRef.current = setTimeout(() => {
-      setPaused(false)
-      startRef.current = Date.now()
-    }, pauseDuration)
-  }, [pauseDuration])
-
   /* ── Go next ── */
   const goNext = useCallback(() => {
-    if (isAnimating) return
-    setIsAnimating(true)
+    if (animatingRef.current) return
+    beginSlide()
 
     const next = current + 1
     animateTo(next)
 
-    const onEnd = () => {
-      trackRef.current?.removeEventListener("transitionend", onEnd)
+    onTrackSettled(trackRef.current, () => {
+      animatingRef.current = false
       const wrapped = ((next % count) + count) % count
       if (wrapped !== next) {
         // We've gone past the end — snap back to the middle copy
         snapTo(wrapped)
       }
       setCurrent(wrapped)
-      setProgress(0)
+      applyProgress(0)
       startRef.current = Date.now()
       setIsAnimating(false)
-    }
-    trackRef.current?.addEventListener("transitionend", onEnd)
-  }, [isAnimating, current, count, animateTo, snapTo])
+    })
+  }, [isAnimating, current, count, animateTo, snapTo, beginSlide, applyProgress])
 
   /* ── Go prev ── */
   const goPrev = useCallback(() => {
-    if (isAnimating) return
-    setIsAnimating(true)
+    if (animatingRef.current) return
+    beginSlide()
 
     const prev = current - 1
     animateTo(prev)
 
-    const onEnd = () => {
-      trackRef.current?.removeEventListener("transitionend", onEnd)
+    onTrackSettled(trackRef.current, () => {
+      animatingRef.current = false
       const wrapped = ((prev % count) + count) % count
       if (wrapped !== prev) {
         snapTo(wrapped)
       }
       setCurrent(wrapped)
-      setProgress(0)
+      applyProgress(0)
       startRef.current = Date.now()
       setIsAnimating(false)
-    }
-    trackRef.current?.addEventListener("transitionend", onEnd)
-  }, [isAnimating, current, count, animateTo, snapTo])
+    })
+  }, [isAnimating, current, count, animateTo, snapTo, beginSlide, applyProgress])
 
   /* ── Jump to bar ── */
   const goTo = useCallback(
     (target: number) => {
-      if (isAnimating || target === current) return
-      setIsAnimating(true)
+      if (animatingRef.current || target === current) return
+      beginSlide()
 
       // Find shortest path through the tripled track
       let delta = target - current
@@ -147,27 +175,30 @@ export function ProjectCarousel({
 
       animateTo(current + delta)
 
-      const onEnd = () => {
-        trackRef.current?.removeEventListener("transitionend", onEnd)
+      onTrackSettled(trackRef.current, () => {
+        animatingRef.current = false
         snapTo(target)
         setCurrent(target)
-        setProgress(0)
+        applyProgress(0)
         startRef.current = Date.now()
         setIsAnimating(false)
-      }
-      trackRef.current?.addEventListener("transitionend", onEnd)
-      pauseAuto()
+      })
     },
-    [isAnimating, current, count, animateTo, snapTo, pauseAuto]
+    [isAnimating, current, count, animateTo, snapTo, beginSlide, applyProgress]
   )
 
   /* ── Auto-advance ── */
   useEffect(() => {
     const tick = () => {
-      if (!paused && !isAnimating) {
+      if (animatingRef.current) {
+        // Mid-slide: run the bar out to full in step with the track.
+        const k = Math.min((Date.now() - slideStartRef.current) / SLIDE_MS, 1)
+        const from = slideFromRef.current
+        applyProgress(from + (100 - from) * k)
+      } else {
         const elapsed = Date.now() - startRef.current
         const pct = Math.min((elapsed / duration) * 100, 100)
-        setProgress(pct)
+        applyProgress(pct)
         if (pct >= 100) goNext()
       }
       rafRef.current = requestAnimationFrame(tick)
@@ -176,24 +207,17 @@ export function ProjectCarousel({
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
     }
-  }, [paused, isAnimating, duration, goNext])
+  }, [isAnimating, duration, goNext, applyProgress])
 
   /* ── Keyboard ── */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") { goPrev(); pauseAuto() }
-      if (e.key === "ArrowRight") { goNext(); pauseAuto() }
+      if (e.key === "ArrowLeft") { goPrev() }
+      if (e.key === "ArrowRight") { goNext() }
     }
     document.addEventListener("keydown", onKey)
     return () => document.removeEventListener("keydown", onKey)
-  }, [goPrev, goNext, pauseAuto])
-
-  /* ── Cleanup ── */
-  useEffect(() => {
-    return () => {
-      if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current)
-    }
-  }, [])
+  }, [goPrev, goNext])
 
   const t = useTranslations("business")
 
@@ -245,29 +269,28 @@ export function ProjectCarousel({
         <div className="endorsement-nav">
           <button
             className="endorsement-arrow"
-            onClick={() => { goPrev(); pauseAuto() }}
+            onClick={() => goPrev()}
             aria-label="Previous project"
           >
             <ChevronLeft size={18} />
           </button>
 
+          {/* Only the current bar fills, and a new lap starts from empty.
+              The bars mark where you are in the set, not how much of it
+              you have sat through — which also keeps the row honest when
+              the arrows carry you backwards. */}
           <div className="endorsement-bars">
             {projects.map((_, i) => (
               <button
                 key={i}
-                className={`endorsement-bar${i < current ? " done" : ""}`}
+                className="endorsement-bar"
                 onClick={() => goTo(i)}
                 aria-label={`Go to project ${i + 1}`}
               >
                 <div
                   className="endorsement-bar-fill"
                   style={{
-                    width:
-                      i === current
-                        ? `${progress}%`
-                        : i < current
-                          ? "100%"
-                          : "0%",
+                    width: i === current ? `${progress}%` : "0%",
                   }}
                 />
               </button>
@@ -276,7 +299,7 @@ export function ProjectCarousel({
 
           <button
             className="endorsement-arrow"
-            onClick={() => { goNext(); pauseAuto() }}
+            onClick={() => goNext()}
             aria-label="Next project"
           >
             <ChevronRight size={18} />
