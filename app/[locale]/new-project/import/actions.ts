@@ -132,6 +132,43 @@ async function tryDiscoverCmsImages(html: string, pageUrl: string): Promise<stri
 // ─── Firecrawl helpers ────────────────────────────────────────────────────────
 
 /** Decode HTML entities and clean up image URLs */
+/**
+ * Share buttons, not photographs.
+ *
+ * Every project page carries a row of them, they sit in <img> tags like
+ * anything else, and none of the existing filters catch them: the files
+ * are called facebook.png, not icon.png. Four of them landed in a
+ * twenty-nine-photo import of a water tower.
+ *
+ * MATCHED ON WHOLE SEGMENTS, never substrings. "Social housing" is a
+ * building type and /media/social-housing-amsterdam.jpg is somebody's
+ * project; a folder named exactly `social` is furniture. Same for the
+ * filename: `facebook.png` is a button, `facebook-hq-rotterdam.jpg` is
+ * a photograph of a building.
+ */
+const SOCIAL_DIRS = new Set([
+  "sharebuttons", "share-buttons", "shareicons", "share-icons",
+  "social", "socials", "social-icons", "socialmedia", "social-media",
+  "share",
+])
+const SOCIAL_NAMES = new Set([
+  "facebook", "twitter", "x", "instagram", "linkedin", "pinterest",
+  "pinterest2", "whatsapp", "youtube", "tiktok", "mail", "email",
+  "share", "vimeo", "behance",
+])
+
+function isSocialButton(url: string): boolean {
+  try {
+    const segments = new URL(url).pathname.toLowerCase().split("/").filter(Boolean)
+    const file = segments.pop() ?? ""
+    if (segments.some((seg) => SOCIAL_DIRS.has(seg))) return true
+    const stem = file.replace(/\.[a-z0-9]+$/i, "")
+    return SOCIAL_NAMES.has(stem)
+  } catch {
+    return false
+  }
+}
+
 function cleanImageSrc(src: string): string {
   // Decode HTML entities
   let cleaned = src
@@ -304,6 +341,7 @@ function extractImagesFromMarkdown(markdown: string, baseUrl: string, ogImage?: 
       if (seen.has(key)) return
       if (/\.(svg|ico|gif)(\?|$)/i.test(key)) return
       if (/logo|icon|avatar|favicon|sprite|placeholder/i.test(key)) return
+      if (isSocialButton(key)) return
       // Elementor caches hashed low-res thumbnails under elementor/thumbs/
       // — always a dupe of an uploads/<file>.jpg that we can't reconstruct.
       if (/\/elementor\/thumbs\//i.test(key)) return
@@ -409,6 +447,7 @@ function extractImagesWithIdentity(html: string, baseUrl: string): ExtractedImag
       if (seen.has(key) || seen.has(idKey)) return
       if (/\.(svg|ico|gif)(\?|$)/i.test(key)) return
       if (/logo|icon|avatar|favicon|sprite|placeholder|gravatar/i.test(key)) return
+      if (isSocialButton(key)) return
       if (/\/elementor\/thumbs\//i.test(key)) return
       if (/data:image/i.test(key)) return
       seen.add(key)
