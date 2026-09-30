@@ -67,7 +67,15 @@ export default async function UsersPage() {
     .select(
       "id, first_name, last_name, avatar_url, admin_role, user_types, is_active, invited_by, invited_at, created_at, updated_at",
     )
-    .or("user_types.cs.{admin},user_types.cs.{client}")
+    // Everyone. This used to be
+    // .or("user_types.cs.{admin},user_types.cs.{client}"), which looks
+    // like "admins and clients" but was in practice "everyone except
+    // the fifteen profiles carrying `professional` on its own" —
+    // because a profile normally keeps the `client` it was created
+    // with and gains `professional` alongside it. Those fifteen were
+    // simply absent: a search for a name returned nothing and read as
+    // "this person has no account", which is how we spent a morning
+    // looking for Joep.
     .order("created_at", { ascending: true })
 
   if (adminProfilesError) {
@@ -239,8 +247,22 @@ export default async function UsersPage() {
     const displayName = profileName || metadataName || authRecord?.email || "Admin user"
 
     const email = authRecord?.email ?? "unknown@example.com"
-    const isClientUser = profile.user_types.includes("client") && !profile.user_types.includes("admin")
-    const adminRole = isClientUser ? "client" : (profile.admin_role === "super_admin" ? "super_admin" : "admin")
+    // Admin is something a profile SAYS it is, not what is left when it
+    // fails to say "client". The old test asked for `client` and treated
+    // everything else as staff — harmless only while the query above
+    // guaranteed every row carried `client` or `admin`. Without that
+    // filter it would stamp Admin on fifteen architects, and the table's
+    // label function checks the admin role before it looks at companies,
+    // so the mistake would have been the first thing on screen.
+    // Defaulted, because user_types is nullable and the removed filter
+    // was quietly standing in for a null check: a row with no types
+    // could never contain 'client' or 'admin', so it never reached this
+    // line. Nothing in the table has a null today, but the column
+    // permits one, and the page would throw on it rather than show the
+    // user — the opposite of what this change is for.
+    const userTypes = profile.user_types ?? []
+    const isAdminUser = userTypes.includes("admin")
+    const adminRole = isAdminUser ? (profile.admin_role === "super_admin" ? "super_admin" : "admin") : "client"
     const isActive = profile.is_active !== false
     const bannedUntil = authRecord?.banned_until ?? null
     const emailConfirmedAt = authRecord?.email_confirmed_at ?? null
