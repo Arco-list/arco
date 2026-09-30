@@ -2153,7 +2153,12 @@
     "other_address_note": "Different address — we'll send a one-time code there.",
     "find_nl_only": "Arco is currently open to companies in the Netherlands only.",
     "used_cta": "Log in",
-    "restoring_pick": "Loading your company…"
+    "restoring_pick": "Loading your company…",
+    "resend_prompt": "Didn't receive the code?",
+    "resend_action": "Resend",
+    "resend_sending": "Sending…",
+    "resend_in": "Resend in {seconds}s",
+    "platform_change_address": "Use a different address"
   },
   "invite_accept": {
     "eyebrow": "Invitation",

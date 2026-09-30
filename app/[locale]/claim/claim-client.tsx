@@ -608,6 +608,60 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
     setSession(null); setError(null)
   }
 
+  /**
+   * A way back when the code runs out.
+   *
+   * Supabase expires an OTP, and the claim funnel had no second ask:
+   * the only thing on screen was "Token has expired or is invalid" over
+   * six boxes that would never accept anything again. Going back is no
+   * escape either — the token screen re-sends nothing — so a reader who
+   * left the tab for an hour was simply finished, one step from a
+   * claimed page.
+   *
+   * The cooldown is the same shape the login modal and the company
+   * modal already use, for the same reason: without it the button is a
+   * way to walk into the provider's rate limit, which returns an error
+   * that reads exactly like a broken code.
+   */
+  const RESEND_COOLDOWN_S = 60
+  const [resendCooldown, setResendCooldown] = useState(0)
+  const [resending, setResending] = useState(false)
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return
+    const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [resendCooldown])
+
+  /** Wraps a send so every resend path clears the dead code, restarts
+   *  the cooldown and puts the cursor back in the first box. */
+  const runResend = async (send: () => Promise<string | null>) => {
+    if (resending || resendCooldown > 0) return
+    setResending(true)
+    setError(null)
+    const failure = await send()
+    setResending(false)
+    // A cooldown even on failure: a rate-limit answer is the one case
+    // where trying again immediately is guaranteed to fail again.
+    setResendCooldown(RESEND_COOLDOWN_S)
+    if (failure) { setError(failure); return }
+    setOtp(["", "", "", "", "", ""])
+    setTimeout(() => otpRefs.current[0]?.focus(), 50)
+  }
+
+  const resendRow = (send: () => Promise<string | null>) => (
+    <p className={styles.resendLine}>
+      {t("resend_prompt")}{" "}
+      {resendCooldown > 0 ? (
+        <span>{t("resend_in", { seconds: resendCooldown })}</span>
+      ) : (
+        <button type="button" className={styles.resendButton} disabled={resending} onClick={() => void runResend(send)}>
+          {resending ? t("resend_sending") : t("resend_action")}
+        </button>
+      )}
+    </p>
+  )
+
   // The six code boxes — shared between the account step's sign-in /
   // signup codes and the platform company step's domain code. Paste and
   // iOS autofill both distribute across the boxes.
@@ -1041,10 +1095,26 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                           {t("platform_code_sent", { email: platformSentTo })}
                         </span>
                         {otpRow}
+                        {/* Actually resends, where this used to send the
+                            reader back to the address field to ask for
+                            the code a second time by hand. Same wording,
+                            one step instead of three, and the cooldown
+                            now says when a retry is worth making. */}
+                        {resendRow(async () => {
+                          const res = await sendPlatformDomainCodeAction({
+                            companyId: platformCompanyId,
+                            domain: domain || null,
+                            emailLocal: verifyLocal,
+                            companyName: name,
+                          })
+                          if (!res.ok) return res.error
+                          setPlatformSentTo(res.email)
+                          return null
+                        })}
                         <div className={styles.note} style={{ marginTop: 10 }}>
                           <button type="button" className="arco-text-link"
                             onClick={() => { setPlatformCodeSent(false); setOtp(["", "", "", "", "", ""]) }}>
-                            {t("resend_code")}
+                            {t("platform_change_address")}
                           </button>
                         </div>
                       </>
@@ -1351,6 +1421,22 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
                   <div className={styles.field}>
                     <span className="form-label">{t("platform_code_sent", { email: emailValue.trim() })}</span>
                     {otpRow}
+                    {/* Whichever code this is — sign-in for an existing
+                        account, signup for a new one — resending has to
+                        go back through the same door it came from, or
+                        the code that arrives is not the one the verify
+                        step will accept. */}
+                    {resendRow(async () => {
+                      const addr = emailValue.trim()
+                      const res = existsFlow
+                        ? await signInWithOtpAction({ email: addr })
+                        : await signUpWithOtpAction({
+                            email: addr,
+                            firstName: firstName.trim(),
+                            lastName: lastName.trim() || undefined,
+                          })
+                      return "error" in res && res.error ? res.error.message : null
+                    })}
                   </div>
                 )}
 

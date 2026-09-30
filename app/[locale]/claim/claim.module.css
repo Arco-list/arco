@@ -137,6 +137,26 @@
 .warn i { font-style: normal; color: var(--primary); }
 .error { font-size: 13px; color: var(--destructive); margin-top: 10px; }
 
+/* The way out when a code has expired. Sits directly under the boxes,
+   in the same quiet register as .note — it is a repair, not an action
+   competing with the primary button. The countdown replaces the button
+   in place so the line does not reflow while it ticks. */
+.resendLine { font-size: 13px; color: var(--arco-mid); margin-top: 10px; }
+
+.resendButton {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--arco-black);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.resendButton:disabled { color: var(--arco-mid); cursor: default; text-decoration: none; }
+
 /* A resolved address is shown, not asked — boxed like an input so the
    form reads as one family, read-only-toned, action beside the value. */
 .addrShown {
