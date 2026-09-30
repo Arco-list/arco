@@ -2,35 +2,8 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { removeContactFromSequence, updateContactStage } from "@/lib/apollo-client";
 import { syncCompanyToApollo } from "@/lib/company-apollo-sync";
 import { logger } from "@/lib/logger";
+import { canAdvanceTo } from "@/lib/sales/prospect-status";
 
-/**
- * Status progression order. A status should only advance forward.
- */
-// The claim funnel flipped the order: the company step (step 1,
-// "Created") completes BEFORE the account commit (step 2, "Signup").
-const STATUS_ORDER = [
-  "prospect",
-  "contacted",
-  "visitor",
-  "verified",
-  "owned",
-  "active",
-] as const;
-
-type ProspectStatus = (typeof STATUS_ORDER)[number];
-
-function statusIndex(status: string): number {
-  return STATUS_ORDER.indexOf(status as (typeof STATUS_ORDER)[number]);
-}
-
-function canAdvanceTo(
-  currentStatus: string | null,
-  newStatus: ProspectStatus
-): boolean {
-  const currentIdx = currentStatus ? statusIndex(currentStatus) : -1;
-  const newIdx = statusIndex(newStatus);
-  return newIdx > currentIdx;
-}
 
 async function logProspectEvent(
   supabase: ReturnType<typeof createServiceRoleSupabaseClient>,

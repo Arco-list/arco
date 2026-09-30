@@ -62,3 +62,43 @@ export const COMPANY_STATUS_DOT_HEX: Record<string, string> = {
   invited: "#f59e0b",
   prospected: "#f59e0b",
 }
+
+/**
+ * How far along the funnel each stage sits.
+ *
+ * ONE TABLE, because there were two and they disagreed. The Sales page
+ * ranked eight stages; lib/prospect-matching kept a six-item list that
+ * omitted `removed` and `unlisted` — and a stage missing from an order
+ * indexes as -1, which reads as "below everything". An unlisted company
+ * therefore looked like fair game for promotion back to owned.
+ *
+ * `removed` is deliberately below prospect: it is a stage you are taken
+ * out at, not one you pass through.
+ */
+export const PROSPECT_STATUS_RANK: Record<ProspectStatus, number> = {
+  removed: -1,
+  prospect: 0,
+  contacted: 1,
+  visitor: 2,
+  verified: 3,
+  owned: 4,
+  unlisted: 5,
+  active: 6,
+}
+
+/**
+ * Whether a contact may be moved forward to `next`.
+ *
+ * Funnel stages only ever advance. Without this guard a late signal —
+ * a drip mail going out after someone already claimed, say — drags the
+ * contact back down to `contacted`, and the Sales table reports a
+ * conversion it already counted as lost.
+ *
+ * An unrecognised current status ranks below everything, so a row
+ * carrying a stage from an older vocabulary can still be advanced out
+ * of it rather than being stuck forever.
+ */
+export function canAdvanceTo(current: string | null | undefined, next: ProspectStatus): boolean {
+  const currentRank = current ? PROSPECT_STATUS_RANK[current as ProspectStatus] ?? -1 : -1
+  return PROSPECT_STATUS_RANK[next] > currentRank
+}

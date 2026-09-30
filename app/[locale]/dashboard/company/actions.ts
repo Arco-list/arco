@@ -23,6 +23,8 @@ import { logger, sanitizeForLogging } from "@/lib/logger"
 import type { Database } from "@/lib/supabase/types"
 import { checkRateLimit } from "@/lib/rate-limit"
 import { slugifyCompanyName, ensureUniqueCompanySlug } from "@/lib/company-slug"
+import { geocodeCompanyLocation } from "@/lib/geocode-company"
+import { canAdvanceTo, type ProspectStatus } from "@/lib/sales/prospect-status"
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/svg+xml"]
@@ -548,21 +550,16 @@ export async function updateCompanyContactAction(
   // trip would only re-derive what getDetails returned.
   let latitude: number | null = payload.latitude ?? null
   let longitude: number | null = payload.longitude ?? null
-  const addressForGeocode = payload.address || payload.city
-  if (latitude == null && longitude == null && addressForGeocode) {
-    try {
-      const mapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-      if (mapsKey) {
-        const geoRes = await fetch(
-          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addressForGeocode)}&key=${mapsKey}`
-        )
-        const geoData = await geoRes.json()
-        if (geoData?.results?.[0]?.geometry?.location) {
-          latitude = geoData.results[0].geometry.location.lat
-          longitude = geoData.results[0].geometry.location.lng
-        }
-      }
-    } catch {}
+  if (latitude == null && longitude == null) {
+    const geo = await geocodeCompanyLocation({
+      address: payload.address,
+      city: payload.city,
+      country: payload.country,
+    })
+    if (geo) {
+      latitude = geo.latitude
+      longitude = geo.longitude
+    }
   }
 
   const { error: updateError } = await supabase
@@ -1792,8 +1789,21 @@ export async function completeCompanySetupAction(input: {
       .or(`company_id.eq.${companyId},user_id.eq.${user.id}`)
       .maybeSingle()
 
-    if (prospect && prospect.status !== "active") {
-      const newStatus = input.listCompany ? "active" : "company"
+    // `owned`, not `company`. The stage below Listed was called
+    // "company" under the old funnel vocabulary (signup → company →
+    // active) and this line never learned the new one, so finishing
+    // setup WITHOUT listing stamped a status no longer in
+    // ProspectStatus. Nothing objected: prospects.status carries no
+    // constraint, and the Sales table answers an unknown status with
+    // `?? STATUS_CONFIG.prospect` — so the contact came back reading as
+    // "Prospect" beside their own claimed company. It looked like data,
+    // not like a fault, which is why it sat there.
+    //
+    // The guard is the same one lib/prospect-matching uses on the same
+    // question: stages only ever advance, so finishing setup can never
+    // walk a contact back down from Listed.
+    const newStatus: ProspectStatus = input.listCompany ? "active" : "owned"
+    if (prospect && canAdvanceTo(prospect.status, newStatus)) {
       await serviceRole2.from("prospects").update({
         status: newStatus,
         ...(input.listCompany ? { converted_at: new Date().toISOString() } : { company_created_at: new Date().toISOString() }),
