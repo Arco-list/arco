@@ -17,8 +17,25 @@ function setConsent(value: ConsentValue) {
 }
 
 /** Load PostHog analytics script dynamically */
+/**
+ * Hosts we do NOT measure.
+ *
+ * Development was 40% of everything PostHog held — 1,824 of 4,509 events
+ * in a week, and 292 "people" who were all one person with the dev
+ * server open. The project's test-account filter does list localhost,
+ * but a filter only helps where it is applied: the session-replay list
+ * ignored it and served recordings of localhost:3000 back. Not sending
+ * is the only version that holds everywhere, and it stops paying for
+ * the ingestion too.
+ */
+function isMeasuredHost(): boolean {
+  const h = window.location.hostname
+  return h !== "localhost" && h !== "127.0.0.1" && !h.endsWith(".local")
+}
+
 function loadPostHog() {
   if (typeof window === "undefined") return
+  if (!isMeasuredHost()) return
   if ((window as any).__posthog_loaded) return
   ;(window as any).__posthog_loaded = true
 
@@ -35,46 +52,77 @@ function loadPostHog() {
       ui_host: 'https://eu.posthog.com',
       defaults: '2026-01-30',
       person_profiles: 'identified_only',
-      autocapture: false,
+      autocapture: true,
+      rageclick: true,
+      capture_dead_clicks: true,
       capture_pageview: true,
       capture_pageleave: true,
       disable_session_recording: false,
-      persistence: 'memory'
+      cookieless_mode: 'on_reject'
     });
   `
   document.head.appendChild(script)
+}
+
+/**
+ * Hand PostHog the consent decision.
+ *
+ * REQUIRED, not an optimisation. Under cookieless_mode 'on_reject'
+ * PostHog captures nothing at all until a decision arrives — accepted or
+ * refused, it just needs one. Ship the mode without this and the whole
+ * platform goes dark.
+ *
+ * Refusing does NOT mean going uncounted. In this mode PostHog keeps
+ * counting the visit through a hash it computes server-side, so the
+ * session holds together across page loads with nothing written to the
+ * device. That is what makes a funnel measurable without a cookie —
+ * and it was the missing piece: on `persistence: memory`, every page
+ * load minted a new person, and 590 of 591 visitors in a week showed
+ * exactly one pageview.
+ *
+ * The queue in PostHog's bootstrap stub swallows these calls safely
+ * before the real script has landed.
+ */
+function applyConsent(accepted: boolean) {
+  const ph = typeof window !== "undefined" ? (window as any).posthog : null
+  if (!ph) return
+  if (accepted) {
+    ph.opt_in_capturing()
+    ph.set_config({ persistence: "localStorage+cookie" })
+  } else {
+    ph.opt_out_capturing()
+  }
 }
 
 export function CookieConsent() {
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
-    // Always load PostHog with cookieless tracking (memory persistence)
     loadPostHog()
 
     const consent = getConsent()
     if (!consent) {
       setVisible(true)
+      return
     }
-    // If previously accepted, upgrade to cookie-based persistence for richer tracking
-    if (consent === "accepted" && typeof window !== "undefined" && (window as any).posthog) {
-      (window as any).posthog.set_config({ persistence: "localStorage+cookie" })
-    }
+    // A returning visitor never sees the banner, so nothing would ever
+    // hand PostHog their decision — and in this mode no decision means
+    // no data. Replay the stored one on every load.
+    applyConsent(consent === "accepted")
   }, [])
 
   const handleAccept = () => {
     setConsent("accepted")
     setVisible(false)
-    // Upgrade to cookie-based persistence
-    if (typeof window !== "undefined" && (window as any).posthog) {
-      (window as any).posthog.set_config({ persistence: "localStorage+cookie" })
-    }
+    applyConsent(true)
   }
 
   const handleReject = () => {
     setConsent("rejected")
     setVisible(false)
-    // Stay on memory persistence — no cookies stored
+    // Counted, not stored: PostHog falls back to its server-side hash,
+    // so the visit still joins up into one session without a cookie.
+    applyConsent(false)
   }
 
   if (!visible) return null
