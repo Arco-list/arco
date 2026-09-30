@@ -158,10 +158,16 @@ export default async function CompanySettingsPage({
   // Setup mode: show complete button when setup not done OR company is still in draft
   const isSetupMode = !company.setup_completed || company.status === "created" || company.status === "owned"
 
-  // Account-level tour flag (ui_tour_seen) — the key embeds the company
-  // id plus the setup_reset_at fragment so an admin rollback re-arms it.
+  // Account-level tour flag (ui_tour_seen). The setup_reset_at fragment
+  // stays so an admin rollback re-arms the tour.
+  //
+  // THE COMPANY ID IS GONE. It made the flag per-company rather than
+  // per-person, the same shape that had the project tour running again
+  // for every new project — seven times over for the average user. It
+  // has not bitten here only because nobody owns two companies yet, and
+  // that is not a reason to keep it.
   const setupResetAt = (company as { setup_reset_at?: string | null }).setup_reset_at ?? null
-  const tourKey = `company-edit:${company.id}${setupResetAt ? `:${setupResetAt}` : ""}`
+  const tourKey = `company-edit${setupResetAt ? `:${setupResetAt}` : ""}`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: tourSeenRow } = await (supabase as any)
     .from("ui_tour_seen")

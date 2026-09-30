@@ -5518,8 +5518,18 @@ export default function ListingEditorPage() {
           storagePrefix="arco.project-edit-tour.seen."
           // Client-only page: resolve the account-level flag (ui_tour_seen)
           // asynchronously; the tour won't auto-start until it's known.
-          serverSeen={() => getTourSeen(`project-edit:${projectId ?? ""}`)}
-          onMarkSeen={() => { if (projectId) void markTourSeen(`project-edit:${projectId}`) }}
+          //
+          // ONE FLAG PER PERSON, NOT PER PROJECT. The key used to carry
+          // the project id, so every new project was a project the
+          // reader had never been shown around — and the tour ran again.
+          // Across 23 users that made 172 flags: the average person sat
+          // through this more than seven times. The tour teaches the
+          // EDITOR, which does not change from one project to the next.
+          //
+          // Anyone who wants it back has "Rondleiding bekijken", which
+          // sets forceRun and ignores the flag entirely.
+          serverSeen={() => getTourSeen("project-edit")}
+          onMarkSeen={() => { void markTourSeen("project-edit") }}
           forceRun={tourForceRun}
           steps={PROJECT_TOUR_STEPS}
           onStepChange={(idx) => {
