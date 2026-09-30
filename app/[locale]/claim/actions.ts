@@ -272,6 +272,19 @@ export async function completeClaimAction(input: CompleteInput): Promise<Complet
       "redirect_to",
       `/dashboard/company?company_id=${parsed.companyId}&claimed=1`,
     )
+    // Funnel stage: the same stamp the two existing-account branches
+    // below already make.
+    //
+    // THIS BRANCH WAS THE ONE WITHOUT IT, and it is the common one — a
+    // person who signs up while claiming. The auth trigger stamps
+    // Signup for them, which reads like the stage was handled, but it
+    // never reaches Owned. And Owned is not just a label here: it is
+    // where the owned-reminder gets enqueued. So the mail was never
+    // scheduled for the majority of claims — not delayed, not
+    // cancelled, simply never created.
+    void import("@/lib/prospect-ref")
+      .then(({ advanceProspectStage }) => advanceProspectStage({ email: parsed.email, companyId: parsed.companyId }, "owned"))
+      .catch(() => {})
     return { status: "done", loginUrl: loginUrl.toString() }
   } catch (err) {
     // Failed after consumption: hand the token back so the link retries,
