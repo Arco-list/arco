@@ -566,6 +566,19 @@ function TimelineStream({
     // The Contacted chapter IS the sequence start — the release-batch
     // cron's bookkeeping row would only repeat it.
     "sequence_auto_started",
+    // A MIGRATION'S PAPERWORK, not a thing the contact did. Three rows
+    // exist, all stamped at one instant on 3 September 2026, by the
+    // backfill that reordered the ladder — their metadata says so:
+    // "account exists, company < signup under new order", moving
+    // status from 'company' to 'signup'. Nothing has written it since
+    // and nothing in the codebase can.
+    //
+    // It is NOT the Owned chapter under another name, which is what it
+    // looks like sitting there. Owned is drawn from prospect.owned or
+    // company_created_at, and for two of these three that moment was
+    // days earlier — so this row landed in their timeline on a date
+    // when nothing whatsoever happened to them.
+    "prospect.claim_completed",
   ])
 
   // Cleanup on raw events, in one pass:

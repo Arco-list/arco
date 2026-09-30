@@ -5,7 +5,7 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { updateContactStage } from "@/lib/apollo-client"
 import { getSubscribedCompanyIds, getSubscriberStats } from "@/lib/subscriptions/subscriber-stats"
 
-import type { ProspectStatus } from "@/lib/sales/prospect-status"
+import { PROSPECT_STATUS_RANK, type ProspectStatus } from "@/lib/sales/prospect-status"
 export type { ProspectStatus }
 
 export type SequenceStatus = "not_started" | "active" | "paused" | "finished" | "replied"
@@ -368,17 +368,6 @@ export type SalesFunnel = {
   owned: number
   unlisted: number
   active: number
-}
-
-const PROSPECT_STATUS_RANK: Record<ProspectStatus, number> = {
-  removed: -1,
-  prospect: 0,
-  contacted: 1,
-  visitor: 2,
-  verified: 3,
-  owned: 4,
-  unlisted: 5,
-  active: 6,
 }
 
 const SEQUENCE_RANK: Record<SequenceStatus, number> = {
@@ -2831,6 +2820,29 @@ type TemplateEventSummary = {
  *  = messageId), so we resolve template by messageId in JS. lastEvent
  *  picks the most-recent terminal/engagement event, mirroring the cadence
  *  of the queue's last_event_cached. */
+/**
+ * The mails a contact can be sent while they are being acquired.
+ *
+ * NAMED ONCE, because the same set was written out three times and the
+ * three had drifted apart. A contact promoted to Showcase mid-track
+ * carries prospect-* rows instead of outreach-*; the queue query knew
+ * that, the events join did not, and the branch gate did not either. So
+ * such a contact fell through to the Apollo lookup, which for anyone
+ * without an apollo_sequence_id returns nothing — an empty sequence, no
+ * mails in the timeline, and no first-send date for the Contacted
+ * marker to sit on.
+ *
+ * SERIES are the ladders whose steps render as named rows, and whose
+ * intro can fire LIVE with no queue row behind it — which is why they,
+ * and not the stage mails, are what the events join has to cover.
+ */
+const OUTREACH_SERIES = ["outreach-intro", "outreach-followup", "outreach-final"] as const
+const SHOWCASE_SERIES = ["prospect-intro", "prospect-followup", "prospect-final"] as const
+const SERIES_TEMPLATES: readonly string[] = [...OUTREACH_SERIES, ...SHOWCASE_SERIES]
+/** Stage mails: always queued, one row each, no live path. */
+const STAGE_TEMPLATES = ["visitor-nudge", "verified-reminder", "owned-welcome", "company-live", "listed-professionals", "listed-backlink"] as const
+const CAMPAIGN_TEMPLATES: readonly string[] = [...SERIES_TEMPLATES, ...STAGE_TEMPLATES]
+
 async function fetchOutreachEventsByTemplate(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
@@ -2859,7 +2871,7 @@ async function fetchOutreachEventsByTemplate(
     if (
       ev.event_type === "sent"
       && ev.template
-      && ["outreach-intro", "outreach-followup", "outreach-final"].includes(ev.template)
+      && SERIES_TEMPLATES.includes(ev.template)
     ) {
       messageIdToTemplate.set(ev.provider_event_id, ev.template)
     }
@@ -2927,9 +2939,7 @@ export async function getProspectSequence(prospectId: string): Promise<{
 
   // Outreach (Apollo source): all three steps live in email_drip_queue
   // (auto-enrol queues the intro alongside followup/final instead of
-  // firing live). When the queue has no outreach-* rows we fall back
-  // to getApolloSequence — handles legacy Apollo prospects added
-  // before auto-enrol existed.
+  // firing live).
   if ((prospect as any).source === "apollo") {
     const { data: outreachQueueRows } = await supabase
       .from("email_drip_queue")
@@ -2937,11 +2947,27 @@ export async function getProspectSequence(prospectId: string): Promise<{
       .ilike("email", prospect.email)
       // prospect-* included: a showcase promotion mid-track swaps the
       // remaining steps to the showcase drip — those rows must show.
-      .in("template", ["outreach-intro", "outreach-followup", "outreach-final", "prospect-intro", "prospect-followup", "prospect-final", "visitor-nudge", "verified-reminder", "owned-welcome", "company-live", "listed-professionals", "listed-backlink"])
+      .in("template", CAMPAIGN_TEMPLATES)
       .order("created_at", { ascending: false })
 
-    const hasOutreachRows = (outreachQueueRows ?? []).some((r: { template: string }) => r.template.startsWith("outreach-"))
-    if (!hasOutreachRows) {
+    // Fetched BEFORE the Apollo question, because the answer to that
+    // question is "do we know anything about this contact ourselves".
+    const outreachEventsByTemplate = await fetchOutreachEventsByTemplate(supabase, prospect.email)
+
+    // Apollo is the fallback for LEGACY contacts — the ones added before
+    // auto-enrol existed, who have no local trace at all. It used to be
+    // reached by a narrower test: "no outreach-* queue rows". A contact
+    // promoted to Showcase has prospect-* rows and no outreach-* ones,
+    // so that test sent a contact we knew plenty about off to Apollo,
+    // which answers with nothing whenever apollo_sequence_id is null.
+    // The panel then showed no mails at all, and the Contacted marker —
+    // which reads the first send out of this list — fell back to
+    // last_email_sent_at and drifted forward onto the newest mail,
+    // landing AFTER the Visitor stage it is supposed to precede.
+    const hasLocalRecord =
+      (outreachQueueRows ?? []).length > 0
+      || Array.from(outreachEventsByTemplate.values()).some((e) => e.sentAt)
+    if (!hasLocalRecord) {
       return getApolloSequence(prospect as any)
     }
 
@@ -2956,32 +2982,45 @@ export async function getProspectSequence(prospectId: string): Promise<{
       if (!outreachByTemplate.has(row.template)) outreachByTemplate.set(row.template, row)
     }
 
-    // Layer email_events on top of the queue rows. dispatchOutreachIntro
-    // fires the intro live via Resend (no queue row), so the queue map
-    // alone misses live-fired sends and their bounce/open/click events.
-    // email_events is the single source of truth for outbound mail —
-    // joined per template here, the bounced engagement label lands on
-    // the step that actually got the bounce instead of disappearing.
-    const outreachEventsByTemplate = await fetchOutreachEventsByTemplate(supabase, prospect.email)
-
-    const outreachSteps: ProspectSequenceStep[] = [
-      mergeStepWithEvents(
-        queueRowToProspectStep("outreach-intro", "Intro", outreachByTemplate.get("outreach-intro")),
-        outreachEventsByTemplate.get("outreach-intro"),
-      ),
-      mergeStepWithEvents(
-        queueRowToProspectStep("outreach-followup", "Follow-up", outreachByTemplate.get("outreach-followup")),
-        outreachEventsByTemplate.get("outreach-followup"),
-      ),
-      mergeStepWithEvents(
-        queueRowToProspectStep("outreach-final", "Final", outreachByTemplate.get("outreach-final")),
-        outreachEventsByTemplate.get("outreach-final"),
-      ),
-    ]
+    // email_events was layered on top of the queue rows above.
+    // dispatchOutreachIntro fires the intro live via Resend (no queue
+    // row), so the queue map alone misses live-fired sends and their
+    // bounce/open/click events. email_events is the single source of
+    // truth for outbound mail — joined per template, the bounced
+    // engagement label lands on the step that actually got the bounce
+    // instead of disappearing.
+    // Same rule as the showcase steps below: a step exists when there is
+    // a queue row or a recorded send.
+    //
+    // It used to be unconditional, which was safe only while this branch
+    // was gated on having outreach-* rows — everyone who got here was on
+    // the Outreach track by definition. Now that a Showcase-only contact
+    // reaches it too, three empty Outreach steps would follow them
+    // around: not as timeline rows (those need a status and a
+    // timestamp), but the Channel pills read the step list whole, so the
+    // panel would claim a track the contact was never on.
+    const outreachSteps: ProspectSequenceStep[] = []
+    for (const [tpl, label] of [
+      ["outreach-intro", "Intro"],
+      ["outreach-followup", "Follow-up"],
+      ["outreach-final", "Final"],
+    ] as const) {
+      const row = outreachByTemplate.get(tpl)
+      const events = outreachEventsByTemplate.get(tpl)
+      if (!row && !events?.sentAt) continue
+      outreachSteps.push(mergeStepWithEvents(queueRowToProspectStep(tpl, label, row), events))
+    }
 
     // Showcase steps appended for tracks swapped mid-sequence (company
-    // promoted to showcase): only templates that actually have queue
-    // rows render — pure-outreach contacts see no phantom showcase steps.
+    // promoted to showcase). A step renders when there is a queue row OR
+    // a recorded send — pure-outreach contacts still see no phantom
+    // showcase steps, because they have neither.
+    //
+    // THE SEND IS ENOUGH ON ITS OWN. The showcase intro fires live, the
+    // same way the outreach intro does, and leaves no queue row behind
+    // it. Requiring one hid the first mail these contacts were ever
+    // sent — the mail that made them Contacted — while the follow-up
+    // and final, which ARE queued, showed up underneath it.
     const showcaseLabels: Array<[string, string]> = [
       ["prospect-intro", "Showcase Intro"],
       ["prospect-followup", "Showcase Follow-up"],
@@ -2989,7 +3028,9 @@ export async function getProspectSequence(prospectId: string): Promise<{
     ]
     for (const [tpl, label] of showcaseLabels) {
       const row = outreachByTemplate.get(tpl)
-      if (row) outreachSteps.push(queueRowToProspectStep(tpl, label, row))
+      const events = outreachEventsByTemplate.get(tpl)
+      if (!row && !events?.sentAt) continue
+      outreachSteps.push(mergeStepWithEvents(queueRowToProspectStep(tpl, label, row), events))
     }
 
     // Visitor-nudge: one abstract queue row (copy variant resolves at
