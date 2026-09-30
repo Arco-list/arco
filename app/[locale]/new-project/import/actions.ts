@@ -1667,95 +1667,164 @@ async function autoTagPhotosWithSpaces(
     } catch { return false }
   })
 
-  // Tag up to 40 photos per import. With the 768px jimp downscale
-  // each image is ~50-150KB base64 → 40 photos comfortably under the
-  // ~32MB Anthropic request limit, and ~20K vision-input tokens (well
-  // inside Haiku's window).
+  // Tag up to 40 photos per import. What actually keeps the request
+  // inside Anthropic's ~32MB limit is the byte budget below, not the
+  // count — a photo goes as-is when it is small and gets scaled to
+  // 768px when it is not.
   const photosToTag = validPhotos.slice(0, 40)
   console.log(`[autoTag] Tagging ${photosToTag.length} of ${photos.length} photos (${photos.length - validPhotos.length} skipped as invalid)`)
 
   if (photosToTag.length === 0) return
 
-  // Build image content blocks — download then downscale to a small
-  // JPEG before base64-encoding. Anthropic enforces a request-size
-  // limit (~32MB); full-resolution architectural photos at 40-per-batch
-  // easily blow through it. 768px on the long side is more than enough
-  // resolution for Claude vision to classify a room, and it cuts each
-  // photo from ~1-3MB down to ~50-150KB.
+  // Build image content blocks. A photo is scaled only when it has to
+  // be: 768px on the long side is ample for Claude to classify a room,
+  // and it cuts a 1-3MB photo to ~50-150KB. Scaling every photo was
+  // simpler, but it meant decoding and re-encoding pictures that were
+  // already small enough to send.
   // Uses jimp (pure-JS) rather than sharp because sharp's native libvips
   // binary doesn't survive Next 15's server-action webpack bundle on
   // either Vercel or localhost. Jimp is slower (~50-100ms per image vs
   // sharp's ~5-10ms) but autoTag is async relative to the user redirect,
   // so the added latency is invisible.
   const { Jimp } = await import("jimp")
+
+  /** Media types Claude's vision API accepts as-is. */
+  const CLAUDE_MEDIA = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"])
+  /** What jimp 1.6 can actually decode. Notably NOT webp. */
+  const JIMP_DECODABLE = new Set(["image/jpeg", "image/png", "image/gif", "image/bmp", "image/tiff"])
+  /** A photo at or under this goes to the model untouched. 1.5 MB keeps
+   *  86% of mirrored photos out of both the resizer and the quota. */
+  const PASS_THROUGH_MAX_BYTES = 1_500_000
+  /**
+   * Ceiling on the bytes sent in one request, before base64.
+   *
+   * Anthropic caps a request near 32MB and base64 inflates by a third,
+   * so ~18MB of image bytes is the most that fits with room for the
+   * prompt. Forty photos that each squeak under the pass-through
+   * threshold would be 60MB — the budget is what stops a photo-heavy
+   * import from being rejected wholesale, by pushing the later photos
+   * back through the resizer once the earlier ones have spent it.
+   */
+  const TOTAL_RAW_BUDGET = 18_000_000
+  let rawBudgetUsed = 0
+
+  const canPassThrough = (buf: Buffer | null, type: string | null): buf is Buffer =>
+    Boolean(buf)
+    && CLAUDE_MEDIA.has(type ?? "")
+    && (buf as Buffer).length <= PASS_THROUGH_MAX_BYTES
+    && rawBudgetUsed + (buf as Buffer).length <= TOTAL_RAW_BUDGET
+
   const imageBlocks: any[] = []
   for (const photo of photosToTag) {
     try {
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 10000)
 
-      // Photos already mirrored into our Supabase Storage: fetch through
-      // the image-transformation endpoint, which resizes server-side AND
-      // transcodes to JPEG — this is what lets webp sources through (jimp
-      // cannot decode webp; sites that ONLY serve webp made every photo
-      // silently skip the vision pass, e.g. "Woning in Doorn" 2026-08-24).
+      // Our own Storage: take the ORIGINAL object, not a transform.
+      //
+      // This branch used to fetch every photo through
+      // /render/image/public/ to get a resized JPEG. It worked, and it
+      // was the single biggest consumer of the Storage Image
+      // Transformations quota on the plan — 734 photos mirrored in a
+      // month, each one billed as a transformed image, to produce
+      // pictures no visitor ever sees. The quota sat at 409% of its
+      // allowance with nothing rendering for a reader.
+      //
+      // The transform did two jobs. Both have cheaper answers:
+      //
+      //   RESIZING is only needed when an image is actually large. The
+      //   median mirrored photo is 336 kB and 86% are under 1.5 MB —
+      //   those go to the model untouched. Only the rest get scaled,
+      //   and jimp does that locally.
+      //
+      //   TRANSCODING to JPEG was for webp, which jimp cannot decode.
+      //   But Claude reads image/webp natively, so a webp under the
+      //   threshold needs no conversion at all. What is left is a webp
+      //   too big to send as-is — ten of them in thirty days — and that
+      //   is the only case still worth a transformation.
       const storageMatch = photo.url.match(/^(https:\/\/[^/]+\/storage\/v1)\/object\/public\/(.+)$/)
+      let sourceBuffer: Buffer | null = null
+      let sourceType: string | null = null
+
       if (storageMatch) {
-        // height + resize=contain bound BOTH dimensions: width=768 alone
-        // preserves aspect ratio, and one tall portrait/panorama over
-        // 2000px high gets the whole many-image API request rejected
-        // ("Surrounded by the Forest" 2026-08-24, 25 photos, 0 tagged).
-        const transformUrl = `${storageMatch[1]}/render/image/public/${storageMatch[2]}?width=768&height=1200&resize=contain&quality=75`
-        const res = await fetch(transformUrl, { signal: controller.signal })
-        clearTimeout(timeout)
-        if (res.ok && (res.headers.get("content-type") ?? "").includes("image/")) {
-          const jpeg = Buffer.from(await res.arrayBuffer())
-          imageBlocks.push(
-            { type: "image", source: { type: "base64", media_type: (res.headers.get("content-type") ?? "image/jpeg") as any, data: jpeg.toString("base64") } },
-            { type: "text", text: `#${photo.order_index}` }
-          )
+        const res = await fetch(photo.url, { signal: controller.signal })
+        if (res.ok) {
+          sourceBuffer = Buffer.from(await res.arrayBuffer())
+          sourceType = (res.headers.get("content-type") ?? "").split(";")[0].trim() || null
+        } else {
+          console.log(`[autoTag] storage fetch failed for #${photo.order_index} (HTTP ${res.status})`)
+        }
+
+        // Too big to pass through AND in a format jimp cannot decode:
+        // the one case the transform endpoint still earns its cost.
+        if (sourceBuffer && !canPassThrough(sourceBuffer, sourceType) && !JIMP_DECODABLE.has(sourceType ?? "")) {
+          const transformUrl = `${storageMatch[1]}/render/image/public/${storageMatch[2]}?width=768&height=1200&resize=contain&quality=75`
+          const tRes = await fetch(transformUrl, { signal: controller.signal })
+          if (tRes.ok && (tRes.headers.get("content-type") ?? "").includes("image/")) {
+            sourceBuffer = Buffer.from(await tRes.arrayBuffer())
+            sourceType = (tRes.headers.get("content-type") ?? "image/jpeg").split(";")[0].trim()
+            console.log(`[autoTag] transformed #${photo.order_index} (${sourceType} too large for pass-through, not jimp-decodable)`)
+          } else {
+            console.log(`[autoTag] transform fetch failed for #${photo.order_index} (HTTP ${tRes.status})`)
+          }
+        }
+      }
+
+      if (!sourceBuffer) {
+        // Some WordPress / CDN setups (jouwnest.nl etc.) return 403 to
+        // requests without a Referer matching the photo's own origin —
+        // hot-link protection. Setting Referer to the origin avoids this.
+        const photoOrigin = (() => {
+          try { return new URL(photo.url).origin + "/" } catch { return undefined }
+        })()
+        const imgRes = await fetch(photo.url, {
+          signal: controller.signal,
+          headers: {
+            // Browser-style UA — bot UAs are sometimes blocked outright.
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+            ...(photoOrigin ? { Referer: photoOrigin } : {}),
+            // webp is welcome here now: an external webp small enough to
+            // pass through goes straight to the model. Only when it has
+            // to be RESIZED does jimp's inability to decode it bite, and
+            // an external photo has no transform endpoint to fall back
+            // on — so jpeg/png still lead the negotiation.
+            Accept: "image/jpeg,image/png,image/gif,image/bmp,image/tiff;q=0.9,image/webp;q=0.8,image/*;q=0.5",
+          },
+        })
+        if (!imgRes.ok) {
+          clearTimeout(timeout)
+          console.log(`[autoTag] Failed to download photo #${photo.order_index}: HTTP ${imgRes.status} ${imgRes.statusText} (${photo.url})`)
           continue
         }
-        console.log(`[autoTag] transform fetch failed for #${photo.order_index} (HTTP ${res.status}) — falling back to raw download`)
+        sourceBuffer = Buffer.from(await imgRes.arrayBuffer())
+        sourceType = (imgRes.headers.get("content-type") ?? "").split(";")[0].trim() || null
       }
-      // Some WordPress / CDN setups (jouwnest.nl etc.) return 403 to
-      // requests without a Referer matching the photo's own origin —
-      // hot-link protection. Setting Referer to the origin avoids this.
-      const photoOrigin = (() => {
-        try { return new URL(photo.url).origin + "/" } catch { return undefined }
-      })()
-      const imgRes = await fetch(photo.url, {
-        signal: controller.signal,
-        headers: {
-          // Browser-style UA — bot UAs are sometimes blocked outright.
-          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
-          ...(photoOrigin ? { Referer: photoOrigin } : {}),
-          // Only advertise formats jimp 1.6.1 can decode (BMP, GIF, JPEG,
-          // PNG, TIFF). If we listed webp/avif/apng here, negotiating
-          // CDNs like Squarespace would happily return webp — which
-          // jimp.read() then throws on, and every photo silently skips.
-          Accept: "image/jpeg,image/png,image/gif,image/bmp,image/tiff;q=0.9,image/*;q=0.5",
-        },
-      })
       clearTimeout(timeout)
-      if (!imgRes.ok) {
-        console.log(`[autoTag] Failed to download photo #${photo.order_index}: HTTP ${imgRes.status} ${imgRes.statusText} (${photo.url})`)
+
+      // Small enough, and a format Claude reads: send the bytes as they
+      // are. No decode, no re-encode, no transformation billed.
+      if (canPassThrough(sourceBuffer, sourceType)) {
+        rawBudgetUsed += sourceBuffer.length
+        imageBlocks.push(
+          { type: "image", source: { type: "base64", media_type: sourceType as string, data: sourceBuffer.toString("base64") } },
+          { type: "text", text: `#${photo.order_index}` }
+        )
         continue
       }
-      const rawBuffer = Buffer.from(await imgRes.arrayBuffer())
+
       let image
       try {
-        image = await Jimp.read(rawBuffer)
+        image = await Jimp.read(sourceBuffer)
       } catch (decodeErr) {
         // Surface the actual reason (unknown MIME, corrupt bytes, etc.) —
         // previously this fell into the generic download-error catch and
         // read as "download failed" in logs, hiding a decode-side issue.
-        const ct = imgRes.headers.get("content-type") ?? "unknown"
-        console.log(`[autoTag] jimp could not decode photo #${photo.order_index} (content-type=${ct}):`, decodeErr instanceof Error ? decodeErr.message : decodeErr)
+        console.log(`[autoTag] jimp could not decode photo #${photo.order_index} (content-type=${sourceType ?? "unknown"}):`, decodeErr instanceof Error ? decodeErr.message : decodeErr)
         continue
       }
       image.scaleToFit({ w: 768, h: 768 })
       const thumb = await image.getBuffer("image/jpeg", { quality: 75 })
+      rawBudgetUsed += thumb.length
       const base64 = thumb.toString("base64")
       imageBlocks.push(
         { type: "image", source: { type: "base64", media_type: "image/jpeg", data: base64 } },
