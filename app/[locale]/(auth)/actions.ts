@@ -226,22 +226,25 @@ export const checkUserExistsAction = async (
     const { createServiceRoleSupabaseClient } = await import('@/lib/supabase/server');
     const adminClient = createServiceRoleSupabaseClient();
 
-    const { data: { users }, error } = await adminClient.auth.admin.listUsers({
-      perPage: 1000,
-    });
+    // One address, one lookup. This used to pull the first thousand
+    // users and scan them in JS, which answers the question wrongly the
+    // moment there are more than a thousand: perPage caps the page, so
+    // an account on page two reads as "no account" — and this answer
+    // decides whether someone is shown a sign-in code or a signup form.
+    const { data: match, error } = await adminClient
+      .rpc('get_auth_user_by_email', { p_email: email.trim() })
+      .maybeSingle();
 
     if (error) {
       logger.auth('check-user', 'Error checking if user exists', {
         error: { message: error.message },
       });
+      // Unchanged on failure: claiming "no account" would send someone
+      // into signup for an address that already has one.
       return { data: { exists: true } };
     }
 
-    const exactMatch = users?.some(
-      (u) => u.email?.toLowerCase() === email.toLowerCase().trim()
-    );
-
-    return { data: { exists: !!exactMatch } };
+    return { data: { exists: Boolean(match) } };
   } catch (error) {
     logger.auth('check-user', 'Exception checking user existence', {}, error as Error);
     return { data: { exists: true } };
@@ -264,12 +267,27 @@ export const signUpWithOtpAction = async (
     const adminClient = createServiceRoleSupabaseClient();
 
     // Step 0: Clean up ghost users (created but never confirmed/signed in)
-    const { data: { users: existingUsers } } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
-    const ghost = existingUsers?.find(
-      (u) => u.email?.toLowerCase() === email.toLowerCase().trim()
-        && !u.email_confirmed_at
-        && !u.last_sign_in_at
-    );
+    //
+    // Looked up by address rather than scanned out of the first
+    // thousand users. Two things were wrong with the scan: it fetched
+    // every user on every signup, and past a thousand it stopped
+    // finding anyone — a ghost on page two survived, and the retry it
+    // was meant to unblock kept failing.
+    //
+    // The destructure it replaces was `{ data: { users } }`, which
+    // throws a TypeError when the call errors and `data` comes back
+    // null. That lands in the outer catch as "An unexpected error
+    // occurred", one step away from the account the person is trying
+    // to make, with nothing in the message to say what happened.
+    const { data: existing, error: lookupError } = await adminClient
+      .rpc('get_auth_user_by_email', { p_email: email.trim() })
+      .maybeSingle<{ id: string; email_confirmed_at: string | null; last_sign_in_at: string | null }>();
+    if (lookupError) {
+      logger.auth('signup-otp', 'Ghost lookup failed; continuing to createUser', {
+        error: { message: lookupError.message },
+      });
+    }
+    const ghost = existing && !existing.email_confirmed_at && !existing.last_sign_in_at ? existing : null;
     if (ghost) {
       logger.auth('signup-otp', 'Removing ghost user before re-creation', { ghostId: ghost.id });
       // Clean up profile and auth user
@@ -302,9 +320,22 @@ export const signUpWithOtpAction = async (
       ) {
         logger.auth('signup-otp', 'User already exists, proceeding with OTP send');
       } else {
+        // SAY WHAT WENT WRONG. This branch used to answer every failure
+        // with "Please try again", which is also all the next person
+        // debugging it gets: the real message went to the server log,
+        // and a server log is not where you look when a customer is
+        // stuck mid-claim. A claim did fail here with no way to tell a
+        // rejected address from a rate limit from a failing trigger.
+        //
+        // The provider's own wording is shown. It is plain enough to
+        // act on ("email address is invalid", "rate limit exceeded")
+        // and it names nothing the caller did not already submit.
+        const detail = createError.message?.trim()
         return {
           error: {
-            message: 'Could not create your account. Please try again.',
+            message: detail
+              ? `Could not create your account: ${detail}`
+              : 'Could not create your account. Please try again.',
             code: 'CREATE_USER_ERROR',
           },
         };
@@ -388,9 +419,14 @@ export const signUpWithOtpAction = async (
       // 3) createError fell through as "user exists". Verify that against
       //    auth.users — a mismatch means the email is claimed only via an
       //    OAuth identity (Google/Apple linked to another account).
-      const matchingUser = existingUsers?.find(
-        (u) => u.email?.toLowerCase() === emailNormalized
-      );
+      //
+      //    Re-read rather than reuse the lookup from before createUser:
+      //    that one is now a single-row read taken minutes earlier in
+      //    the same request, and what this needs to know is whether the
+      //    row is there NOW, after the create attempt.
+      const { data: matchingUser } = await adminClient
+        .rpc('get_auth_user_by_email', { p_email: emailNormalized })
+        .maybeSingle();
 
       if (!matchingUser) {
         return {

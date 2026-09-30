@@ -223,6 +223,69 @@ export type Database = {
           },
         ]
       }
+      claim_arrivals: {
+        Row: {
+          channel: string
+          company_id: string | null
+          created_at: string
+          email: string | null
+          id: string
+          source_ref: string | null
+        }
+        Insert: {
+          channel: string
+          company_id?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          source_ref?: string | null
+        }
+        Update: {
+          channel?: string
+          company_id?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          source_ref?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "claim_arrivals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "claim_arrivals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "company_metrics"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "claim_arrivals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id_full"]
+          },
+          {
+            foreignKeyName: "claim_arrivals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "claim_arrivals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       claim_email_verification_codes: {
         Row: {
           code: string
@@ -1660,6 +1723,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      outbound_templates: {
+        Row: {
+          body: string
+          situation_id: string
+          subject: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          body: string
+          situation_id: string
+          subject: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          body?: string
+          situation_id?: string
+          subject?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
       }
       persons: {
         Row: {
@@ -3739,6 +3826,7 @@ export type Database = {
           current_period_end: string | null
           first_payment_at: string | null
           id: string
+          livemode: boolean
           status: string
           stripe_customer_id: string
           stripe_price_id: string | null
@@ -3757,6 +3845,7 @@ export type Database = {
           current_period_end?: string | null
           first_payment_at?: string | null
           id?: string
+          livemode?: boolean
           status: string
           stripe_customer_id: string
           stripe_price_id?: string | null
@@ -3775,6 +3864,7 @@ export type Database = {
           current_period_end?: string | null
           first_payment_at?: string | null
           id?: string
+          livemode?: boolean
           status?: string
           stripe_customer_id?: string
           stripe_price_id?: string | null
@@ -4024,6 +4114,14 @@ export type Database = {
       enqueue_homeowner_welcome_rows: {
         Args: { p_email: string; p_first_name: string; p_user_id: string }
         Returns: undefined
+      }
+      get_auth_user_by_email: {
+        Args: { p_email: string }
+        Returns: {
+          email_confirmed_at: string
+          id: string
+          last_sign_in_at: string
+        }[]
       }
       get_platform_stats: {
         Args: never
