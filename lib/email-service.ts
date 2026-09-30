@@ -831,19 +831,25 @@ function renderTeamInvite(vars: EmailVariables, locale: EmailLocale = 'en'): { s
 function renderDomainVerification(vars: EmailVariables, locale: EmailLocale = 'en'): { subject: string; html: string } {
   const businessFallback = locale === 'nl' ? 'je bedrijf' : 'your company'
   const business = vars.businessname || businessFallback
+  // Both minters of this code — lib/claim/email-verification.ts and
+  // lib/verification.ts — now give it an hour, so the sentence is the
+  // same whoever sent it. It briefly was not: while only the claim side
+  // counted wrong guesses, only the claim side could afford the longer
+  // life, and this template had to be told which clock applied.
+  const validity = locale === 'nl' ? 'een uur' : 'one hour'
   const copy = locale === 'nl'
     ? {
         subject: `${vars.code} is je Arco domein-verificatiecode`,
         h1: 'Verifieer je domein',
         intro: `Gebruik deze code om eigendom van <strong>${business}</strong> te verifiëren:`,
-        expires: 'Deze code verloopt over 10 minuten.',
+        expires: `Deze code verloopt over ${validity}.`,
         ignore: 'Heb je dit niet aangevraagd? Dan kun je deze email negeren.',
       }
     : {
         subject: `${vars.code} is your Arco domain verification code`,
         h1: 'Verify your domain',
         intro: `Use this code to verify ownership of <strong>${business}</strong>:`,
-        expires: 'This code expires in 10 minutes.',
+        expires: `This code expires in ${validity}.`,
         ignore: "If you didn't request this, you can safely ignore this email.",
       }
   return {
@@ -1618,6 +1624,29 @@ function renderNewProfessionalFinal(vars: EmailVariables, locale: EmailLocale = 
 // Supabase's built-in mailer. Uses the same heading/body/button helpers
 // as other transactional emails for a consistent design.
 
+/**
+ * How long an emailed sign-in code, confirmation code or recovery link
+ * stays valid, in words.
+ *
+ * MIRRORS a Supabase setting the code cannot read: Authentication →
+ * Providers → Email → "Email OTP expiration", currently 3600 seconds.
+ * Its own help text is the scope — "Duration before an email OTP /
+ * link expires" — so one number governs all three templates below.
+ *
+ * WRITTEN ONCE, because it was written three times and all three were
+ * wrong. Sign-in and recovery each claimed ten minutes, which sends
+ * someone who opens their mail twenty minutes later back to request a
+ * code they did not need. Signup claimed twenty-four HOURS, which is
+ * the same mistake pointing the other way and costs more: it invites
+ * people to come back tomorrow to a code that died within the hour.
+ *
+ * NOT the domain-verification code in renderDomainVerification. That
+ * one really is ten minutes — it is ours, minted in
+ * lib/claim/email-verification.ts with CODE_TTL_SECONDS = 600, and has
+ * nothing to do with this setting.
+ */
+const AUTH_CODE_VALIDITY = { nl: 'een uur', en: 'one hour' } as const
+
 function renderAuthConfirmSignup(vars: EmailVariables, locale: EmailLocale = 'en'): { subject: string; html: string } {
   const code = vars.code
   const copy = locale === 'nl'
@@ -1627,7 +1656,7 @@ function renderAuthConfirmSignup(vars: EmailVariables, locale: EmailLocale = 'en
         intro: (name?: string) => `${name ? `Hoi ${name},` : 'Hoi,'}<br><br>Bedankt voor je aanmelding. Gebruik deze code om je e-mailadres te bevestigen:`,
         or: 'Of klik op de knop hieronder:',
         button: 'Bevestig e-mailadres',
-        expiry: 'Deze code verloopt over 24 uur.',
+        expiry: `Deze code verloopt over ${AUTH_CODE_VALIDITY.nl}.`,
       }
     : {
         subject: code ? `${code} is your Arco verification code` : 'Confirm your Arco account',
@@ -1635,7 +1664,7 @@ function renderAuthConfirmSignup(vars: EmailVariables, locale: EmailLocale = 'en
         intro: (name?: string) => `${name ? `Hi ${name},` : 'Hi,'}<br><br>Thanks for signing up. Use this code to confirm your email:`,
         or: 'Or click the button below:',
         button: 'Confirm email',
-        expiry: 'This code expires in 24 hours.',
+        expiry: `This code expires in ${AUTH_CODE_VALIDITY.en}.`,
       }
 
   const url = vars.confirmUrl ?? '#'
@@ -1666,7 +1695,7 @@ function renderAuthMagicLink(vars: EmailVariables, locale: EmailLocale = 'en'): 
         intro: (name?: string) => `${name ? `Hoi ${name},` : 'Hoi,'}<br><br>Gebruik deze code om in te loggen bij je Arco-account:`,
         or: 'Of klik op de knop hieronder om direct in te loggen:',
         button: 'Inloggen',
-        expiry: 'Deze code is 10 minuten geldig. Als je dit niet hebt aangevraagd, kun je deze e-mail negeren.',
+        expiry: `Deze code is ${AUTH_CODE_VALIDITY.nl} geldig. Als je dit niet hebt aangevraagd, kun je deze e-mail negeren.`,
       }
     : {
         subject: code ? `${code} is your Arco sign-in code` : 'Sign in to Arco',
@@ -1674,7 +1703,7 @@ function renderAuthMagicLink(vars: EmailVariables, locale: EmailLocale = 'en'): 
         intro: (name?: string) => `${name ? `Hi ${name},` : 'Hi,'}<br><br>Use this code to sign in to your Arco account:`,
         or: 'Or click the button below to sign in directly:',
         button: 'Sign in',
-        expiry: "This code expires in 10 minutes. If you didn't request this, you can safely ignore this email.",
+        expiry: `This code expires in ${AUTH_CODE_VALIDITY.en}. If you didn't request this, you can safely ignore this email.`,
       }
 
   const url = vars.confirmUrl ?? '#'
@@ -1703,14 +1732,14 @@ function renderAuthRecovery(vars: EmailVariables, locale: EmailLocale = 'en'): {
         h1: 'Wachtwoord herstellen',
         intro: (name?: string) => `${name ? `Hoi ${name},` : 'Hoi,'}<br><br>We hebben een verzoek ontvangen om je wachtwoord te herstellen. Klik hieronder om een nieuw wachtwoord in te stellen.`,
         button: 'Wachtwoord herstellen',
-        expiry: 'Deze link verloopt over 10 minuten. Als je dit niet hebt aangevraagd, blijft je wachtwoord ongewijzigd.',
+        expiry: `Deze link verloopt over ${AUTH_CODE_VALIDITY.nl}. Als je dit niet hebt aangevraagd, blijft je wachtwoord ongewijzigd.`,
       }
     : {
         subject: 'Reset your Arco password',
         h1: 'Reset your password',
         intro: (name?: string) => `${name ? `Hi ${name},` : 'Hi,'}<br><br>We received a request to reset your password. Click below to choose a new one.`,
         button: 'Reset password',
-        expiry: "This link expires in 10 minutes. If you didn't request this, your password remains unchanged.",
+        expiry: `This link expires in ${AUTH_CODE_VALIDITY.en}. If you didn't request this, your password remains unchanged.`,
       }
 
   const url = vars.confirmUrl ?? '#'

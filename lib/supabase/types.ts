@@ -288,6 +288,7 @@ export type Database = {
       }
       claim_email_verification_codes: {
         Row: {
+          attempts: number
           code: string
           created_at: string
           domain: string
@@ -296,6 +297,7 @@ export type Database = {
           id: string
         }
         Insert: {
+          attempts?: number
           code: string
           created_at?: string
           domain: string
@@ -304,6 +306,7 @@ export type Database = {
           id?: string
         }
         Update: {
+          attempts?: number
           code?: string
           created_at?: string
           domain?: string
@@ -989,6 +992,7 @@ export type Database = {
       }
       domain_verification_codes: {
         Row: {
+          attempts: number
           code: string
           created_at: string
           domain: string
@@ -997,6 +1001,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          attempts?: number
           code: string
           created_at?: string
           domain: string
@@ -1005,6 +1010,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          attempts?: number
           code?: string
           created_at?: string
           domain?: string
