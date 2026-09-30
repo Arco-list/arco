@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
 import { logger } from "@/lib/logger"
+import { geocodeCompanyLocation } from "@/lib/geocode-company"
 
 /**
  * Photographer credit on a project.
@@ -133,20 +134,14 @@ export async function addPhotographerToProject(
 
     let latitude: number | null = null
     let longitude: number | null = null
-    if (input.formattedAddress) {
-      try {
-        const mapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-        if (mapsKey) {
-          const geoRes = await fetch(
-            `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(input.formattedAddress)}&key=${mapsKey}`
-          )
-          const geoData = await geoRes.json()
-          if (geoData?.results?.[0]?.geometry?.location) {
-            latitude = geoData.results[0].geometry.location.lat
-            longitude = geoData.results[0].geometry.location.lng
-          }
-        }
-      } catch { /* geocode failures are non-fatal */ }
+    const geo = await geocodeCompanyLocation({
+      address: input.formattedAddress,
+      city: input.city,
+      country: input.country,
+    })
+    if (geo) {
+      latitude = geo.latitude
+      longitude = geo.longitude
     }
 
     const contactEmail = input.domain ? `info@${input.domain}` : null

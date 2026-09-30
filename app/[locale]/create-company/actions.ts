@@ -14,6 +14,7 @@ import { generateVerificationCode, storeVerificationCode, validateVerificationCo
 import { sendDomainVerificationEmail } from "@/lib/email-service";
 import { enrichCompanyAction } from "@/app/dashboard/edit/enrich-company-actions";
 import { ensureCompanyOwnerContact } from "@/lib/company-ownership";
+import { geocodeCompanyLocation } from "@/lib/geocode-company"
 
 const createCompanySchema = z.object({
   companyName: z.string().trim().min(2, "Company name is required"),
@@ -669,20 +670,14 @@ export async function createCompanyFromPlacesAction(
   // dropped off the /professionals map.
   let latitude: number | null = null
   let longitude: number | null = null
-  if (input.formattedAddress) {
-    try {
-      const mapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-      if (mapsKey) {
-        const geoRes = await fetch(
-          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(input.formattedAddress)}&key=${mapsKey}`
-        )
-        const geoData = await geoRes.json()
-        if (geoData?.results?.[0]?.geometry?.location) {
-          latitude = geoData.results[0].geometry.location.lat
-          longitude = geoData.results[0].geometry.location.lng
-        }
-      }
-    } catch {}
+  const geo = await geocodeCompanyLocation({
+    address: input.formattedAddress,
+    city: input.city,
+    country: input.country,
+  })
+  if (geo) {
+    latitude = geo.latitude
+    longitude = geo.longitude
   }
 
   // Check for ownerless company matching domain (claim flow)

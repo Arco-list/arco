@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
 import { logger } from "@/lib/logger"
+import { geocodeCompanyLocation } from "@/lib/geocode-company"
 
 export type AdminAddCompanyResult = {
   success: boolean
@@ -105,20 +106,14 @@ export async function adminAddCompanyAction(input: GooglePlaceInput): Promise<Ad
   // Geocode address for map placement
   let latitude: number | null = null
   let longitude: number | null = null
-  if (input.formattedAddress) {
-    try {
-      const mapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-      if (mapsKey) {
-        const geoRes = await fetch(
-          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(input.formattedAddress)}&key=${mapsKey}`
-        )
-        const geoData = await geoRes.json()
-        if (geoData?.results?.[0]?.geometry?.location) {
-          latitude = geoData.results[0].geometry.location.lat
-          longitude = geoData.results[0].geometry.location.lng
-        }
-      }
-    } catch {}
+  const geo = await geocodeCompanyLocation({
+    address: input.formattedAddress,
+    city: input.city,
+    country: input.country,
+  })
+  if (geo) {
+    latitude = geo.latitude
+    longitude = geo.longitude
   }
 
   // Derive contact email from domain (info@domain is the most common pattern)
