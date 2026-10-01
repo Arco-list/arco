@@ -60,8 +60,17 @@ export function ProjectsGrid({ initialProjects = [], sortBy, onSortChange }: Pro
         if (!entries.some((e) => e.isIntersecting)) return
         if (isLoading) return
         if (autoLoadsRef.current >= AUTO_LOAD_PAGES) return
-        autoLoadsRef.current += 1
-        void loadMore()
+        // Spend the budget only on a page that was actually fetched.
+        // Counting attempts instead burned it before anything loaded:
+        // a hub page empties the grid on mount to run its filtered
+        // fetch, the sentinel jumps into view (600px margin), and the
+        // observer fired three times while that first fetch was still
+        // in flight. Each call returned at once — isLoading — but the
+        // budget was already gone, so scrolling never loaded again and
+        // the grid sat at 30 of 49.
+        void loadMore().then((fetched) => {
+          if (fetched) autoLoadsRef.current += 1
+        })
       },
       // Start fetching well before the button scrolls into view.
       { rootMargin: "600px 0px" },

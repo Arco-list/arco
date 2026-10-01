@@ -80,7 +80,9 @@ interface UseProfessionalsQueryResult {
   isLoadingMore: boolean
   error: string | null
   hasMore: boolean
-  loadMore: () => Promise<void>
+  /** Resolves true when a page was actually fetched, false when the
+   *  call was a no-op (already loading, or nothing left). */
+  loadMore: () => Promise<boolean>
   refetch: () => Promise<void>
 }
 
@@ -346,11 +348,15 @@ export function useProfessionalsQuery(
     void fetchPage(0, true)
   }, [fetchPage, taxonomy.isLoading, selectedCategories.length, selectedServices.length, selectedCities, selectedRegions, keyword, sortBy])
 
-  const loadMore = useCallback(async () => {
+  /** Resolves true when this call actually fetched a page. Callers that
+   *  ration auto-loading must count STARTS, not attempts — see the
+   *  observer in professionals-grid.tsx. */
+  const loadMore = useCallback(async (): Promise<boolean> => {
     if (isLoading || isLoadingMore || !hasMore) {
-      return
+      return false
     }
     await fetchPage(currentOffset, false)
+    return true
   }, [fetchPage, currentOffset, hasMore, isLoading, isLoadingMore])
 
   const refetch = useCallback(async () => {

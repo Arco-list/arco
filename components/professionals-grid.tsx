@@ -97,8 +97,13 @@ export function ProfessionalsGrid({
         if (!entries.some((e) => e.isIntersecting)) return
         if (isLoadingMore) return
         if (autoLoadsRef.current >= AUTO_LOAD_PAGES) return
-        autoLoadsRef.current += 1
-        void loadMore()
+        // Only a page that was actually fetched spends the budget —
+        // same reasoning as projects-grid.tsx, where counting attempts
+        // burned all three while the first filtered fetch was still in
+        // flight and left the grid unable to auto-load ever again.
+        void loadMore().then((fetched) => {
+          if (fetched) autoLoadsRef.current += 1
+        })
       },
       // Start fetching well before the button scrolls into view.
       { rootMargin: "600px 0px" },

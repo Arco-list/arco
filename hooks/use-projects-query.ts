@@ -82,7 +82,9 @@ interface UseProjectsQueryResult {
   isLoading: boolean
   error: string | null
   hasMore: boolean
-  loadMore: () => Promise<void>
+  /** Resolves true when a page was actually fetched, false when the
+   *  call was a no-op (already loading, or nothing left). */
+  loadMore: () => Promise<boolean>
   refetch: () => Promise<void>
   typePhotoOverrides: Record<string, { url: string; alt?: string | null }>
   spacePhotoOverrides: Record<string, { url: string; alt?: string | null }>
@@ -927,8 +929,12 @@ export function useProjectsQuery({
     selectedSpace
   ])
 
-  const loadMore = useCallback(async () => {
-    if (isLoading || !hasMore) return
+  /** Resolves true when this call actually started a fetch. Callers that
+   *  ration auto-loading must count STARTS, not attempts: a call that
+   *  returns early here costs nothing and must not spend anyone's
+   *  budget. */
+  const loadMore = useCallback(async (): Promise<boolean> => {
+    if (isLoading || !hasMore) return false
 
     setIsLoading(true)
     setError(null)
@@ -964,6 +970,7 @@ export function useProjectsQuery({
     } finally {
       setIsLoading(false)
     }
+    return true
   }, [effectivePageSize, fetchProjects, fetchTypePhotoOverrides, fetchSpacePhotoOverrides, hasMore, imageCategorySearchOrder, isLoading, page, selectedSpace])
 
   const refetch = useCallback(async () => {
