@@ -172,6 +172,7 @@ export function CheckoutClient({
   savedMethod,
   savedMethodFailed = false,
   companyAddress,
+  initialCode = null,
 }: {
   interval: "month" | "year"
   /** Where the cross goes: the page the reader came from. */
@@ -191,6 +192,12 @@ export function CheckoutClient({
    *  been short for a day and only its owner knows — but marked, and
    *  never the default. */
   savedMethodFailed?: boolean
+  /** A code carried in by the link that offered it — FOUNDING, from the
+   *  Pro card. Applied on arrival, so the offer the reader clicked is
+   *  already in the total they are looking at. Unknown codes are
+   *  dropped silently: nobody typed this, so there is nothing to
+   *  correct, and an error about a link would only alarm. */
+  initialCode?: string | null
   /** The address on the company's own page. A fixture used to stand in
    *  for it, so the checkout stated an address the buyer had never
    *  given — on the document they would later have to file. */
@@ -209,7 +216,11 @@ export function CheckoutClient({
   const [vatNumber, setVatNumber] = useState("")
   const [promoOpen, setPromoOpen] = useState(false)
   const [promoInput, setPromoInput] = useState("")
-  const [promo, setPromo] = useState<{ code: string; labelKey: string; percent: number; periodsKey: string } | null>(null)
+  const [promo, setPromo] = useState<{ code: string; labelKey: string; percent: number; periodsKey: string } | null>(() => {
+    const key = initialCode?.trim().toUpperCase()
+    const found = key ? CODES[key] : undefined
+    return found ? { code: key as string, ...found } : null
+  })
   const [promoError, setPromoError] = useState(false)
   // Billing details Stripe requires with every mandate.
   const [name, setName] = useState("")

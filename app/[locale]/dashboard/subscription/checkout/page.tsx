@@ -23,7 +23,7 @@ import { freeUntilLabel } from "./constants"
 export default async function CheckoutPage({
   searchParams,
 }: {
-  searchParams: Promise<{ interval?: string; return?: string; setup_intent?: string }>
+  searchParams: Promise<{ interval?: string; return?: string; setup_intent?: string; code?: string }>
 }) {
   // Every action behind this page checks ownership for itself, but a
   // signed-out visitor should meet the login screen rather than a
@@ -32,7 +32,7 @@ export default async function CheckoutPage({
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.user) redirect("/login?redirectTo=/dashboard/subscription")
 
-  const { interval, return: returnTo, setup_intent: setupIntent } = await searchParams
+  const { interval, return: returnTo, setup_intent: setupIntent, code } = await searchParams
 
   // The mandate confirmation and the invoices both go here, so the
   // field starts on the address they signed in with. companies.email is
@@ -160,6 +160,11 @@ export default async function CheckoutPage({
       // card and landing on a yearly total is the kind of small
       // betrayal a checkout cannot afford, even in a drawing.
       interval={interval === "month" ? "month" : "year"}
+      // Prefilled from the link that offered it, so the reader never
+      // carries a code between two screens. Unknown codes are ignored
+      // rather than shown as an error: nobody typed this one, so there
+      // is nothing for the reader to correct.
+      initialCode={code ?? null}
       returnTo={returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "/dashboard/subscription"}
       freeUntil={freeUntil}
       // Stripe appends this when the browser comes back from a bank.

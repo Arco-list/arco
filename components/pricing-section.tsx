@@ -130,7 +130,10 @@ export function PricingSection({
   currentPlan?: "free" | "pro" | null
   /** Takes the cycle the reader has selected, so the card and the
    *  checkout can never promise different prices. */
-  onUpgrade?: ((interval: "month" | "year") => void) | null
+  /** Starts checkout. The optional code is prefilled there rather than
+   *  typed — the founding offer is reached by clicking an offer, not by
+   *  remembering a password. */
+  onUpgrade?: ((interval: "month" | "year", code?: string) => void) | null
   actionsBusy?: boolean
 }) {
   const t = useTranslations("dashboard")
@@ -253,7 +256,10 @@ export function PricingSection({
         "Onbeperkt projectvermeldingen" wrapped, which broke the line-for-line
         pairing the two cards are built on. The prose below keeps its own
         reading width. */}
-    <div className={sectionHeading ? undefined : "wrap"} style={{ maxWidth: 940, margin: sectionHeading ? "0 auto" : undefined }}>
+    <div
+      className={sectionHeading ? undefined : "pricing-section-wrap"}
+      style={sectionHeading ? { maxWidth: 940, margin: "0 auto" } : undefined}
+    >
 
       {sectionHeading && (
         <h3 className="arco-section-title" style={{ textAlign: "center", marginBottom: 20 }}>
@@ -367,14 +373,18 @@ export function PricingSection({
                 {t("pricing_get_started")}
               </button>
             )}
-            {/* Same note height as the Pro footer (2 lines) so
-                margin-top:auto pins both buttons to the same y. Both
-                notes are pitches at someone still deciding to join, so
-                inside the product both come off — together, which keeps
-                the footers level. */}
-            {!managing && (
-              <p style={{ textAlign: "center", fontSize: 12, color: "var(--arco-light)", marginTop: 8, minHeight: 36 }}>
-                {t("pricing_no_card")}
+            {/* The footers are bottom-pinned (margin-top:auto in a shared
+                subgrid row), so the buttons only line up while the block
+                BELOW them is the same height in both cards. This slot is
+                that block: it carries the note on the public page and
+                stands empty inside the product, where only the Pro card
+                still has something to say.
+                Rendered on exactly the condition the Pro note uses. One
+                of the two notes was once dropped on its own and the
+                buttons immediately sat at different heights. */}
+            {(!managing || currentPlan !== "pro") && (
+              <p style={{ textAlign: "center", fontSize: 12, color: "var(--arco-light)", marginTop: 6, minHeight: 22 }}>
+                {managing ? "\u00A0" : t("pricing_no_card")}
               </p>
             )}
           </div>
@@ -382,7 +392,11 @@ export function PricingSection({
 
         {/* Pro */}
         <div className={`pricing-card pricing-card-subgrid${proIsCurrent ? "" : " pricing-card-featured"}`}>
-          {managing && !proIsCurrent && <span className="pricing-card-badge">{t("pricing_recommended")}</span>}
+          {/* Shown wherever Pro is still something to choose, inside the
+              product and out. It was dashboard-only, which left the
+              public page — the one page whose whole job is to recommend
+              a plan — without a recommendation. */}
+          {!proIsCurrent && <span className="pricing-card-badge">{t("pricing_recommended")}</span>}
           <div className="pricing-card-header">
             <p className="pricing-card-label" style={{ color: "var(--primary)" }}>{t("pricing_pro")}</p>
             <div style={{ display: "flex", alignItems: "baseline", gap: 4, minHeight: 48 }}>
@@ -452,9 +466,22 @@ export function PricingSection({
               // live in the manage section with the other rows that
               // change something.
               currentPlan === "pro" ? currentPlanNote : (
+                /* The founding offer, not a bare upgrade. A company
+                   reading this page is on the free plan during the
+                   launch period, so "Upgrade naar Pro" asked them to
+                   pay for something they can have for six months at no
+                   charge — the same offer /pricing makes to the same
+                   person before they sign up.
+                   No modal here. Outside the product the modal explains
+                   a code to someone who has to carry it into a checkout
+                   they have not seen; here the checkout is one click
+                   away and arrives with the code already applied, so
+                   showing it would be explaining a step we just removed.
+                   The code is removable there, which is what keeps the
+                   plain paid route reachable. */
                 <button
                   type="button"
-                  onClick={() => onUpgrade?.(billingCycle === "monthly" ? "month" : "year")}
+                  onClick={() => onUpgrade?.(billingCycle === "monthly" ? "month" : "year", "FOUNDING")}
                   disabled={!onUpgrade || actionsBusy}
                   style={{
                     width: "100%", padding: "12px 24px", fontSize: 14, fontFamily: "var(--font-sans)",
@@ -463,7 +490,7 @@ export function PricingSection({
                     opacity: onUpgrade ? (actionsBusy ? 0.6 : 1) : 0.5,
                   }}
                 >
-                  {t("billing.action_upgrade")}
+                  {t("pricing_founding_cta")}
                 </button>
               )
             ) : foundingClaimed ? (
@@ -479,8 +506,19 @@ export function PricingSection({
                 {t("pricing_founding_cta")}
               </button>
             )}
-            {!managing && (
-              <p style={{ textAlign: "center", fontSize: 12, color: "var(--arco-light)", marginTop: 8, minHeight: 36 }}>
+            {/* Shown wherever the offer is: outside the product always,
+                inside it only on the card that is actually offering it —
+                never under "Je huidige abonnement", where it would read
+                as a condition on something already held. Its twin in the
+                Free footer renders on this same condition and keeps the
+                two buttons level.
+                22px is one line, not two: both notes are short enough to
+                stay on one at every width where the cards sit side by
+                side, and reserving a second line held both buttons a
+                line higher than they needed to be. Below 640px the grid
+                is a single column, where height no longer has to match. */}
+            {(!managing || currentPlan !== "pro") && (
+              <p style={{ textAlign: "center", fontSize: 12, color: "var(--arco-light)", marginTop: 6, minHeight: 22 }}>
                 {t("pricing_founding_limit")}
               </p>
             )}

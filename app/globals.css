@@ -9452,3 +9452,30 @@ body.no-scroll {
     opacity: 1;
   }
 }
+
+/* The pricing cards' container on /pricing.
+ *
+ * Not .wrap, and the difference is the whole point. .wrap caps width
+ * and adds its gutters INSIDE that cap, so a 940px limit left the cards
+ * 820px on the public page while the same component inside the
+ * dashboard — which mounts without .wrap — got the full 940. Two
+ * surfaces showing the same two cards at different widths.
+ *
+ * box-sizing: content-box puts the gutters outside the cap, so the
+ * cards measure 940 on both. No width: 100% here (which .wrap sets, and
+ * which with content-box would overflow by the padding).
+ */
+.pricing-section-wrap {
+  box-sizing: content-box;
+  max-width: 940px;
+  margin: 0 auto;
+  padding: 0 60px;
+}
+
+@media (max-width: 768px) {
+  .pricing-section-wrap { padding: 0 24px; }
+}
+
+@media (max-width: 480px) {
+  .pricing-section-wrap { padding: 0 16px; }
+}

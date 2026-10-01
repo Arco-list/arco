@@ -311,8 +311,9 @@ export function SubscriptionScreen({
       // the banner button already opens the design study, and with both
       // pointing there the working Stripe flow had no way in from this
       // page at all.
-      onUpgrade={isOwner ? (interval) => router.push(
-        `/dashboard/subscription/checkout?interval=${interval}&return=${encodeURIComponent(pathname)}`,
+      onUpgrade={isOwner ? (interval, code) => router.push(
+        `/dashboard/subscription/checkout?interval=${interval}&return=${encodeURIComponent(pathname)}`
+        + (code ? `&code=${encodeURIComponent(code)}` : ""),
       ) : null}
       actionsBusy={pending}
     />
