@@ -199,6 +199,19 @@ export default async function CompanySettingsPage({
       .from("project_professionals")
       .select("id, project_id, is_project_owner, status, cover_photo_id, projects!inner(id, slug, title, location, status, rejection_reason, project_type, address_city, translations, project_type_category:categories!projects_project_type_category_id_fkey(name), project_photos(id, url, is_primary, order_index))")
       .eq("company_id", company.id)
+      // Credits that ended, hidden here for the same reason /dashboard/
+      // listings hides them: a company that took itself off a project
+      // was shown the project back, labelled "Verwijderd", on its own
+      // page — and there is no way out of that state from here. The
+      // status picker offers listed / unlisted / live_on_page and
+      // nothing else, so the card carried a menu that could not change
+      // what it displayed. Coming back is a fresh invitation, which
+      // revives this very row as `invited` and brings the project back
+      // on its own.
+      //
+      // It also stops ended credits eating slots in the limit below,
+      // which could push live projects off a company's own page.
+      .not("status", "in", "(rejected,removed)")
       .limit(10),
     // Fetch projects this company is invited to (for setup mode go-live)
     isSetupMode
