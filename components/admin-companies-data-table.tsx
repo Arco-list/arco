@@ -807,7 +807,12 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   // Row menu opens AT the click position (a zero-size fixed anchor for
   // the dropdown), not at the far-right "…" column.
   const [rowMenu, setRowMenu] = useState<{ id: string; x: number; y: number } | null>(null)
-  const [sorting, setSorting] = useState<SortingState>([{ id: "created", desc: true }])
+  // Newest listing first. Created-descending put whatever was imported
+  // last at the top, which on a table of 3,000 catalogue rows is almost
+  // never the thing being looked for; the companies that just went live
+  // are. Never-listed rows rank -1 in the column's sorting function, so
+  // descending leaves them below every real date rather than above it.
+  const [sorting, setSorting] = useState<SortingState>([{ id: "listed", desc: true }])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   // "Load more" pagination — start at 50, grow by 50 each click.
@@ -1695,6 +1700,38 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         enableSorting: true,
         cell: ({ row }) => {
           const date = row.original.createdAt
+          if (!date) return <span className="arco-table-secondary">—</span>
+          return <span className="arco-table-nowrap">{format(new Date(date), "dd MMM yyyy")}</span>
+        },
+      },
+      {
+        id: "listed",
+        header: "Listed",
+        // When this company first went Listed as a CLAIMED company.
+        //
+        // Straight off companies.listed_at, which means exactly that and
+        // only that since migration 267: a database trigger stamps it on
+        // the first transition into 'listed' and leaves it alone
+        // afterwards, and an ownerless showcase page can no longer reach
+        // that status at all. The admin table and the growth dashboard
+        // therefore read the same field and agree.
+        //
+        // This column briefly derived its own value instead — max of
+        // listed_at and the first team member — to work around showcase
+        // stamps. That made two surfaces answer one question differently
+        // (one pro listed on 1 October against three), which is the bug
+        // it was trying to fix. Fixed in the data, read plainly here.
+        accessorFn: (row) => row.listedAt,
+        enableSorting: true,
+        // Never-listed sorts below every real date rather than mixing in
+        // with the oldest, the same way the Impressions column keeps its
+        // empty states out of the ranking.
+        sortingFn: (rowA, rowB) => {
+          const rank = (r: AdminCompanyRow) => (r.listedAt ? new Date(r.listedAt).getTime() : -1)
+          return rank(rowA.original) - rank(rowB.original)
+        },
+        cell: ({ row }) => {
+          const date = row.original.listedAt
           if (!date) return <span className="arco-table-secondary">—</span>
           return <span className="arco-table-nowrap">{format(new Date(date), "dd MMM yyyy")}</span>
         },
