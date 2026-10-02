@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server"
 import { headers } from "next/headers"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
-import { verifyClaimToken } from "@/lib/claim/claim-token"
+import { verifyClaimToken, type ClaimChannel } from "@/lib/claim/claim-token"
 import { loadClaimContext, loadPlatformStartContext } from "@/lib/claim/context"
 
 import { Link } from "@/i18n/navigation"
@@ -73,18 +73,41 @@ export default async function ClaimPage({
 
   // No token at all → the PLATFORM channel: the tokenless funnel entered
   // from the site itself, opening on a company search instead of a
-  // prefilled review. A token that is present but broken still errors —
-  // a mangled email link should say so, not silently demote the visitor
-  // to the search flow.
+  // prefilled review.
+  //
+  // An EXPIRED token lands there too, and that is the difference between
+  // expired and broken. A mangled link should say so — whoever sent it
+  // got something wrong and a search page would hide that. But an
+  // expired link was a real invitation that this real person really
+  // received; it is only old. Ending them on a page whose only advice
+  // was "reply to the invitation email and we will send a new one"
+  // closed the funnel on someone standing in it, fourteen days late and
+  // still willing.
+  //
+  // So expiry demotes the visit to the platform channel rather than
+  // refusing it: same funnel, entered by searching for the company
+  // instead of reviewing a prefilled one. Nothing is handed out — the
+  // e-mail verification that actually guards a claim is further down
+  // the funnel and unchanged.
   let parsed: Awaited<ReturnType<typeof verifyClaimToken>> | null = null
   let ctx = null
+  /** Set when a token verified but had run out. What it knew is still
+   *  true — see the expired variant in verifyClaimToken. */
+  let expiredLink: { companyId: string; channel: ClaimChannel } | null = null
   if (token !== undefined) {
-    parsed = await verifyClaimToken(token)
-    if (!parsed.ok) {
-      return parsed.reason === "expired"
-        ? invalid(t("expired_title"), t("expired_body"))
-        : invalid(t("invalid_title"), t("invalid_body"))
+    const verified = await verifyClaimToken(token)
+    if (!verified.ok) {
+      if (verified.reason !== "expired") return invalid(t("invalid_title"), t("invalid_body"))
+      // Falls through to the platform branch below: `parsed` stays null,
+      // which every reader downstream already treats as "no token" —
+      // but the token's own company and channel are kept, so the branch
+      // can seat them at their company and bill the visit correctly.
+      expiredLink = { companyId: verified.companyId, channel: verified.channel }
+    } else {
+      parsed = verified
     }
+  }
+  if (parsed) {
     // Funnel stage, recorded BEFORE the page decides what to show.
     //
     // A signed token that verifies means this person clicked the link
@@ -157,8 +180,13 @@ export default async function ClaimPage({
     // the page then arrives already on the picked state, no flash of
     // the search screen. Google picks (?p=) resolve client-side; the
     // client shows a loading state for those instead of the search.
-    if (pickedCompanyId) {
-      const picked = await loadClaimContext({ companyId: pickedCompanyId, creditId: null, email: "" })
+    // An expired link seats its own company, so a late arrival opens on
+    // the page they were invited to review rather than hunting for
+    // themselves in a search box. An explicit ?c= still wins: that is
+    // the reader's own pick from the search, made after this.
+    const seatCompanyId = pickedCompanyId ?? expiredLink?.companyId ?? null
+    if (seatCompanyId) {
+      const picked = await loadClaimContext({ companyId: seatCompanyId, creditId: null, email: "" })
       if (picked && !picked.company.ownerId) {
         ctx = { ...picked, company: { ...picked.company, contactLocal: "" } }
       }
@@ -171,8 +199,11 @@ export default async function ClaimPage({
     // and a broken link is not a platform arrival.
     void import("@/lib/claim/track-arrival")
       .then(({ trackClaimArrival }) => trackClaimArrival({
-        channel: "platform",
-        companyId: pickedCompanyId ?? null,
+        // An expired link is not a platform arrival. The person was
+        // mailed, clicked, and got here — late. Billing that to the
+        // site itself would quietly move outreach wins into organic.
+        channel: expiredLink?.channel ?? "platform",
+        companyId: seatCompanyId,
       }))
       .catch(() => {})
   }
@@ -211,7 +242,7 @@ export default async function ClaimPage({
       // at step 1 — the review is the point of the page.
       initialScreen={parsed && step === "you" ? "you" : "company"}
       ctx={ctx}
-      initialPlatformCompanyId={!parsed && pickedCompanyId && ctx.company.id ? ctx.company.id : null}
+      initialPlatformCompanyId={!parsed && (pickedCompanyId || expiredLink) && ctx.company.id ? ctx.company.id : null}
       initialRestoringPick={Boolean(!parsed && pickedPlaceId)}
     />
   )

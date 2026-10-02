@@ -109,7 +109,14 @@ export async function issueClaimToken(
 
 export type ClaimTokenResult =
   | { ok: true; id: string; companyId: string; email: string; creditId: string | null; channel: ClaimChannel; consumed: boolean }
-  | { ok: false; reason: "malformed" | "bad_signature" | "expired" | "not_found" }
+  | { ok: false; reason: "malformed" | "bad_signature" | "not_found" }
+  /** Expiry carries its payload, and may: the signature is checked
+   *  before the clock, so by the time a token is judged expired its
+   *  contents are already proven to be ours. They are stale, not
+   *  suspect — which is what lets /claim seat a late arrival at their
+   *  own company instead of a blank search, and bill the visit to the
+   *  channel that actually mailed them. */
+  | { ok: false; reason: "expired"; companyId: string; email: string; creditId: string | null; channel: ClaimChannel }
 
 /**
  * Verify signature + expiry, then load the issuance row. Does NOT
@@ -141,7 +148,10 @@ export async function verifyClaimToken(token: string | null | undefined): Promis
   if (provided.length !== expected.length) return { ok: false, reason: "bad_signature" }
   if (!timingSafeEqual(provided, expected)) return { ok: false, reason: "bad_signature" }
   // Expiry after signature, so errors don't leak which ids are real.
-  if (Date.now() > expiry) return { ok: false, reason: "expired" }
+  // The row is loaded first either way: an expired token still answers
+  // with who it was for, and that answer comes from the issuance row,
+  // not from the (equally signed, but older) token body.
+  const expired = Date.now() > expiry
 
   const svc = createServiceRoleSupabaseClient()
   const { data } = await svc
@@ -151,6 +161,16 @@ export async function verifyClaimToken(token: string | null | undefined): Promis
     .maybeSingle()
   if (!data) return { ok: false, reason: "not_found" }
   const row = data as { id: string; company_id: string; email: string; credit_id: string | null; channel: string | null; consumed_at: string | null }
+  if (expired) {
+    return {
+      ok: false,
+      reason: "expired",
+      companyId: row.company_id,
+      email: row.email,
+      creditId: row.credit_id,
+      channel: (row.channel as ClaimChannel) ?? "invite",
+    }
+  }
   return {
     ok: true,
     id: row.id,
