@@ -14,6 +14,7 @@ import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { ProspectTimelineFused, TransactionalOnlyTimeline } from "./prospect-timeline-fused"
 import { EmailComposeModal } from "./email-compose-modal"
 import { formatPhoneDisplay } from "@/lib/format-phone"
+import { SUBSCRIBED_CONFIG } from "@/lib/sales/prospect-status"
 
 /**
  * Shared Contact Card — right-anchored slide-over. The single detail
@@ -881,6 +882,10 @@ function NoProspectTimeline({ data }: { data: ContactByEmailData }) {
     companyContact?.company_id ?? data.memberships[0]?.company_id ?? null
   const primaryCompany = primaryCompanyId ? data.companiesById[primaryCompanyId] : undefined
   const companyStatus = primaryCompany?.status ?? null
+  // Subscribed outranks the lifecycle status here too — same rule as
+  // the Sales row and the prospect card, so the three surfaces cannot
+  // describe one company three ways.
+  const subscribedAt = primaryCompany?.subscribed_at ?? null
   const createdAt = data.profile?.created_at ?? companyContact?.created_at ?? null
   const rowStyle = { display: "grid", gridTemplateColumns: "70px 1fr", gap: 8, alignItems: "baseline" } as const
   const labelStyle = { fontSize: 11, color: "#a1a1a0" } as const
@@ -904,7 +909,12 @@ function NoProspectTimeline({ data }: { data: ContactByEmailData }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={rowStyle}>
             <span style={labelStyle}>Status</span>
-            {companyStatus ? (
+            {subscribedAt ? (
+              <span style={{ fontSize: 12, color: "#1c1c1a", display: "inline-flex", alignItems: "baseline", gap: 6 }}>
+                <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: SUBSCRIBED_CONFIG.dotHex, flexShrink: 0 }} />
+                {SUBSCRIBED_CONFIG.label}
+              </span>
+            ) : companyStatus ? (
               <span style={{ fontSize: 12, color: "#1c1c1a", display: "inline-flex", alignItems: "baseline", gap: 6 }}>
                 <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: COMPANY_STATUS_DOT[companyStatus] ?? "#a1a1a0", flexShrink: 0 }} />
                 {companyStatus === "created" ? "Created" : companyStatus.charAt(0).toUpperCase() + companyStatus.slice(1)}

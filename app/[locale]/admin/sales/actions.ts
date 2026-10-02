@@ -3,7 +3,7 @@
 import { Resend } from "resend"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { updateContactStage } from "@/lib/apollo-client"
-import { getSubscribedCompanyIds, getSubscriberStats } from "@/lib/subscriptions/subscriber-stats"
+import { getSubscribedSince, getSubscriberStats } from "@/lib/subscriptions/subscriber-stats"
 
 import { PROSPECT_STATUS_RANK, type ProspectStatus } from "@/lib/sales/prospect-status"
 export type { ProspectStatus }
@@ -54,6 +54,12 @@ export type Prospect = {
   /** false = account created but code never verified (Signup Started);
    *  true = first session exists; null/absent = unknown or n/a. */
   signupVerified?: boolean | null
+  /** When this contact's company became a subscriber — paying or
+   *  founding. Not a prospect column and not a prospect status: there
+   *  is no status for "bought", which is why the Contact Card used to
+   *  say "Listed" about a company the Sales table already called
+   *  Subscribed. Rides along like companyStatus. */
+  subscribedAt?: string | null
   company_created_at: string | null
   project_published_at: string | null
   converted_at: string | null
@@ -263,6 +269,9 @@ export type SalesContact = {
   notInterestedAt: string | null
   createdAt: string
   updatedAt: string
+  /** prospects.status_changed_at — the last funnel move. Not updatedAt,
+   *  which the platform-prospect sync rewrites every fifteen minutes. */
+  statusChangedAt: string | null
   refCode: string
   /** Display name + avatar for this individual contact (Owner profile when
    *  the company has been claimed and this prospect is past signup, else
@@ -291,6 +300,11 @@ export type SalesClaimedCompany = {
   phone: string | null
   primaryService: string | null
   status: string | null
+  /** companies.status_changed_at — when the COMPANY last moved. From
+   *  Verified on, the row's status comes from the company (see
+   *  companyRowStatus), so this is the date that belongs beside it;
+   *  the prospect's own status change answers a different question. */
+  statusChangedAt: string | null
   ownerUserId: string | null
   ownerName: string | null
   ownerEmail: string | null
@@ -330,8 +344,33 @@ export type SalesCompanyRow = {
    *  as a row-level "Unsubscribed" badge so the admin doesn't need to
    *  expand the contacts dropdown to see the warning. */
   unsubscribedContactCount: number
-  /** Max lastEmailSentAt across contacts, null if nobody's been contacted. */
+  /** When this company's funnel position last moved. Not createdAt,
+   *  which answers when the prospect was imported, and not updatedAt,
+   *  which the platform-prospect sync rewrites every fifteen minutes.
+   *
+   *  Reads from whichever ladder the row's STATUS came from, so the
+   *  date and the pill beside it always describe the same move: the
+   *  company's own status change from Verified on, the contact's below
+   *  that — and the subscription when there is one, because that
+   *  outranks both and is the one move neither trigger can see. */
+  statusChangedAt: string | null
+  /** When this company became a subscriber (paying or founding), from
+   *  the same facts as isSubscribed so the pill and the date cannot
+   *  disagree. Null when it isn't one. */
+  subscribedAt: string | null
+  /** Max lastEmailSentAt across contacts, null if nobody's been contacted.
+   *  Kept because the contacts popup still distinguishes a sequence mail
+   *  from a logged call; the TABLE shows lastContactAt instead. */
   lastContactedAt: string | null
+  /** The later of lastContactedAt and lastOutboundAt — the last time we
+   *  reached this company by ANY channel.
+   *
+   *  The table used to carry those two side by side, which asked the
+   *  reader to compare two dates to answer one question ("when did we
+   *  last touch them?") and to remember that a logged call and a
+   *  sequence mail live in different columns. Which channel it was is a
+   *  detail of the contacts popup, not of a row you scan. */
+  lastContactAt: string | null
   /** Earliest pending send_at across all contacts on this row, sourced
    *  from email_drip_queue. Null when no future sends are queued. Lets
    *  admins scan "what's hitting whose inbox tomorrow" without expanding
@@ -361,6 +400,11 @@ export type SalesCompanyRow = {
 
 export type SalesFunnel = {
   total: number
+  /** Companies holding Pro — paying or founding. Counted from
+   *  subscriptions, not from a prospect status, because there is no
+   *  such status. The card existed and read zero for as long as it
+   *  existed, because nothing ever wrote this number. */
+  subscribed: number
   prospect: number
   contacted: number
   visitor: number
@@ -382,10 +426,14 @@ const SEQUENCE_RANK: Record<SequenceStatus, number> = {
 }
 
 export type SalesSortBy =
-  | "created_at"
-  | "last_contacted_at"
-  | "next_scheduled_at"
-  | "last_outbound_at"
+  /** The row's last funnel move — see SalesCompanyRow.statusChangedAt.
+   *  Replaces created_at, which answered when a prospect was imported:
+   *  useful for cohorts, useless for "who moved recently". */
+  | "status_changed_at"
+  /** The later of the automated mail and the manual touch — see
+   *  lastContactAt. Replaces the separate last_contacted_at and
+   *  last_outbound_at keys, which sorted two halves of one question. */
+  | "last_contact_at"
   | "next_outbound_at"
 export type SalesSortDir = "asc" | "desc"
 
@@ -665,7 +713,10 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   // Read once for the whole page, from the same helper the funnel and
   // /companies use. Three screens asking the same question three ways
   // is how they end up disagreeing.
-  const subscribedIds = await getSubscribedCompanyIds()
+  //
+  // Membership AND the date it started, so the Subscribed pill and the
+  // Last change date beside it come from one read of one source.
+  const subscribedSince = await getSubscribedSince()
   const {
     statuses,
     sources,
@@ -673,7 +724,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     search,
     offset = 0,
     limit = 50,
-    sortBy = "last_contacted_at",
+    sortBy = "last_contact_at",
     sortDir = "desc",
     callListOnly = false,
     subscribedOnly = false,
@@ -689,7 +740,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     "source", "status", "sequence_status",
     "emails_sent", "emails_delivered", "emails_opened", "emails_clicked",
     "last_email_sent_at", "last_email_opened_at", "last_email_clicked_at",
-    "created_at", "updated_at", "ref_code", "user_id", "website",
+    "created_at", "updated_at", "status_changed_at", "ref_code", "user_id", "website",
     "unsubscribed_at", "bounced_at", "complained_at", "not_interested_at",
     "replied_at", "last_outbound_at", "next_follow_up_at", "phone",
   ].join(", ")
@@ -777,6 +828,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     emailsDelivered: p.emails_delivered ?? 0,
     emailsOpened: p.emails_opened ?? 0,
     emailsClicked: p.emails_clicked ?? 0,
+    statusChangedAt: (p as any).status_changed_at ?? null,
     lastEmailSentAt: p.last_email_sent_at,
     lastEmailOpenedAt: p.last_email_opened_at,
     lastEmailClickedAt: p.last_email_clicked_at,
@@ -851,7 +903,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
       Array.from({ length: Math.ceil(companyIds.length / CHUNK) }, (_, i) =>
         supabase
           .from("companies")
-          .select("id, name, slug, logo_url, city, phone, owner_id, status, website, domain, primary_service:categories!companies_primary_service_id_fkey(name)")
+          .select("id, name, slug, logo_url, city, phone, owner_id, status, status_changed_at, website, domain, primary_service:categories!companies_primary_service_id_fkey(name)")
           .in("id", companyIds.slice(i * CHUNK, (i + 1) * CHUNK)),
       ),
     )
@@ -907,6 +959,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
         phone: cc.phone ?? null,
         primaryService: cc.primary_service?.name ?? null,
         status: cc.status ?? null,
+        statusChangedAt: cc.status_changed_at ?? null,
         ownerUserId: cc.owner_id ?? null,
         ownerName,
         ownerEmail: cc.owner_id ? ownerEmailById.get(cc.owner_id) ?? null : null,
@@ -928,6 +981,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     emailsClicked: number
     lastContactedAt: string | null
     createdAt: string
+    statusChangedAt: string | null
   } => {
     let status: ProspectStatus = "prospect"
     let statusRank = -1
@@ -940,6 +994,12 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     let emailsClicked = 0
     let lastContactedAt: string | null = null
     let createdAt: string = cs[0]?.createdAt ?? new Date().toISOString()
+    // Follows the row's status rather than the contacts' max: the row
+    // shows the furthest-progressed contact, so the date that belongs
+    // beside it is when THAT contact reached it. A colleague still
+    // sitting at 'contacted' moving yesterday is not this company
+    // moving. Ties within the same status take the later moment.
+    let statusChangedAt: string | null = null
 
     for (const c of cs) {
       sourceSet.add(c.source)
@@ -947,6 +1007,10 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
       if (sRank > statusRank) {
         statusRank = sRank
         status = c.status
+        statusChangedAt = c.statusChangedAt
+      } else if (sRank === statusRank && c.statusChangedAt
+        && (!statusChangedAt || c.statusChangedAt > statusChangedAt)) {
+        statusChangedAt = c.statusChangedAt
       }
       const qRank = SEQUENCE_RANK[c.sequenceStatus] ?? 0
       if (qRank > sequenceRank) {
@@ -973,6 +1037,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
       emailsClicked,
       lastContactedAt,
       createdAt,
+      statusChangedAt,
     }
   }
 
@@ -1022,6 +1087,16 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     // fall back to the prospect-derived counts so older rows still
     // render their historical metrics until the backfill catches up.
     const hasEventCoverage = events && (events.sent + events.delivered + events.opened + events.clicked) > 0
+    // Hoisted out of the object literal: lastContactAt is built from it
+    // as well, and computing the same reduce twice would be the start of
+    // the two drifting apart.
+    const lastOutboundForRow = sortedContacts.reduce<string | null>((acc, c) => {
+      if (!c.lastOutboundAt) return acc
+      return !acc || c.lastOutboundAt > acc ? c.lastOutboundAt : acc
+    }, null)
+    // Hoisted for the same reason: both statusChangedAt and
+    // subscribedAt below are built from it.
+    const subscribedAtForRow = g.companyId ? subscribedSince.get(g.companyId) ?? null : null
     return {
       rowId: key,
       companyId: g.companyId,
@@ -1031,7 +1106,9 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
       contacts: sortedContacts,
       claimedCompany: claimed,
       status: companyRowStatus ?? agg.status,
-      isSubscribed: g.companyId ? subscribedIds.has(g.companyId) : false,
+      // has(), not subscribedAtForRow — membership is the question, and
+      // a subscriber whose start date never got recorded is still one.
+      isSubscribed: g.companyId ? subscribedSince.has(g.companyId) : false,
       sequenceStatus: agg.sequenceStatus,
       // SHOWCASE IS A CHANNEL THIS ROW IS IN, not a label beside it.
       // Membership comes from the company's lifecycle rather than any
@@ -1051,10 +1128,11 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
       unsubscribedContactCount: sortedContacts.filter((c) => c.unsubscribedAt).length,
       lastContactedAt: agg.lastContactedAt,
       nextScheduledAt: nextScheduledByGroup.get(key) ?? null,
-      lastOutboundAt: sortedContacts.reduce<string | null>((acc, c) => {
-        if (!c.lastOutboundAt) return acc
-        return !acc || c.lastOutboundAt > acc ? c.lastOutboundAt : acc
-      }, null),
+      lastOutboundAt: lastOutboundForRow,
+      lastContactAt: [agg.lastContactedAt, lastOutboundForRow]
+        .filter((v): v is string => Boolean(v))
+        .sort()
+        .at(-1) ?? null,
       nextOutboundAt: sortedContacts.reduce<string | null>((acc, c) => {
         // Future-only: ignore overdue follow-ups for sorting purposes, but
         // still keep the soonest. Overdue handling is purely cosmetic in
@@ -1064,6 +1142,25 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
       }, null),
       hasEmailActivity: sortedContacts.some((c) => c.hasInboundEmail),
       createdAt: agg.createdAt,
+      // The date has to describe the status standing next to it.
+      //
+      // Three ladders feed this row and until now the column only read
+      // the bottom one. The row's status comes from the COMPANY from
+      // Verified on (companyRowStatus above), so pairing it with the
+      // contact's status change dated the wrong event. And above both
+      // sits the subscription, which the table has always shown as the
+      // row's status — while nothing stamped a date for it, because no
+      // status column changes when a company buys. Studio Melanie
+      // Parker subscribed on 1 October and read as last changed on 15
+      // September.
+      statusChangedAt: [
+        companyRowStatus ? claimed?.statusChangedAt ?? null : agg.statusChangedAt,
+        subscribedAtForRow,
+      ]
+        .filter((v): v is string => Boolean(v))
+        .sort()
+        .at(-1) ?? null,
+      subscribedAt: subscribedAtForRow,
     }
   })
 
@@ -1178,6 +1275,9 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   for (const r of rows) {
     funnel.total++
     if (r.status in funnel) (funnel as any)[r.status]++
+    // Not a status, so it needs counting of its own: a company can be
+    // subscribed at any stage of the ladder.
+    if (r.isSubscribed) funnel.subscribed++
   }
 
   if (statuses && statuses.length > 0) {
@@ -1207,11 +1307,9 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   // never float to the top of either ascending or descending sort.
   const dir = sortDir === "asc" ? 1 : -1
   const pickSortValue = (r: SalesCompanyRow): string | null => {
-    if (sortBy === "created_at") return r.createdAt
-    if (sortBy === "next_scheduled_at") return r.nextScheduledAt
-    if (sortBy === "last_outbound_at") return r.lastOutboundAt
+    if (sortBy === "status_changed_at") return r.statusChangedAt
     if (sortBy === "next_outbound_at") return r.nextOutboundAt
-    return r.lastContactedAt
+    return r.lastContactAt
   }
   rows.sort((a, b) => {
     const av = pickSortValue(a)
@@ -1229,7 +1327,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
 }
 
 const EMPTY_SALES_FUNNEL: SalesFunnel = {
-  total: 0, prospect: 0, contacted: 0, visitor: 0, verified: 0, owned: 0, unlisted: 0, active: 0,
+  total: 0, subscribed: 0, prospect: 0, contacted: 0, visitor: 0, verified: 0, owned: 0, unlisted: 0, active: 0,
 }
 
 /**
@@ -1526,6 +1624,7 @@ export async function fetchSalesContactForProspect(prospectId: string): Promise<
     bouncedAt: (p as any).bounced_at ?? null,
     complainedAt: (p as any).complained_at ?? null,
     notInterestedAt: (p as any).not_interested_at ?? null,
+    statusChangedAt: (p as any).status_changed_at ?? null,
     createdAt: p.created_at,
     updatedAt: p.updated_at,
     refCode: p.ref_code,
@@ -1554,13 +1653,22 @@ export async function fetchProspectById(prospectId: string): Promise<Prospect | 
   // the track the contact is in (Showcase vs plain Outreach) even
   // before any sequence step exists.
   let companyStatus: string | null = null
+  // Subscribed rides along the same way, from the same helper the Sales
+  // table and /companies use — so the card's pill cannot contradict the
+  // row the admin clicked to open it.
+  let subscribedAt: string | null = null
   if ((withContact as { company_id?: string | null }).company_id) {
-    const { data: companyRow } = await supabase
-      .from("companies")
-      .select("status")
-      .eq("id", (withContact as { company_id: string }).company_id)
-      .maybeSingle()
+    const companyId = (withContact as { company_id: string }).company_id
+    const [{ data: companyRow }, subscribedSince] = await Promise.all([
+      supabase
+        .from("companies")
+        .select("status")
+        .eq("id", companyId)
+        .maybeSingle(),
+      getSubscribedSince(),
+    ])
     companyStatus = (companyRow?.status as string | null) ?? null
+    subscribedAt = subscribedSince.get(companyId) ?? null
   }
   // Signup honesty: signed_up_at stamps when the auth user is CREATED —
   // which is code-SEND (signUpWithOtpAction pre-creates), i.e. only
@@ -1573,7 +1681,7 @@ export async function fetchProspectById(prospectId: string): Promise<Prospect | 
     const { data: authUser } = await supabase.auth.admin.getUserById(linkedUserId)
     signupVerified = authUser?.user ? Boolean(authUser.user.last_sign_in_at) : null
   }
-  return { ...withContact, companyStatus, signupVerified } as Prospect & { companyStatus: string | null }
+  return { ...withContact, companyStatus, signupVerified, subscribedAt } as Prospect & { companyStatus: string | null }
 }
 
 export async function fetchProspectEvents(prospectId: string) {

@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState, useTransition, useCallback } from "react"
 import { ArrowUpRight } from "lucide-react"
 import { toast } from "sonner"
-import { PROSPECT_STATUS_CONFIG } from "@/lib/sales/prospect-status"
+import { PROSPECT_STATUS_CONFIG, SUBSCRIBED_CONFIG } from "@/lib/sales/prospect-status"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { EmailComposeModal } from "@/components/contact-card/email-compose-modal"
 import { AdminTabs, useAdminTab } from "@/components/admin/admin-tabs"
@@ -58,13 +58,11 @@ export { PROSPECT_STATUS_CONFIG as STATUS_CONFIG } from "@/lib/sales/prospect-st
 const STATUS_CONFIG = PROSPECT_STATUS_CONFIG
 
 /** Not a prospect status — there is none — so it sits beside the map
- *  rather than in it. Same green the funnel gives the monetization
- *  driver, so the pill and the stage read as one thing. */
-const SUBSCRIBED_CONFIG = {
-  label: "Subscribed",
-  cls: "bg-teal-50 text-teal-800 font-semibold",
-  dot: "bg-[#0f766e]",
-}
+ *  rather than in it. Moved to lib so the Contact Card can show the
+ *  same pill: it read the prospect status and so said "Listed" about a
+ *  company this table already called Subscribed. Re-exported like
+ *  STATUS_CONFIG above so this file's own importers keep working. */
+export { SUBSCRIBED_CONFIG } from "@/lib/sales/prospect-status"
 
 // Statuses surfaced in the multi-select status filter. 'removed' is a soft-
 // delete marker — admin doesn't filter for it, the row is just hidden.
@@ -851,10 +849,10 @@ export function ProspectsClient({
   const [offset, setOffset] = useState(0)
   const [hasMore, setHasMore] = useState(initialTotalCompanies > 50)
   const [isPending, startTransition] = useTransition()
-  // last_contacted_at desc is the primary sales workflow — admins want to
-  // see who they last touched first. Created sort exists for cohort
-  // analysis ("everyone added this week").
-  const [sortBy, setSortBy] = useState<SalesSortBy>("last_contacted_at")
+  // last_contact_at desc is the primary sales workflow — admins want to
+  // see who they last touched first, by whichever channel. Created sort
+  // exists for cohort analysis ("everyone added this week").
+  const [sortBy, setSortBy] = useState<SalesSortBy>("last_contact_at")
   const [sortDir, setSortDir] = useState<SalesSortDir>("desc")
 
   const reload = useCallback((opts?: { offset?: number; append?: boolean }) => {
@@ -916,7 +914,10 @@ export function ProspectsClient({
     const due = opts.callListOnly ?? callListOnly
     startTransition(async () => {
       const result = await fetchSalesCompanies({
-        statuses: s, sources: src, sequences: seq, search,
+        // subscribedOnly rides along. It was in this callback's deps but
+        // never in its request, so picking any other filter silently
+        // dropped the subscription filter the reader had set.
+        statuses: s, sources: src, sequences: seq, search, subscribedOnly,
         callListOnly: due,
         offset: 0, limit: 50, sortBy, sortDir,
       })
@@ -974,15 +975,27 @@ export function ProspectsClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search])
 
+  // Toggling Subscribed changed state and nothing else: no fetch was
+  // tied to it, so the checkbox ticked and the table kept whatever it
+  // was already showing. Every other filter reloads through
+  // handleFilterChange; this one had no path at all.
+  const firstSubscribedRender = useRef(true)
+  useEffect(() => {
+    if (firstSubscribedRender.current) { firstSubscribedRender.current = false; return }
+    reload({ offset: 0 })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only the
+    // flag drives this; reload changes identity on every fetch.
+  }, [subscribedOnly])
+
   const handleLoadMore = useCallback(() => {
     reload({ offset: offset + 50, append: true })
   }, [reload, offset])
 
   const toggleSort = useCallback((field: SalesSortBy) => {
-    // Default first-click direction is "desc" for date columns (most recent
-    // first) — except next_scheduled_at, where the natural reading is
-    // "soonest pending send first" (asc).
-    const defaultDir: SalesSortDir = field === "next_scheduled_at" ? "asc" : "desc"
+    // Default first-click direction is "desc" for date columns (most
+    // recent first) — except next_outbound_at, where the natural reading
+    // is "soonest follow-up first" (asc).
+    const defaultDir: SalesSortDir = field === "next_outbound_at" ? "asc" : "desc"
     const nextDir: SalesSortDir = sortBy === field ? (sortDir === "desc" ? "asc" : "desc") : defaultDir
     setSortBy(field)
     setSortDir(nextDir)
@@ -1594,48 +1607,24 @@ export function ProspectsClient({
               <th style={{ textAlign: "center" }}>Clicked</th>
               <th
                 style={{ textAlign: "right", cursor: "pointer", userSelect: "none" }}
-                onClick={() => toggleSort("created_at")}
-                title="Sort by created"
+                onClick={() => toggleSort("status_changed_at")}
+                title="Sort by last funnel move — filter to a status and sort here to see who reached it most recently"
               >
                 <span className="inline-flex items-center justify-end gap-1">
-                  Created
-                  {sortBy === "created_at" && (
+                  Last change
+                  {sortBy === "status_changed_at" && (
                     <span className="text-[10px] text-[#a1a1a0]">{sortDir === "desc" ? "↓" : "↑"}</span>
                   )}
                 </span>
               </th>
               <th
                 style={{ textAlign: "right", cursor: "pointer", userSelect: "none" }}
-                onClick={() => toggleSort("last_contacted_at")}
-                title="Sort by last email sent"
+                onClick={() => toggleSort("last_contact_at")}
+                title="Sort by last contact — automated mail or logged outbound, whichever is later"
               >
                 <span className="inline-flex items-center justify-end gap-1">
-                  Last email
-                  {sortBy === "last_contacted_at" && (
-                    <span className="text-[10px] text-[#a1a1a0]">{sortDir === "desc" ? "↓" : "↑"}</span>
-                  )}
-                </span>
-              </th>
-              <th
-                style={{ textAlign: "right", cursor: "pointer", userSelect: "none" }}
-                onClick={() => toggleSort("next_scheduled_at")}
-                title="Sort by next email scheduled"
-              >
-                <span className="inline-flex items-center justify-end gap-1">
-                  Next email
-                  {sortBy === "next_scheduled_at" && (
-                    <span className="text-[10px] text-[#a1a1a0]">{sortDir === "desc" ? "↓" : "↑"}</span>
-                  )}
-                </span>
-              </th>
-              <th
-                style={{ textAlign: "right", cursor: "pointer", userSelect: "none" }}
-                onClick={() => toggleSort("last_outbound_at")}
-                title="Sort by last manual outbound touch"
-              >
-                <span className="inline-flex items-center justify-end gap-1">
-                  Last outbound
-                  {sortBy === "last_outbound_at" && (
+                  Last contact
+                  {sortBy === "last_contact_at" && (
                     <span className="text-[10px] text-[#a1a1a0]">{sortDir === "desc" ? "↓" : "↑"}</span>
                   )}
                 </span>
@@ -1645,7 +1634,7 @@ export function ProspectsClient({
           <tbody>
             {companies.length === 0 && (
               <tr>
-                <td colSpan={callListOnly ? 15 : 14} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
+                <td colSpan={callListOnly ? 14 : 13} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
                   No companies found.
                 </td>
               </tr>
@@ -2174,15 +2163,11 @@ function CompanyRowView({
         {ratePct ? <span className={clickedRateColor(ratePct.clicked, row.emailsSent)}>{ratePct.clicked}%</span> : <span className="text-[#a1a1a0] font-normal">—</span>}
       </td>
 
-      <td className="arco-table-nowrap" style={{ textAlign: "right", color: "var(--text-disabled)" }}>{formatDate(row.createdAt)}</td>
       <td className="arco-table-nowrap" style={{ textAlign: "right", color: "var(--text-disabled)" }}>
-        {row.lastContactedAt ? formatDate(row.lastContactedAt) : <span className="text-[#c4c4c2]">—</span>}
+        {row.statusChangedAt ? formatDate(row.statusChangedAt) : <span className="text-[#c4c4c2]">—</span>}
       </td>
       <td className="arco-table-nowrap" style={{ textAlign: "right", color: "var(--text-disabled)" }}>
-        {row.nextScheduledAt ? formatDate(row.nextScheduledAt) : <span className="text-[#c4c4c2]">—</span>}
-      </td>
-      <td className="arco-table-nowrap" style={{ textAlign: "right", color: "var(--text-disabled)" }}>
-        {row.lastOutboundAt ? formatDate(row.lastOutboundAt) : <span className="text-[#c4c4c2]">—</span>}
+        {row.lastContactAt ? formatDate(row.lastContactAt) : <span className="text-[#c4c4c2]">—</span>}
       </td>
     </tr>
   )

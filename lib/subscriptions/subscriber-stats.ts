@@ -154,7 +154,7 @@ export async function getSubscriberFacts(): Promise<SubscriberFact[]> {
 }
 
 /**
- * Which companies hold Pro right now.
+ * Which companies hold Pro right now, and since when.
  *
  * For the admin tables, where "Subscribed" is a row's state rather
  * than a number in a funnel. Derived from the same facts as everything
@@ -163,10 +163,26 @@ export async function getSubscriberFacts(): Promise<SubscriberFact[]> {
  *
  * Paying and founding both count: the question the tables ask is what
  * a company has, not what it pays.
+ *
+ * THE DATE TRAVELS WITH THE MEMBERSHIP, deliberately. This returned a
+ * bare Set, so every caller that also wanted "since when" had to reach
+ * for `founding_claimed_at` itself — and the "Last change" columns on
+ * /sales and /companies simply didn't, which is why a company that
+ * subscribed on 1 October read as last changed on 15 September.
+ * Subscribing is the furthest a company can move and the one move
+ * those columns cannot see on their own: the trigger behind
+ * status_changed_at watches `status`, and nothing about buying touches
+ * `status`.
+ *
+ * `use .has()` for membership — a subscriber whose start date was
+ * never recorded maps to null and is still a subscriber. And a company
+ * that was founding and later started paying keeps the EARLIER of its
+ * two dates, because it became a subscriber when it got Pro, not when
+ * it started paying for it.
  */
-export async function getSubscribedCompanyIds(): Promise<Set<string>> {
+export async function getSubscribedSince(): Promise<Map<string, string | null>> {
   const facts = await getSubscriberFacts()
-  return new Set(facts.filter((f) => !f.endedAt).map((f) => f.companyId))
+  return new Map(facts.filter((f) => !f.endedAt).map((f) => [f.companyId, f.startedAt]))
 }
 
 export async function getSubscriberStats(sinceIso?: string): Promise<SubscriberStats> {

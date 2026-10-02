@@ -296,6 +296,10 @@ export type AdminCompanyRow = {
    *  option — a Created company can only move to Listed, not directly
    *  to Unlisted. */
   listedAt: string | null
+  /** ISO timestamp of the last status change, in either direction —
+   *  companies.status_changed_at. Distinct from createdAt and from
+   *  listedAt: those record one moment each and never move again. */
+  lastChangeAt: string | null
   canPublishProjects: boolean
   autoApproveProjects: boolean
   source: CompanySource | null
@@ -807,12 +811,12 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   // Row menu opens AT the click position (a zero-size fixed anchor for
   // the dropdown), not at the far-right "…" column.
   const [rowMenu, setRowMenu] = useState<{ id: string; x: number; y: number } | null>(null)
-  // Newest listing first. Created-descending put whatever was imported
-  // last at the top, which on a table of 3,000 catalogue rows is almost
-  // never the thing being looked for; the companies that just went live
-  // are. Never-listed rows rank -1 in the column's sorting function, so
-  // descending leaves them below every real date rather than above it.
-  const [sorting, setSorting] = useState<SortingState>([{ id: "listed", desc: true }])
+  // Most recently moved first. Created-descending put whatever was
+  // imported last at the top, which on a table of 3,000 catalogue rows
+  // is almost never what is being looked for; the companies that just
+  // changed state are. Undated rows rank -1 in the column's sorting
+  // function, so descending leaves them below every real date.
+  const [sorting, setSorting] = useState<SortingState>([{ id: "lastChange", desc: true }])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   // "Load more" pagination — start at 50, grow by 50 each click.
@@ -1694,44 +1698,37 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         },
       },
       {
-        id: "created",
-        header: "Created",
-        accessorFn: (row) => row.createdAt,
-        enableSorting: true,
-        cell: ({ row }) => {
-          const date = row.original.createdAt
-          if (!date) return <span className="arco-table-secondary">—</span>
-          return <span className="arco-table-nowrap">{format(new Date(date), "dd MMM yyyy")}</span>
-        },
-      },
-      {
-        id: "listed",
-        header: "Listed",
-        // When this company first went Listed as a CLAIMED company.
+        id: "lastChange",
+        header: "Last change",
+        // The last time this company moved in the funnel, in either
+        // direction — companies.status_changed_at, stamped by the same
+        // trigger that already watched this table for transitions.
         //
-        // Straight off companies.listed_at, which means exactly that and
-        // only that since migration 267: a database trigger stamps it on
-        // the first transition into 'listed' and leaves it alone
-        // afterwards, and an ownerless showcase page can no longer reach
-        // that status at all. The admin table and the growth dashboard
-        // therefore read the same field and agree.
+        // Replaces Listed and Created, which each answered one fixed
+        // question and never moved again. This one answers the question
+        // an admin actually arrives with: filter to a status, sort by
+        // this, and the companies that most recently reached it are on
+        // top.
         //
-        // This column briefly derived its own value instead — max of
-        // listed_at and the first team member — to work around showcase
-        // stamps. That made two surfaces answer one question differently
-        // (one pro listed on 1 October against three), which is the bug
-        // it was trying to fix. Fixed in the data, read plainly here.
-        accessorFn: (row) => row.listedAt,
+        // Deliberately not updated_at. That moves on any write at all —
+        // the SEO cron, the Apollo sync, an admin fixing a logo — which
+        // is the trap migration 163 named when it added listed_at.
+        //
+        // Rows from before migration 269 carry a backfill: exact for the
+        // 3,006 companies still sitting at their import status, and an
+        // approximation for the ~137 that had already moved.
+        accessorFn: (row) => row.lastChangeAt,
         enableSorting: true,
-        // Never-listed sorts below every real date rather than mixing in
+        // Undated rows sort below every real date rather than mixing in
         // with the oldest, the same way the Impressions column keeps its
         // empty states out of the ranking.
         sortingFn: (rowA, rowB) => {
-          const rank = (r: AdminCompanyRow) => (r.listedAt ? new Date(r.listedAt).getTime() : -1)
+          const rank = (r: AdminCompanyRow) =>
+            r.lastChangeAt ? new Date(r.lastChangeAt).getTime() : -1
           return rank(rowA.original) - rank(rowB.original)
         },
         cell: ({ row }) => {
-          const date = row.original.listedAt
+          const date = row.original.lastChangeAt
           if (!date) return <span className="arco-table-secondary">—</span>
           return <span className="arco-table-nowrap">{format(new Date(date), "dd MMM yyyy")}</span>
         },

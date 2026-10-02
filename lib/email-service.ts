@@ -1,7 +1,7 @@
 'use server'
 
 import { buildUnsubscribeUrl } from './unsubscribe-token'
-import { TEMPLATE_CHANNEL, usesOutreachDomain, utmSourceFor, type EmailChannel } from './email-channels'
+import { TEMPLATE_CHANNEL, countsAsContact, usesOutreachDomain, utmSourceFor, type EmailChannel } from './email-channels'
 
 // Exhaustiveness lives here, because EmailTemplate lives here. If a new
 // template is added without a channel, this line stops the build rather
@@ -2964,6 +2964,57 @@ export async function sendTransactionalEmail(
         } else {
           campaignKind = 'transactional'
         }
+        // WHO this mail went to, in the vocabulary the sales board uses.
+        //
+        // prospect_id was never set here, so it was filled on 91 of
+        // 3,810 sends — even the cold outreach ones. Every surface that
+        // wanted "this contact's mail" had to join on the address
+        // instead, and the prospect timeline quietly showed less than
+        // the whole truth.
+        //
+        // The address is the key, but it is NOT a unique one: the
+        // constraint on prospects is (email, source), so the same
+        // person can hold a row as an Apollo contact and another as an
+        // invite. Today no address does, which is exactly why this must
+        // not be written as maybeSingle() — the first one to appear
+        // would start throwing inside a send.
+        //
+        // So: ask for the candidates and choose. The company we are
+        // mailing about wins when we know it; otherwise the contact
+        // we most recently mailed, which is the row the sales board is
+        // already showing.
+        //
+        // eq() on a lowercased address, NOT ilike(). The rest of this
+        // codebase reaches for ilike to get case-insensitivity, but
+        // `_` and `%` are LIKE wildcards and an underscore is ordinary
+        // in an e-mail address — `ilike('email', 'a_b@x.com')` also
+        // matches a1b@x.com, and picking the wrong contact here would
+        // file the mail against the wrong company. Every stored
+        // prospect address is already lowercase (3,574 of 3,574), so
+        // equality loses nothing.
+        const sentAt = new Date().toISOString()
+        let prospectId: string | null = null
+        let prospectLastSentAt: string | null = null
+        {
+          const { data: candidates } = await supabase
+            .from('prospects')
+            .select('id, company_id, last_email_sent_at')
+            .eq('email', email.toLowerCase())
+            .order('last_email_sent_at', { ascending: false, nullsFirst: false })
+            .limit(5)
+          const rows = (candidates ?? []) as Array<{
+            id: string
+            company_id: string | null
+            last_email_sent_at: string | null
+          }>
+          const picked = (opts.companyId
+            ? rows.find((r) => r.company_id === opts.companyId)
+            : null) ?? rows[0] ?? null
+          if (picked) {
+            prospectId = picked.id
+            prospectLastSentAt = picked.last_email_sent_at
+          }
+        }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any).from('email_events').insert({
           provider: 'resend',
@@ -2972,16 +3023,39 @@ export async function sendTransactionalEmail(
           recipient_email: email,
           recipient_user_id: opts.userId ?? null,
           recipient_company_id: opts.companyId ?? null,
+          prospect_id: prospectId,
           campaign_kind: campaignKind,
           template,
           subject,
           locale,
-          occurred_at: new Date().toISOString(),
+          occurred_at: sentAt,
           // Mirror the resend id into metadata too so analytics joins
           // (engagement rows → send row) use a symmetric key:
           //   `metadata->>'resend_message_id'` on both sides.
           metadata: { resend_message_id: data.id },
         })
+
+        // "When did we last contact them?" — answered HERE, at the one
+        // point every send passes through, instead of at each of the
+        // seven call sites that happened to remember.
+        //
+        // Only the drip queue ever stamped this, so 136 contacts showed
+        // a Last contact date older than their inbox: a founding-active
+        // mail, a listed-series mail or a visitor nudge (106 of the 136)
+        // left no trace at all. Those call sites still write the same
+        // value at the same moment and are harmless; what matters is
+        // that a send which goes through NO queue now also counts.
+        //
+        // Forward-only. A resend of an older template must not drag the
+        // date backwards, and a clock skew between processes must not
+        // either.
+        if (prospectId && countsAsContact(template)
+          && (!prospectLastSentAt || sentAt > prospectLastSentAt)) {
+          await supabase
+            .from('prospects')
+            .update({ last_email_sent_at: sentAt } as never)
+            .eq('id', prospectId)
+        }
       } catch (logErr) {
         // Don't propagate — Resend already accepted the send. Log loudly.
         console.error('[email-events] Failed to log sent event', {

@@ -6,6 +6,7 @@ import {
 } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
 import { getContactByEmail, type ContactByEmailResult } from "@/lib/contacts/get-contact-by-email"
+import { getSubscribedSince } from "@/lib/subscriptions/subscriber-stats"
 
 /**
  * Prospect-keyed variant of getContactByEmail.
@@ -69,11 +70,14 @@ export async function getContactByProspectId(id: string): Promise<ContactByEmail
   const companyId = prospect.company_id
   const companiesById: NonNullable<Extract<ContactByEmailResult, { success: true }>["data"]>["companiesById"] = {}
   if (companyId) {
-    const { data: c } = await svc
-      .from("companies")
-      .select("id, name, slug, logo_url, city, domain, website, status, primary_service:categories!companies_primary_service_id_fkey(name)")
-      .eq("id", companyId)
-      .maybeSingle()
+    const [{ data: c }, subscribedSince] = await Promise.all([
+      svc
+        .from("companies")
+        .select("id, name, slug, logo_url, city, domain, website, status, primary_service:categories!companies_primary_service_id_fkey(name)")
+        .eq("id", companyId)
+        .maybeSingle(),
+      getSubscribedSince(),
+    ])
     const row = c as unknown as {
       id: string
       name: string | null
@@ -95,6 +99,7 @@ export async function getContactByProspectId(id: string): Promise<ContactByEmail
         domain: row.domain ?? null,
         website: row.website ?? null,
         status: row.status ?? null,
+        subscribed_at: subscribedSince.get(row.id) ?? null,
         primary_service_name: row.primary_service?.name ?? null,
       }
     }

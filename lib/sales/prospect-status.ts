@@ -48,6 +48,29 @@ export const PROSPECT_STATUS_CONFIG: Record<
   removed: { label: "Removed", cls: "bg-gray-50 text-gray-500", dot: "bg-[#a1a1a0]", dotHex: "#a1a1a0" },
 }
 
+/**
+ * Subscribed — above the whole ladder, and not on it.
+ *
+ * There is no prospect status for "bought", because buying is a fact
+ * about the COMPANY and the ladder above tracks a contact's journey
+ * towards it. So it gets its own pill rather than an eighth entry in
+ * PROSPECT_STATUS_CONFIG, which would make `PROSPECT_STATUS_RANK` and
+ * every `prospects.status` write have to know about it.
+ *
+ * It lives here, next to the statuses it outranks, because three
+ * surfaces render it: the Sales table row, the Contact Card's pill row
+ * and the card's timeline. It was defined in prospects-client, so the
+ * card had no way to read it and showed "Listed" for a company that
+ * had already subscribed — the row and the card answering one question
+ * from two places.
+ */
+export const SUBSCRIBED_CONFIG = {
+  label: "Subscribed",
+  cls: "bg-teal-50 text-teal-800 font-semibold",
+  dot: "bg-[#0f766e]",
+  dotHex: "#0f766e",
+}
+
 /** Company statuses, for contacts that have no prospect row. Same
  *  colours the Companies table uses. */
 export const COMPANY_STATUS_DOT_HEX: Record<string, string> = {

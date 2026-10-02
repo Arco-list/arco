@@ -49,6 +49,44 @@ export function usesOutreachDomain(template: string): boolean {
   return channel !== undefined && OUTREACH_CHANNELS.has(channel)
 }
 
+/**
+ * Mail the recipient asked for seconds earlier, not a touch from us.
+ *
+ * "When did we last contact them?" is a sales question, and a sign-in
+ * code someone requested themselves is not an answer to it: it would
+ * put a row at the top of a recency sort because the owner logged in,
+ * which tells a rep nothing about whether to call.
+ *
+ * Deliberately a template list rather than a channel: the channel axis
+ * cannot separate these: `auth-magic-link` and `founding-active` are
+ * both 'lifecycle', and only one of them is us reaching out.
+ *
+ * Everything else counts, including lifecycle and transactional mail.
+ * That is the whole point of this predicate — `prospects
+ * .last_email_sent_at` was only ever written by the drip queue, so a
+ * founding-active or a listed-series mail left no trace and the Sales
+ * board reported a contact date weeks older than the inbox.
+ */
+const SELF_TRIGGERED: ReadonlySet<string> = new Set([
+  'auth-confirm-signup',
+  'auth-magic-link',
+  'auth-recovery',
+  'auth-email-change',
+  'auth-invite',
+  'domain-verification',
+])
+
+/** Whether this send counts as us having contacted the recipient.
+ *  Unknown and missing templates count: an unlabelled send is far more
+ *  likely to be a new lifecycle mail than a new auth code, and a
+ *  contact date that is slightly too recent costs a wasted glance,
+ *  while one that is weeks stale costs a call that should have been
+ *  made. (Apollo's synced events carry no template at all.) */
+export function countsAsContact(template: string | null | undefined): boolean {
+  if (!template) return true
+  return !SELF_TRIGGERED.has(template)
+}
+
 /** The utm_source a channel writes into every Arco link it tags. */
 export function utmSourceFor(channel: EmailChannel | undefined): string {
   // An unlabelled template parks outside the funnel rather than

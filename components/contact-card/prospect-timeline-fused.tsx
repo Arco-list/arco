@@ -28,6 +28,7 @@ import {
   formatDateShort,
   templateDisplayName,
 } from "@/app/admin/sales/prospects-client"
+import { SUBSCRIBED_CONFIG } from "@/lib/sales/prospect-status"
 import {
   getTransactionalEmails,
   type TransactionalEmailRow,
@@ -201,7 +202,16 @@ function ActivitySection({
   onSequenceActionComplete?: () => void
 }) {
   const p = bundle.prospect
-  const statusCfg = p ? STATUS_CONFIG[p.status as ProspectStatus] ?? null : null
+  // Subscribed outranks the sales ladder — the same rule the Sales
+  // table applies to its row, now read from the same config so the two
+  // cannot drift. The card used to show only `prospects.status`, where
+  // "bought" does not exist, so it said "Listed" about a company the
+  // table beside it already called Subscribed.
+  const statusCfg = p
+    ? ((p as { subscribedAt?: string | null }).subscribedAt
+        ? SUBSCRIBED_CONFIG
+        : STATUS_CONFIG[p.status as ProspectStatus] ?? null)
+    : null
 
   // Distinct campaign channels the sequence steps belong to. A contact
   // can accumulate more than one channel over their lifetime (e.g.
@@ -414,7 +424,7 @@ function TimelineStream({
   // Verified/Owned have no prospect-row timestamp — their transitions
   // live in prospect_events (stamped by the claim funnel).
   const eventTs = (type: string) => bundle.events.find((ev) => ev.event_type === type)?.created_at ?? null
-  const stageDefs: Array<{ label: string; ts: string | null; status: ProspectStatus }> = prospect
+  const stageDefs: Array<{ label: string; ts: string | null; status: ProspectStatus; dot?: string }> = prospect
     ? [
         { label: "prospect", ts: prospect.created_at, status: initialStatus },
         { label: "contacted", ts: firstSentAt ?? prospect.last_email_sent_at, status: "contacted" },
@@ -430,13 +440,24 @@ function TimelineStream({
         { label: prospect.signupVerified === false ? "signup started" : "signed up", ts: prospect.signed_up_at, status: "owned" },
         { label: "owned", ts: eventTs("prospect.owned") ?? prospect.company_created_at, status: "owned" },
         { label: "listed", ts: (prospect as any).converted_at, status: "active" },
+        // The top of the ladder, and the only rung that isn't a
+        // prospect status — so it carries its own dot rather than
+        // borrowing one from STATUS_CONFIG. It was missing entirely:
+        // the timeline of a company that had subscribed ended at
+        // "listed", with no trace of the thing the whole funnel is for.
+        {
+          label: "subscribed",
+          ts: (prospect as { subscribedAt?: string | null }).subscribedAt ?? null,
+          status: "active",
+          dot: SUBSCRIBED_CONFIG.dot,
+        },
       ]
     : []
   if (isInvite && stageDefs.length > 0) stageDefs[0].label = "invited"
   const stageRows: StreamRow[] = stageDefs
     .map((s, ladderRank) => ({ ...s, ladderRank }))
-    .filter((s): s is { label: string; ts: string; status: ProspectStatus; ladderRank: number } => Boolean(s.ts))
-    .map((s) => ({ kind: "stage" as const, ts: s.ts, label: s.label, dot: STATUS_CONFIG[s.status]?.dot ?? "bg-[#a1a1a0]", key: `stage-${s.label}`, rank: s.ladderRank }))
+    .filter((s): s is { label: string; ts: string; status: ProspectStatus; dot?: string; ladderRank: number } => Boolean(s.ts))
+    .map((s) => ({ kind: "stage" as const, ts: s.ts, label: s.label, dot: s.dot ?? STATUS_CONFIG[s.status]?.dot ?? "bg-[#a1a1a0]", key: `stage-${s.label}`, rank: s.ladderRank }))
 
   // The visitor-nudge is queued under the abstract 'visitor-nudge' but
   // goes out as a concrete variant (platform/invite/showcase) that also

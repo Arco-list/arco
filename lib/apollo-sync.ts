@@ -1,5 +1,6 @@
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { updateContactStage } from "@/lib/apollo-client"
+import { countsAsContact } from "@/lib/email-channels"
 import { logger } from "@/lib/logger"
 
 const APOLLO_API_URL = "https://api.apollo.io/api/v1"
@@ -839,13 +840,26 @@ export async function syncApolloEmailEvents(): Promise<{
 
 /**
  * Recompute prospects.last_email_sent_at from the canonical email_events
- * sent timestamps. Run after syncApolloEmailEvents (and any Resend-side
- * sales_outbound send) so the prospect cache reflects the real "last
- * contacted" time rather than the last cron run.
+ * sent timestamps. Run after syncApolloEmailEvents so the prospect cache
+ * reflects the real "last contacted" time rather than the last cron run.
  *
- * Matches by lowercased email — prospects.email is treated as canonical.
- * Captures both Apollo and Resend sales_outbound sends since both write
- * email_events with campaign_kind='sales_outbound'.
+ * SAFETY NET, NOT THE MECHANISM. Every send now stamps this column
+ * itself inside sendTransactionalEmail, at the single point all mail
+ * passes through. This pass exists for the sends that never go through
+ * it — Apollo's, which arrive by sync hours after the fact.
+ *
+ * EVERY KIND OF SEND COUNTS, which it did not before: the filter here
+ * was campaign_kind='sales_outbound', so a founding-active mail, a
+ * listed-series mail or a visitor nudge moved nothing, and 136 contacts
+ * showed a Last contact date weeks older than their actual inbox. What
+ * does NOT count is mail the recipient asked for seconds earlier — a
+ * sign-in code is not a sales touch. That line is drawn once, in
+ * countsAsContact, and this pass and the send path read the same one.
+ *
+ * Matches by lowercased email. The constraint on prospects is
+ * (email, source), so two rows can share an address; both then get the
+ * same answer, which is correct — the mail reached that person either
+ * way.
  */
 export async function recomputeProspectLastEmailSentAt(): Promise<{ updated: number; error: string | null }> {
   const supabase = createServiceRoleSupabaseClient()
@@ -853,47 +867,67 @@ export async function recomputeProspectLastEmailSentAt(): Promise<{ updated: num
   // Use a CTE-style update via PostgREST. PostgREST doesn't expose CTEs
   // directly, so we do it in two passes: pull max(occurred_at) per email
   // from email_events, then update prospects in a batch.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: maxRows, error: readErr } = await (supabase as any)
-    .from("email_events")
-    .select("recipient_email, occurred_at")
-    .eq("event_type", "sent")
-    .eq("campaign_kind", "sales_outbound")
-    .neq("recipient_email", "")
-
-  if (readErr) {
-    logger.error("[apollo-email-events] recompute read failed", { error: readErr.message })
-    return { updated: 0, error: readErr.message }
-  }
-
-  // Build email → max(occurred_at) map.
+  //
+  // Both passes page past the 1,000-row response cap. Neither did, and
+  // email_events passed 1,000 sends in August 2026 — so this was
+  // silently recomputing from the oldest quarter of the table and
+  // widening the set above would have made that worse, not better.
   const maxByEmail = new Map<string, string>()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const r of (maxRows ?? []) as any[]) {
-    const key = String(r.recipient_email).toLowerCase()
-    const ts = r.occurred_at as string
-    const existing = maxByEmail.get(key)
-    if (!existing || ts > existing) maxByEmail.set(key, ts)
+  for (let from = 0; ; from += 1000) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
+      .from("email_events")
+      .select("recipient_email, occurred_at, template")
+      .eq("event_type", "sent")
+      .neq("recipient_email", "")
+      .order("id")
+      .range(from, from + 999)
+
+    if (error) {
+      logger.error("[apollo-email-events] recompute read failed", { error: error.message })
+      return { updated: 0, error: error.message }
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const r of (data ?? []) as any[]) {
+      if (!countsAsContact(r.template as string | null)) continue
+      const key = String(r.recipient_email).toLowerCase()
+      const ts = r.occurred_at as string
+      const existing = maxByEmail.get(key)
+      if (!existing || ts > existing) maxByEmail.set(key, ts)
+    }
+    if (!data || data.length < 1000) break
   }
 
   if (maxByEmail.size === 0) return { updated: 0, error: null }
 
   // Pull current prospect timestamps to detect changes (avoid no-op writes).
-  const { data: prospects, error: pErr } = await supabase
-    .from("prospects")
-    .select("id, email, last_email_sent_at")
-    .not("email", "is", null)
+  const prospects: Array<{ id: string; email: string; last_email_sent_at: string | null }> = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from("prospects")
+      .select("id, email, last_email_sent_at")
+      .not("email", "is", null)
+      .order("id")
+      .range(from, from + 999)
 
-  if (pErr || !prospects) {
-    logger.error("[apollo-email-events] recompute prospects fetch failed", { error: pErr?.message })
-    return { updated: 0, error: pErr?.message ?? "fetch failed" }
+    if (error) {
+      logger.error("[apollo-email-events] recompute prospects fetch failed", { error: error.message })
+      return { updated: 0, error: error.message }
+    }
+    prospects.push(...((data ?? []) as Array<{ id: string; email: string; last_email_sent_at: string | null }>))
+    if (!data || data.length < 1000) break
   }
 
   let updated = 0
-  for (const p of prospects as Array<{ id: string; email: string; last_email_sent_at: string | null }>) {
+  for (const p of prospects) {
     const target = maxByEmail.get(p.email.toLowerCase())
     if (!target) continue
-    if (p.last_email_sent_at === target) continue
+    // Forward-only. The send path already stamps this column, so the
+    // stored value can legitimately be NEWER than anything this pass
+    // can see (an event row not yet written, an Apollo sync still
+    // pending) — and a repair that moves a date backwards is not a
+    // repair.
+    if (p.last_email_sent_at && target <= p.last_email_sent_at) continue
     const { error: uErr } = await supabase
       .from("prospects")
       .update({ last_email_sent_at: target } as never)

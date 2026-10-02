@@ -444,6 +444,7 @@ export type Database = {
           specialties: string[]
           state_region: string | null
           status: Database["public"]["Enums"]["company_status"]
+          status_changed_at: string | null
           stripe_customer_id: string | null
           team_size_max: number | null
           team_size_min: number | null
@@ -503,6 +504,7 @@ export type Database = {
           specialties?: string[]
           state_region?: string | null
           status?: Database["public"]["Enums"]["company_status"]
+          status_changed_at?: string | null
           stripe_customer_id?: string | null
           team_size_max?: number | null
           team_size_min?: number | null
@@ -562,6 +564,7 @@ export type Database = {
           specialties?: string[]
           state_region?: string | null
           status?: Database["public"]["Enums"]["company_status"]
+          status_changed_at?: string | null
           stripe_customer_id?: string | null
           team_size_max?: number | null
           team_size_min?: number | null
@@ -3361,6 +3364,7 @@ export type Database = {
           signed_up_at: string | null
           source: string | null
           status: Database["public"]["Enums"]["prospect_status"]
+          status_changed_at: string | null
           tags: string[] | null
           unsubscribed_at: string | null
           updated_at: string | null
@@ -3407,6 +3411,7 @@ export type Database = {
           signed_up_at?: string | null
           source?: string | null
           status?: Database["public"]["Enums"]["prospect_status"]
+          status_changed_at?: string | null
           tags?: string[] | null
           unsubscribed_at?: string | null
           updated_at?: string | null
@@ -3453,6 +3458,7 @@ export type Database = {
           signed_up_at?: string | null
           source?: string | null
           status?: Database["public"]["Enums"]["prospect_status"]
+          status_changed_at?: string | null
           tags?: string[] | null
           unsubscribed_at?: string | null
           updated_at?: string | null

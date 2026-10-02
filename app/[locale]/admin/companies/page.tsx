@@ -1,5 +1,5 @@
 import { AdminCompaniesDataTable, type AdminCompanyRow } from "@/components/admin-companies-data-table"
-import { getSubscribedCompanyIds } from "@/lib/subscriptions/subscriber-stats"
+import { getSubscribedSince } from "@/lib/subscriptions/subscriber-stats"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import type { Tables } from "@/lib/supabase/types"
 import { logger } from "@/lib/logger"
@@ -26,7 +26,11 @@ async function loadAdminCompaniesData() {
   // row, rather than asked per company — and from the same helper the
   // funnels use, so a company cannot read as subscribed on one screen
   // and not on another.
-  const subscribedIds = await getSubscribedCompanyIds()
+  // The map carries that same set plus the date each subscription
+  // started — Last change needs it, because subscribing is a funnel
+  // move that no status column records, so the trigger behind
+  // status_changed_at cannot see it.
+  const subscribedSince = await getSubscribedSince()
 
   // Parallel queries
   const [companiesQuery, metricsQuery, servicesQuery, projectProfessionalsQuery, unclaimedInvitesQuery, companyMembersQuery, companyContactsQuery] =
@@ -40,7 +44,7 @@ async function loadAdminCompaniesData() {
       supabase
         .from("companies")
         .select(
-          "id, name, slug, status, city, country, is_verified, is_featured, domain, logo_url, website, email, services_offered, primary_service_id, owner_id, created_at, listed_at, auto_approve_projects, source, first_touch_source, audience, seo_indexed, seo_indexation_state, seo_impressions_28d, seo_clicks_28d, seo_ctr_28d, seo_position_28d"
+          "id, name, slug, status, city, country, is_verified, is_featured, domain, logo_url, website, email, services_offered, primary_service_id, owner_id, created_at, listed_at, status_changed_at, auto_approve_projects, source, first_touch_source, audience, seo_indexed, seo_indexation_state, seo_impressions_28d, seo_clicks_28d, seo_ctr_28d, seo_position_28d"
         )
         .or("source.in.(direct,manual,invited),status.in.(invited,verified,created,owned,listed,unlisted,deactivated)"),
       supabase
@@ -505,7 +509,7 @@ async function loadAdminCompaniesData() {
       logoUrl: company.logo_url ?? null,
       isVerified: Boolean(company.is_verified),
       isFeatured: Boolean(company.is_featured),
-      isSubscribed: subscribedIds.has(company.id),
+      isSubscribed: subscribedSince.has(company.id),
       contactEmail: company.email ?? null,
       website: company.website ?? null,
       servicesOffered: serviceIds,
@@ -516,6 +520,17 @@ async function loadAdminCompaniesData() {
         (p) => p.projectStatus === "published" && (p.inviteStatus === "listed" || p.inviteStatus === "live_on_page"),
       ),
       listedAt: (company as { listed_at?: string | null }).listed_at ?? null,
+      // The later of the status change and the subscription: buying is
+      // the furthest a company can move and the one move the trigger
+      // behind status_changed_at never fires on, because nothing about
+      // `status` changes when it happens.
+      lastChangeAt: [
+        (company as { status_changed_at?: string | null }).status_changed_at ?? null,
+        subscribedSince.get(company.id) ?? null,
+      ]
+        .filter((v): v is string => Boolean(v))
+        .sort()
+        .at(-1) ?? null,
       canPublishProjects: serviceIds.some((id) => publishableCategoryIds.has(id)),
       autoApproveProjects: Boolean((company as any).auto_approve_projects),
       source: company.source ?? null,
@@ -603,6 +618,7 @@ async function loadAdminCompaniesData() {
         country: null,
         hasPublishedProjects: false,
         listedAt: null,
+        lastChangeAt: null,
         canPublishProjects: false,
         autoApproveProjects: false,
         source: null,
@@ -624,7 +640,7 @@ async function loadAdminCompaniesData() {
 }
 
 export default async function AdminProfessionalsPage() {
-  // isSubscribed already rides in on every row (getSubscribedCompanyIds
+  // isSubscribed already rides in on every row (getSubscribedSince
   // above), and the funnel now counts Subscribed from those rows like
   // every other stage — so it narrows with the channel filter instead
   // of showing the platform-wide total. The separate getSubscriberStats

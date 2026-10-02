@@ -5,6 +5,7 @@ import {
   createServiceRoleSupabaseClient,
 } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
+import { getSubscribedSince } from "@/lib/subscriptions/subscriber-stats"
 
 /**
  * Phase 1 discovery layer for the shared Contact Card slide-over.
@@ -45,6 +46,11 @@ export type ContactByEmailCompanySummary = {
   domain: string | null
   website: string | null
   status: string | null
+  /** When this company became a subscriber — paying or founding. Not
+   *  derivable from `status`, which has no value for "bought", so a
+   *  card showing only the status says "Listed" about a company the
+   *  Sales table already calls Subscribed. */
+  subscribed_at: string | null
   primary_service_name: string | null
 }
 
@@ -281,10 +287,13 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
   const companyNames = new Map<string, string>()
   const companiesById: Record<string, ContactByEmailCompanySummary> = {}
   if (companyIds.length > 0) {
-    const { data: companies } = await svc
-      .from("companies")
-      .select("id, name, slug, logo_url, city, domain, website, status, primary_service:categories!companies_primary_service_id_fkey(name)")
-      .in("id", companyIds)
+    const [{ data: companies }, subscribedSince] = await Promise.all([
+      svc
+        .from("companies")
+        .select("id, name, slug, logo_url, city, domain, website, status, primary_service:categories!companies_primary_service_id_fkey(name)")
+        .in("id", companyIds),
+      getSubscribedSince(),
+    ])
     for (const c of (companies ?? []) as Array<{
       id: string
       name: string | null
@@ -308,6 +317,7 @@ export async function getContactByEmail(rawEmail: string): Promise<ContactByEmai
         domain: c.domain ?? null,
         website: c.website ?? null,
         status: c.status ?? null,
+        subscribed_at: subscribedSince.get(c.id) ?? null,
         primary_service_name: c.primary_service?.name ?? null,
       }
     }
