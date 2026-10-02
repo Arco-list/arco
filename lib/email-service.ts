@@ -1,7 +1,7 @@
 'use server'
 
 import { buildUnsubscribeUrl } from './unsubscribe-token'
-import { TEMPLATE_CHANNEL, utmSourceFor, type EmailChannel } from './email-channels'
+import { TEMPLATE_CHANNEL, usesOutreachDomain, utmSourceFor, type EmailChannel } from './email-channels'
 
 // Exhaustiveness lives here, because EmailTemplate lives here. If a new
 // template is added without a channel, this line stops the build rather
@@ -22,6 +22,25 @@ function getResend() {
 }
 
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Arco <automated@arcolist.com>'
+
+/**
+ * The outreach subdomain's two addresses — brand and personal.
+ *
+ * OPT-IN, and that is deliberate. Unset, every mail keeps leaving from
+ * the root exactly as before, so this code can ship days before the DNS
+ * does. Set them only once mail.arcolist.com verifies in Resend:
+ * arcolist.com publishes DMARC p=reject with no sp=, so the subdomain
+ * inherits reject from its first second of life. A From on a domain
+ * Resend cannot sign for is not foldered, it is refused.
+ *
+ * The personal one keeps the display name. In almost every client the
+ * reader sees "Niek van Leeuwen" and never the domain behind it, which
+ * is what lets the founder-voice series move house without changing
+ * how it reads.
+ */
+const FROM_EMAIL_OUTREACH = process.env.RESEND_FROM_EMAIL_OUTREACH || null
+const FROM_PERSONAL_OUTREACH = process.env.RESEND_FROM_PERSONAL_OUTREACH || null
+const FROM_PERSONAL = 'Niek van Leeuwen <niek@arcolist.com>' 
 
 /**
  * Languages supported by email templates. Mirrors i18n/config.ts `locales`.
@@ -2862,7 +2881,18 @@ export async function sendTransactionalEmail(
 
   try {
     const { data, error } = await getResend().emails.send({
-      from: isPersonalSeries ? 'Niek van Leeuwen <niek@arcolist.com>' : FROM_EMAIL,
+      // Two independent questions. WHO it reads as comes from
+      // isPersonalSeries above; WHICH DOMAIN carries it comes from the
+      // channel (see usesOutreachDomain). founding-* is personal and
+      // stays on the root because it goes to customers; an invite is
+      // impersonal and moves because it goes to strangers.
+      //
+      // Either address falls back to its root twin while the subdomain
+      // is unset, so this behaves exactly as before until the DNS is
+      // live.
+      from: isPersonalSeries
+        ? (usesOutreachDomain(template) ? FROM_PERSONAL_OUTREACH ?? FROM_PERSONAL : FROM_PERSONAL)
+        : (usesOutreachDomain(template) ? FROM_EMAIL_OUTREACH ?? FROM_EMAIL : FROM_EMAIL),
       to: email,
       subject,
       html,

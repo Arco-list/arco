@@ -18,6 +18,37 @@
  */
 export type EmailChannel = 'invite' | 'sales' | 'outbound' | 'email' | 'lifecycle'
 
+/**
+ * Channels that send from the outreach subdomain rather than the root.
+ *
+ * Sales and invite mail reaches people who never asked for it: cold
+ * pitches to architects, and credits claimed on someone else's project.
+ * Together that is three quarters of everything the domain sends. The
+ * other quarter is sign-in codes, password resets, domain verification
+ * and failed-payment notices — mail that MUST arrive, to people who are
+ * waiting for it.
+ *
+ * Sharing one reputation between those two means a complaint wave on
+ * the cold half lands on the half that cannot afford it. So the cold
+ * half moves out.
+ *
+ * This is the channel axis, not the voice axis. `founding-*` reads as a
+ * personal note from Niek and stays on the root, because it goes to
+ * customers; `professional-invite` is impersonal and moves, because it
+ * goes to strangers. Who it sounds like and who it is for are different
+ * questions.
+ */
+const OUTREACH_CHANNELS: ReadonlySet<EmailChannel> = new Set<EmailChannel>(['sales', 'invite'])
+
+/** Whether this template sends from the outreach subdomain. Unknown
+ *  templates stay on the root: an unlabelled mail is far more likely to
+ *  be a new lifecycle notice than a new cold series, and the root is
+ *  the safer place to be wrong. */
+export function usesOutreachDomain(template: string): boolean {
+  const channel = TEMPLATE_CHANNEL[template]
+  return channel !== undefined && OUTREACH_CHANNELS.has(channel)
+}
+
 /** The utm_source a channel writes into every Arco link it tags. */
 export function utmSourceFor(channel: EmailChannel | undefined): string {
   // An unlabelled template parks outside the funnel rather than
