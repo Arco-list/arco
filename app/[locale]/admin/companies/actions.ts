@@ -997,10 +997,22 @@ export async function changeCompanyOwnerAction(input: {
 
 // ─── Prospect outreach ──────────────────────────────────────────────────────
 
+/**
+ * Schedule the Showcase sequence for one company.
+ *
+ * Named "send" from when it sent: the intro went straight out through
+ * Resend on the click, and only the follow-up and final were queued. It
+ * now books all three into the drip queue, so the whole sequence lands
+ * in the 09:00–15:00 window instead of whenever an admin happened to be
+ * at their desk — 30 of the first 35 showcase intros arrived outside it,
+ * 18 of them at 21:00.
+ *
+ * `scheduledAt` is when the intro will go out, for telling the admin.
+ */
 export async function sendProspectEmailAction(input: {
   companyId: string
   emailTo: string
-}): Promise<{ success: boolean; error?: string; warning?: string }> {
+}): Promise<{ success: boolean; error?: string; warning?: string; scheduledAt?: string }> {
   const { supabase, user, error } = await assertAdmin()
   if (error) return { success: false, error: error.message }
 
@@ -1068,54 +1080,45 @@ export async function sendProspectEmailAction(input: {
     heroImageUrl = primary?.url ?? null
   }
 
-  // Send email via Resend
-  const { sendTransactionalEmail } = await import("@/lib/email-service")
-  const sendResult = await sendTransactionalEmail(
-    emailResult.data,
-    "prospect-intro",
-    {
-      company_name: company.name,
-      company_page_url: companyPageUrl,
-      claim_url: claimUrl,
-      hero_image_url: heroImageUrl ?? undefined,
-      logo_url: company.logo_url ?? undefined,
-      company_subtitle: locationParts.join(" · ") || undefined,
-    },
-    // Prospected company — no owner yet. Resolver will fall back to
-    // companies.country (NL/BE → nl) or email TLD.
-    { companyId: company.id },
-  )
-
-  if (!sendResult.success) {
-    return { success: false, error: sendResult.message ?? "Failed to send email" }
+  // The recipient already said no? Then nothing is scheduled, and the
+  // admin is told now rather than discovering a silently skipped row.
+  // Sending checks this too, on the way out — that check is the one
+  // that protects the recipient; this one stops the enrolment.
+  const { isOptedOutOfMarketing } = await import("@/lib/email/opt-out")
+  if (await isOptedOutOfMarketing(emailResult.data, null)) {
+    return { success: false, error: "Recipient is opted out of marketing email" }
   }
 
-  // Track in company_outreach
-  await serviceClient.from("company_outreach" as any).insert({
-    company_id: company.id,
-    email_to: emailResult.data,
-    template: "prospect_intro",
-    resend_message_id: sendResult.messageId ?? null,
-  })
-
-  // ── Schedule the followup + final drip rows ────────────────────────────
-  // PR 3 of the drip pipeline. The intro just went out via direct Resend
-  // call; the followup and final get queued in email_drip_queue and the
-  // Vercel Cron at /api/cron/process-drip-queue picks them up when their
-  // send_at is reached.
+  // ── Schedule the whole sequence ────────────────────────────────────────
+  // THE INTRO IS SCHEDULED, NOT SENT. It used to fire straight through
+  // Resend the moment this action ran, so it landed whenever the admin
+  // happened to click — 30 of 35 showcase intros arrived outside the
+  // 09:00–15:00 window, 18 of them at 21:00. The follow-up and final
+  // were queued and so always landed inside it: one sequence, two
+  // clocks. Now all three go through email_drip_queue and the Vercel
+  // Cron at /api/cron/process-drip-queue sends them when their send_at
+  // is reached.
   //
-  // Variables payload mirrors what we passed to sendTransactionalEmail
-  // above so the cron-side render produces visually identical card content.
-  // company_id is the column from PR 1 — used by PR 4's cancellation
-  // triggers to find pending rows when a company is claimed, status
-  // changes, etc.
+  // Everything that used to happen here on a successful send — the
+  // company_outreach row, the prospect counters, the status flip to
+  // 'contacted' — now happens in that cron, at the moment the mail
+  // actually leaves. A contact that reads as contacted before anything
+  // was sent is a lie the funnel then counts.
   //
-  // Dedup: PR 1 added a partial unique index on (company_id, template)
-  // WHERE pending. A second click on "Send prospect email" for the same
-  // company will hit a 23505 unique violation on these inserts; we catch
-  // it and continue silently so a duplicate intro click doesn't fail the
-  // whole action. The intro itself was already sent via Resend at this
-  // point — the duplicate followup just no-ops.
+  // Variables payload mirrors what the direct send passed so the
+  // cron-side render produces identical card content.
+  // company_id is used by the cancellation triggers to find pending
+  // rows when a company is claimed, status changes, etc.
+  //
+  // Dedup: a partial unique index on (lower(email), template) WHERE
+  // pending — one pending mail of each kind PER CONTACT. A second click
+  // for the same person hits 23505; we catch it, so a double click
+  // schedules nothing twice rather than failing.
+  //
+  // It used to be keyed on (company_id, template), which made it one
+  // sequence per COMPANY: the first contact claimed the slot and every
+  // colleague enrolled after them was silently dropped. See migration
+  // 273.
   const { nextBusinessSlot } = await import("@/lib/date-utils")
   const { claimSequenceSlots, isProAudienceCompany } = await import("@/lib/drip-queue")
   const dripVariables = {
@@ -1126,69 +1129,81 @@ export async function sendProspectEmailAction(input: {
     logo_url: company.logo_url ?? undefined,
     hero_image_url: heroImageUrl ?? undefined,
   }
-  // Both steps in one claim: separate calls read the same queue state
-  // (neither row is written yet) and on a full calendar both landed on
-  // the same slot — follow-up and final in the same minute.
-  const [followupSlot, finalSlot] = await claimSequenceSlots(serviceClient, [
-    nextBusinessSlot(3),
-    nextBusinessSlot(7),
-  ])
-  const followupSendAt = followupSlot.toISOString()
-  const finalSendAt = finalSlot.toISOString()
   // Skip pro-audience companies (photographers). Their entry to Arco is via
   // architect credit on a project, not outbound prospect outreach — running
   // them through the prospect drip would spam an info@ address with
   // architect-flavoured templates.
+  //
+  // THE INTRO IS NOT SKIPPED — it never was. This button is an explicit
+  // admin decision about one company, and the gate only ever governed
+  // the automated follow-ups behind it.
   const skipDrip = await isProAudienceCompany(serviceClient, company.id)
-  const dripInsertError = skipDrip
-    ? null
-    : (await serviceClient
-        .from("email_drip_queue")
-        .insert([
-          {
-            company_id: company.id,
-            email: emailResult.data,
-            template: "prospect-followup",
-            sequence: "prospect-outreach",
-            step: 1,
-            variables: dripVariables,
-            send_at: followupSendAt,
-          },
-          {
-            company_id: company.id,
-            email: emailResult.data,
-            template: "prospect-final",
-            sequence: "prospect-outreach",
-            step: 2,
-            variables: dripVariables,
-            send_at: finalSendAt,
-          },
-        ] as never)).error
-  // Surface any drip-enqueue error as a warning on the action result.
-  // The intro already went out via Resend, so we don't fail the whole
-  // action — but silently logging hides schema / constraint issues that
-  // would otherwise go weeks unnoticed (migration 134 fixed exactly one
-  // of those). The outer actions (startProspectSequence etc.) propagate
-  // this warning up to the client, which renders a yellow toast.
-  let dripWarning: string | undefined
+  // Claimed together: separate calls read the same queue state (no row
+  // is written yet) and on a full calendar landed on the same slot —
+  // which is how a follow-up and a final once shared a minute.
+  const slotDays = skipDrip ? [0] : [0, 3, 7]
+  const slots = await claimSequenceSlots(
+    serviceClient,
+    slotDays.map((d) => nextBusinessSlot(d)),
+  )
+  const introSendAt = slots[0].toISOString()
+  const rows = [
+    {
+      company_id: company.id,
+      email: emailResult.data,
+      template: "prospect-intro",
+      sequence: "prospect-outreach",
+      step: 0,
+      variables: dripVariables,
+      send_at: introSendAt,
+    },
+    ...(skipDrip ? [] : [
+      {
+        company_id: company.id,
+        email: emailResult.data,
+        template: "prospect-followup",
+        sequence: "prospect-outreach",
+        step: 1,
+        variables: dripVariables,
+        send_at: slots[1].toISOString(),
+      },
+      {
+        company_id: company.id,
+        email: emailResult.data,
+        template: "prospect-final",
+        sequence: "prospect-outreach",
+        step: 2,
+        variables: dripVariables,
+        send_at: slots[2].toISOString(),
+      },
+    ]),
+  ]
+  const dripInsertError = (await serviceClient
+    .from("email_drip_queue")
+    .insert(rows as never)).error
+  // The enqueue IS the action now, so a real failure fails it. It used
+  // to be a warning because the intro had already gone out and only the
+  // follow-ups were at stake; with nothing sent yet, reporting success
+  // would tell the admin a mail is coming when none is scheduled.
   if (dripInsertError) {
     const code = (dripInsertError as { code?: string }).code
     if (code === "23505") {
-      // 23505 = unique_violation: partial index hit, meaning pending rows
-      // already exist for this (company_id, template). Benign — the
-      // sequence is already queued. No warning needed.
-      logger.info("admin-companies", "Drip rows already enqueued for company", {
+      // 23505 = unique_violation: this CONTACT already has pending rows.
+      // Benign — their sequence is already queued. Report it, rather
+      // than claiming to have scheduled something a second time.
+      logger.info("admin-companies", "Drip rows already enqueued for contact", {
         companyId: company.id,
+        emailTo: emailResult.data,
       })
-    } else {
-      logger.error(
-        "admin-companies",
-        "Failed to enqueue prospect drip rows (intro was sent successfully)",
-        { companyId: company.id, supabaseError: dripInsertError },
-      )
-      const message = (dripInsertError as { message?: string }).message ?? "unknown error"
-      dripWarning = `Intro sent, but follow-up drip couldn't be queued: ${message}`
+      return { success: true, warning: "This contact already has a sequence scheduled." }
     }
+    logger.error(
+      "admin-companies",
+      "Failed to enqueue prospect sequence",
+      { companyId: company.id, supabaseError: dripInsertError },
+    )
+    const message = (dripInsertError as { message?: string }).message ?? "unknown error"
+    return { success: false, error: `Could not schedule the sequence: ${message}` }
   }
 
   // Update company status to prospected (only if no owner)
@@ -1198,36 +1213,22 @@ export async function sendProspectEmailAction(input: {
     .eq("id", company.id)
     .is("owner_id", null)
 
-  // Bump the matching prospects row from `prospect` → `contacted` so the
-  // admin/sales table reflects that the intro was sent. Match by company_id
-  // first, fall back to email so manual prospects (no company link yet) also
-  // transition. Only advance if currently in `prospect` so we don't regress
-  // a row that's already further along the funnel (visitor/signup/etc).
-  const { data: prospectRow } = await serviceClient
-    .from("prospects")
-    .select("id, status, emails_sent")
-    .or(`company_id.eq.${company.id},email.eq.${emailResult.data}`)
-    .maybeSingle()
+  // The prospect's counters, last_email_sent_at and the flip to
+  // 'contacted' used to be written here. They now happen in
+  // process-drip-queue when the intro actually leaves — contacted means
+  // we reached them, and until the queue fires we have not. Stamping it
+  // at scheduling time put rows in the Contacted bucket hours before
+  // any mail existed, and the funnel counted them there.
 
-  if (prospectRow) {
-    const updates: Record<string, unknown> = {
-      emails_sent: (prospectRow.emails_sent ?? 0) + 1,
-      last_email_sent_at: new Date().toISOString(),
-    }
-    if (prospectRow.status === "prospect") {
-      updates.status = "contacted"
-    }
-    await serviceClient.from("prospects").update(updates).eq("id", prospectRow.id)
-  }
-
-  logger.info("admin-companies", "Prospect email sent", {
+  logger.info("admin-companies", "Prospect sequence scheduled", {
     companyId: company.id,
     emailTo: emailResult.data,
+    sendAt: introSendAt,
     adminId: user!.id,
   })
 
   revalidatePath("/", "layout")
-  return { success: true, warning: dripWarning }
+  return { success: true, scheduledAt: introSendAt }
 }
 
 /**

@@ -374,38 +374,37 @@ export async function dispatchProfessionalInvite(
     accept_url: acceptUrl,
   }
 
-  // 1. Intro — direct Resend send.
-  const introResult = await sendTransactionalEmail(
-    input.recipientEmail,
-    "new-professional-invite",
-    sequenceVars,
-    { companyId: recipient.id },
-  )
-  // Opted out: nothing went out, so nothing downstream may claim it did
-  // (no Contacted status, no followups, no dispatch stamp).
-  if (introResult.skipped) {
+  // 1. Intro — SCHEDULED, not sent.
+  //
+  // This is step 1 of a three-step series to a stranger: the recipient's
+  // company is unclaimed, which is the whole reason this branch exists.
+  // It used to fire straight through Resend, so 29 of 59 landed outside
+  // the 09:00–15:00 window while its own follow-up and final — 23 sends,
+  // none outside it — always landed inside. One sequence, two clocks.
+  //
+  // Its one-shot sibling 'professional-invite' (claimed company, the
+  // recipient has an account) still goes out immediately, because that
+  // is a notification about someone's own account rather than the
+  // opening line of a pitch.
+  //
+  // Opted out: nothing is scheduled, and nothing downstream may claim
+  // otherwise — no Contacted status, no followups, no dispatch stamp.
+  const { isOptedOutOfMarketing } = await import("@/lib/email/opt-out")
+  if (await isOptedOutOfMarketing(input.recipientEmail, null)) {
     return { success: false, sequence: "skipped", reason: "recipient opted out" }
   }
-  if (introResult.success) await markInviteDispatched(supabase, input)
-
-  // Mirror the prospect-intro flow: log every direct intro send to
-  // company_outreach so the Outreach Sequence popup in /admin/sales has a
-  // row to render for the intro step. Non-fatal if it fails — the email
-  // already went out.
-  if (introResult.success) {
-    await supabase.from("company_outreach" as any).insert({
-      company_id: recipient.id,
-      email_to: input.recipientEmail,
-      template: "new_professional_invite",
-      resend_message_id: introResult.messageId ?? null,
-    })
-  }
+  await markInviteDispatched(supabase, input)
 
   // 2. Upsert the prospects row so the company shows in /admin/sales and
   //    so migration 134's status-advance trigger can cancel pending drips
   //    when this person signs up. We do not abort if the upsert fails —
-  //    the intro already went out and the followup/final still get
-  //    enqueued; an admin can clean up an orphan drip row by hand.
+  //    the sequence is queued either way and an admin can clean up an
+  //    orphan drip row by hand.
+  //
+  //    The row starts at 'prospect', not 'contacted'. Nothing has been
+  //    sent yet; process-drip-queue flips the status, the counters and
+  //    last_email_sent_at when the intro actually leaves. The sequence
+  //    IS active, though — it is scheduled and running.
   const { data: existingProspect } = await supabase
     .from("prospects")
     .select("id, sequence_status, emails_sent, emails_delivered")
@@ -419,11 +418,11 @@ export async function dispatchProfessionalInvite(
       company_name: recipient.name,
       city: recipient.city,
       source: "invites",
-      status: introResult.success ? "contacted" : "prospect",
-      sequence_status: introResult.success ? "active" : "not_started",
-      emails_sent: introResult.success ? 1 : 0,
-      emails_delivered: introResult.success ? 1 : 0,
-      last_email_sent_at: introResult.success ? new Date().toISOString() : null,
+      status: "prospect",
+      sequence_status: "active",
+      emails_sent: 0,
+      emails_delivered: 0,
+      last_email_sent_at: null,
       company_id: recipient.id,
       // Project context — needed by /admin/sales "Start sequence" so we can
       // re-fire the dispatcher with the same project. Without it, restart
@@ -432,70 +431,74 @@ export async function dispatchProfessionalInvite(
       project_id: input.projectId,
       ref_code: recipient.slug ?? recipient.id,
     })
-  } else if (introResult.success) {
+  } else {
+    // Only the sequence state: the counters and the status move when the
+    // intro is actually sent, in process-drip-queue.
     await supabase.from("prospects").update({
       sequence_status: "active",
-      status: "contacted",
-      emails_sent: (existingProspect.emails_sent ?? 0) + 1,
-      emails_delivered: (existingProspect.emails_delivered ?? 0) + 1,
-      last_email_sent_at: new Date().toISOString(),
     }).eq("id", existingProspect.id)
   }
 
-  // 3. Enqueue the followup + final. Same partial-unique-index dedup as
-  //    the prospect outreach: a duplicate enqueue for (company_id,
-  //    template) WHERE pending will hit 23505 and silently no-op.
+  // 3. Enqueue the three steps. Same partial-unique-index dedup as the
+  //    prospect outreach: a duplicate enqueue for (lower(email),
+  //    template) WHERE pending hits 23505 and silently no-ops. Per
+  //    CONTACT since migration 273 — two people at one firm can each
+  //    hold their own sequence.
+  //
+  // Direct nextBusinessSlot days — deliberately NOT claimNextSendSlot.
+  // The slot ledger serialises COLD outreach bursts; invite steps are
+  // warm, event-driven and low-volume, and routing them through the
+  // ledger meant a saturated calendar deferred the 3-day reminder by
+  // 15 days AND collapsed followup + final onto the same minute (both
+  // claims ran before either row was inserted — MGK Bouw, Sep 8 2026).
+  // The cadence IS the product here, and the intro joins on the same
+  // terms: nextBusinessSlot(0) is the next valid moment in today's
+  // window, which inside working hours is right now.
+  //
   // Skip for pro-audience companies (photographers): they reach Arco via
-  // architect credit, not via the new-professional invite sequence — and
-  // shouldn't get followups even if dispatch is somehow triggered for them.
+  // architect credit, not via the new-professional invite sequence. The
+  // INTRO is scheduled for them regardless — dispatch was triggered by a
+  // real credit on a real project, and that mail is the credit's own
+  // notification; only the automated chase behind it is skipped.
   const { isProAudienceCompany } = await import("@/lib/drip-queue")
-  if (!(await isProAudienceCompany(supabase, recipient.id))) {
-    const { nextBusinessSlot } = await import("@/lib/date-utils")
-    // Direct +3/+7 business days — deliberately NOT claimNextSendSlot.
-    // The slot ledger serialises COLD outreach bursts; invite steps are
-    // warm, event-driven and low-volume, and routing them through the
-    // ledger meant a saturated calendar deferred the 3-day reminder by
-    // 15 days AND collapsed followup + final onto the same minute
-    // (both claims ran before either row was inserted — MGK Bouw,
-    // Sep 8 2026). The cadence IS the product here.
-    const followupSendAt = nextBusinessSlot(3).toISOString()
-    const finalSendAt = nextBusinessSlot(7).toISOString()
-    await supabase
-      .from("email_drip_queue")
-      .insert([
-        {
-          company_id: recipient.id,
-          email: input.recipientEmail,
-          template: "new-professional-followup",
-          sequence: "new-professional-invite",
-          step: 1,
-          variables: sequenceVars as Record<string, unknown>,
-          send_at: followupSendAt,
-        },
-        {
-          company_id: recipient.id,
-          email: input.recipientEmail,
-          template: "new-professional-final",
-          sequence: "new-professional-invite",
-          step: 2,
-          variables: sequenceVars as Record<string, unknown>,
-          send_at: finalSendAt,
-        },
-      ] as never)
+  const { nextBusinessSlot } = await import("@/lib/date-utils")
+  const skipChase = await isProAudienceCompany(supabase, recipient.id)
+  const queueRow = (template: string, step: number, days: number) => ({
+    company_id: recipient.id,
+    email: input.recipientEmail,
+    template,
+    sequence: "new-professional-invite",
+    step,
+    variables: sequenceVars as Record<string, unknown>,
+    send_at: nextBusinessSlot(days).toISOString(),
+  })
+  const { error: enqueueError } = await supabase
+    .from("email_drip_queue")
+    .insert([
+      queueRow("new-professional-invite", 0, 0),
+      ...(skipChase ? [] : [
+        queueRow("new-professional-followup", 1, 3),
+        queueRow("new-professional-final", 2, 7),
+      ]),
+    ] as never)
+  // 23505 means pending rows already exist for this recipient — their
+  // sequence is already scheduled, which is not a failure.
+  if (enqueueError && (enqueueError as { code?: string }).code !== "23505") {
+    console.error("[dispatch-professional-invite] enqueue failed", enqueueError)
+    return { success: false, sequence: "skipped", reason: "could not schedule the invite sequence" }
   }
 
-  // Account stage: the intro send moves the funnel to Contacted; let the
-  // resolver recompute the Apollo account stage for the company.
-  if (introResult.success) {
-    try {
-      const { syncCompanyToApollo } = await import("@/lib/company-apollo-sync")
-      await syncCompanyToApollo(recipient.id)
-    } catch (err) {
-      console.error("Failed to sync Apollo account stage after invite dispatch", err)
-    }
+  // Account stage: let the resolver recompute the Apollo account stage.
+  // Scheduling is the commitment — the stage follows the decision to
+  // reach out, and the drip cron owns the Contacted flip itself.
+  try {
+    const { syncCompanyToApollo } = await import("@/lib/company-apollo-sync")
+    await syncCompanyToApollo(recipient.id)
+  } catch (err) {
+    console.error("Failed to sync Apollo account stage after invite dispatch", err)
   }
 
-  return { success: introResult.success, sequence: "drip" }
+  return { success: true, sequence: "drip" }
 }
 
 /**

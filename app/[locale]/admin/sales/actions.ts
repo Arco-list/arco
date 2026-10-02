@@ -1271,25 +1271,44 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   // so the cards reflect the currently-visible cohort. Status is applied
   // below this, so the cards stay stable when the admin clicks a funnel
   // stage to narrow the table.
+  // ONE ROW, ONE STAGE — including Subscribed.
+  //
+  // Every other stage here is exclusive: a row shows its furthest
+  // position and is counted there only, so a Listed company is not
+  // also tallied under Visitor it passed through months ago. Subscribed
+  // was the exception — incremented ON TOP of the ladder stage — so the
+  // cards no longer summed to total, and a company that had bought
+  // appeared under the Listed filter wearing a Subscribed pill, which
+  // reads as a bug because every other pill names the bucket its row
+  // is in.
+  //
+  // This is the rule /companies already applies (its `effective` status,
+  // used for its filter, sort, pill and funnel alike). /sales was the
+  // odd one out.
+  //
+  // The cost is deliberate: "Listed" now means listed and not yet
+  // subscribed. That is what a funnel stage means everywhere else on
+  // this page.
+  const effectiveStatus = (r: SalesCompanyRow): ProspectStatus | "subscribed" =>
+    r.isSubscribed ? "subscribed" : r.status
+
   const funnel: SalesFunnel = { ...EMPTY_SALES_FUNNEL }
   for (const r of rows) {
     funnel.total++
-    if (r.status in funnel) (funnel as any)[r.status]++
-    // Not a status, so it needs counting of its own: a company can be
-    // subscribed at any stage of the ladder.
-    if (r.isSubscribed) funnel.subscribed++
+    const stage = effectiveStatus(r)
+    if (stage in funnel) (funnel as any)[stage]++
   }
 
-  if (statuses && statuses.length > 0) {
-    const set = new Set<ProspectStatus>(statuses)
-    rows = rows.filter((r) => set.has(r.status))
-  }
-
-  // Applied after the funnel is counted, like the status filter above:
-  // the funnel describes the whole set, and a filtered funnel would
-  // only ever show the stage you clicked.
-  if (subscribedOnly) {
-    rows = rows.filter((r) => r.isSubscribed)
+  // Status and Subscribed are ONE filter over that one partition, not
+  // two ANDed ones. They used to be separate steps, which made the
+  // dropdown mean two different things at once: ticking two statuses
+  // unions them, but ticking a status AND Subscribed intersected them
+  // — "Contacted + Subscribed" returned only companies that were both,
+  // where every other pair in that list returns either.
+  if ((statuses && statuses.length > 0) || subscribedOnly) {
+    const set = new Set<ProspectStatus | "subscribed">(statuses ?? [])
+    if (subscribedOnly) set.add("subscribed")
+    rows = rows.filter((r) => set.has(effectiveStatus(r)))
   }
 
   // Call-list mode replaces the remaining filters + sort entirely: the
@@ -2248,13 +2267,83 @@ export async function syncPlatformProspects() {
   }
 }
 
+/** Which of the three pitches a contact belongs in. */
+type SequenceTrack = "invites" | "apollo" | "arco"
+
 /**
- * Start prospect sequence — branches on source:
- *   - 'invites' → fires the new-professional invite sequence via the
- *     dispatcher (intro now + followup/final via drip queue), with the
- *     project + inviter context the prospect was originally tagged on.
- *   - 'arco'    → fires the original prospect outreach (prospect-intro
- *     now + prospect-followup/-final via drip queue).
+ * WHICH PITCH DOES THIS CONTACT GET?
+ *
+ * `prospects.source` records where the contact came FROM, which is not
+ * the same question. A cold Apollo contact at a company we have since
+ * built a showcase page for must get the showcase story — their page
+ * already exists, so the cold "Arco exists, come and look" intro is
+ * simply the wrong mail.
+ *
+ * This rule lived inside startProspectSequence and nowhere else, so
+ * resume and restart both carried on with the cold track after an
+ * upgrade: stats architecten was promoted to showcase and resuming
+ * Ralph's sequence still re-queued the Outreach follow-ups. One
+ * question, three answers, one of them informed.
+ */
+async function resolveEffectiveTrack(
+  supabase: ReturnType<typeof createServiceRoleSupabaseClient>,
+  prospect: { source: string | null; company_id: string | null },
+): Promise<SequenceTrack> {
+  if (prospect.source === "invites") return "invites"
+  if (prospect.source === "apollo" && prospect.company_id) {
+    const { data: companyRow } = await supabase
+      .from("companies")
+      .select("status")
+      .eq("id", prospect.company_id)
+      .maybeSingle()
+    if (companyRow?.status === "prospected") return "arco"
+    return "apollo"
+  }
+  return prospect.source === "apollo" ? "apollo" : "arco"
+}
+
+/**
+ * Which track the queued mail actually belongs to, read from the queue
+ * rather than from `source`.
+ *
+ * Needed because the answer above can CHANGE under a running sequence.
+ * Comparing it to `source` would be wrong in both directions: after a
+ * restart on the showcase track the rows are prospect-*, while source
+ * stays 'apollo' forever — so source would report a switch on every
+ * later resume and restart the sequence again and again.
+ *
+ * Null when nothing has ever been queued for this contact.
+ */
+async function currentQueuedTrack(
+  supabase: ReturnType<typeof createServiceRoleSupabaseClient>,
+  prospect: { email: string; company_id: string | null },
+): Promise<SequenceTrack | null> {
+  let query = supabase
+    .from("email_drip_queue")
+    .select("template")
+    .order("created_at", { ascending: false })
+    .limit(20)
+  query = prospect.company_id
+    ? query.eq("company_id", prospect.company_id)
+    : query.ilike("email", prospect.email)
+  const { data: rows } = await query
+  for (const row of (rows ?? []) as Array<{ template: string }>) {
+    if (row.template.startsWith("outreach-")) return "apollo"
+    if (row.template.startsWith("prospect-")) return "arco"
+    if (row.template.startsWith("new-professional-")) return "invites"
+  }
+  return null
+}
+
+/**
+ * Start prospect sequence — branches on the EFFECTIVE track (see
+ * resolveEffectiveTrack), not on the stored source:
+ *   - 'invites' → the new-professional invite sequence via the
+ *     dispatcher, with the project + inviter context the prospect was
+ *     originally tagged on.
+ *   - 'apollo'  → the cold Outreach sequence.
+ *   - 'arco'    → the Showcase sequence (a page we built).
+ * All three schedule every step into the drip queue.
  */
 export async function startProspectSequence(prospectId: string) {
   const supabase = createServiceRoleSupabaseClient()
@@ -2277,8 +2366,10 @@ export async function startProspectSequence(prospectId: string) {
   // function's rollback never ran (bas@ceipps.nl, Aug 13).
   try {
 
+  const track = await resolveEffectiveTrack(supabase, prospect)
+
   // ── Invite-source prospects: fire the new-professional sequence ──
-  if (prospect.source === "invites") {
+  if (track === "invites") {
     if (!prospect.company_id) {
       await supabase.from("prospects").update({ sequence_status: "not_started" }).eq("id", prospectId)
       return { success: false, error: "No linked company" }
@@ -2298,35 +2389,20 @@ export async function startProspectSequence(prospectId: string) {
       await supabase.from("prospects").update({ sequence_status: "not_started" }).eq("id", prospectId)
       return { success: false, error: result.reason ?? "Failed to send invite email" }
     }
-    // Dispatcher already upserts the prospect row's status / counters /
-    // last_email_sent_at when it sends the intro, so no extra update here.
-    await supabase.from("prospect_events").insert({
-      prospect_id: prospectId,
-      event_type: "email_sent",
-      metadata: { template: "new_professional_invite", email: prospect.email },
-    })
+    // The dispatcher sets sequence_status; the counters, the status and
+    // the email_sent event follow the real send, in process-drip-queue.
+    // This used to log an email_sent event here, which dated the send to
+    // the moment of enrolment.
     return { success: true }
-  }
-
-  // ── Track override: showcased companies always get the showcase
-  // pitch. An apollo-source contact whose company was promoted to
-  // showcase before the sequence started must NOT receive the cold
-  // outreach intro — their page already exists; the showcase sequence
-  // ("your work is featured — claim it") is the correct story.
-  let effectiveSource = prospect.source
-  if (prospect.source === "apollo" && prospect.company_id) {
-    const { data: companyRow } = await supabase
-      .from("companies")
-      .select("status")
-      .eq("id", prospect.company_id)
-      .maybeSingle()
-    if (companyRow?.status === "prospected") effectiveSource = "arco"
   }
 
   // ── Apollo-source prospects: fire the Outreach (cold) drip ──
   // Unlike arco/invites, company_id is OPTIONAL here — Apollo cold
   // contacts often aren't linked to a marketplace companies row yet.
-  if (effectiveSource === "apollo") {
+  //
+  // The showcase override that used to sit here moved into
+  // resolveEffectiveTrack, so resume and restart apply it too.
+  if (track === "apollo") {
     const { dispatchOutreachIntro } = await import("@/lib/outreach/dispatch-outreach-intro")
     const firstName =
       (prospect.contact_name as string | null)?.trim().split(/\s+/)[0]
@@ -2342,18 +2418,12 @@ export async function startProspectSequence(prospectId: string) {
       await supabase.from("prospects").update({ sequence_status: "not_started" }).eq("id", prospectId)
       return { success: false, error: result.error }
     }
-    await supabase.from("prospects").update({
-      sequence_status: "active",
-      emails_sent: (prospect.emails_sent ?? 0) + 1,
-      emails_delivered: (prospect.emails_delivered ?? 0) + 1,
-      last_email_sent_at: new Date().toISOString(),
-      status: "contacted",
-    }).eq("id", prospectId)
-    await supabase.from("prospect_events").insert({
-      prospect_id: prospectId,
-      event_type: "email_sent",
-      metadata: { template: "outreach_intro", email: prospect.email },
-    })
+    // Only the sequence state. The counters, last_email_sent_at, the
+    // flip to 'contacted' and the email_sent event all belong to the
+    // moment the intro LEAVES, which is now process-drip-queue's job —
+    // stamping them here put a contact in the Contacted bucket, with a
+    // contact date, before any mail existed.
+    await supabase.from("prospects").update({ sequence_status: "active" }).eq("id", prospectId)
     if (prospect.company_id) {
       try {
         const { syncCompanyToApollo } = await import("@/lib/company-apollo-sync")
@@ -2381,20 +2451,10 @@ export async function startProspectSequence(prospectId: string) {
     return { success: false, error: result.error }
   }
 
-  // Update: sequence active (follow-up emails pending), increment sent count
-  await supabase.from("prospects").update({
-    sequence_status: "active",
-    emails_sent: (prospect.emails_sent ?? 0) + 1,
-    emails_delivered: (prospect.emails_delivered ?? 0) + 1,
-    last_email_sent_at: new Date().toISOString(),
-    status: "contacted",
-  }).eq("id", prospectId)
-
-  await supabase.from("prospect_events").insert({
-    prospect_id: prospectId,
-    event_type: "email_sent",
-    metadata: { template: "prospect_intro", email: prospect.email },
-  })
+  // Sequence active — the three steps are scheduled. Counters, contact
+  // date, the flip to 'contacted' and the email_sent event are stamped
+  // by process-drip-queue when the intro actually goes out.
+  await supabase.from("prospects").update({ sequence_status: "active" }).eq("id", prospectId)
 
   try {
     const { syncCompanyToApollo } = await import("@/lib/company-apollo-sync")
@@ -2500,6 +2560,16 @@ export async function pauseProspectSequence(prospectId: string) {
   } catch (err) {
     console.error("[pauseProspectSequence] Failed to cancel pending drip rows", err)
   }
+
+  // Resume logged an event and pause did not, so the timeline showed
+  // "Sequence resumed" with neither the pause before it nor the one
+  // after — a run of events of which half were invisible. Ralph van de
+  // Donk read as resumed while his rows sat cancelled six seconds later.
+  await supabase.from("prospect_events").insert({
+    prospect_id: prospectId,
+    event_type: "sequence_paused",
+    metadata: {},
+  })
 
   return { success: true }
 }
@@ -3210,19 +3280,28 @@ export async function getProspectSequence(prospectId: string): Promise<{
 
   const introStepTemplate: ProspectSequenceStep["template"] =
     isInviteSeries ? "new-professional-invite" : "prospect-intro"
+  const introLabel = isInviteSeries ? "Invite" : "Intro"
+  // The intro is a queue row now, like every other step, so it can read
+  // as Scheduled before it goes out. Rows from before that change were
+  // sent straight through Resend and have no queue row at all — those
+  // still come from company_outreach, which is why this falls back
+  // rather than simply switching.
+  const queuedIntroRow = queueByTemplate.get(introStepTemplate)
   const steps: ProspectSequenceStep[] = [
-    {
-      template: introStepTemplate,
-      label: isInviteSeries ? "Invite" : "Intro",
-      status: introRow?.sent_at ? "sent" : "missing",
-      timestamp: introRow?.sent_at ?? null,
-      cancelledReason: null,
-      attemptCount: 0,
-      lastError: null,
-      lastEvent: introRow?.last_event_cached ?? null,
-      openedAt: introRow?.opened_at ?? null,
-      clickedAt: introRow?.clicked_at ?? null,
-    },
+    queuedIntroRow
+      ? queueRowToProspectStep(introStepTemplate, introLabel, queuedIntroRow)
+      : {
+          template: introStepTemplate,
+          label: introLabel,
+          status: introRow?.sent_at ? "sent" : "missing",
+          timestamp: introRow?.sent_at ?? null,
+          cancelledReason: null,
+          attemptCount: 0,
+          lastError: null,
+          lastEvent: introRow?.last_event_cached ?? null,
+          openedAt: introRow?.opened_at ?? null,
+          clickedAt: introRow?.clicked_at ?? null,
+        },
     queueRowToProspectStep(followupTemplate, "Follow-up", followupRow),
     queueRowToProspectStep(finalTemplate, "Final", finalRow),
   ]
@@ -3267,6 +3346,45 @@ export async function resumeProspectSequence(prospectId: string) {
     return { success: false, error: "Sequence is not paused" }
   }
 
+  // ── Has the track changed under the paused sequence? ────────────────
+  //
+  // A company promoted to Showcase while its contact sat paused belongs
+  // in a different sequence than the one that was running. Resume used
+  // to re-queue the old track regardless, so an Outreach follow-up went
+  // out to a firm whose page we had since built.
+  //
+  // IT CANNOT SIMPLY CONTINUE ON THE NEW TRACK, and the reason is in the
+  // copy. The showcase follow-up opens with "a few days ago I created a
+  // company and project page for you — just checking whether you saw
+  // it". A contact who only ever got the cold Outreach intro never got
+  // that mail: step 2 of this series refers back to a step 1 that, for
+  // them, does not exist.
+  //
+  // So a changed track restarts, intro and all. That is not a duplicate
+  // pitch: the showcase intro announces a page that did not exist when
+  // this contact was first mailed, and it is the mail the rest of the
+  // sequence leans on.
+  const effectiveTrack = await resolveEffectiveTrack(supabase, prospect)
+  const queuedTrack = await currentQueuedTrack(supabase, prospect)
+  if (queuedTrack && queuedTrack !== effectiveTrack) {
+    const TRACK_LABEL: Record<SequenceTrack, string> = {
+      apollo: "Outreach", arco: "Showcase", invites: "Invite",
+    }
+    // Restart reads the effective track itself, so it lands on the new
+    // one. It expects 'paused' or any other state and sets its own.
+    const result = await restartProspectSequence(prospectId)
+    if (!result.success) return result
+    await supabase.from("prospect_events").insert({
+      prospect_id: prospectId,
+      event_type: "sequence_track_changed",
+      metadata: { from: TRACK_LABEL[queuedTrack], to: TRACK_LABEL[effectiveTrack] },
+    })
+    return {
+      success: true,
+      warning: `Company moved to ${TRACK_LABEL[effectiveTrack]} — restarted on that sequence instead of resuming ${TRACK_LABEL[queuedTrack]}.`,
+    }
+  }
+
   try {
     const { nextBusinessSlot } = await import("@/lib/date-utils")
     const { claimSequenceSlots } = await import("@/lib/drip-queue")
@@ -3279,7 +3397,10 @@ export async function resumeProspectSequence(prospectId: string) {
     // calendar can delay the pair but never collapse it onto one day.
     let sequenceName: string
     let stepConfig: Array<{ template: string; step: number; sendAt: string }>
-    if (prospect.source === "invites") {
+    // effectiveTrack, not source — the same answer the switch check
+    // above used, so resume cannot queue one track while having decided
+    // on another.
+    if (effectiveTrack === "invites") {
       sequenceName = "new-professional-invite"
       {
         const [followup, final] = await claimSequenceSlots(supabase, [nextBusinessSlot(3), nextBusinessSlot(7)])
@@ -3288,7 +3409,7 @@ export async function resumeProspectSequence(prospectId: string) {
           { template: "new-professional-final", step: 2, sendAt: final.toISOString() },
         ]
       }
-    } else if (prospect.source === "apollo") {
+    } else if (effectiveTrack === "apollo") {
       sequenceName = "outreach"
       {
         const [followup, final] = await claimSequenceSlots(supabase, [nextBusinessSlot(3), nextBusinessSlot(10)])
@@ -3457,8 +3578,12 @@ export async function restartProspectSequence(prospectId: string) {
   // Same exception-safety as startProspectSequence — see note there.
   try {
 
+  // The EFFECTIVE track, so a restart after a showcase upgrade re-fires
+  // the showcase story rather than the cold one the contact started on.
+  const track = await resolveEffectiveTrack(supabase, prospect)
+
   // ── Invite-source restart: dispatcher with project context ──
-  if (prospect.source === "invites") {
+  if (track === "invites") {
     if (!prospect.company_id) {
       await supabase.from("prospects").update({ sequence_status: previousStatus }).eq("id", prospectId)
       return { success: false, error: "No linked company" }
@@ -3487,7 +3612,7 @@ export async function restartProspectSequence(prospectId: string) {
   }
 
   // ── Apollo-source restart: re-fire the Outreach intro + drip ──
-  if (prospect.source === "apollo") {
+  if (track === "apollo") {
     const { dispatchOutreachIntro } = await import("@/lib/outreach/dispatch-outreach-intro")
     const firstName =
       (prospect.contact_name as string | null)?.trim().split(/\s+/)[0]
@@ -3503,16 +3628,13 @@ export async function restartProspectSequence(prospectId: string) {
       await supabase.from("prospects").update({ sequence_status: previousStatus }).eq("id", prospectId)
       return { success: false, error: result.error }
     }
-    await supabase.from("prospects").update({
-      sequence_status: "active",
-      emails_sent: (prospect.emails_sent ?? 0) + 1,
-      emails_delivered: (prospect.emails_delivered ?? 0) + 1,
-      last_email_sent_at: new Date().toISOString(),
-    }).eq("id", prospectId)
+    // Sequence state only — the counters and the contact date follow the
+    // real send, in process-drip-queue, now that the intro is queued.
+    await supabase.from("prospects").update({ sequence_status: "active" }).eq("id", prospectId)
     await supabase.from("prospect_events").insert({
       prospect_id: prospectId,
-      event_type: "email_resent",
-      metadata: { template: "outreach_intro", email: prospect.email },
+      event_type: "sequence_restarted",
+      metadata: { track: "outreach", email: prospect.email },
     })
     return { success: true, warning: result.warning }
   }
@@ -3533,17 +3655,12 @@ export async function restartProspectSequence(prospectId: string) {
     return { success: false, error: result.error }
   }
 
-  await supabase.from("prospects").update({
-    sequence_status: "active",
-    emails_sent: (prospect.emails_sent ?? 0) + 1,
-    emails_delivered: (prospect.emails_delivered ?? 0) + 1,
-    last_email_sent_at: new Date().toISOString(),
-  }).eq("id", prospectId)
+  await supabase.from("prospects").update({ sequence_status: "active" }).eq("id", prospectId)
 
   await supabase.from("prospect_events").insert({
     prospect_id: prospectId,
-    event_type: "email_resent",
-    metadata: { template: "prospect_intro", email: prospect.email },
+    event_type: "sequence_restarted",
+    metadata: { track: "showcase", email: prospect.email },
   })
 
   return { success: true, warning: result.warning }

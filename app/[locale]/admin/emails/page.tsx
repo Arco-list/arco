@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { AdminTabs, useAdminTab } from "@/components/admin/admin-tabs"
 import { clickedRateColor, deliveredRateColor, openedRateColor, unsubscribedRateColor, RATE_BENCHMARKS } from "@/lib/email-rate-colors"
 import { OutboundTemplateEditor } from "./outbound-template-editor"
+import { EmailPreviewModal } from "@/components/admin/email-preview-modal"
 import { TEMPLATE_CHANNEL, utmSourceFor, type EmailChannel } from "@/lib/email-channels"
 
 /**
@@ -478,31 +479,11 @@ function AdminEmailsPage() {
   const [templates, setTemplates] = useState(INITIAL_TEMPLATES)
   const [templateStats, setTemplateStats] = useState<Record<string, TemplateStats>>({})
   const [previewTemplate, setPreviewTemplate] = useState<string | null>(null)
-  // Preview locale — toggles the iframe URL so we can eyeball both Dutch
-  // and English rendering without restarting the dev server. Reset to EN
-  // whenever the preview popup opens on a different template.
-  const [previewLocale, setPreviewLocale] = useState<"en" | "nl">("en")
-  // Subject for the currently previewed template+locale. Fetched from
-  // /admin/emails/preview?meta=1 so it always matches what the renderer
-  // would actually send (e.g. "Welkom bij Arco" for the NL welcome).
-  const [previewSubject, setPreviewSubject] = useState<string | null>(null)
-
-  // Re-fetch whenever the previewed template or the locale toggle changes.
-  useEffect(() => {
-    if (!previewTemplate) {
-      setPreviewSubject(null)
-      return
-    }
-    let cancelled = false
-    setPreviewSubject(null)
-    fetch(`/admin/emails/preview?template=${previewTemplate}&lang=${previewLocale}&meta=1`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => {
-        if (!cancelled && json?.subject) setPreviewSubject(json.subject)
-      })
-      .catch(() => { /* non-fatal — header just shows template name */ })
-    return () => { cancelled = true }
-  }, [previewTemplate, previewLocale])
+  // Which language the preview OPENS in. The toggle itself, and the
+  // subject fetch that used to live here, moved into EmailPreviewModal
+  // when the Contact Card started using the same popup — two copies of
+  // one window is how the card ended up without a subject line at all.
+  const previewLocale: "en" | "nl" = "en"
   const [audienceFilter, setAudienceFilter] = useState<UserAudience | "all-filter">("all-filter")
   const [timeFilter, setTimeFilter] = useState<string>("30d")
   const [isPending, startTransition] = useTransition()
@@ -552,15 +533,7 @@ function AdminEmailsPage() {
     })
   }, [timeFilter])
 
-  const handleSendTest = (templateId: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!user?.email) { toast.error("No email address found"); return }
-    startTransition(async () => {
-      const result = await sendTestEmail(templateId, user.email!)
-      if (result.success) toast.success(`Test email sent to ${user.email}`)
-      else toast.error(result.error ?? "Failed to send test email")
-    })
-  }
+  // handleSendTest moved into EmailPreviewModal with the button it fed.
 
   const toggleActive = (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -1329,74 +1302,16 @@ function AdminEmailsPage() {
             </div>
           )}
 
-          {/* Preview popup */}
+          {/* Preview popup — shared with the Contact Card timeline, so
+              the same template opens the same window wherever it is
+              clicked. The subject fetch, locale toggle and test send
+              moved inside it along with the markup. */}
           {previewTemplate && (
-            <div className="popup-overlay" onClick={() => setPreviewTemplate(null)}>
-              <div
-                className="popup-card"
-                onClick={(e) => e.stopPropagation()}
-                style={{ maxWidth: 640, padding: 0, maxHeight: "85vh", display: "flex", flexDirection: "column" }}
-              >
-                <div style={{
-                  padding: "16px 24px", background: "var(--arco-off-white)",
-                  borderRadius: "12px 12px 0 0", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0,
-                }}>
-                  <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                    <span className="text-sm font-medium text-[#1c1c1a]">
-                      {templates.find(t => t.id === previewTemplate)?.name}
-                    </span>
-                    {previewSubject && (
-                      <span
-                        className="text-xs text-[#6b6b68] truncate"
-                        style={{ marginTop: 2 }}
-                        title={previewSubject}
-                      >
-                        {previewSubject}
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {/* Locale toggle — affects only the iframe render.
-                        Test send still uses the resolver. */}
-                    <div style={{ display: "inline-flex", border: "1px solid var(--arco-rule)", borderRadius: 3, overflow: "hidden", fontSize: 11 }}>
-                      {(["en", "nl"] as const).map((loc) => (
-                        <button
-                          key={loc}
-                          type="button"
-                          onClick={() => setPreviewLocale(loc)}
-                          style={{
-                            padding: "4px 10px",
-                            background: previewLocale === loc ? "var(--arco-black)" : "transparent",
-                            color: previewLocale === loc ? "#fff" : "var(--arco-mid-grey)",
-                            border: "none",
-                            cursor: "pointer",
-                            fontWeight: previewLocale === loc ? 500 : 400,
-                            textTransform: "uppercase",
-                            letterSpacing: "0.04em",
-                          }}
-                        >
-                          {loc}
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      onClick={(e) => handleSendTest(previewTemplate, e)}
-                      disabled={isPending}
-                      className="arco-nav-text h-7 px-3 rounded-[3px] text-xs"
-                      style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer", opacity: isPending ? 0.5 : 1 }}
-                    >
-                      {isPending ? "Sending..." : "Send test"}
-                    </button>
-                    <button className="popup-close" onClick={() => setPreviewTemplate(null)} aria-label="Close">✕</button>
-                  </div>
-                </div>
-                <iframe
-                  src={`/admin/emails/preview?template=${previewTemplate}&lang=${previewLocale}`}
-                  style={{ width: "100%", flex: 1, minHeight: 500, border: "none", background: "#f5f5f4" }}
-                  title="Email preview"
-                />
-              </div>
-            </div>
+            <EmailPreviewModal
+              template={previewTemplate}
+              initialLang={previewLocale}
+              onClose={() => setPreviewTemplate(null)}
+            />
           )}
 
       </div>

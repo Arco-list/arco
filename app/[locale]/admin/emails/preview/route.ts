@@ -79,8 +79,21 @@ const AUTH_TEMPLATE_MAP: Record<string, EmailTemplate> = {
 }
 
 export async function GET(request: NextRequest) {
-  const template = request.nextUrl.searchParams.get('template')
-  if (!template) return new NextResponse('Template not found', { status: 404 })
+  const requested = request.nextUrl.searchParams.get('template')
+  if (!requested) return new NextResponse('Template not found', { status: 404 })
+
+  // The drip queue schedules four steps under an abstract id and picks
+  // the variant at send. The Contact Card shows a step as soon as it is
+  // QUEUED, so it asks for that abstract id — and got a 404, because no
+  // renderer has one. Resolve it the way the sender would: with the
+  // recipient's company when the caller passes one, otherwise the
+  // default variant. Concrete templates pass through untouched.
+  const { resolveTemplateVariant } = await import('@/lib/emails/template-variants')
+  const template = await resolveTemplateVariant(
+    requested,
+    request.nextUrl.searchParams.get('companyId'),
+    request.nextUrl.searchParams.get('email'),
+  )
 
   const origin = request.nextUrl.origin
 
@@ -103,7 +116,7 @@ export async function GET(request: NextRequest) {
     const authResult = await renderEmailTemplate(AUTH_TEMPLATE_MAP[template], { ...TEST_VARS }, origin, locale)
     if (authResult) {
       if (wantsMeta) {
-        return NextResponse.json({ subject: authResult.subject })
+        return NextResponse.json({ subject: authResult.subject, template })
       }
       return new NextResponse(authResult.html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
@@ -157,8 +170,11 @@ export async function GET(request: NextRequest) {
   const result = await renderEmailTemplate(template as EmailTemplate, vars, origin, locale)
   if (!result) return new NextResponse('Template not found', { status: 404 })
 
+  // `template` is the RESOLVED id, which may differ from what was asked
+  // for. The popup reads it back so its header can name the variant the
+  // recipient would actually get instead of the queue's placeholder.
   if (wantsMeta) {
-    return NextResponse.json({ subject: result.subject })
+    return NextResponse.json({ subject: result.subject, template })
   }
 
   // The preview renders inside the popup's iframe — without a base

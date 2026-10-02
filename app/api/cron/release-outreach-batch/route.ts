@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
+import { isWithinSendWindow } from "@/lib/date-utils"
 
 /**
  * Daily auto-release — pushes prospects from Prospect → Contacted by
@@ -106,6 +107,22 @@ export async function GET(request: NextRequest) {
   const supabase = createServiceRoleSupabaseClient()
   const now = new Date()
 
+  // ── Only enrol while the window is open ─────────────────────────────
+  // The cron is `0 7-15 * * 1-5` in UTC, which it has to be: Amsterdam
+  // is UTC+1 or UTC+2 depending on the season, so a cron narrow enough
+  // for summer would miss an hour of winter. It therefore runs to 17:00
+  // local in summer — two hours past the window.
+  //
+  // That mattered little when the intro was sent on the spot (it simply
+  // went out late). Now that it is scheduled, a late run would book
+  // prospects onto TOMORROW while spending TODAY's cap — and the budget
+  // below, which measures today, would not see them and would release
+  // another batch tomorrow on top. Capping by day only works if a day's
+  // releases land on that day.
+  if (!isWithinSendWindow(now)) {
+    return NextResponse.json({ ok: true, released: 0, reason: "outside send window" })
+  }
+
   // ── Adaptive cap: warm-up schedule gated on trailing-7d health ──────
   const weeksSinceRampStart = Math.max(0, Math.floor((now.getTime() - RAMP_START_UTC) / (7 * 24 * 3600 * 1000)))
   const scheduledCap = Math.min(MAX_DAILY_CAP, Math.round(BASE_DAILY_CAP * Math.pow(RAMP_FACTOR, weeksSinceRampStart)))
@@ -137,23 +154,44 @@ export async function GET(request: NextRequest) {
   }
 
   // ── Budget: how much of today's cap is already spent ────────────────
-  // Counts ACTUAL intro sends today (email_events), not just
-  // cron-triggered ones — manual releases from /admin/sales spend the
-  // same 20/day budget, so a hand-started morning batch can't be
-  // doubled by the afternoon cron runs.
+  // Counts intros BOOKED for today, not merely sent — the two differ
+  // now that an intro is a queue row with a send_at a few minutes out.
+  // Counting only email_events would miss everything this run and the
+  // previous one just scheduled, and release the same budget twice
+  // within the hour.
   //
-  // BOTH INTROS COUNT. The cap protects one sending domain, so it is
-  // one budget: a showcase intro and an outreach intro cost the same
-  // reputation. Counting only outreach-intro here would let showcase
-  // sends ride along for free and quietly double the day's volume.
+  // Not just cron-triggered ones: manual releases from /admin/sales and
+  // the showcase button spend the same budget, so a hand-started
+  // morning batch can't be doubled by the afternoon runs.
+  //
+  // BOTH INTROS COUNT, and so does the invite intro. The cap protects
+  // one sending domain, so it is one budget: every cold opener costs
+  // the same reputation. Counting only outreach-intro would let the
+  // others ride along for free and quietly multiply the day's volume.
+  //
+  // email_events is still consulted and the LARGER number wins: intros
+  // sent before they were queued leave no queue row, so on any day
+  // straddling that change the send log is the higher, safer count.
   const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
-  const { count: startedToday } = await supabase
-    .from("email_events")
-    .select("id", { count: "exact", head: true })
-    .eq("event_type", "sent")
-    .in("template", ["outreach-intro", "prospect-intro"])
-    .gte("occurred_at", dayStart)
-  const remaining = dailyCap - (startedToday ?? 0)
+  const dayEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)).toISOString()
+  const INTRO_TEMPLATES = ["outreach-intro", "prospect-intro", "new-professional-invite"]
+  const [{ count: bookedToday }, { count: sentToday }] = await Promise.all([
+    supabase
+      .from("email_drip_queue")
+      .select("id", { count: "exact", head: true })
+      .in("template", INTRO_TEMPLATES)
+      .is("cancelled_at", null)
+      .gte("send_at", dayStart)
+      .lt("send_at", dayEnd),
+    supabase
+      .from("email_events")
+      .select("id", { count: "exact", head: true })
+      .eq("event_type", "sent")
+      .in("template", INTRO_TEMPLATES)
+      .gte("occurred_at", dayStart),
+  ])
+  const startedToday = Math.max(bookedToday ?? 0, sentToday ?? 0)
+  const remaining = dailyCap - startedToday
   if (remaining <= 0) {
     return NextResponse.json({ ok: true, released: 0, reason: "daily cap reached", startedToday })
   }
@@ -253,5 +291,5 @@ export async function GET(request: NextRequest) {
     released: released.length, failures: failures.length, perRun, remaining, runsLeft,
     dailyCap, scheduledCap, rampHeld,
   })
-  return NextResponse.json({ ok: true, released: released.length, emails: released, failures, budget: { dailyCap, scheduledCap, rampHeld, startedToday: startedToday ?? 0, perRun } })
+  return NextResponse.json({ ok: true, released: released.length, emails: released, failures, budget: { dailyCap, scheduledCap, rampHeld, startedToday, perRun } })
 }

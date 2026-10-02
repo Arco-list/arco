@@ -2,6 +2,7 @@
 
 import { buildUnsubscribeUrl } from './unsubscribe-token'
 import { TEMPLATE_CHANNEL, countsAsContact, usesOutreachDomain, utmSourceFor, type EmailChannel } from './email-channels'
+import { isOptedOutOfMarketing } from './email/opt-out'
 
 // Exhaustiveness lives here, because EmailTemplate lives here. If a new
 // template is added without a channel, this line stops the build rather
@@ -354,56 +355,11 @@ interface EmailResponse {
 
 /**
  * True when a recipient should not receive marketing/sales sends.
- * Three gates, OR'd:
  *
- *   1. profiles.notification_preferences.marketing === false (in-app
- *      Marketing toggle off; default ON when the column is null/missing)
- *   2. any prospects row for this email has unsubscribed_at set
- *      (List-Unsubscribe one-click for cold leads)
- *   3. any prospects row for this email has bounced_at OR complained_at
- *      set (deliverability suppression — set by the Resend webhook on
- *      email.bounced / email.complained; retrying the same dead address
- *      hurts sender reputation)
- *
- * The unsubscribe endpoint mirrors writes between (1) and (2) so either
- * path's "off" sticks at send time. (3) is set automatically by the
- * webhook for every send to that recipient. Errors are logged and
- * treated as "not opted out" — failing closed (skipping the send) on a
- * transient Supabase blip would silently kill legitimate marketing flow.
+ * Moved to lib/email/opt-out so the drip dispatchers can ask the same
+ * question when they SCHEDULE a send, not only here when it goes out.
+ * Both moments matter and the rule must not fork.
  */
-async function isOptedOutOfMarketing(email: string, userId: string | null): Promise<boolean> {
-  try {
-    const { createServiceRoleSupabaseClient } = await import('@/lib/supabase/server')
-    const supabase = createServiceRoleSupabaseClient()
-
-    if (userId) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('notification_preferences')
-        .eq('id', userId)
-        .maybeSingle()
-      const prefs = (profile as { notification_preferences?: { marketing?: boolean } | null } | null)
-        ?.notification_preferences ?? null
-      if (prefs && prefs.marketing === false) return true
-    }
-
-    // Single roundtrip — any prospect row for this email with any of
-    // the suppression timestamps set means we don't send. not_interested
-    // is the soft one (polite decline) but blocks automated sends the same.
-    const { data: prospect } = await (supabase as any)
-      .from('prospects')
-      .select('id, unsubscribed_at, bounced_at, complained_at, not_interested_at')
-      .ilike('email', email)
-      .or('unsubscribed_at.not.is.null,bounced_at.not.is.null,complained_at.not.is.null,not_interested_at.not.is.null')
-      .limit(1)
-    if (Array.isArray(prospect) && prospect.length > 0) return true
-
-    return false
-  } catch (err) {
-    console.error('isOptedOutOfMarketing failed; defaulting to not-opted-out', err)
-    return false
-  }
-}
 
 // ─── Email HTML templates ────────────────────────────────────────────────────
 

@@ -29,6 +29,7 @@ import {
   templateDisplayName,
 } from "@/app/admin/sales/prospects-client"
 import { SUBSCRIBED_CONFIG } from "@/lib/sales/prospect-status"
+import { EmailPreviewModal } from "@/components/admin/email-preview-modal"
 import {
   getTransactionalEmails,
   type TransactionalEmailRow,
@@ -166,8 +167,14 @@ export function ProspectTimelineFused({ prospectId, email, emails, contactLabel,
         />
       </div>
       {preview && (
-        <TemplatePreviewModal
+        // The same popup /emails opens. Company and address travel with
+        // it so a still-QUEUED step resolves to the variant THIS
+        // recipient would get, rather than 404-ing on the abstract id
+        // the drip queue scheduled it under.
+        <EmailPreviewModal
           template={preview.template}
+          companyId={bundle.prospect?.company_id ?? null}
+          email={email}
           initialLang={preview.lang}
           onClose={() => setPreview(null)}
         />
@@ -887,64 +894,6 @@ export function TransactionalOnlyTimeline({ emails }: { emails: string[] }) {
   )
 }
 
-// ── Template preview modal ─────────────────────────────────────────────
-
-function TemplatePreviewModal({
-  template,
-  initialLang,
-  onClose,
-}: {
-  template: string
-  initialLang: "en" | "nl"
-  onClose: () => void
-}) {
-  const [lang, setLang] = useState<"en" | "nl">(initialLang)
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [onClose])
-
-  return (
-    <div className="popup-overlay" onClick={onClose} style={{ zIndex: 800 }}>
-      <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720, width: "min(720px, 90vw)" }}>
-        <div className="popup-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <h3 className="arco-section-title" style={{ margin: 0 }}>{templateDisplayName(template)}</h3>
-            <div style={{ display: "inline-flex", border: "1px solid #eeeeed", borderRadius: 999, padding: 2 }}>
-              {(["en", "nl"] as const).map((loc) => (
-                <button
-                  key={loc}
-                  type="button"
-                  onClick={() => setLang(loc)}
-                  style={{
-                    background: lang === loc ? "var(--arco-black)" : "transparent",
-                    color: lang === loc ? "#fff" : "var(--arco-mid-grey)",
-                    padding: "3px 12px",
-                    borderRadius: 999,
-                    fontSize: 11,
-                    fontWeight: lang === loc ? 500 : 400,
-                    border: "none",
-                    cursor: "pointer",
-                  }}
-                >
-                  {loc.toUpperCase()}
-                </button>
-              ))}
-            </div>
-          </div>
-          <button type="button" className="popup-close" onClick={onClose} aria-label="Close">✕</button>
-        </div>
-        <iframe
-          src={`/admin/emails/preview?template=${template}&lang=${lang}`}
-          style={{ width: "100%", height: "70vh", border: "none", background: "#fff" }}
-          title={`${template} preview`}
-        />
-      </div>
-    </div>
-  )
-}
 
 // ── Small shared helpers ───────────────────────────────────────────────
 
@@ -995,7 +944,10 @@ function SequenceActionLink({
   const restart: SeqAction = { label: "Restart", verb: "restarted", Icon: RotateCcw, run: () => restartProspectSequence(prospectId) }
   const actions: SeqAction[] = (() => {
     switch (status) {
-      case "not_started": return [{ label: "Start", verb: "started", Icon: Play, run: () => startProspectSequence(prospectId) }]
+      // "scheduled", not "started": the intro is a drip row now, so the
+      // first mail is booked into the 09:00–15:00 window rather than
+      // sent on the click.
+      case "not_started": return [{ label: "Start", verb: "scheduled — first mail in the 09:00–15:00 window", Icon: Play, run: () => startProspectSequence(prospectId) }]
       case "paused":      return [{ label: "Continue", verb: "resumed", Icon: Play, run: () => resumeProspectSequence(prospectId) }]
       // Restart alongside Pause: after a bounce the rep corrects the
       // email (clearing the bounce stamp) and re-fires from step one.

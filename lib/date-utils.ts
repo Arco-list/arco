@@ -37,6 +37,28 @@ export const BUSINESS_END_HOUR = 15 // exclusive — last valid send minute is 1
 export const SLOT_INTERVAL_MIN = 2
 
 /**
+ * Is this instant inside the send window — a weekday, between
+ * BUSINESS_START_HOUR and BUSINESS_END_HOUR Amsterdam time?
+ *
+ * For callers that must not merely SCHEDULE inside the window but act
+ * inside it. The outreach releaser is the one that matters: its Vercel
+ * cron is expressed in UTC (`0 7-15`), which drifts an hour against
+ * Amsterdam twice a year and runs to 17:00 local in summer. Left to the
+ * cron alone it would enrol prospects after the window closed, booking
+ * them onto tomorrow — and then its daily cap, which measures today,
+ * could not see them and would release another batch.
+ *
+ * So the cron stays deliberately wide (it has to cover both offsets)
+ * and this decides. One definition of the window, in the file that
+ * owns it.
+ */
+export function isWithinSendWindow(now: Date = new Date()): boolean {
+  const local = toAmsterdamParts(now)
+  if (isWeekend(local)) return false
+  return local.hour >= BUSINESS_START_HOUR && local.hour < BUSINESS_END_HOUR
+}
+
+/**
  * Returns a UTC `Date` representing the next valid "business slot" `days`
  * business days from now, clamped to a 09:00–17:00 Europe/Amsterdam window.
  *

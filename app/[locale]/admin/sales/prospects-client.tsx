@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState, useTransition, useCallback } fro
 import { ArrowUpRight } from "lucide-react"
 import { toast } from "sonner"
 import { PROSPECT_STATUS_CONFIG, SUBSCRIBED_CONFIG } from "@/lib/sales/prospect-status"
+import { templateDisplayName } from "@/lib/emails/template-names"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { EmailComposeModal } from "@/components/contact-card/email-compose-modal"
 import { AdminTabs, useAdminTab } from "@/components/admin/admin-tabs"
@@ -212,58 +213,10 @@ export function formatDateShort(dateStr: string | null) {
   } catch { return dateStr }
 }
 
-// Map template ids → friendly display names (same labels as the
-// Marketing table on /admin/emails). Falls back to humanised slug.
-const TEMPLATE_NAMES: Record<string, string> = {
-  // Showcase (formerly "prospect-") — we built a page + project, recipient claims.
-  "prospect-intro": "Showcase Intro",
-  "prospect-followup": "Showcase Follow-up",
-  "prospect-final": "Showcase Final",
-  // Manual sends from the contact-card compose popup.
-  "manual-compose": "Personal email",
-  // Invite — peer-to-peer from another professional on a real project.
-  "new-professional-invite": "Invite Intro",
-  "new-professional-followup": "Invite Follow-up",
-  "new-professional-final": "Invite Final",
-  // Outreach (cold) — formerly run via Apollo, now Arco-controlled.
-  "outreach-intro": "Outreach Intro",
-  "outreach-followup": "Outreach Follow-up",
-  "outreach-final": "Outreach Final",
-  // Visitor-nudge — one drip step; the queue row is abstract, the sent
-  // variant ids carry the channel.
-  "visitor-nudge": "Visitor Nudge",
-  "visitor-nudge-invite": "Invite Visitor Nudge",
-  "visitor-nudge-showcase": "Showcase Visitor Nudge",
-  // Internal id stays '-platform' (historic email_events rows carry
-  // it); the audience is outreach prospects — the "platform" was only
-  // ever the tokenless landing this variant links to.
-  "visitor-nudge-platform": "Outreach Visitor Nudge",
-  "verified-reminder": "Verified Reminder",
-  "owned-welcome": "Owned Reminder",
-  "owned-publisher": "Publisher Reminder",
-  "owned-contributor": "Contributor Reminder",
-  "owned-invited": "Invited Reminder",
-  "company-live": "Company Live",
-  "company-live-publisher": "Company Live — Publisher",
-  "company-live-contributor": "Company Live — Contributor",
-  "listed-professionals": "Listed Professionals",
-  "listed-professionals-publisher": "Credit Your Professionals",
-  "listed-professionals-contributor": "More Projects On Your Page",
-  "listed-backlink": "Listed Backlink",
-  // Auth-hook templates — the timeline receives the raw render ids;
-  // shown under the same names as the /emails Transactional tab.
-  "auth-magic-link": "Sign-in Code",
-  "auth-confirm-signup": "Signup Confirmation",
-  "auth-recovery": "Password Reset",
-  "auth-email-change": "Email Change",
-  "auth-invite": "Team Invite",
-}
-export function templateDisplayName(template: string): string {
-  if (TEMPLATE_NAMES[template]) return TEMPLATE_NAMES[template]
-  return template
-    .replace(/-/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-}
+/** Template display names moved to lib so the /emails table and the
+ *  shared preview popup read the same labels. Re-exported because this
+ *  file's importers (the Contact Card timeline) already pull it here. */
+export { templateDisplayName } from "@/lib/emails/template-names"
 
 /** Derive the campaign channel label ("Showcase" / "Outreach" /
  *  "Invite") from an email template id. Used to append a channel pill
@@ -323,6 +276,10 @@ const EVENT_LABELS: Record<string, string> = {
   sequence_enroled: "Sequence enrolled",
   sequence_paused: "Sequence paused",
   sequence_resumed: "Sequence resumed",
+  sequence_restarted: "Sequence restarted",
+  // Written when resuming finds the company has moved to a different
+  // pitch — the detail (from → to) is rendered from metadata below.
+  sequence_track_changed: "Sequence track changed",
   sequence_finished: "Sequence finished",
   removed_from_funnel: "Removed from funnel",
   unsubscribed: "Unsubscribed",
@@ -370,11 +327,8 @@ function formatEventLabel(type: string, metadata?: Record<string, unknown> | nul
   if (type === "email_sent" || type === "email_resent") {
     const rawTemplate = typeof metadata?.template === "string" ? metadata.template : null
     if (rawTemplate) {
-      const friendly =
-        TEMPLATE_NAMES[rawTemplate]
-        ?? TEMPLATE_NAMES[rawTemplate.replace(/_/g, "-")]
-        ?? templateDisplayName(rawTemplate.replace(/_/g, "-"))
-      return `${friendly} ${type === "email_resent" ? "resent" : "sent"}`
+      // templateDisplayName normalises the legacy underscore ids itself.
+      return `${templateDisplayName(rawTemplate)} ${type === "email_resent" ? "resent" : "sent"}`
     }
   }
   // Surface the differentiating bit of metadata inline so the row tells
@@ -382,6 +336,17 @@ function formatEventLabel(type: string, metadata?: Record<string, unknown> | nul
   if (type === "removed_from_funnel") {
     const prev = typeof metadata?.previous_status === "string" ? metadata.previous_status : null
     return prev ? `Removed from funnel · was ${prev}` : "Removed from funnel"
+  }
+  // Which pitch replaced which: the whole point of the event is that the
+  // contact is no longer in the sequence the timeline above it shows.
+  if (type === "sequence_track_changed") {
+    const from = typeof metadata?.from === "string" ? metadata.from : null
+    const to = typeof metadata?.to === "string" ? metadata.to : null
+    return from && to ? `Sequence track · ${from} → ${to}` : "Sequence track changed"
+  }
+  if (type === "sequence_restarted") {
+    const track = typeof metadata?.track === "string" ? metadata.track : null
+    return track ? `Sequence restarted · ${track}` : "Sequence restarted"
   }
   if (EVENT_LABELS[type]) return EVENT_LABELS[type]
   if (type.startsWith("status_changed_to_")) {
@@ -1450,12 +1415,14 @@ export function ProspectsClient({
                       ) : (
                         <div style={{ height: 24 }} />
                       )}
-                      {/* Subscribed filters on its own flag rather than
-                          on a status, because it is not one. The card
-                          was disabled when the count could only be
-                          zero; it counts real companies now, and a
-                          number you cannot click is a number you cannot
-                          check. */}
+                      {/* Subscribed toggles its own flag rather than a
+                          status, because it is not one — but the server
+                          folds that flag and the statuses into ONE
+                          filter over one partition, so this card now
+                          narrows exactly like its neighbours. It used
+                          to add to whatever status was already picked,
+                          which is why a subscriber showed up under
+                          Listed as well. */}
                       <button
                         onClick={() => {
                           if (stage.status === "subscribed") setSubscribedOnly((v) => !v)
@@ -1539,8 +1506,22 @@ export function ProspectsClient({
                     if (r.success) success++
                     else failure++
                   }
-                  if (success > 0) toast.success(`Sequence started — ${success} ${success === 1 ? "contact" : "contacts"}`)
-                  if (failure > 0 && success === 0) toast.error("Failed to start sequence")
+                  // Says "scheduled", not "sent": since the intro joined
+                  // the drip queue, starting a sequence books the first
+                  // mail into the 09:00–15:00 window rather than firing
+                  // it on the spot.
+                  //
+                  // EVERY contact selected is now its own sequence —
+                  // colleagues at one firm used to share a single slot
+                  // in the queue, so all but the first were silently
+                  // dropped while still reading as started.
+                  if (success > 0) toast.success(`Sequence scheduled — ${success} ${success === 1 ? "contact" : "contacts"}. First mail in the 09:00–15:00 window.`)
+                  // Reported even when some succeeded: a partial failure
+                  // used to pass as a clean success, which is how a
+                  // contact ends up looking enrolled and never mailed.
+                  if (failure > 0) {
+                    toast.error(`${failure} ${failure === 1 ? "contact" : "contacts"} could not be scheduled`)
+                  }
                   setSelectedRowIds(new Set())
                   setIsBulkProcessing(false)
                   reload({ offset, append: false })

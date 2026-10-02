@@ -234,8 +234,17 @@ async function sendOne(
     "payment-method-expiring",
   ])
   const COMPANY_SEQUENCE_TEMPLATES = new Set([
+    // Every sequence now starts HERE rather than at its dispatcher.
+    // The three intros used to fire straight through Resend the moment
+    // something enrolled a prospect, so they landed whenever that
+    // happened to be: 416 of 1,313 outreach intros, 30 of 35 showcase
+    // intros and 29 of 59 invite intros arrived outside the 09:00–15:00
+    // window, while every follow-up and final sat inside it. One
+    // sequence, two clocks.
+    "prospect-intro",
     "prospect-followup",
     "prospect-final",
+    "new-professional-invite",
     "new-professional-followup",
     "new-professional-final",
     "outreach-intro",
@@ -254,10 +263,11 @@ async function sendOne(
     "listed-backlink",
   ])
   // Subset that triggers a status='prospect' → 'contacted' flip.
-  // Currently only the Outreach intro fires through this cron (the
-  // other intros are sent live by their start actions), but we keep
-  // the set extensible so e.g. a future enqueued prospect-intro
-  // path naturally advances status too.
+  // All three intros now fire through this cron, so this is where a
+  // contact becomes 'contacted' — the moment the mail actually leaves,
+  // not the moment an admin or the releaser decided it should. The
+  // start actions used to stamp that optimistically, which is why a
+  // prospect could read as contacted hours before anything was sent.
   const INTRO_TEMPLATES = new Set([
     "outreach-intro",
     "prospect-intro",
