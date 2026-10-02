@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState, useTransition, useCallback } from "react"
 import { ArrowUpRight } from "lucide-react"
 import { toast } from "sonner"
-import { PROSPECT_STATUS_CONFIG, SUBSCRIBED_CONFIG } from "@/lib/sales/prospect-status"
+import { PROSPECT_STATUS_CONFIG, SUBSCRIBED_CONFIG, channelForSource } from "@/lib/sales/prospect-status"
 import { templateDisplayName } from "@/lib/emails/template-names"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { EmailComposeModal } from "@/components/contact-card/email-compose-modal"
@@ -187,6 +187,11 @@ const SOURCE_LABELS: Record<string, string> = {
   arco: "Showcase",
   invites: "Invite",
   apollo: "Outreach",
+  // Kept for the Contact Card's Source field, which reports PROVENANCE
+  // and should say Manual. It never reaches a channel pill: those run
+  // through channelForSource first, because the channel vocabulary is
+  // Outreach, Showcase, Invite, Outbound and Email — and Manual is none
+  // of the five.
   manual: "Manual",
   outbound: "Outbound",
   email: "Email",
@@ -2476,7 +2481,11 @@ function ContactInline({ contact, afterName, companyShowcased = false }: { conta
   // started, both pills show — the history plus the current state.
   const outreachStarted =
     contact.emailsSent > 0 || contact.sequenceStatus !== "not_started" || !!contact.lastOutboundAt
-  const showcaseUpgrade = companyShowcased && contact.source !== "arco"
+  // 'manual' is a provenance, not a channel — translated to the one the
+  // company actually puts this contact in, so the pill row stays in the
+  // vocabulary the filter offers.
+  const channel = channelForSource(contact.source, companyShowcased)
+  const showcaseUpgrade = companyShowcased && channel !== "arco"
   const replaceSourceWithShowcase = showcaseUpgrade && !outreachStarted
   return (
     <>
@@ -2492,7 +2501,7 @@ function ContactInline({ contact, afterName, companyShowcased = false }: { conta
         <span className={`status-pill-dot ${sequenceCfg.dot}`} />
         {sequenceCfg.label}
       </span>
-      <span className="status-pill">{replaceSourceWithShowcase ? "Showcase" : sourceLabel(contact.source)}</span>
+      <span className="status-pill">{replaceSourceWithShowcase ? "Showcase" : sourceLabel(channel)}</span>
       {showcaseUpgrade && !replaceSourceWithShowcase && (
         <span className="status-pill">Showcase</span>
       )}

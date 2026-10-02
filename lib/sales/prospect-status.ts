@@ -71,6 +71,30 @@ export const SUBSCRIBED_CONFIG = {
   dotHex: "#0f766e",
 }
 
+/**
+ * Which CHANNEL a contact's source puts them in.
+ *
+ * `prospects.source` records where a contact came from; the channel is
+ * how we talk to them. For most sources those coincide — apollo is
+ * Outreach, arco is Showcase, invites is Invite — but 'manual' has no
+ * channel of its own. Somebody typed the address in; that says nothing
+ * about which mail they will get, and the pill row rendered it as a
+ * fourth channel beside Outreach, Showcase and Outbound, where the
+ * vocabulary is only ever Outreach, Showcase, Invite, Outbound, Email.
+ *
+ * So a hand-added contact takes the channel the COMPANY puts them in —
+ * the same answer resolveEffectiveTrack gives at send time: a showcased
+ * firm has a page, so it's the showcase pitch; anything else gets the
+ * cold one.
+ *
+ * Returns a source CODE, not a label, so callers keep running it
+ * through sourceLabel and the filter keeps matching on the same values.
+ */
+export function channelForSource(source: string, companyShowcased: boolean): string {
+  if (source === "manual") return companyShowcased ? "arco" : "apollo"
+  return source
+}
+
 /** Company statuses, for contacts that have no prospect row. Same
  *  colours the Companies table uses. */
 export const COMPANY_STATUS_DOT_HEX: Record<string, string> = {

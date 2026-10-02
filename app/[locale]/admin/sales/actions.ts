@@ -5,7 +5,7 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { updateContactStage } from "@/lib/apollo-client"
 import { getSubscribedSince, getSubscriberStats } from "@/lib/subscriptions/subscriber-stats"
 
-import { PROSPECT_STATUS_RANK, type ProspectStatus } from "@/lib/sales/prospect-status"
+import { PROSPECT_STATUS_RANK, channelForSource, type ProspectStatus } from "@/lib/sales/prospect-status"
 export type { ProspectStatus }
 
 export type SequenceStatus = "not_started" | "active" | "paused" | "finished" | "replied"
@@ -1121,10 +1121,19 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
       // moment you filtered on Showcase, and the funnel above never
       // counted it either. Putting it in sources answers the question
       // once: the pills, the filter and the funnel all read this.
-      sources:
-        claimed?.status === "prospected" && !agg.sources.includes("arco")
-          ? [...agg.sources, "arco"].sort()
-          : agg.sources,
+      //
+      // 'manual' is translated away here for the same reason: it is a
+      // provenance, not a channel. A hand-added contact is reached
+      // through Showcase or Outreach like anyone else, and rendering
+      // "Manual" put a fourth word in a row whose vocabulary is only
+      // ever Outreach, Showcase, Invite, Outbound and Email — one the
+      // channel filter does not even offer.
+      sources: (() => {
+        const showcased = claimed?.status === "prospected"
+        const mapped = agg.sources.map((s) => channelForSource(s, showcased))
+        if (showcased && !mapped.includes("arco")) mapped.push("arco")
+        return Array.from(new Set(mapped)).sort()
+      })(),
       emailsSent: hasEventCoverage ? events.sent : agg.emailsSent,
       emailsDelivered: hasEventCoverage ? events.delivered : agg.emailsDelivered,
       emailsOpened: hasEventCoverage ? events.opened : agg.emailsOpened,

@@ -83,8 +83,11 @@ export function resolveApolloAccountStage(
 }
 
 /** Domains that identify a mailbox provider, not a company — matching
- *  or creating an Apollo account on these would be meaningless. */
-const FREEMAIL_DOMAINS = new Set([
+ *  or creating an Apollo account on these would be meaningless.
+ *  Exported because the contact import needs the same list when it
+ *  matches on an e-mail host: attaching everyone with a gmail address
+ *  to whichever company owns gmail.com is the failure this prevents. */
+export const FREEMAIL_DOMAINS = new Set([
   "gmail.com",
   "googlemail.com",
   "hotmail.com",

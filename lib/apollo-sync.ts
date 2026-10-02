@@ -1,5 +1,6 @@
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { updateContactStage } from "@/lib/apollo-client"
+import { FREEMAIL_DOMAINS } from "@/lib/company-apollo-sync"
 import { countsAsContact } from "@/lib/email-channels"
 import { logger } from "@/lib/logger"
 
@@ -256,22 +257,53 @@ export async function syncApolloList(
       // import surfaces on /admin/companies (status='added', source='manual'
       // until an actual conversion flips it to 'apollo'). Domain comes from
       // either Apollo's website_url or the email's host. Skip if neither.
-      const rawDomain =
-        pickCompanyWebsite(contact)?.replace(/^https?:\/\//i, "").replace(/^www\./i, "").split("/")[0]?.toLowerCase()
-        || emailLc.split("@")[1]
-      const companyDomain = rawDomain && rawDomain.includes(".") ? rawDomain : null
+      // TWO CANDIDATE DOMAINS, not one. Apollo's organisation website
+      // and the contact's own e-mail host are both plausible keys, and
+      // for the same firm they are often different: 2711 Interiors
+      // carries 2711.nl from martine@2711.nl, while Apollo's enrichment
+      // calls the organisation 2711interiors.com.
+      //
+      // Taking only the first and falling back to the second — which
+      // this did — makes the key depend on what Apollo happens to know
+      // TODAY. In August Apollo had no website for that firm, so the
+      // e-mail host was used and the company was created as 2711.nl.
+      // Waterfall enrichment later filled the website in, the first
+      // candidate started winning, nothing matched, and a second
+      // company row appeared beside the first with the same name.
+      //
+      // So: try both before concluding this is a new company. The
+      // e-mail host is tried FIRST for matching, because an address at
+      // a domain is the stronger evidence of where someone actually
+      // works; Apollo's website is the better value to CREATE with,
+      // being the organisation's canonical site.
+      const websiteDomain =
+        pickCompanyWebsite(contact)?.replace(/^https?:\/\//i, "").replace(/^www\./i, "").split("/")[0]?.toLowerCase() || null
+      const emailDomain = emailLc.split("@")[1] || null
+      const usable = (d: string | null | undefined): d is string =>
+        Boolean(d && d.includes(".") && !FREEMAIL_DOMAINS.has(d))
+      // Freemail never identifies a company — it would attach everyone
+      // with a gmail address to whoever owns gmail.com.
+      const matchDomains = [emailDomain, websiteDomain].filter(usable)
+      const companyDomain = usable(websiteDomain) ? websiteDomain : usable(emailDomain) ? emailDomain : null
 
       let prospectCompanyId: string | null = (upserted as any)?.company_id ?? null
 
       const companyPhone = pickCompanyPhone(contact)
 
       if (!prospectCompanyId && companyDomain) {
-        // Match by domain first; fall back to insert.
-        const { data: existingCompany } = await supabase
+        // Match on either candidate; fall back to insert. `.in()` rather
+        // than two round trips, ordered so the e-mail host wins when
+        // both somehow resolve to different companies.
+        const { data: candidates } = await supabase
           .from("companies")
-          .select("id")
-          .eq("domain", companyDomain)
-          .maybeSingle()
+          .select("id, domain")
+          .in("domain", matchDomains)
+
+        const rows = (candidates ?? []) as Array<{ id: string; domain: string | null }>
+        const existingCompany =
+          rows.find((r) => r.domain === emailDomain)
+          ?? rows.find((r) => r.domain === websiteDomain)
+          ?? null
 
         if (existingCompany) {
           prospectCompanyId = existingCompany.id
