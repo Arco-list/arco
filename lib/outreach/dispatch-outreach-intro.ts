@@ -114,18 +114,16 @@ export async function dispatchOutreachIntro(
   //    the day's window so the followup doesn't collide with other
   //    sends already scheduled at 09:00 sharp.
   const { nextBusinessSlot } = await import("@/lib/date-utils")
-  const { claimNextSendSlot } = await import("@/lib/drip-queue")
+  const { claimSequenceSlots } = await import("@/lib/drip-queue")
+  // Claimed together so the two steps can never be compressed onto one
+  // day when the queue is under pressure — see claimSequenceSlots.
+  const [followupSlot, finalSlot] = await claimSequenceSlots(supabase, [
+    nextBusinessSlot(FOLLOWUP_DAYS),
+    nextBusinessSlot(FINAL_DAYS),
+  ])
   const stepConfig = [
-    {
-      template: "outreach-followup" as const,
-      step: 1,
-      sendAt: (await claimNextSendSlot(supabase, nextBusinessSlot(FOLLOWUP_DAYS))).toISOString(),
-    },
-    {
-      template: "outreach-final" as const,
-      step: 2,
-      sendAt: (await claimNextSendSlot(supabase, nextBusinessSlot(FINAL_DAYS))).toISOString(),
-    },
+    { template: "outreach-followup" as const, step: 1, sendAt: followupSlot.toISOString() },
+    { template: "outreach-final" as const, step: 2, sendAt: finalSlot.toISOString() },
   ]
 
   for (const { template, step, sendAt } of stepConfig) {

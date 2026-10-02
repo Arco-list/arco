@@ -204,6 +204,46 @@ export async function isProAudienceCompany(
  * one cron tick" which is bounded by the tick interval anyway. If we
  * grow to multi-admin enqueueing, add SELECT FOR UPDATE here.
  */
+/**
+ * Slots handed out but not yet written, with the time they expire.
+ *
+ * The function is called "claim" and until now claimed nothing: it read
+ * the table for the last used slot and returned one after it, writing
+ * nothing. A caller that allocates two slots before inserting either —
+ * which is every multi-step sequence we have — read the same table state
+ * twice and got the same answer twice. Two rows, one minute, one reader
+ * receiving both.
+ *
+ * Holding them here closes that. It is per-process rather than in the
+ * database on purpose: the collisions all came from one function
+ * allocating several slots in a row, which is always one process. A
+ * cross-instance race would still be possible and would cost two mails
+ * two minutes apart, which is what the spacing was for anyway.
+ *
+ * Entries expire so a crashed or abandoned caller cannot hold a slot
+ * forever — the worst case is a gap in the schedule, never a lost mail.
+ */
+const RESERVED_SLOTS = new Map<number, number>()
+const RESERVATION_TTL_MS = 60_000
+
+function reserve(slot: Date): void {
+  RESERVED_SLOTS.set(slot.getTime(), Date.now() + RESERVATION_TTL_MS)
+}
+
+/** Live reservations inside [from, to), newest first. Prunes as it goes. */
+function reservedWithin(from: Date, to: Date): number[] {
+  const now = Date.now()
+  const hits: number[] = []
+  for (const [slot, expires] of RESERVED_SLOTS) {
+    if (expires <= now) {
+      RESERVED_SLOTS.delete(slot)
+      continue
+    }
+    if (slot >= from.getTime() && slot < to.getTime()) hits.push(slot)
+  }
+  return hits
+}
+
 export async function claimNextSendSlot(
   supabase: SupabaseClient,
   baseDate: Date,
@@ -247,9 +287,21 @@ export async function claimNextSendSlot(
 
   const lastUsedIso = (existing as Array<{ send_at: string }> | null)?.[0]?.send_at ?? null
   const lastUsed = lastUsedIso ? new Date(lastUsedIso) : null
-  const candidate = lastUsed
-    ? new Date(Math.max(windowStart.getTime(), lastUsed.getTime() + SLOT_INTERVAL_MIN * 60 * 1000))
+
+  // The table's last slot AND anything this process handed out but has
+  // not written yet. Taking the later of the two is what stops a second
+  // claim landing on the first one's minute.
+  const latestReserved = Math.max(0, ...reservedWithin(windowStart, windowEnd))
+  const occupiedUntil = Math.max(lastUsed?.getTime() ?? 0, latestReserved)
+  let candidate = occupiedUntil > 0
+    ? new Date(Math.max(windowStart.getTime(), occupiedUntil + SLOT_INTERVAL_MIN * 60 * 1000))
     : windowStart
+
+  // Belt and braces: a reservation could sit past the computed candidate
+  // if two callers interleave. Step over anything already held.
+  while (RESERVED_SLOTS.has(candidate.getTime()) && candidate.getTime() < windowEnd.getTime()) {
+    candidate = new Date(candidate.getTime() + SLOT_INTERVAL_MIN * 60 * 1000)
+  }
 
   // If the candidate slot is past the window's end, roll to next
   // business day. Recursion bottom-outs once we find a day with room.
@@ -258,5 +310,41 @@ export async function claimNextSendSlot(
     return claimNextSendSlot(supabase, nextDay, lookaheadDays + 1)
   }
 
+  reserve(candidate)
   return candidate
+}
+
+/**
+ * Slots for the consecutive steps of ONE sequence to ONE reader,
+ * guaranteed to land on different days.
+ *
+ * Steps are spaced in business days by design — a follow-up on day 3, a
+ * final on day 10 — but that spacing lived entirely in the base dates
+ * handed to claimNextSendSlot, and claimNextSendSlot is allowed to move
+ * a mail forward when its day is full. When both days were full, both
+ * rolled to the same next day with room, and a reader got the follow-up
+ * and the "last mail from us" in the same minute. The seven days between
+ * them were not a rule anywhere; they were an input that could be
+ * overruled.
+ *
+ * Here they are a rule. Each step claims from at least the business day
+ * after the one before it, so capacity pressure can delay a sequence but
+ * never compress it.
+ *
+ * Order matters: pass the base dates in step order.
+ */
+export async function claimSequenceSlots(
+  supabase: SupabaseClient,
+  baseDates: readonly Date[],
+): Promise<Date[]> {
+  const slots: Date[] = []
+  for (const base of baseDates) {
+    const previous = slots[slots.length - 1]
+    // A step may never open before the day after its predecessor, no
+    // matter how early its own base date falls.
+    const floor = previous ? nextBusinessSlot(1, previous) : null
+    const from = floor && floor.getTime() > base.getTime() ? floor : base
+    slots.push(await claimNextSendSlot(supabase, from))
+  }
+  return slots
 }

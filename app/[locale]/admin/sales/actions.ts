@@ -3161,33 +3161,43 @@ export async function resumeProspectSequence(prospectId: string) {
 
   try {
     const { nextBusinessSlot } = await import("@/lib/date-utils")
-    const { claimNextSendSlot } = await import("@/lib/drip-queue")
+    const { claimSequenceSlots } = await import("@/lib/drip-queue")
     // Pick the right template trio + sequence label for this prospect's
     // source. apollo (Outreach) cadence is Day 3 / Day 10 to match the
     // dispatcher; arco + invites stay on Day 3 / Day 7 as before.
-    // claimNextSendSlot picks the next free 5-min slot on the target
-    // day so resume doesn't pile rows at 09:00 sharp alongside the
-    // morning's other queued sends.
+    // claimSequenceSlots picks the next free slot on each target day so
+    // resume doesn't pile rows at 09:00 sharp alongside the morning's
+    // other queued sends — and claims both steps in one call, so a full
+    // calendar can delay the pair but never collapse it onto one day.
     let sequenceName: string
     let stepConfig: Array<{ template: string; step: number; sendAt: string }>
     if (prospect.source === "invites") {
       sequenceName = "new-professional-invite"
-      stepConfig = [
-        { template: "new-professional-followup", step: 1, sendAt: (await claimNextSendSlot(supabase, nextBusinessSlot(3))).toISOString() },
-        { template: "new-professional-final", step: 2, sendAt: (await claimNextSendSlot(supabase, nextBusinessSlot(7))).toISOString() },
-      ]
+      {
+        const [followup, final] = await claimSequenceSlots(supabase, [nextBusinessSlot(3), nextBusinessSlot(7)])
+        stepConfig = [
+          { template: "new-professional-followup", step: 1, sendAt: followup.toISOString() },
+          { template: "new-professional-final", step: 2, sendAt: final.toISOString() },
+        ]
+      }
     } else if (prospect.source === "apollo") {
       sequenceName = "outreach"
-      stepConfig = [
-        { template: "outreach-followup", step: 1, sendAt: (await claimNextSendSlot(supabase, nextBusinessSlot(3))).toISOString() },
-        { template: "outreach-final", step: 2, sendAt: (await claimNextSendSlot(supabase, nextBusinessSlot(10))).toISOString() },
-      ]
+      {
+        const [followup, final] = await claimSequenceSlots(supabase, [nextBusinessSlot(3), nextBusinessSlot(10)])
+        stepConfig = [
+          { template: "outreach-followup", step: 1, sendAt: followup.toISOString() },
+          { template: "outreach-final", step: 2, sendAt: final.toISOString() },
+        ]
+      }
     } else {
       sequenceName = "prospect-outreach"
-      stepConfig = [
-        { template: "prospect-followup", step: 1, sendAt: (await claimNextSendSlot(supabase, nextBusinessSlot(3))).toISOString() },
-        { template: "prospect-final", step: 2, sendAt: (await claimNextSendSlot(supabase, nextBusinessSlot(7))).toISOString() },
-      ]
+      {
+        const [followup, final] = await claimSequenceSlots(supabase, [nextBusinessSlot(3), nextBusinessSlot(7)])
+        stepConfig = [
+          { template: "prospect-followup", step: 1, sendAt: followup.toISOString() },
+          { template: "prospect-final", step: 2, sendAt: final.toISOString() },
+        ]
+      }
     }
 
     // Skip pro-audience companies (photographers). Their entry to Arco is

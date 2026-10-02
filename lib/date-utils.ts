@@ -7,18 +7,34 @@
  */
 
 const AMSTERDAM_TZ = "Europe/Amsterdam"
-// Send window: 09:00–11:00 Europe/Amsterdam. Tight on purpose — receiving
-// servers (Gmail/Outlook spam filters) score sender reputation on burst
-// rate from low-volume domains, and morning-only sends give the strongest
-// open rates for B2B cold outreach. Combined with SLOT_INTERVAL_MIN this
-// also caps daily volume implicitly: (END-START)*60/INTERVAL = 24/day.
+// Send window: 09:00–15:00 Europe/Amsterdam, two minutes apart — 180
+// slots a day.
+//
+// THIS IS HEADROOM, NOT A TARGET. The window used to be 09:00–11:00 at
+// five-minute slots: 24 slots, while the queue was draining about 70
+// mails a working day. Three times oversubscribed, and claimNextSendSlot
+// absorbs that by rolling every unplaceable mail to the next day with
+// room — so a follow-up scheduled for day 3 and a final scheduled for
+// day 10 both slid until they landed in the same minute, on the same
+// morning, for the same reader. The capacity was not a cap, it was a
+// collapse.
+//
+// So the window is sized well above what is sent, deliberately. Volume
+// is capped where it belongs — the outreach releaser's own daily cap,
+// which is ramped and gated on bounce and complaint rates. A window
+// that doubles as a volume limit cannot do either job properly.
+//
+// Starting at 09:00 still means most of it lands in the morning, which
+// is what the old window was really protecting. Running to 15:00 only
+// changes where the overflow goes — and now there is none.
 export const BUSINESS_START_HOUR = 9
-export const BUSINESS_END_HOUR = 11 // exclusive — last valid send minute is 10:59
-// Minimum gap between consecutive sends in the same day's window. Slot
-// allocation in claimNextSendSlot enforces this — receiving servers
-// throttle burst rates from one sender, so a 5-min cadence keeps us
-// well below any reasonable rate-limit trigger.
-export const SLOT_INTERVAL_MIN = 5
+export const BUSINESS_END_HOUR = 15 // exclusive — last valid send minute is 14:59
+// Minimum gap between consecutive sends in the same day's window. Two
+// minutes against the old five: receiving servers throttle burst rate
+// from one sender, and at ~70 mails spread over six hours this stays far
+// below any reasonable trigger. The real burst protection is the daily
+// cap, not the spacing.
+export const SLOT_INTERVAL_MIN = 2
 
 /**
  * Returns a UTC `Date` representing the next valid "business slot" `days`

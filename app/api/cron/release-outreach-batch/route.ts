@@ -58,10 +58,28 @@ export const maxDuration = 120
 // schedule once metrics are clean again, it never "catches up" with a
 // burst. The 48h hard bounce guard below still halts releases outright.
 const BASE_DAILY_CAP = 20
-const MAX_DAILY_CAP = 60
+// 50, not 60: the ceiling the warm-up climbs to. More per day buys
+// nothing at a 0.6% claim rate, and leaves less room under the window
+// for the mail that is not outreach.
+const MAX_DAILY_CAP = 50
 const RAMP_FACTOR = 1.25
-// Monday Aug 17 2026 = week 0 (cap 20). Week 1 → 25, then 31, 39, 49, 60.
-const RAMP_START_UTC = Date.UTC(2026, 7, 17)
+// Week 0 = the Monday the current sending domain started. Week 1 → 25,
+// then 31, 39, 49, 60.
+//
+// RESET ON 2 OCTOBER 2026, when sales and invite moved to
+// mail.arcolist.com. A warm-up schedule measures the reputation of the
+// domain that is actually sending, and that domain was one day old: the
+// six weeks of good behaviour behind the old date belonged to
+// arcolist.com and did not transfer. Leaving it would have opened a
+// fresh subdomain at 60 a day, which is how a new domain gets filtered
+// before anyone has read a word of it.
+//
+// It also relieves the queue. The send window is 09:00–11:00 at
+// five-minute slots — 24 a day — while this was releasing up to 60.
+// That 2.5x oversubscription is what slid every scheduled mail forward
+// until a day-3 follow-up and a day-10 final landed in the same minute.
+// At 20 the window stops overflowing and that collapse stops happening.
+const RAMP_START_UTC = Date.UTC(2026, 9, 5)
 const RAMP_HOLD_BOUNCE_PCT = 3
 const RAMP_HOLD_MIN_SENDS = 30
 const RAMP_HOLD_COMPLAINTS = 2
