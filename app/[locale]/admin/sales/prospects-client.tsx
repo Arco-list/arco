@@ -10,6 +10,7 @@ import { EmailComposeModal } from "@/components/contact-card/email-compose-modal
 import { AdminTabs, useAdminTab } from "@/components/admin/admin-tabs"
 import {
   markProspectNotInterested,
+  createProspectContact,
   fetchSalesCompanies,
   skipCallListProspect,
   startProspectSequence,
@@ -760,6 +761,7 @@ export function ProspectsClient({
   // zero-size fixed anchor. Only rows with a companies record get it;
   // company-less prospect rows keep opening the contact panel.
   const [rowMenu, setRowMenu] = useState<{ row: SalesCompanyRow; x: number; y: number } | null>(null)
+  const [addContactFor, setAddContactFor] = useState<{ companyId: string; companyName: string } | null>(null)
   // Contact menu actions that live at table level: compose opens the
   // shared modal; the two funnel exits confirm, apply and reload.
   // The Outbound popup's target. Carries the company because the
@@ -772,6 +774,17 @@ export function ProspectsClient({
     const r = await markProspectNotInterested(contact.prospectId, true)
     if (r.success) { toast.success("Marked as not interested"); reload({ offset, append: false }) }
     else toast.error(r.error ?? "Failed")
+  }
+  // Same wording as the bulk button: it schedules, it does not send.
+  // The track is decided from the company at send time, so there is
+  // nothing to choose here — one contact, one click.
+  const handleStartSequence = async (contact: SalesContact) => {
+    const r = await startProspectSequence(contact.prospectId)
+    if (r.success) {
+      if (r.warning) toast.warning(r.warning)
+      else toast.success("Sequence scheduled — first mail in the 09:00–15:00 window")
+      reload({ offset, append: false })
+    } else toast.error(r.error ?? "Failed to start sequence")
   }
   const handleRemoveFromFunnel = async (contact: SalesContact) => {
     if (!confirm(`Remove ${contact.contactName ?? contact.email} from the funnel?`)) return
@@ -814,10 +827,18 @@ export function ProspectsClient({
   const [offset, setOffset] = useState(0)
   const [hasMore, setHasMore] = useState(initialTotalCompanies > 50)
   const [isPending, startTransition] = useTransition()
-  // last_contact_at desc is the primary sales workflow — admins want to
-  // see who they last touched first, by whichever channel. Created sort
-  // exists for cohort analysis ("everyone added this week").
-  const [sortBy, setSortBy] = useState<SalesSortBy>("last_contact_at")
+  // status_changed_at desc: the board opens on who MOVED last, not on
+  // who we mailed last. Those are different questions and the second
+  // one mostly answers itself — the drip queue sends on a schedule, so
+  // sorting by contact date largely reproduces the send calendar.
+  // Movement is the part nobody controls and the part worth seeing
+  // first: a company that reached Listed or Owned this morning is at
+  // the top without filtering for it.
+  //
+  // MUST MATCH the default in fetchSalesCompanies, which serves the
+  // first paint — a disagreement there resorts the table under the
+  // reader the moment the client takes over.
+  const [sortBy, setSortBy] = useState<SalesSortBy>("status_changed_at")
   const [sortDir, setSortDir] = useState<SalesSortDir>("desc")
 
   const reload = useCallback((opts?: { offset?: number; append?: boolean }) => {
@@ -1631,6 +1652,7 @@ export function ProspectsClient({
                 onOpenRowMenu={(e) => setRowMenu({ row, x: e.clientX, y: e.clientY })}
                 onSendEmail={(c) => setEmailTarget({ contact: c, companyId: row.companyId ?? null, companyLabel: row.companyName ?? null })}
                 onNotInterested={handleNotInterested}
+                onStartSequence={handleStartSequence}
                 onRemoveFromFunnel={handleRemoveFromFunnel}
                 onRenamed={() => reload({ offset, append: false })}
                 onSkip={async () => {
@@ -1683,6 +1705,24 @@ export function ProspectsClient({
                   <a href={`/dashboard/company?company_id=${rowMenu.row.companyId}`} target="_blank" rel="noopener noreferrer" className="text-xs cursor-pointer">
                     Edit company
                   </a>
+                </DropdownMenuItem>
+              )}
+              {/* The only way to add a contact by hand. Every other
+                  prospect row is minted by a sync, and all of those
+                  stop at the first contact per company. Lives on the
+                  company menu because that is the only company-scoped
+                  one — the contact menus behind each name belong to one
+                  person, and adding a colleague from someone else's
+                  menu reads wrong. */}
+              {rowMenu?.row.companyId && (
+                <DropdownMenuItem
+                  className="text-xs cursor-pointer"
+                  onClick={() => setAddContactFor({
+                    companyId: rowMenu.row.companyId!,
+                    companyName: rowMenu.row.companyName,
+                  })}
+                >
+                  Add contact
                 </DropdownMenuItem>
               )}
               {canShowcase && (
@@ -1867,8 +1907,136 @@ export function ProspectsClient({
         onClose={contactParam.close}
       />
 
+      {addContactFor && (
+        <AddContactModal
+          companyId={addContactFor.companyId}
+          companyName={addContactFor.companyName}
+          onClose={() => setAddContactFor(null)}
+          onCreated={(email) => {
+            setAddContactFor(null)
+            reload({ offset })
+            // Land in the card for the contact just created — the whole
+            // point of the two-field form rather than an empty card:
+            // this one has a row behind it, so its edit fields save and
+            // its Start sequence does something.
+            contactParam.open(email)
+          }}
+        />
+      )}
+
       </div>
     </>
+  )
+}
+
+/**
+ * Add a contact to a company. Two fields, because the rest is already
+ * known: the channel is inherited from the colleagues (see
+ * createProspectContact) and the status is always 'prospect' — this
+ * person has not been mailed yet, however far along the company is.
+ */
+function AddContactModal({
+  companyId,
+  companyName,
+  onClose,
+  onCreated,
+}: {
+  companyId: string
+  companyName: string
+  onClose: () => void
+  onCreated: (email: string) => void
+}) {
+  const [email, setEmail] = useState("")
+  const [name, setName] = useState("")
+  const [pending, setPending] = useState(false)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [onClose])
+
+  const submit = async () => {
+    if (!email.trim() || pending) return
+    setPending(true)
+    const result = await createProspectContact({ companyId, email, contactName: name })
+    setPending(false)
+    if (result.success && result.email) {
+      toast.success(`Contact added to ${companyName}`)
+      onCreated(result.email)
+    } else {
+      toast.error(result.error ?? "Could not add the contact")
+    }
+  }
+
+  // The Popup Card from /admin/design: popup-header with a Section
+  // title, form-label + form-input pairs, and popup-actions holding a
+  // tertiary Cancel beside a secondary confirm. popup-card brings its
+  // own 28px padding and popup-actions its own top spacing, so neither
+  // gets a wrapper.
+  //
+  // NO EXPLANATORY PARAGRAPH. It used to say the channel and status
+  // follow the company — true, and nobody needs telling: the company is
+  // named under the title, and a form with two fields does not need a
+  // note about the fields it does not have.
+  return (
+    <div className="popup-overlay" onClick={onClose} style={{ zIndex: 800 }}>
+      <div
+        className="popup-card"
+        onClick={(e) => e.stopPropagation()}
+        style={{ position: "relative", maxWidth: 380, width: "min(380px, 90vw)" }}
+      >
+        {/* Company under the title, the way the Outbound popup carries
+            the recipient: the one fact you need to be sure you are
+            adding this person to the right firm. */}
+        <div className="popup-header">
+          <div className="min-w-0 flex-1">
+            <h3 className="arco-section-title">Add contact</h3>
+            <p className="text-xs text-[#6b6b68] mt-0.5 truncate">{companyName}</p>
+          </div>
+          <button type="button" className="popup-close" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+
+        <label className="form-label" htmlFor="add-contact-email">Email</label>
+        <input
+          id="add-contact-email"
+          type="text"
+          className="form-input"
+          value={email}
+          autoFocus
+          onChange={(e) => setEmail(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") submit() }}
+          placeholder="naam@bedrijf.nl"
+        />
+
+        <label className="form-label" htmlFor="add-contact-name">Name (optional)</label>
+        <input
+          id="add-contact-name"
+          type="text"
+          className="form-input"
+          style={{ marginBottom: 0 }}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") submit() }}
+          placeholder="Voornaam Achternaam"
+        />
+
+        <div className="popup-actions">
+          <button type="button" className="btn-tertiary" style={{ flex: 1 }} onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{ flex: 1 }}
+            onClick={submit}
+            disabled={!email.trim() || pending}
+          >
+            {pending ? "Adding…" : "Add contact"}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -1894,6 +2062,7 @@ function CompanyRowView({
   onOpenRowMenu,
   onSendEmail,
   onNotInterested,
+  onStartSequence,
   onRemoveFromFunnel,
   onRenamed,
 }: {
@@ -1916,6 +2085,7 @@ function CompanyRowView({
   onOpenRowMenu: (e: React.MouseEvent) => void
   onSendEmail: (contact: SalesContact) => void
   onNotInterested: (contact: SalesContact) => void
+  onStartSequence: (contact: SalesContact) => void
   onRemoveFromFunnel: (contact: SalesContact) => void
   /** After an inline company rename — parent refetches the table. */
   onRenamed: () => void
@@ -2091,6 +2261,7 @@ function CompanyRowView({
           onOpenContactCard={onOpenContactCard}
           onSendEmail={onSendEmail}
           onNotInterested={onNotInterested}
+          onStartSequence={onStartSequence}
           onRemoveFromFunnel={onRemoveFromFunnel}
         />
       </td>
@@ -2168,12 +2339,14 @@ function ContactsCell({
   onOpenContactCard,
   onSendEmail,
   onNotInterested,
+  onStartSequence,
   onRemoveFromFunnel,
 }: {
   row: SalesCompanyRow
   onOpenContactCard: (contact: SalesContact) => void
   onSendEmail: (contact: SalesContact) => void
   onNotInterested: (contact: SalesContact) => void
+  onStartSequence: (contact: SalesContact) => void
   onRemoveFromFunnel: (contact: SalesContact) => void
 }) {
   const primary = row.primaryContact
@@ -2196,6 +2369,17 @@ function ContactsCell({
             <a href={`tel:${phone.replace(/[^+\d]/g, "")}`} className="text-xs cursor-pointer">
               Call
             </a>
+          </DropdownMenuItem>
+        )}
+        {/* Only when there is a sequence to start. Shown conditionally
+            like Call above: starting one that is already active, paused
+            or finished would re-fire the intro or throw, which is why
+            the bulk action filters on the same state. Pause, Continue
+            and Restart stay on the Contact Card — this is the one step
+            you reach for from a row. */}
+        {contact.sequenceStatus === "not_started" && (
+          <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => onStartSequence(contact)}>
+            Start sequence
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
@@ -2265,19 +2449,27 @@ function ContactsCell({
   )
 }
 
-/** Inline pill-row representation of a single contact: leading sequence
- *  dot + name + status pill + source pill. Used as the click target for
- *  the primary contact and as each +N-more item label. The leading dot
- *  reflects the *sequence* state (active / paused / finished /
- *  not_started) for at-a-glance outreach scanning; status (the funnel
- *  stage) sits in its own pill alongside the source. Email is
- *  intentionally omitted — the panel carries the full address.
+/** Inline pill-row for a single contact: name + status + sequence +
+ *  source. Used as the click target for the primary contact and as each
+ *  +N-more item label. Email is intentionally omitted — the panel
+ *  carries the full address.
  *
- *  Suppression states (bounced / complained / unsubscribed) override
- *  the row's Sequence column instead — keeping the source pill stable
- *  here so the admin can still identify the channel at a glance. */
+ *  THE SEQUENCE PILL SITS BEHIND THE STATUS, because the two answer
+ *  different halves of one question: the status is where this contact
+ *  stands, the sequence is whether anything is still working on them.
+ *  Per contact since each one holds their own sequence — the row-level
+ *  Sequence column shows the furthest-progressed contact's, which is
+ *  not necessarily the one you are looking at.
+ *
+ *  Suppression (bounced / complained / unsubscribed / not interested)
+ *  REPLACES the sequence label rather than sitting beside it: those
+ *  states end a sequence, so "Active" next to "Bounced" would be two
+ *  pills disagreeing. The source pill stays put either way, so the
+ *  channel is still identifiable at a glance. */
 function ContactInline({ contact, afterName, companyShowcased = false }: { contact: SalesContact; afterName?: React.ReactNode; companyShowcased?: boolean }) {
   const statusCfg = STATUS_CONFIG[contact.status] ?? STATUS_CONFIG.prospect
+  const suppression = getSuppressionState(contact)
+  const sequenceCfg = suppression ?? SEQUENCE_CONFIG[contact.sequenceStatus] ?? SEQUENCE_CONFIG.not_started
   const displayName = contact.resolvedContact.name?.trim() || contact.contactName?.trim() || contact.email
   // Showcase is an UPGRADE of the track: before any outreach touch the
   // source pill is simply replaced ("Showcase"); once outreach has
@@ -2295,6 +2487,10 @@ function ContactInline({ contact, afterName, companyShowcased = false }: { conta
       <span className="status-pill">
         <span className={`status-pill-dot ${statusCfg.dot}`} />
         {statusCfg.label}
+      </span>
+      <span className="status-pill">
+        <span className={`status-pill-dot ${sequenceCfg.dot}`} />
+        {sequenceCfg.label}
       </span>
       <span className="status-pill">{replaceSourceWithShowcase ? "Showcase" : sourceLabel(contact.source)}</span>
       {showcaseUpgrade && !replaceSourceWithShowcase && (

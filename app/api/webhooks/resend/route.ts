@@ -85,11 +85,46 @@ export async function POST(request: NextRequest) {
         // Resend's email.clicked payload carries the clicked URL under
         // data.click.link (not in our typed shape — hence the cast).
         const clickLink = (data as unknown as { click?: { link?: string } } | null)?.click?.link ?? null
-        // Machine-open detection: gateways/Apple-MPP prefetch the open
-        // pixel while scanning — those "opens" land within seconds of
-        // the send. Flag them so read-side stats can exclude them; the
-        // raw event is still stored.
-        if (type === "email.opened") {
+        // Machine detection, for opens AND clicks.
+        //
+        // Gateways and Apple-MPP prefetch the open pixel while scanning;
+        // enterprise mail security (SafeLinks et al.) goes further and
+        // detonates every link. Both land within seconds of the send.
+        // The raw event is always stored — the flag only keeps it out of
+        // the engagement counters and, for clicks, out of the promotion
+        // to Visitor.
+        //
+        // TWO RULES, because the clock alone cannot separate them.
+        // Measured over every click in the history, grouped by how long
+        // after the send the first one arrived:
+        //
+        //     10–30s    61 mails,  25% clicked 2+ distinct links
+        //     30–60s   233 mails,  39%          ← the biggest band
+        //      1–2m    136 mails,  36%
+        //     >5m      267 mails, 2.6%          ← where people live
+        //
+        // The 30–60s band is the largest of all, and still only two in
+        // five carry the signature. Cutting there would throw away 141
+        // single clicks that may well be human, and cutting at 30 would
+        // wave through 92 proven scanners. So:
+        //
+        //   1. MULTIPLE DISTINCT LINKS IN THE SAME INSTANT is the
+        //      certain tell and needs no clock. A scanner opens every
+        //      link in the mail; marketing@wolterinck.com had two, SIX
+        //      MILLISECONDS apart, on the company page and the claim
+        //      link. No hand does that.
+        //   2. A 30-SECOND FLOOR for everything else — half the old 60,
+        //      which the data says was too generous.
+        //
+        // Being strict is cheap here: a real person who clicks is
+        // promoted anyway when the claim page loads, which records
+        // arrivals server-side behind its own country and user-agent
+        // filter. This path only has to catch clicks the landing cannot
+        // identify — forwarded mail, a client that strips parameters —
+        // and for those a click after 30 seconds still counts.
+        const MACHINE_WINDOW_MS = 30_000
+        const MULTI_LINK_WINDOW_MS = 2_000
+        if (type === "email.opened" || type === "email.clicked") {
           const { data: sentRow } = await (supabase as any)
             .from("email_events")
             .select("occurred_at")
@@ -99,7 +134,26 @@ export async function POST(request: NextRequest) {
             .maybeSingle()
           if (sentRow?.occurred_at) {
             const delta = new Date(occurredAt).getTime() - new Date(sentRow.occurred_at as string).getTime()
-            machineOpen = delta >= 0 && delta < 60_000
+            machineOpen = delta >= 0 && delta < MACHINE_WINDOW_MS
+          }
+
+          // Rule 1. Any sibling click on a DIFFERENT url within two
+          // seconds, in either direction — the events arrive in
+          // whichever order the webhook delivers them.
+          if (!machineOpen && type === "email.clicked" && clickLink) {
+            const windowStart = new Date(new Date(occurredAt).getTime() - MULTI_LINK_WINDOW_MS).toISOString()
+            const windowEnd = new Date(new Date(occurredAt).getTime() + MULTI_LINK_WINDOW_MS).toISOString()
+            const { data: siblings } = await (supabase as any)
+              .from("email_events")
+              .select("metadata")
+              .eq("event_type", "clicked")
+              .eq("recipient_email", recipientEmail ?? "")
+              .gte("occurred_at", windowStart)
+              .lte("occurred_at", windowEnd)
+            const otherLinks = ((siblings ?? []) as Array<{ metadata: Record<string, unknown> | null }>)
+              .map((s) => (s.metadata?.click_link as string | undefined) ?? null)
+              .filter((l): l is string => Boolean(l) && l !== clickLink)
+            if (otherLinks.length > 0) machineOpen = true
           }
         }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -253,11 +307,16 @@ export async function POST(request: NextRequest) {
       // A click on an email link means the prospect landed on the site,
       // even when the ref-code tracking misses them (other device,
       // stripped params, forwarded mail). Promote Contacted -> Visitor
-      // so the funnel doesn't undercount. Known trade-off: security
-      // scanners (Outlook SafeLinks etc.) can auto-click and register a
-      // false visit — accepted, since ref-only tracking systematically
-      // loses real visitors. Never downgrades: only fires from
-      // 'contacted', so visitor/signup/company/active stay untouched.
+      // so the funnel doesn't undercount. Never downgrades: only fires
+      // from 'contacted', so visitor/signup/company/active stay
+      // untouched.
+      //
+      // The trade-off this used to name — scanner auto-clicks accepted
+      // as the price of not losing real visitors — no longer holds.
+      // Real visitors are caught by the claim page, which records
+      // arrivals server-side with its own country and user-agent
+      // filter, so the only thing a lenient rule here still bought was
+      // the false visits. Flagged clicks are skipped above.
       let promotedToVisitor = false
 
       switch (type) {
@@ -272,6 +331,12 @@ export async function POST(request: NextRequest) {
           updates.last_email_opened_at = now
           break
         case "email.clicked":
+          // A flagged click is a scanner: it stays in email_events but
+          // moves nothing. It used to count and promote, which is how
+          // marketing@wolterinck.com became a Visitor thirty-three
+          // seconds after her intro was sent, on two links six
+          // milliseconds apart.
+          if (machineOpen) break
           updates.emails_clicked = (prospect.emails_clicked ?? 0) + 1
           updates.last_email_clicked_at = now
           if ((prospect as { status?: string }).status === "contacted") {

@@ -107,17 +107,37 @@ export async function sendGmailReply(
     references: args.references ?? args.inReplyTo ?? null,
   })
 
-  const body: { raw: string; threadId?: string } = { raw }
-  if (threadId) body.threadId = threadId
+  const post = (payload: { raw: string; threadId?: string }) =>
+    fetch(`${GMAIL_API_BASE}/users/me/messages/send`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    })
 
-  const r = await fetch(`${GMAIL_API_BASE}/users/me/messages/send`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  })
+  let r = await post(threadId ? { raw, threadId } : { raw })
+
+  // A thread id can go stale: the conversation was deleted from the
+  // mailbox, or purged with age. Gmail answers that with a flat 404
+  // "Requested entity was not found", which killed the send — a reply
+  // to isis@enzoarchitecten.nl failed outright because the thread it
+  // pointed at was from 11 May and no longer there.
+  //
+  // THREADING IS A NICETY, SENDING IS THE POINT. Dropping the id costs
+  // the conversation grouping on OUR side only: In-Reply-To and
+  // References still carry it, so the recipient's client threads the
+  // reply exactly as before. Retried once, and only for the one error
+  // the id can cause — the check above already handles the other
+  // (a thread belonging to a different mailbox).
+  if (!r.ok && r.status === 404 && threadId) {
+    const stale = await r.text()
+    logger.warn("[gmail-send] thread id not found, resending unthreaded", {
+      threadId, mailbox: conn.gmail_address, body: stale.slice(0, 200),
+    })
+    r = await post({ raw })
+  }
 
   if (!r.ok) {
     const text = await r.text()

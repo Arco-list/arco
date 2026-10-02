@@ -594,6 +594,24 @@ function TimelineStream({
     // The Contacted chapter IS the sequence start — the release-batch
     // cron's bookkeeping row would only repeat it.
     "sequence_auto_started",
+    // SEQUENCE MACHINERY, which the mail rows already show.
+    //
+    // A restart is three fresh Scheduled rows appearing. A track change
+    // is those rows being Showcase where the ones above them were
+    // Outreach. A pause is the Scheduled rows going away, a resume is
+    // them coming back — and the pill in Activity carries the current
+    // state either way. Ralph van de Donk's timeline printed "Sequence
+    // track changed", "Sequence restarted" and "Sequence resumed" in
+    // one minute, directly above the three Showcase mails that say the
+    // same thing with the dates attached.
+    //
+    // Still WRITTEN to prospect_events — they are cheap, and the sales
+    // event history is where you go when you need to know who pressed
+    // what. They just do not belong in the reading of the story.
+    "sequence_resumed",
+    "sequence_paused",
+    "sequence_restarted",
+    "sequence_track_changed",
     // A MIGRATION'S PAPERWORK, not a thing the contact did. Three rows
     // exist, all stamped at one instant on 3 September 2026, by the
     // backfill that reordered the ladder — their metadata says so:

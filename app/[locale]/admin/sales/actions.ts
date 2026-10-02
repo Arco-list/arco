@@ -724,7 +724,11 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     search,
     offset = 0,
     limit = 50,
-    sortBy = "last_contact_at",
+    // Serves the server-rendered first paint, where /sales calls this
+    // with nothing but a limit. Kept in step with the client's initial
+    // state — the two defaults are one decision written twice, and if
+    // they drift the table resorts itself as soon as the client mounts.
+    sortBy = "status_changed_at",
     sortDir = "desc",
     callListOnly = false,
     subscribedOnly = false,
@@ -2267,6 +2271,100 @@ export async function syncPlatformProspects() {
   }
 }
 
+/**
+ * Add a contact to a company by hand.
+ *
+ * Every other prospect row is minted by a machine — the Apollo sync,
+ * the invite dispatcher, or the showcase promotion's one synthetic row
+ * per company. All three of those stop at the FIRST contact
+ * (`if (!existing)`), so a firm that already had one could never gain a
+ * colleague unless Apollo happened to supply them. That was fine while
+ * a company could hold only one sequence; since migration 273 each
+ * contact holds their own, and being able to add one is the other half
+ * of that.
+ *
+ * TWO FIELDS, because the rest is already known:
+ *
+ *   * the CHANNEL is not asked, because it is not stored. A new name at
+ *     a showcased firm belongs in the same pitch as everyone else
+ *     there, and resolveEffectiveTrack reads that from the COMPANY at
+ *     send time. Asking would invite the one answer that makes the row
+ *     inconsistent with its own company.
+ *   * the STATUS is 'prospect', the column default. Not 'contacted',
+ *     however far along the colleagues are: this person has not been
+ *     mailed, and since today that is exactly what contacted means.
+ */
+export async function createProspectContact(input: {
+  companyId: string
+  email: string
+  contactName?: string | null
+}): Promise<{ success: boolean; error?: string; email?: string }> {
+  const supabase = createServiceRoleSupabaseClient()
+
+  const email = input.email.trim().toLowerCase()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { success: false, error: "That doesn't look like an email address" }
+  }
+
+  const { data: company } = await supabase
+    .from("companies")
+    .select("id, name, city, status")
+    .eq("id", input.companyId)
+    .maybeSingle()
+  if (!company) return { success: false, error: "Company not found" }
+
+  const { data: siblings } = await supabase
+    .from("prospects")
+    .select("email")
+    .eq("company_id", input.companyId)
+
+  const rows = (siblings ?? []) as Array<{ email: string | null }>
+  if (rows.some((r) => (r.email ?? "").toLowerCase() === email)) {
+    return { success: false, error: "That address is already a contact at this company" }
+  }
+
+  const { error } = await supabase.from("prospects").insert({
+    email,
+    contact_name: input.contactName?.trim() || null,
+    company_name: company.name,
+    city: company.city ?? null,
+    company_id: company.id,
+    // 'manual', NOT the colleagues' source. Source records where a
+    // contact CAME FROM, and this one came from an admin typing it in —
+    // inheriting 'apollo' would file a hand-added name as something
+    // Apollo delivered. The two questions got conflated because the
+    // thing that genuinely should follow the colleagues is the TRACK,
+    // and that is resolved from the company at send time by
+    // resolveEffectiveTrack, not stored here.
+    source: "manual",
+    // status defaults to 'prospect'; sequence_status to not_started.
+    //
+    // NO ref_code. It carries a UNIQUE index, and the obvious value —
+    // the company slug — is already taken at any firm whose synthetic
+    // showcase row holds it: adding a second contact to 123DV failed
+    // outright because info@123dv.nl had claimed '123dv' in April. Null
+    // is the normal state anyway, on 3,463 of 3,575 prospects; only the
+    // synthetic rows carry one, and only because they are the sole
+    // contact at their company.
+  } as never)
+
+  if (error) {
+    if ((error as { code?: string }).code === "23505") {
+      // Name the constraint rather than guessing. This used to report
+      // every unique violation as a duplicate address, which sent
+      // somebody looking at an address that was never the problem.
+      const detail = `${(error as { message?: string }).message ?? ""} ${(error as { details?: string }).details ?? ""}`
+      if (detail.includes("ref_code")) {
+        return { success: false, error: "Referral code already taken — that's an Arco bug, not your input" }
+      }
+      return { success: false, error: "That address is already in the funnel under this channel" }
+    }
+    return { success: false, error: error.message }
+  }
+
+  return { success: true, email }
+}
+
 /** Which of the three pitches a contact belongs in. */
 type SequenceTrack = "invites" | "apollo" | "arco"
 
@@ -2289,17 +2387,34 @@ async function resolveEffectiveTrack(
   supabase: ReturnType<typeof createServiceRoleSupabaseClient>,
   prospect: { source: string | null; company_id: string | null },
 ): Promise<SequenceTrack> {
+  // Invite is the one track the source really does decide: it carries a
+  // project credit, which is a fact about how this contact arrived and
+  // nothing about the company can override it.
   if (prospect.source === "invites") return "invites"
-  if (prospect.source === "apollo" && prospect.company_id) {
+
+  // Everything else is decided by the COMPANY, not by the source
+  // string. A showcased firm has a page, so the showcase pitch is the
+  // one that works; a firm without one can only be sent the cold
+  // outreach pitch, whose links point at a landing page rather than at
+  // a company page that does not exist.
+  //
+  // Reading the source here instead is what broke when hand-added
+  // contacts arrived: they carry source 'manual', which matched neither
+  // branch and fell through to the showcase pitch regardless of whether
+  // the company had a page.
+  if (prospect.company_id) {
     const { data: companyRow } = await supabase
       .from("companies")
       .select("status")
       .eq("id", prospect.company_id)
       .maybeSingle()
     if (companyRow?.status === "prospected") return "arco"
-    return "apollo"
   }
-  return prospect.source === "apollo" ? "apollo" : "arco"
+
+  // No company, or a company that was never showcased. 'arco' rows are
+  // the synthetic ones syncPlatformProspects mints for showcased firms,
+  // so they keep their track; everything else gets the cold pitch.
+  return prospect.source === "arco" ? "arco" : "apollo"
 }
 
 /**
@@ -3241,26 +3356,50 @@ export async function getProspectSequence(prospectId: string): Promise<{
   // Pick the template trio for this prospect's source. 'arco' = the original
   // outbound prospect series; 'invites' = the new-professional sequence.
   const isInviteSeries = prospect.source === "invites"
-  const introTemplate = isInviteSeries ? "new_professional_invite" : "prospect_intro"
+  // Two spellings of one template, deliberately: company_outreach has
+  // always stored the intro with underscores, email_drip_queue with
+  // dashes. Named apart rather than converted at the call site, where a
+  // silent replace() is the kind of thing that works until it doesn't.
+  const introTemplateOutreach = isInviteSeries ? "new_professional_invite" : "prospect_intro"
+  const introTemplateQueue = isInviteSeries ? "new-professional-invite" : "prospect-intro"
   const followupTemplate = isInviteSeries ? "new-professional-followup" : "prospect-followup"
   const finalTemplate = isInviteSeries ? "new-professional-final" : "prospect-final"
 
-  // Intro: read from company_outreach (intro is sent direct via Resend, not
-  // via email_drip_queue, so it's the only template that ever lands here).
+  // SCOPED TO THIS CONTACT, not to the company.
+  //
+  // Both reads keyed on company_id, which was right while a company
+  // could hold exactly one sequence and became wrong the moment each
+  // contact held their own (migration 273). A contact added to
+  // Wolterinck on 2 October opened with her colleagues' history: a
+  // Showcase Intro delivered on 27 September to remco@, a Visitor Nudge
+  // opened on 30 September by hwolterinck@, and a Contacted chapter
+  // dated five days before she existed — because the chapter is drawn
+  // from the earliest sent step, and the earliest step was someone
+  // else's.
+  //
+  // eq() on the address rather than ilike(): every stored address in
+  // both tables is already lowercase (verified), and `_` is a LIKE
+  // wildcard that is ordinary in an e-mail address. The Apollo branch
+  // above still uses ilike — same hazard, older code, left alone here.
+  const contactEmail = prospect.email.toLowerCase()
+
+  // Intro: read from company_outreach. Only ever written for intros
+  // sent direct via Resend, which is history now — a queued intro row
+  // takes precedence below.
   const { data: outreachRows } = await supabase
     .from("company_outreach" as never)
     .select("template, sent_at, opened_at, clicked_at, last_event_cached")
-    .eq("company_id", prospect.company_id)
-    .eq("template", introTemplate)
+    .eq("email_to", contactEmail)
+    .eq("template", introTemplateOutreach)
     .order("sent_at", { ascending: false })
     .limit(1)
 
-  // Followup + Final: read from email_drip_queue. Most recent matching row wins.
+  // Every step this contact holds. Most recent row per template wins.
   const { data: queueRows } = await supabase
     .from("email_drip_queue")
     .select("template, send_at, sent_at, cancelled_at, cancelled_reason, attempt_count, last_error, opened_at, clicked_at, last_event_cached")
-    .eq("company_id", prospect.company_id)
-    .in("template", [followupTemplate, finalTemplate, "visitor-nudge", "verified-reminder", "owned-welcome", "company-live", "listed-professionals", "listed-backlink"])
+    .eq("email", contactEmail)
+    .in("template", [introTemplateQueue, followupTemplate, finalTemplate, "visitor-nudge", "verified-reminder", "owned-welcome", "company-live", "listed-professionals", "listed-backlink"])
     .order("created_at", { ascending: false })
 
   // Build a map: template → most recent row (we sorted desc above)
@@ -3278,8 +3417,7 @@ export async function getProspectSequence(prospectId: string): Promise<{
   const finalRow = queueByTemplate.get(finalTemplate)
 
 
-  const introStepTemplate: ProspectSequenceStep["template"] =
-    isInviteSeries ? "new-professional-invite" : "prospect-intro"
+  const introStepTemplate = introTemplateQueue as ProspectSequenceStep["template"]
   const introLabel = isInviteSeries ? "Invite" : "Intro"
   // The intro is a queue row now, like every other step, so it can read
   // as Scheduled before it goes out. Rows from before that change were
