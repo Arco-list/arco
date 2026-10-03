@@ -273,6 +273,116 @@ async function syncDailyMetrics(
   return { scopes: scopes.length, days: totalDays }
 }
 
+/**
+ * Daily impressions/clicks/position per SEARCH QUERY, per scope.
+ *
+ * The third axis. Day and page were already synced; which words put us
+ * in front of someone was not stored anywhere, so every explanation of
+ * a spike was a guess — including the one about August, where
+ * /professionals/ went from ~30 impressions a week to 8,504 and back to
+ * ~600, and the project pages did exactly the same thing in exactly the
+ * same weeks.
+ *
+ * NINETY DAYS, NOT 480. The daily totals above re-upsert their whole
+ * history on every run because one row per day is nothing; this is one
+ * row per day PER QUERY, which is three orders of magnitude more. GSC
+ * also caps a response at 25,000 rows, and a 480-day window would hit
+ * that cap and silently return a truncated top-N instead of everything.
+ * Ninety days re-upserted daily keeps the recent window exact and lets
+ * history accumulate row by row — nothing is deleted, so the table
+ * grows past ninety days on its own.
+ *
+ * Paginated: `startRow` walks until a page comes back short. Without it
+ * the sync would quietly keep whichever 25,000 rows Google ordered
+ * first, which for a site with a long tail is the loudest queries only
+ * — exactly the ones we already know about.
+ */
+async function syncQueryMetrics(
+  token: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+): Promise<{ scopes: number; rows: number; truncated: string[] }> {
+  const today = new Date()
+  const startDate = new Date(today)
+  startDate.setDate(today.getDate() - 90)
+  const fmt = (d: Date) => d.toISOString().slice(0, 10)
+
+  const scopes: Array<{ scope: string; pathContains: string }> = [
+    { scope: "projects", pathContains: "/projects/" },
+    { scope: "companies", pathContains: "/professionals/" },
+  ]
+
+  const PAGE = 25_000
+  // Six pages = 150,000 rows for a 90-day window. Far beyond what this
+  // site produces; the cap exists so a runaway cannot wedge the cron
+  // against its 300s budget.
+  const MAX_PAGES = 6
+
+  let totalRows = 0
+  const truncated: string[] = []
+
+  for (const { scope, pathContains } of scopes) {
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const res = await fetch(
+        `https://searchconsole.googleapis.com/webmasters/v3/sites/${encodeURIComponent(GSC_PROPERTY)}/searchAnalytics/query`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            startDate: fmt(startDate),
+            endDate: fmt(today),
+            dimensions: ["date", "query"],
+            dimensionFilterGroups: [{ filters: [{ dimension: "page", operator: "contains", expression: pathContains }] }],
+            rowLimit: PAGE,
+            startRow: page * PAGE,
+          }),
+        },
+      )
+      if (!res.ok) {
+        logger.warn("[gsc-sync] query metrics request failed", { scope, page, status: res.status })
+        break
+      }
+      const json = (await res.json()) as {
+        rows?: Array<{ keys?: string[]; impressions: number; clicks: number; position?: number }>
+      }
+      const raw = json.rows ?? []
+      const rows = raw
+        .filter((r) => r.keys?.[0] && r.keys?.[1])
+        .map((r) => ({
+          metric_date: r.keys![0],
+          scope,
+          query: r.keys![1],
+          impressions: Math.round(r.impressions ?? 0),
+          clicks: Math.round(r.clicks ?? 0),
+          // Rounded to two decimals to match the column; Google serves
+          // a long float and the difference between 50.4 and 50 is the
+          // difference between the top of page five and the bottom.
+          position: typeof r.position === "number" ? Math.round(r.position * 100) / 100 : null,
+        }))
+
+      if (rows.length > 0) {
+        const { error } = await supabase
+          .from("seo_query_metrics")
+          .upsert(rows, { onConflict: "metric_date,scope,query" })
+        if (error) {
+          logger.warn("[gsc-sync] query metrics upsert failed", { scope, page, message: error.message })
+          break
+        }
+        totalRows += rows.length
+      }
+
+      // A short page is the last page.
+      if (raw.length < PAGE) break
+      // A full page on the last allowed iteration means Google had more
+      // to give. Reported rather than swallowed: a silently truncated
+      // tail is the failure this pagination exists to prevent.
+      if (page === MAX_PAGES - 1) truncated.push(scope)
+    }
+  }
+
+  return { scopes: scopes.length, rows: totalRows, truncated }
+}
+
 // ─── Sync ─────────────────────────────────────────────────────────────────────
 
 type RowToSync = {
@@ -418,6 +528,20 @@ export async function syncGscIndexation(): Promise<GscSyncResult> {
     logger.info("[gsc-sync] daily metrics synced", daily)
   } catch (err) {
     logger.warn("[gsc-sync] daily metrics sync failed", { message: err instanceof Error ? err.message : String(err) })
+  }
+
+  // Per-query series — 90-day rolling window, best-effort like the rest.
+  // Last in the run deliberately: it is the heaviest call and the only
+  // one nothing else depends on, so a timeout here costs the newest
+  // queries rather than the indexation state.
+  try {
+    const queries = await syncQueryMetrics(token, supabase)
+    logger.info("[gsc-sync] query metrics synced", queries)
+    if (queries.truncated.length > 0) {
+      logger.warn("[gsc-sync] query metrics hit the page cap — tail not stored", { scopes: queries.truncated })
+    }
+  } catch (err) {
+    logger.warn("[gsc-sync] query metrics sync failed", { message: err instanceof Error ? err.message : String(err) })
   }
 
   logger.info("[gsc-sync] done", { projectsSynced, companiesSynced, errorCount })
