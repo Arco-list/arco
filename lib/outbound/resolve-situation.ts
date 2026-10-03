@@ -178,11 +178,17 @@ export async function resolveOutboundSituation(
   // to as if they had never heard of us.
   let visited = prospectStatus === "visitor"
   if (!visited && email) {
+    // Flagged arrivals do not count. This decides whether the mail
+    // opens with "you have already been to the page", and a scanner
+    // detonating the link would put that sentence in front of somebody
+    // who never saw it.
     const { data: arrival } = await (svc as unknown as {
       from: (t: string) => {
         select: (c: string) => {
           eq: (c: string, v: string) => {
-            limit: (n: number) => { maybeSingle: () => Promise<{ data: unknown }> }
+            is: (c: string, v: null) => {
+              limit: (n: number) => { maybeSingle: () => Promise<{ data: unknown }> }
+            }
           }
         }
       }
@@ -190,6 +196,7 @@ export async function resolveOutboundSituation(
       .from("claim_arrivals")
       .select("id")
       .eq("email", email.trim().toLowerCase())
+      .is("machine_reason", null)
       .limit(1)
       .maybeSingle()
     visited = Boolean(arrival)

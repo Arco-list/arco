@@ -275,7 +275,11 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     fetchAllRows((f, t) => supabase.from("saved_companies").select("user_id, company_id, created_at").order("created_at").range(f, t)),
     fetchAllRows((f, t) => supabase.from("prospects").select("id, email, company_id, apollo_contact_id").order("id").range(f, t)),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    fetchAllRows((f, t) => (supabase as any).from("claim_arrivals").select("channel, email, created_at, company_id").order("id").range(f, t)),
+    // machine_reason IS NULL: scanner arrivals are written now rather
+    // than dropped (see trackClaimArrival), so the exclusion lives here
+    // instead of at the write. The row stays readable for auditing the
+    // rule; the funnel only counts what it believes.
+    fetchAllRows((f, t) => (supabase as any).from("claim_arrivals").select("channel, email, created_at, company_id").is("machine_reason", null).order("id").range(f, t)),
     supabase.from("categories").select("id, slug").in("slug", PUBLISHABLE_SERVICE_SLUGS),
     // Outbound metric inputs — manual logs from admin/companies and the
     // Sales page. 'note' is excluded (observations, not outbound
