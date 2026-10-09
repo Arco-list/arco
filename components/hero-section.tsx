@@ -174,8 +174,19 @@ export function HeroSection({ projects, isSuperAdmin = false }: HeroSectionProps
       <div className="hidden md:block absolute bottom-0 left-0 right-0 pb-12" style={{ zIndex: 20 }}>
         <div className="max-w-[1680px] mx-auto px-[80px] max-lg:px-[40px]">
 
-          {/* Large screens: Left (Title) | Right (Navigation) */}
-          <div className="lg:flex lg:items-end lg:justify-between lg:gap-8">
+          {/* Titel en navigatie staan pas náást elkaar vanaf 2xl (1536).
+              Gemeten: regel 1 van de titel is 855px breed op 72px. De
+              navigatie is met vijf balken van 60px plus twee pijlen 424px,
+              en met de tussenruimte van 32 kost ze 456. Naast elkaar past
+              het dus vanaf ±1471px; daaronder staat ze eronder en heeft de
+              titel de volle breedte, wat vanaf 1024 ruim genoeg is omdat
+              de clamp het lettertype dan al heeft teruggeschaald.
+
+              LET OP bij het toevoegen van covers: elke extra balk kost 68px
+              aan titelbreedte. Bij zes covers blijft er op 1536 nog 852px
+              over tegen 855 nodig — dan breekt de kop precies op de grens.
+              Gaat het aantal omhoog, zet deze grens dan mee omhoog. */}
+          <div className="2xl:flex 2xl:items-end 2xl:justify-between 2xl:gap-8">
 
             {/* Left Side - Title & Stats */}
             <div className="flex-1">
@@ -191,7 +202,7 @@ export function HeroSection({ projects, isSuperAdmin = false }: HeroSectionProps
 
             {/* Navigation - right on desktop, below title on tablet */}
             {projects.length > 1 && (
-              <div className="flex flex-col gap-3 mt-6 lg:mt-0">
+              <div className="flex flex-col gap-3 mt-6 2xl:mt-0">
                 {/* Progress Bars & Arrows Row */}
                 <div className="flex items-center gap-3">
                   <div className="flex gap-2">

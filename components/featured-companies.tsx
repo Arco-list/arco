@@ -24,8 +24,11 @@ export function FeaturedCompanies({ companies }: FeaturedCompaniesProps) {
     return null
   }
 
+  // Bovenkant gehalveerd — zie de notitie in recent-projects. De
+  // max-md-variant ontbrak hier helemaal, waardoor deze sectie op
+  // mobiel ook al meer ruimte nam dan zijn buren.
   return (
-    <section className="py-16 bg-white">
+    <section className="pt-8 pb-16 max-md:pt-5 max-md:pb-10 bg-white">
       <div className="wrap">
         <div className="section-header">
           <h2 className="arco-section-title">{t("featured_architects")}</h2>
