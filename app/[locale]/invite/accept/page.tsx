@@ -1,10 +1,15 @@
+import type { Metadata } from "next"
+
 import { getTranslations } from "next-intl/server"
 
 import { previewCredit } from "@/lib/invites/accept-credit"
+import { NO_INDEX } from "@/lib/seo-utils"
 
 import { AcceptClient } from "./accept-client"
 
 export const dynamic = "force-dynamic"
+
+export const metadata: Metadata = { robots: NO_INDEX }
 
 /**
  * Landing page for the "Accepteer vermelding" link in invite email.

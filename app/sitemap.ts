@@ -39,6 +39,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { path: "/businesses/architects", priority: 0.6, changeFrequency: "monthly" },
     { path: "/businesses/professionals", priority: 0.6, changeFrequency: "monthly" },
     { path: "/about", priority: 0.4, changeFrequency: "monthly" },
+    // Pagina's die we serveren en die Google al rankt, maar die hier
+    // nooit stonden. Dat viel op via % Ranked op /admin/seo: de
+    // Arco-groep kwam op 122% uit — meer gerankte pagina's dan
+    // aangeboden — omdat /nl/pricing, /privacy en /terms wél in de
+    // zoekresultaten stonden en niet in deze lijst. De sitemap is de
+    // noemer van die metriek, dus een gat hier is een gat daar.
+    { path: "/pricing", priority: 0.6, changeFrequency: "monthly" },
+    { path: "/privacy", priority: 0.2, changeFrequency: "yearly" },
+    { path: "/terms", priority: 0.2, changeFrequency: "yearly" },
   ]
 
   const staticEntries: MetadataRoute.Sitemap = staticPaths.map(({ path, priority, changeFrequency }) => ({

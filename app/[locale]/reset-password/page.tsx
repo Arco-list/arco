@@ -1,4 +1,6 @@
 import type { Metadata } from "next"
+
+import { NO_INDEX } from "@/lib/seo-utils"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { ResetPassword1 } from "@/components/reset-password1"
@@ -6,6 +8,7 @@ import { ResetPassword1 } from "@/components/reset-password1"
 export const metadata: Metadata = {
   title: "Reset Password",
   description: "Reset your Arco account password. Enter your email to receive a password reset link.",
+  robots: NO_INDEX,
 }
 
 export default function ResetPasswordPage() {

@@ -1,4 +1,7 @@
+import type { Metadata } from "next"
+
 import { createServiceRoleSupabaseClient, createServerSupabaseClient } from "@/lib/supabase/server"
+import { localeAlternates } from "@/lib/seo-utils"
 import { isSuperAdminUser } from "@/lib/auth-utils"
 import { AboutClient, type AboutHeroCover } from "./about-client"
 
@@ -91,6 +94,14 @@ async function fetchIsSuperAdmin(): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/** Zelfde reden als op de homepagina: /about stond met 80 vertoningen
+ *  op positie 6,2 en /nl/about met één op 3,0. Zonder canonical en
+ *  hreflang koos Google zelf, en hij koos de URL die omleidt. */
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params
+  return { alternates: localeAlternates(locale, "/about") }
 }
 
 export default async function AboutPage() {

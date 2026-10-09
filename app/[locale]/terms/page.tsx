@@ -1,10 +1,23 @@
 import type { Metadata } from "next"
+
+import { localeAlternates } from "@/lib/seo-utils"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 
-export const metadata: Metadata = {
-  title: "Terms of Service",
-  description: "Read Arco's terms of service. Understand your rights and responsibilities when using our platform to connect with professionals.",
+/**
+ * Statische `metadata` kon de locale niet lezen, dus deze pagina gaf
+ * geen canonical en geen hreflang — net als de homepagina en /about.
+ * Zonder die twee kiest Google zelf welke URL en welke taalversie hij
+ * toont, en dat deed hij ook: de locale-loze variant stond boven de
+ * canonieke. Als generateMetadata kan hij wel bij `params`.
+ */
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params
+  return {
+    title: "Terms of Service",
+    description: "Read Arco's terms of service. Understand your rights and responsibilities when using our platform to connect with professionals.",
+    alternates: localeAlternates(locale, "/terms"),
+  }
 }
 
 export default function TermsPage() {

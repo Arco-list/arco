@@ -1,5 +1,7 @@
 import Link from "next/link"
 import type { Metadata } from "next"
+
+import { NO_INDEX } from "@/lib/seo-utils"
 import { MailCheck } from "lucide-react"
 
 import { Footer } from "@/components/footer"
@@ -10,6 +12,7 @@ import { emailSchema } from "@/lib/supabase/auth-validation"
 export const metadata: Metadata = {
   title: "Check Your Email",
   description: "Please check your email to confirm your Arco account registration.",
+  robots: NO_INDEX,
 }
 
 interface SignupConfirmPageProps {
