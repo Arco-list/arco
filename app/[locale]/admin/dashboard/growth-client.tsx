@@ -4,6 +4,7 @@ import { useState, useEffect, useTransition } from "react"
 import type { GrowthMetrics, Timeframe } from "./actions"
 import { fetchGrowthMetrics } from "./actions"
 import { GrowthSyncBadge } from "@/components/admin/growth-sync-badge"
+import { AdminNotice } from "@/components/admin/admin-notice"
 import { AdminTabs, useAdminTab } from "@/components/admin/admin-tabs"
 import { MetricDetailModal } from "./metric-detail-modal"
 import { GrowthTableView } from "./table/table-view"
@@ -615,6 +616,16 @@ export function GrowthClient({ initialMetrics, initialLastSynced = null }: Props
         }
       />
 
+      {/* Als balk onder de sub-nav in plaats van als blok in de inhoud:
+          dit gaat over de staat van de pagina, niet over de tabel die
+          eronder staat, en als blok duwde het die tabel omlaag. */}
+      {posthogError && (
+        <AdminNotice tone="danger">
+          <strong className="font-medium">PostHog data unavailable</strong>
+          <span className="opacity-80"> — {posthogError}</span>
+        </AdminNotice>
+      )}
+
       {/* Tracking events — floats in the gap under the sticky bar, same
           treatment as the tour-replay link on company edit. */}
       <div className="wrap" style={{ position: "relative", height: 0 }}>
@@ -647,16 +658,6 @@ export function GrowthClient({ initialMetrics, initialLastSynced = null }: Props
       </div>
 
       <div className="wrap" style={{ paddingTop: 52, paddingBottom: 48 }}>
-
-      {posthogError && (
-        <div
-          role="alert"
-          className="mb-6 rounded-[3px] border border-[#fecaca] bg-[#fef2f2] p-4 text-sm text-[#991b1b]"
-        >
-          <p className="font-medium">PostHog data unavailable</p>
-          <p className="mt-1 text-xs text-[#991b1b]/80">{posthogError}</p>
-        </div>
-      )}
 
       {view === "table" ? (
         <GrowthTableView
