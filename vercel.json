@@ -1,6 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["fra1"],
+  "regions": [
+    "fra1"
+  ],
   "crons": [
     {
       "path": "/api/cron/process-drip-queue",
@@ -9,6 +11,10 @@
     {
       "path": "/api/cron/sync-gsc-indexation",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/sync-seo-pages",
+      "schedule": "30 3 * * *"
     },
     {
       "path": "/api/cron/sync-gmail",

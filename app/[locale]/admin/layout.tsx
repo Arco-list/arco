@@ -35,6 +35,9 @@ const ICONS = {
   growth: (
     <svg {...iconProps}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
   ),
+  seo: (
+    <svg {...iconProps}><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="8" y1="11" x2="14" y2="11" /></svg>
+  ),
   growthModel: (
     <svg {...iconProps}><path d="M3 3v18h18" /><path d="M7 14l4-4 4 4 5-5" /></svg>
   ),
@@ -46,6 +49,9 @@ const ICONS = {
   ),
   categories: (
     <svg {...iconProps}><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>
+  ),
+  proposition: (
+    <svg {...iconProps}><path d="M12 3v18" /><path d="M5 8l7-5 7 5" /><circle cx="12" cy="14" r="3" /></svg>
   ),
   design: (
     <svg {...iconProps}><circle cx="13.5" cy="6.5" r=".5" fill="currentColor" /><circle cx="17.5" cy="10.5" r=".5" fill="currentColor" /><circle cx="8.5" cy="7.5" r=".5" fill="currentColor" /><circle cx="6.5" cy="12.5" r=".5" fill="currentColor" /><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c3.31 0 6-2.69 6-6 0-5.52-4.5-10-10-10z" /></svg>
@@ -85,6 +91,7 @@ function buildAdminNavLinks({
       label: "Growth",
       children: [
         { href: "/admin/dashboard", label: "Dashboard", icon: ICONS.growth },
+        { href: "/admin/seo", label: "SEO", icon: ICONS.seo },
         // No badge: the outbound-due count implied action pressure the
         // call-list workflow no longer uses (mirrors the earlier removal
         // of the in-page Call list count).
@@ -100,6 +107,7 @@ function buildAdminNavLinks({
         { href: "/admin/categories", label: "Categories", icon: ICONS.categories },
         { href: "/admin/pinterest", label: "Pinterest", icon: ICONS.pinterest },
         { href: "/admin/design", label: "Design", icon: ICONS.design },
+        { href: "/admin/brand", label: "Brand", icon: ICONS.proposition },
         { href: "/admin/subscriptions", label: "Subscriptions", icon: ICONS.subscriptions },
       ],
     },

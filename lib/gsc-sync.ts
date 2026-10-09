@@ -1,33 +1,22 @@
-// Google Search Console sync — pulls per-URL indexation + 28-day Search
-// Analytics rollups for every published project and listed/prospected company,
-// then writes them back to the SEO columns on those tables.
+// Google Search Console — per-URL indexatie.
 //
-// Two GSC APIs in one job:
-//   1. URL Inspection API (`urlInspection.index.inspect`) — per-URL verdict
-//      (PASS / PARTIAL / FAIL / NEUTRAL) and the canonical Google picked.
-//      Rate limit ~2,000 requests/day, current scale ~20 URLs.
-//   2. Search Analytics API (`searchanalytics.query`) — bulk impressions /
-//      clicks / CTR / position per page in a single call (one request per
-//      property, returns up to 25k rows).
+// Loopt met de URL Inspection API (`urlInspection.index.inspect`) langs
+// elk gepubliceerd project en elk listed/prospected bedrijf, en schrijft
+// het oordeel (PASS / PARTIAL / FAIL / NEUTRAL), de canonical die Google
+// koos en een 28-daagse rollup terug naar de seo_*-kolommen op die
+// rijen. Limiet ~2.000 aanroepen per dag; de huidige lus doet er ~274.
 //
-// Auth: service-account JWT signed with the private key from
-// GOOGLE_GSC_SERVICE_ACCOUNT (JSON), exchanged at oauth2.googleapis.com/token
-// for an access token. No npm dep — Node's built-in crypto handles RSA-SHA256.
+// De SITEBREDE cijfers — per dag, per pagina, per zoekopdracht — staan
+// in lib/seo/sync-pages.ts met een eigen cron. Ze stonden hier, achter
+// deze lus, en haalden het einde van de functie niet meer.
 //
-// See docs/SETUP_GSC_SYNC.md for the one-time GCP + Search Console setup.
-import crypto from "crypto"
+// Authenticatie in lib/gsc/client.ts, gedeeld met die sync.
+//
+// Zie docs/SETUP_GSC_SYNC.md voor de eenmalige GCP + Search Console-setup.
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
+import { getGscAccessToken, GSC_PROPERTY, SITE_URL } from "@/lib/gsc/client"
 
-const GSC_SCOPE = "https://www.googleapis.com/auth/webmasters.readonly"
-const GSC_PROPERTY = "https://www.arcolist.com/"
-const SITE_URL = "https://www.arcolist.com"
-
-type ServiceAccount = {
-  client_email: string
-  private_key: string
-  token_uri?: string
-}
 
 type IndexationState = "PASS" | "PARTIAL" | "FAIL" | "NEUTRAL" | "PENDING"
 
@@ -40,71 +29,6 @@ export type GscSyncResult = {
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
-
-function loadServiceAccount(): ServiceAccount {
-  const raw = process.env.GOOGLE_GSC_SERVICE_ACCOUNT
-  if (!raw) throw new Error("GOOGLE_GSC_SERVICE_ACCOUNT env var not set")
-  try {
-    const parsed = JSON.parse(raw) as ServiceAccount
-    if (!parsed.client_email || !parsed.private_key) {
-      throw new Error("client_email or private_key missing")
-    }
-    return parsed
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    throw new Error(`GOOGLE_GSC_SERVICE_ACCOUNT is not valid JSON: ${msg}`)
-  }
-}
-
-function base64url(input: Buffer | string): string {
-  const buf = typeof input === "string" ? Buffer.from(input) : input
-  return buf.toString("base64").replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_")
-}
-
-async function getAccessToken(): Promise<string> {
-  const sa = loadServiceAccount()
-  const now = Math.floor(Date.now() / 1000)
-  const header = { alg: "RS256", typ: "JWT" }
-  // Domain-wide delegation: when GSC_IMPERSONATE_USER is set, the service
-  // account acts as that Workspace user (who already has GSC property
-  // access). Avoids the "Add user" path in Search Console, which Workspace
-  // policy can refuse for non-domain emails. The `sub` claim is what
-  // triggers impersonation; the Workspace admin must have authorised this
-  // service account's Client ID + the webmasters.readonly scope under
-  // admin.google.com → Security → API controls → Domain-wide delegation.
-  const claim: Record<string, unknown> = {
-    iss: sa.client_email,
-    scope: GSC_SCOPE,
-    aud: sa.token_uri || "https://oauth2.googleapis.com/token",
-    exp: now + 3600,
-    iat: now,
-  }
-  const impersonate = process.env.GSC_IMPERSONATE_USER
-  if (impersonate) claim.sub = impersonate
-  const signingInput = `${base64url(JSON.stringify(header))}.${base64url(JSON.stringify(claim))}`
-  const signer = crypto.createSign("RSA-SHA256")
-  signer.update(signingInput)
-  signer.end()
-  const signature = base64url(signer.sign(sa.private_key))
-  const jwt = `${signingInput}.${signature}`
-
-  const res = await fetch(sa.token_uri || "https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion: jwt,
-    }),
-  })
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`Token exchange failed: ${res.status} ${body}`)
-  }
-  const json = (await res.json()) as { access_token: string }
-  return json.access_token
-}
-
-// ─── URL Inspection ───────────────────────────────────────────────────────────
 
 type InspectResponse = {
   inspectionResult?: {
@@ -213,177 +137,17 @@ async function fetchPagePerformance28d(token: string): Promise<Map<string, {
   return map
 }
 
-/** True DAILY impressions/clicks per scope, path-filtered. GSC serves up
- * to ~16 months of daily rows in one call, so every run re-upserts the
- * full available history — self-healing (GSC finalizes data ~3 days
- * late) and the initial run doubles as the backfill. Feeds the
- * dashboard's weekly/monthly buckets with real per-period sums; the
- * 28d rolling snapshots remain for point-in-time reads. */
-async function syncDailyMetrics(
-  token: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
-): Promise<{ scopes: number; days: number }> {
-  const today = new Date()
-  const startDate = new Date(today)
-  startDate.setDate(today.getDate() - 480)
-  const fmt = (d: Date) => d.toISOString().slice(0, 10)
-
-  const scopes: Array<{ scope: string; pathContains: string }> = [
-    { scope: "projects", pathContains: "/projects/" },
-    { scope: "companies", pathContains: "/professionals/" },
-  ]
-  let totalDays = 0
-  for (const { scope, pathContains } of scopes) {
-    const res = await fetch(
-      `https://searchconsole.googleapis.com/webmasters/v3/sites/${encodeURIComponent(GSC_PROPERTY)}/searchAnalytics/query`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          startDate: fmt(startDate),
-          endDate: fmt(today),
-          dimensions: ["date"],
-          dimensionFilterGroups: [{ filters: [{ dimension: "page", operator: "contains", expression: pathContains }] }],
-          rowLimit: 1000,
-        }),
-      },
-    )
-    if (!res.ok) {
-      logger.warn("[gsc-sync] daily metrics query failed", { scope, status: res.status })
-      continue
-    }
-    const json = (await res.json()) as { rows?: Array<{ keys?: string[]; impressions: number; clicks: number }> }
-    const rows = (json.rows ?? [])
-      .filter((r) => r.keys?.[0])
-      .map((r) => ({
-        metric_date: r.keys![0],
-        scope,
-        impressions: Math.round(r.impressions ?? 0),
-        clicks: Math.round(r.clicks ?? 0),
-      }))
-    if (rows.length > 0) {
-      const { error } = await supabase
-        .from("seo_daily_metrics")
-        .upsert(rows, { onConflict: "metric_date,scope" })
-      if (error) logger.warn("[gsc-sync] daily metrics upsert failed", { scope, message: error.message })
-      else totalDays += rows.length
-    }
-  }
-  return { scopes: scopes.length, days: totalDays }
-}
-
-/**
- * Daily impressions/clicks/position per SEARCH QUERY, per scope.
- *
- * The third axis. Day and page were already synced; which words put us
- * in front of someone was not stored anywhere, so every explanation of
- * a spike was a guess — including the one about August, where
- * /professionals/ went from ~30 impressions a week to 8,504 and back to
- * ~600, and the project pages did exactly the same thing in exactly the
- * same weeks.
- *
- * NINETY DAYS, NOT 480. The daily totals above re-upsert their whole
- * history on every run because one row per day is nothing; this is one
- * row per day PER QUERY, which is three orders of magnitude more. GSC
- * also caps a response at 25,000 rows, and a 480-day window would hit
- * that cap and silently return a truncated top-N instead of everything.
- * Ninety days re-upserted daily keeps the recent window exact and lets
- * history accumulate row by row — nothing is deleted, so the table
- * grows past ninety days on its own.
- *
- * Paginated: `startRow` walks until a page comes back short. Without it
- * the sync would quietly keep whichever 25,000 rows Google ordered
- * first, which for a site with a long tail is the loudest queries only
- * — exactly the ones we already know about.
- */
-async function syncQueryMetrics(
-  token: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
-): Promise<{ scopes: number; rows: number; truncated: string[] }> {
-  const today = new Date()
-  const startDate = new Date(today)
-  startDate.setDate(today.getDate() - 90)
-  const fmt = (d: Date) => d.toISOString().slice(0, 10)
-
-  const scopes: Array<{ scope: string; pathContains: string }> = [
-    { scope: "projects", pathContains: "/projects/" },
-    { scope: "companies", pathContains: "/professionals/" },
-  ]
-
-  const PAGE = 25_000
-  // Six pages = 150,000 rows for a 90-day window. Far beyond what this
-  // site produces; the cap exists so a runaway cannot wedge the cron
-  // against its 300s budget.
-  const MAX_PAGES = 6
-
-  let totalRows = 0
-  const truncated: string[] = []
-
-  for (const { scope, pathContains } of scopes) {
-    for (let page = 0; page < MAX_PAGES; page++) {
-      const res = await fetch(
-        `https://searchconsole.googleapis.com/webmasters/v3/sites/${encodeURIComponent(GSC_PROPERTY)}/searchAnalytics/query`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            startDate: fmt(startDate),
-            endDate: fmt(today),
-            dimensions: ["date", "query"],
-            dimensionFilterGroups: [{ filters: [{ dimension: "page", operator: "contains", expression: pathContains }] }],
-            rowLimit: PAGE,
-            startRow: page * PAGE,
-          }),
-        },
-      )
-      if (!res.ok) {
-        logger.warn("[gsc-sync] query metrics request failed", { scope, page, status: res.status })
-        break
-      }
-      const json = (await res.json()) as {
-        rows?: Array<{ keys?: string[]; impressions: number; clicks: number; position?: number }>
-      }
-      const raw = json.rows ?? []
-      const rows = raw
-        .filter((r) => r.keys?.[0] && r.keys?.[1])
-        .map((r) => ({
-          metric_date: r.keys![0],
-          scope,
-          query: r.keys![1],
-          impressions: Math.round(r.impressions ?? 0),
-          clicks: Math.round(r.clicks ?? 0),
-          // Rounded to two decimals to match the column; Google serves
-          // a long float and the difference between 50.4 and 50 is the
-          // difference between the top of page five and the bottom.
-          position: typeof r.position === "number" ? Math.round(r.position * 100) / 100 : null,
-        }))
-
-      if (rows.length > 0) {
-        const { error } = await supabase
-          .from("seo_query_metrics")
-          .upsert(rows, { onConflict: "metric_date,scope,query" })
-        if (error) {
-          logger.warn("[gsc-sync] query metrics upsert failed", { scope, page, message: error.message })
-          break
-        }
-        totalRows += rows.length
-      }
-
-      // A short page is the last page.
-      if (raw.length < PAGE) break
-      // A full page on the last allowed iteration means Google had more
-      // to give. Reported rather than swallowed: a silently truncated
-      // tail is the failure this pagination exists to prevent.
-      if (page === MAX_PAGES - 1) truncated.push(scope)
-    }
-  }
-
-  return { scopes: scopes.length, rows: totalRows, truncated }
-}
-
-// ─── Sync ─────────────────────────────────────────────────────────────────────
+// DE DAGREEKS EN DE ZOEKOPDRACHTEN STAAN HIER NIET MEER.
+//
+// Ze stonden achter de lus hierboven en werden daardoor nooit bereikt:
+// 274 URL-inspecties duurden vanaf 30 september langer dan de 300
+// seconden van Vercel, en de run eindigde elke nacht op "This operation
+// was aborted". Dat bleef vier dagen onzichtbaar, want de inspectie
+// zelf slaagde wel en schreef netjes zijn rijen weg.
+//
+// Nu in lib/seo/sync-pages.ts met een eigen cron
+// (/api/cron/sync-seo-pages). De cijfers horen niet achter de traagste
+// aanroep van het platform te staan.
 
 type RowToSync = {
   table: "projects" | "companies"
@@ -404,7 +168,7 @@ type RowToSync = {
  */
 export async function syncGscIndexation(): Promise<GscSyncResult> {
   const supabase = createServiceRoleSupabaseClient()
-  const token = await getAccessToken()
+  const token = await getGscAccessToken()
 
   const [{ data: projectRows }, { data: companyRows }] = await Promise.all([
     supabase
@@ -520,28 +284,6 @@ export async function syncGscIndexation(): Promise<GscSyncResult> {
         logger.error("[gsc-sync] row failed", { url: target.urls[0], error: lastError })
       }
     }
-  }
-
-  // Daily impressions/clicks series — full-history upsert, best-effort.
-  try {
-    const daily = await syncDailyMetrics(token, supabase)
-    logger.info("[gsc-sync] daily metrics synced", daily)
-  } catch (err) {
-    logger.warn("[gsc-sync] daily metrics sync failed", { message: err instanceof Error ? err.message : String(err) })
-  }
-
-  // Per-query series — 90-day rolling window, best-effort like the rest.
-  // Last in the run deliberately: it is the heaviest call and the only
-  // one nothing else depends on, so a timeout here costs the newest
-  // queries rather than the indexation state.
-  try {
-    const queries = await syncQueryMetrics(token, supabase)
-    logger.info("[gsc-sync] query metrics synced", queries)
-    if (queries.truncated.length > 0) {
-      logger.warn("[gsc-sync] query metrics hit the page cap — tail not stored", { scopes: queries.truncated })
-    }
-  } catch (err) {
-    logger.warn("[gsc-sync] query metrics sync failed", { message: err instanceof Error ? err.message : String(err) })
   }
 
   logger.info("[gsc-sync] done", { projectsSynced, companiesSynced, errorCount })
