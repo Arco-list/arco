@@ -89,7 +89,8 @@ export default function LegacyComponentsPage() {
               <ComponentItem name="popular-projects.tsx" path="components/popular-projects.tsx" status="needs-redesign" />
               <ComponentItem name="featured-professionals.tsx" path="components/featured-professionals.tsx" status="needs-redesign" />
               <ComponentItem name="featured-companies.tsx" path="components/featured-companies.tsx" status="needs-redesign" />
-              <ComponentItem name="features-section.tsx" path="components/features-section.tsx" status="needs-redesign" />
+              <ComponentItem name="positioning-section.tsx" path="components/positioning-section.tsx" status="needs-redesign" />
+              <ComponentItem name="how-arco-works.tsx" path="components/how-arco-works.tsx" status="needs-redesign" />
               <ComponentItem name="professionals-section.tsx" path="components/professionals-section.tsx" status="needs-redesign" />
               <ComponentItem name="pricing-section.tsx" path="components/pricing-section.tsx" status="needs-redesign" />
               <ComponentItem name="map-section.tsx" path="components/map-section.tsx" status="needs-redesign" />
@@ -136,7 +137,6 @@ export default function LegacyComponentsPage() {
               <ComponentItem name="project-narrative-fields.tsx" path="components/project-details/project-narrative-fields.tsx" status="needs-redesign" />
               <ComponentItem name="custom-dropdown.tsx" path="components/project-details/custom-dropdown.tsx" status="needs-redesign" />
               <ComponentItem name="feature-checkbox-grid.tsx" path="components/project-details/feature-checkbox-grid.tsx" status="needs-redesign" />
-              <ComponentItem name="segmented-progress-bar.tsx" path="components/new-project/segmented-progress-bar.tsx" status="needs-redesign" />
               <ComponentItem name="photo-tour-manager.tsx" path="components/photo-tour-manager.tsx" status="needs-redesign" />
             </div>
           </div>
