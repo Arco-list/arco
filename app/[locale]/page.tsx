@@ -9,7 +9,8 @@ import { Header } from "@/components/header"
 import { HeroSection, type HeroProject } from "@/components/hero-section"
 import { BrowseSection, type BrowseCard } from "@/components/browse-section"
 import { RecentProjects, type RecentProject } from "@/components/recent-projects"
-import { FeaturesSection } from "@/components/features-section"
+import { PositioningSection } from "@/components/positioning-section"
+import { HowArcoWorks } from "@/components/how-arco-works"
 import { MembershipCTA } from "@/components/membership-cta"
 import { PopularSearches, type PopularHubs } from "@/components/popular-searches"
 import { FeaturedCompanies, type FeaturedCompany } from "@/components/featured-companies"
@@ -675,21 +676,26 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
         {/* 1. Hero — full bleed, editorial headline */}
         <HeroSection projects={heroProjects} isSuperAdmin={isSuperAdmin} />
 
-        {/* 3. Browse Section - Projects, Spaces, Professionals */}
+        {/* 2. Browse Section - Projects, Spaces, Professionals */}
         <BrowseSection 
           projects={browseProjects}
           spaces={browseSpaces}
           professionals={browseProfessionals}
         />
 
-        {/* Hoe Arco werkt — direct na de professionals-rail, want daar
-            eindigt het bladeren en begint de vraag waarom je dit zou
-            geloven. Stond eerst onder de uitgelichte projecten. */}
-        <FeaturesSection />
+        {/* 3. Pay-off en merkverhaal — na de rail, als opmaat naar de
+            uitgelichte projecten: eerst het bladeren, dan wie erachter
+            zit, dan het werk zelf. */}
+        <PositioningSection />
 
         {/* 4. Recent Projects */}
         <RecentProjects projects={recentProjects} />
 
+
+        {/* 5. Hoe Arco werkt — na de uitgelichte projecten: een
+            gebruiksaanwijzing landt pas als iemand gezien heeft waar het
+            over gaat. Stap 3 is de conversiestap. */}
+        <HowArcoWorks />
 
         {/* 6. Featured Studios */}
         <FeaturedCompanies companies={featuredCompanies} />

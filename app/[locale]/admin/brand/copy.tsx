@@ -46,14 +46,15 @@ const nl = {
   },
 
   hero: {
-    line1: "Het netwerk van professionals,",
-    line2: "bewezen door hun werk",
-    eyebrow: "GEREALISEERDE ARCHITECTUUR · MET EER AAN DE MAKERS · REDACTIONEEL SAMENGESTELD",
+    line1: "Uitzonderlijke architectuur.",
+    line2: "Met eer aan de makers.",
+    eyebrow: "GEREALISEERDE PROJECTEN · VERMELD DOOR DE ARCHITECT · REDACTIONEEL SAMENGESTELD",
   },
 
   story: {
     more: "Lees meer",
     less: "Minder",
+    payoff: "Het netwerk achter uitzonderlijke architectuur.",
     lead: "Arco is waar toonaangevende architecten hun gerealiseerde werk publiceren en de vakmensen vermelden waarmee ze hebben samengewerkt. Wij helpen opdrachtgevers aan een netwerk van professionals — van interieurontwerper tot aannemer — die hun reputatie hebben verdiend door vakmanschap, niet door reclame.",
     p1: "Een bureau kiezen voor je huis is een dure beslissing op dun bewijs. Wat je online vindt is meestal een render, een moodboard of een profiel dat iemand over zichzelf heeft geschreven. Afgerond werk, gefotografeerd zoals het is opgeleverd, kom je zelden tegen — en dat is juist het enige dat voorspelt wat je krijgt.",
     p2: "Aan de andere kant staan bureaus met tien jaar gebouwd werk en geen neutrale plek om het te laten zien. Hun eigen site is een bewering over zichzelf; een gidsvermelding is een regel in een lijst. Hier staat dat werk op één plek, en iedereen die eraan meewerkte staat erbij — vermeld door de architect, niet door zichzelf.",
@@ -61,19 +62,19 @@ const nl = {
   },
   benefits: () => [
     {
-      title: "Gerealiseerde architectuur",
-      body: "Op Arco staan alleen gerealiseerde projecten, professioneel gefotografeerd. Zoek op ruimte, stijl en plaats, en gebruik wat anderen hebben gebouwd als inspiratie voor je eigen project.",
+      title: "Ontdek afgerond werk",
+      body: "Filter op ruimte, stijl en plaats. Alles wat je vindt is gebouwd en professioneel gefotografeerd — je kijkt naar een echt project, niet naar een render of AI-beeld.",
       rests: ["Geen beeld zonder herkomst"],
     },
     {
-      title: "Met eer aan de makers",
-      body: "Elke professional op een project — aannemer, interieurontwerper, landschapsarchitect — wordt vermeld door de architect waarmee ze hebben samengewerkt. Die vermelding betekent iets.",
+      title: "Vind het hele team",
+      body: "Bij elk project staan de betrokken vakmensen, van interieurontwerper tot aannemer, vermeld door de architect die met ze samenwerkte.",
       rests: ["Vermeldingen boven reviews"],
     },
     {
-      title: "Redactioneel samengesteld",
-      body: "Toonaangevende architecten dienen hun afgeronde projecten in en wij beoordelen ze voordat ze online komen. Niet alles haalt het, en een plek is niet te koop.",
-      rests: ["Niet iedereen hoort hier", "Geld koopt bereik, nooit geloofwaardigheid"],
+      title: "Benader ze rechtstreeks",
+      body: "Stel je eigen team samen uit de vakmensen die bij de projecten vermeld staan. Je benadert ze zelf, zonder tussenpersoon.",
+      rests: ["De besten moeten hier wíllen staan"],
     },
   ],
   benefitsRests: "Steunt op",
@@ -289,9 +290,10 @@ const nl = {
     slots: {
       headers: ["Slot", "Wat er komt te staan", "Regel"],
       rows: [
-        ["Homepagina-hero", "Het netwerk van professionals, bewezen door hun werk", "Op twee regels, alleen. Staat live."],
-        ["Eyebrow onder de hero", "GEREALISEERDE ARCHITECTUUR · MET EER AAN DE MAKERS · REDACTIONEEL SAMENGESTELD", "De volgorde ligt vast: elk item slaat op het woord ervóór. Live staat home.hero_eyebrow nog in de oude samenstelling."],
-        ["Footer", "Het netwerk van professionals, bewezen door hun werk", "Staat live, onder het logo."],
+        ["Homepagina-hero", "Uitzonderlijke architectuur. Met eer aan de makers.", "Twee zinnen, twee regels. Staat live."],
+        ["Eyebrow onder de hero", "GEREALISEERDE PROJECTEN · VERMELD DOOR DE ARCHITECT · REDACTIONEEL SAMENGESTELD", "Feit, bron, selectie — elk item beantwoordt een andere vraag die de hero oproept. Staat live."],
+        ["Pay-off op de homepage", "Het netwerk achter uitzonderlijke architectuur.", "Kop boven het merkverhaal. Pakt de hero op: je hebt de architectuur gezien, dit is wie erachter zit. Staat live."],
+        ["Footer", "Het netwerk achter uitzonderlijke architectuur.", "Staat live, onder het logo. Dezelfde zin als de pay-off — bewust, als refrein."],
         ["Zoekresultaattitel", "— gerealiseerd werk, als achtervoegsel", "Zoekvraag eerst, claim tweede. De formules hieronder vullen het eerste deel."],
         ["Meta-omschrijving", "Feiten van de pagina zelf", "Gegenereerd uit aantallen, plaatsen en typen. De claim alleen als er tekens over zijn."],
         ["H1", "Niets", "De H1 noemt de pagina. De claim staat in de intro eronder."],
@@ -300,7 +302,7 @@ const nl = {
         ["Koude e-mail", "De eerste zin van het merkverhaal", "Eerste regel van de mail, vóór de vraag."],
         ["AI Overview", "Niets te zetten", "Geen slot dat je bestuurt — het citeert wat het vaakst voorkomt. Daarom staat dezelfde zin op elke hub."],
       ],
-      note: "Deze sectie is een uitrollijst en kan weg zodra hij is afgewerkt. Vijf live strings dragen nog het oude merk: home.hero_line1, home.hero_line2, home.hero_eyebrow, home.hero_title (“Het gecureerde architectuurplatform”) en footer.tagline, plus about.hero_subtitle. Zolang die er staan, zegt de site iets anders dan deze pagina.",
+      note: "Deze sectie is een uitrollijst en kan weg zodra hij is afgewerkt. Nog twee live strings dragen het oude merk: home.hero_title (“Het gecureerde architectuurplatform”, wordt nergens getoond) en about.hero_subtitle. Zolang die er staan, zegt de site op die plekken iets anders dan deze pagina.",
     },
     formulas: {
       inCode: "in code",
@@ -424,34 +426,35 @@ const en: Copy = {
   },
 
   hero: {
-    line1: "The network of professionals,",
-    line2: "proven by their work",
-    eyebrow: "BUILT ARCHITECTURE · CREDIT TO THE MAKERS · EDITORIALLY CURATED",
+    line1: "Exceptional architecture.",
+    line2: "With credit to the creators.",
+    eyebrow: "BUILT PROJECTS · CREDITED BY THE ARCHITECT · EDITORIALLY CURATED",
   },
 
   story: {
     more: "Read more",
     less: "Less",
-    lead: "Arco is where leading architects publish their built work and credit the makers they worked with. We give clients a network of professionals — from interior designer to contractor — who earned their reputation through craft, not advertising.",
+    payoff: "The network behind exceptional architecture.",
+    lead: "Arco is where leading architects publish their built work and credit the creators they worked with. We give clients a network of professionals — from interior designer to contractor — who earned their reputation through craft, not advertising.",
     p1: "Choosing a firm for your house is an expensive decision made on thin evidence. What you find online is usually a render, a mood board or a profile someone wrote about themselves. Finished work, photographed as it was handed over, is rare — and it is the only thing that predicts what you will get.",
     p2: "On the other side are firms with ten years of built work and nowhere neutral to show it. Their own site is a claim about themselves; a directory listing is one line in a list. Here that work sits in one place, and everyone who worked on it is named — by the architect, not by themselves.",
     p3: "Recognise your own ambition in a finished project and the match is made. You get in touch directly, with no intermediary and no brokerage fee.",
   },
   benefits: () => [
     {
-      title: "Built architecture",
-      body: "Arco carries only projects that have been built, photographed professionally. Search by room, style and place, and use what others have built as inspiration for your own project.",
+      title: "Explore finished work",
+      body: "Filter by room, style and place. Everything you find has been built and professionally photographed — you are looking at a real project, not a render or an AI image.",
       rests: ["No image without provenance"],
     },
     {
-      title: "Credit to the makers",
-      body: "Every professional on a project — contractor, interior designer, landscape architect — is credited by the architect they worked with. That credit means something.",
+      title: "Find the whole team",
+      body: "Every project lists the creators involved, from interior designer to contractor, credited by the architect who worked with them.",
       rests: ["Credits over reviews"],
     },
     {
-      title: "Editorially curated",
-      body: "Leading architects submit their completed projects and we review them before they go online. Not everything makes it, and a place is not for sale.",
-      rests: ["Not everyone belongs here", "Money buys reach, never credibility"],
+      title: "Connect with them directly",
+      body: "Assemble your own team from the professionals credited on the projects. You approach them yourself, with no intermediary.",
+      rests: ["The best have to want to be here"],
     },
   ],
   benefitsRests: "Rests on",
@@ -667,9 +670,10 @@ const en: Copy = {
     slots: {
       headers: ["Slot", "What goes there", "Rule"],
       rows: [
-        ["Homepage hero", "The network of professionals, proven by their work", "On two lines, alone. Live this is still home.hero_line1/2 — “Uitzonderlijke architectuur. Vertrouwde professionals.”"],
-        ["Eyebrow under the hero", "BUILT ARCHITECTURE · CREDIT TO THE MAKERS · EDITORIALLY CURATED", "The order is fixed: each item attaches to the word before it. Live, home.hero_eyebrow still carries the old composition."],
-        ["Footer", "The network of professionals, proven by their work", "Live this is still footer.tagline — “Het professionele netwerk dat architecten vertrouwen.”"],
+        ["Homepage hero", "Exceptional architecture. With credit to the creators.", "Two sentences, two lines. Live."],
+        ["Eyebrow under the hero", "BUILT PROJECTS · CREDITED BY THE ARCHITECT · EDITORIALLY CURATED", "Fact, source, selection — each item answers a different question the hero raises. Live."],
+        ["Homepage pay-off", "The network behind exceptional architecture.", "Heading above the brand story. It picks the hero back up: you have seen the architecture, this is who stands behind it. Live."],
+        ["Footer", "The network behind exceptional architecture.", "Live, under the logo. The same sentence as the pay-off — deliberately, as a refrain."],
         ["Search result title", "— built work, as a suffix", "Query first, claim second. The formulas below fill the first part."],
         ["Meta description", "Facts from the page itself", "Generated from counts, cities and types. The claim only if characters remain."],
         ["H1", "Nothing", "The H1 names the page. The claim sits in the intro beneath it."],
@@ -678,7 +682,7 @@ const en: Copy = {
         ["Cold e-mail", "The first sentence of the brand story", "First line of the mail, before the ask."],
         ["AI Overview", "Nothing to set", "Not a slot you control — it quotes what it finds most often. Which is why the same sentence sits on every hub."],
       ],
-      note: "This section is a rollout list and can go once it is worked through. Five live strings still carry the old brand: home.hero_line1, home.hero_line2, home.hero_eyebrow, home.hero_title (“Het gecureerde architectuurplatform”) and footer.tagline, plus about.hero_subtitle. While those stand, the site says something different from this page.",
+      note: "This section is a rollout list and can go once it is worked through. Two live strings still carry the old brand: home.hero_title (“Het gecureerde architectuurplatform”, shown nowhere) and about.hero_subtitle. While those stand, the site says something different from this page in those places.",
     },
     formulas: {
       inCode: "in code",

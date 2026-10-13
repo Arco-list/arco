@@ -8,10 +8,10 @@ export function MembershipCTA() {
   const tn = useTranslations("nav")
 
   return (
-    <section className="py-20 px-4 md:px-8" style={{ background: "var(--arco-surface)" }}>
+    <section className="py-16 max-md:py-10 px-4 md:px-8">
       <div className="max-w-[1100px] mx-auto">
 
-        <h2 className="arco-page-title mb-4 text-center">
+        <h2 className="arco-section-title mb-4 text-center">
           {t("built_for_industry")}
         </h2>
         <p className="arco-body-text mb-12 max-w-[760px] mx-auto text-center">
@@ -22,7 +22,7 @@ export function MembershipCTA() {
 
           <div className="membership-cta-card">
             <p className="arco-eyebrow" style={{ marginBottom: 12 }}>{tn("for_architects")}</p>
-            <h3 className="arco-section-title" style={{ marginBottom: 12 }}>
+            <h3 className="arco-subsection-title" style={{ marginBottom: 12 }}>
               {t("for_architects_title")}
             </h3>
             <p className="arco-body-text" style={{ marginBottom: 24 }}>
@@ -35,7 +35,7 @@ export function MembershipCTA() {
 
           <div className="membership-cta-card">
             <p className="arco-eyebrow" style={{ marginBottom: 12 }}>{tn("for_professionals")}</p>
-            <h3 className="arco-section-title" style={{ marginBottom: 12 }}>
+            <h3 className="arco-subsection-title" style={{ marginBottom: 12 }}>
               {t("for_professionals_title")}
             </h3>
             <p className="arco-body-text" style={{ marginBottom: 24 }}>

@@ -24,16 +24,18 @@ export function FeaturedCompanies({ companies }: FeaturedCompaniesProps) {
     return null
   }
 
-  // Bovenkant gehalveerd — zie de notitie in recent-projects. De
-  // max-md-variant ontbrak hier helemaal, waardoor deze sectie op
-  // mobiel ook al meer ruimte nam dan zijn buren.
+  // Weer gewoon py-16 — zie de notitie in recent-projects. De bovenkant
+  // was gehalveerd om deze sectie aan Uitgelichte projecten te koppelen;
+  // sinds Hoe Arco werkt ertussen staat was die halve bovenmarge een
+  // wees, en nam deze overgang 96px waar alle andere er 128 nemen.
   return (
-    <section className="pt-8 pb-16 max-md:pt-5 max-md:pb-10 bg-white">
+    <section className="py-16 max-md:py-10 bg-white">
       <div className="wrap">
         <div className="section-header">
           <h2 className="arco-section-title">{t("featured_architects")}</h2>
           <Link href="/professionals?services=architect" className="view-all-link">
-            {t("view_all_architects")}
+            <span className="arco-text-link-label">{t("view_all_architects")}</span>
+            <span aria-hidden>→</span>
           </Link>
         </div>
 

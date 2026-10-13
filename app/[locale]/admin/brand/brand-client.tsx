@@ -230,6 +230,20 @@ function BrandStorySpecimen() {
           regel op 15/1,7, zodat de witruimte tussen alinea's groter is
           dan die binnen een alinea. */}
       <div className="max-w-[58ch] mx-auto text-center [&>div]:mt-6 [&_p+p]:mt-6">
+        {/* De pay-off staat op de homepage als kop boven dit verhaal, dus
+            hier ook — anders toont het specimen alleen de helft van wat
+            de bezoeker leest. 28px in plaats van de 36 van de homepage:
+            dat is de seriefmaat die dit document al gebruikt, dus het
+            past in de bestaande typeladder in plaats van er een maat
+            bij te verzinnen. Verwarring met een sectiekop ligt niet op
+            de loer: die staan links uitgelijnd, deze staat gecentreerd
+            binnen het specimen. */}
+        <p
+          className="m-0 mb-5 text-[28px] font-light leading-[1.25]"
+          style={{ fontFamily: "var(--font-serif)" }}
+        >
+          {t.story.payoff}
+        </p>
         <p className="m-0 text-[15px] leading-[1.65]">{t.story.lead}</p>
         <ReadMoreBody
           paragraphs={[t.story.p1, t.story.p2, t.story.p3]}
@@ -243,29 +257,34 @@ function BrandStorySpecimen() {
 
 /**
  * De drie benefits, in de opmaak van de homepage maar zonder kop en
- * zonder nummering.
+ * zonder nummering — letterlijk .how-title en .how-body, dezelfde
+ * klassen die de blokken daar dragen, zodat dit specimen meegroeit als
+ * die opmaak verandert. Stond eerder op een eigen 14px, waardoor het
+ * kleiner oogde dan de productblokken verderop in dit document, die wel
+ * al die klassen gebruikten.
  *
- * Het zijn de drie items uit de eyebrow, hier uitgeschreven. Dat is de
- * hele bedoeling van de ladder: dezelfde drie bewijzen op drie
- * resoluties — drie woorden in de eyebrow, drie alinea's hier, en het
- * volledige verhaal achter "Lees meer". Eén wijziging raakt alle drie.
+ * Dit waren de drie items uit de eyebrow, uitgeschreven. Dat is het
+ * niet meer: sinds de homepage ze als "Hoe Arco werkt" toont, zijn het
+ * drie STAPPEN — ontdekken, de makers vinden, ze benaderen. De eyebrow
+ * draagt nu de drie bewijzen (gerealiseerd, vermeld, redactioneel) en
+ * deze blokken de route. Verander je het ene, kijk dan of het andere
+ * nog klopt; ze lopen niet meer synchroon.
  *
- * De nummers zijn eruit omdat 01-02-03 een volgorde belooft die er niet
- * is: dit zijn geen stappen maar drie onafhankelijke claims.
+ * Op de homepage staan hier 01-02-03 bij, want daar is het een route.
+ * Hier niet: dit specimen staat onder het merkverhaal en toont de
+ * teksten, niet de volgorde waarin je ze doorloopt.
  */
 function HowSpecimen() {
   const t = useCopy()
   const features = t.benefits()
   // Dezelfde blokvorm als de alternatieven in sectie 3 en de principes
-  // in sectie 4: drie kolommen, kop en tekst, verder niets. De nummers
-  // zijn er weer uit — 01-02-03 belooft een volgorde, en dit zijn drie
-  // onafhankelijke claims die je in elke volgorde kunt lezen.
+  // in sectie 4: drie kolommen, kop en tekst, verder niets.
   return (
     <div className="grid gap-8 md:grid-cols-3 md:gap-10">
       {features.map((f) => (
         <div key={f.title}>
-          <h3 className="text-[14px] font-medium m-0 mb-2">{f.title}</h3>
-          <p className="m-0 text-[14px] leading-[1.6] text-[#6b6b68]">{f.body}</p>
+          <h3 className="how-title">{f.title}</h3>
+          <p className="how-body m-0">{f.body}</p>
           {/* Waar deze publieke claim op rust. Het nummer wordt opgezocht
               in sectie 4 in plaats van hier herhaald, zodat het meeschuift
               als de principes van volgorde wisselen — en een principe dat
