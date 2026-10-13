@@ -144,6 +144,15 @@ export const CACHED_METRIC_KEYS = [
   "client_visitors_social",
   "client_visitors_email",
   "client_visitors_referral",
+  // De vier kanalen die vroeger uit de ouder werden geknipt in plaats van
+  // getoond. Sales = claim- en outreachlinks, Invites = uitnodigingen,
+  // Outbound = door een admin geschreven prospectmail, Lifecycle = mail aan
+  // wie al is wat de funnel probeert te maken. Samen met de zeven hierboven
+  // dekken ze elke waarde die ENTRY_CHANNEL_EXPR kan opleveren.
+  "client_visitors_sales",
+  "client_visitors_invites",
+  "client_visitors_outbound",
+  "client_visitors_lifecycle",
   // Total client signups — unique persons with user_signed_up event
   // and event-level user_type='client'. Sourced from PostHog (not
   // Supabase) so the parent Signups row reconciles exactly with its
@@ -527,34 +536,28 @@ function buildHogQLQuery(metric: CachedMetricKey, bucketExpr: string, sinceIso: 
   switch (metric) {
     case "client_visitors":
       /**
-       * Everyone who did NOT arrive through a pro door.
+       * Iedereen. Geen uitzonderingen op instapkanaal.
        *
-       * This used to be `1 = 1` — every unique visitor, which matched
-       * PostHog Web Analytics' headline number and meant the row under
-       * the Clients track counted pros as well. Not a rounding error:
-       * in September 441 of roughly 1200 production visitors entered on
-       * a claim or outreach link, plus 23 on an invite. Nearly half the
-       * traffic on the client row was supply, not demand.
+       * Dit heeft een tijd `NOT IN ('sales','invites','outbound','lifecycle')`
+       * gestaan, zodat de rij onder het Clients-spoor alleen vraag telde en
+       * geen aanbod. Dat was analytisch zuiver maar praktisch duur: het getal
+       * stond 4,5x onder PostHog's headline en elke vergelijking tussen de
+       * twee dashboards kostte een onderzoek. Een metriek die "Visitors" heet
+       * moet visitors betekenen, ook voor wie er niet bij was toen het besluit
+       * viel.
        *
-       * They were also invisible. The six client channel keys have no
-       * bucket for 'sales' or 'invites', so those sessions sat in the
-       * parent and in no sub, and the difference showed up as an
-       * unexplained remainder that grew with outreach volume.
+       * De reden dat de uitsluiting er destijds kwam was echt, en die is nu
+       * op de andere manier opgelost: er waren geen kanaalbakken voor sales,
+       * invites, outbound en lifecycle, dus die bezoekers zaten in het totaal
+       * en in geen enkele sub — een onverklaarde rest die meegroeide met het
+       * mailvolume. Die vier bakken bestaan nu wel (zie hieronder), dus de
+       * subs tellen weer op tot de ouder.
        *
-       * 'outbound' and 'lifecycle' come out for the same reason, one
-       * step further along. Outbound is mail an admin wrote to a
-       * prospect; lifecycle is mail to somebody who is already what the
-       * funnel is trying to make them — a pro reading the Listed drip,
-       * a customer whose card is expiring. Neither is demand arriving,
-       * and counting them here would put pro retention inside a client
-       * acquisition channel.
-       *
-       * Excluding them fixes both at once: the row means clients again,
-       * and because parent and channels now run through the same
-       * classifier, the subs add up to it by construction rather than
-       * by hope.
+       * LET OP bij het toevoegen van een kanaal aan ENTRY_CHANNEL_EXPR: voeg
+       * er dan ook een cache-sleutel voor toe, anders ontstaat die rest
+       * opnieuw en zie je het niet.
        */
-      return firstTouchChannelQuery(bucketExpr, sinceIso, `NOT IN ('sales', 'invites', 'outbound', 'lifecycle')`)
+      return firstTouchChannelQuery(bucketExpr, sinceIso, `IS NOT NULL`)
     case "pro_visitors":
       // Persons with a session that touched the /businesses recruitment
       // pages — session-scoped so internally-navigated visits count.
@@ -690,6 +693,14 @@ function buildHogQLQuery(metric: CachedMetricKey, bucketExpr: string, sinceIso: 
       return firstTouchChannelQuery(bucketExpr, sinceIso, `= 'direct'`)
     case "client_visitors_google":
       return firstTouchChannelQuery(bucketExpr, sinceIso, `= 'google'`)
+    case "client_visitors_sales":
+      return firstTouchChannelQuery(bucketExpr, sinceIso, `= 'sales'`)
+    case "client_visitors_invites":
+      return firstTouchChannelQuery(bucketExpr, sinceIso, `= 'invites'`)
+    case "client_visitors_outbound":
+      return firstTouchChannelQuery(bucketExpr, sinceIso, `= 'outbound'`)
+    case "client_visitors_lifecycle":
+      return firstTouchChannelQuery(bucketExpr, sinceIso, `= 'lifecycle'`)
     case "client_visitors_social":
       return firstTouchChannelQuery(bucketExpr, sinceIso, `= 'social'`)
     case "client_visitors_email":

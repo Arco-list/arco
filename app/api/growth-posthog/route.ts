@@ -122,6 +122,8 @@ export async function GET(request: NextRequest) {
       // Email / Referral).
       "client_visitors_direct", "client_visitors_google", "client_visitors_social",
       "client_visitors_email", "client_visitors_referral",
+      "client_visitors_sales", "client_visitors_invites",
+      "client_visitors_outbound", "client_visitors_lifecycle",
     ] as const
     type CachedKey = typeof CACHED_KEYS[number]
     const cacheMaps = await Promise.all(
@@ -190,6 +192,13 @@ export async function GET(request: NextRequest) {
     const clientVisitorsSocialSeries = bucketize("client_visitors_social")
     const clientVisitorsEmailSeries = bucketize("client_visitors_email")
     const clientVisitorsReferralSeries = bucketize("client_visitors_referral")
+    // De vier kanalen die vroeger uit de ouder werden geknipt. Zonder deze
+    // vier telt de kaart niet op tot Visitors en groeit het verschil mee met
+    // het mailvolume — in september was dat ~40% van het getal.
+    const clientVisitorsSalesSeries = bucketize("client_visitors_sales")
+    const clientVisitorsInvitesSeries = bucketize("client_visitors_invites")
+    const clientVisitorsOutboundSeries = bucketize("client_visitors_outbound")
+    const clientVisitorsLifecycleSeries = bucketize("client_visitors_lifecycle")
 
     // Window totals per source — sum of bucketed uniques. Same
     // approximation caveat as the parent visitor totals above.
@@ -198,7 +207,13 @@ export async function GET(request: NextRequest) {
     const socialCount = clientVisitorsSocialSeries.reduce((a, b) => a + b, 0)
     const emailCount = clientVisitorsEmailSeries.reduce((a, b) => a + b, 0)
     const referralCount = clientVisitorsReferralSeries.reduce((a, b) => a + b, 0)
-    const clientSourceTotal = directCount + googleCount + socialCount + emailCount + referralCount
+    const salesCount = clientVisitorsSalesSeries.reduce((a, b) => a + b, 0)
+    const invitesCount = clientVisitorsInvitesSeries.reduce((a, b) => a + b, 0)
+    const outboundCount = clientVisitorsOutboundSeries.reduce((a, b) => a + b, 0)
+    const lifecycleCount = clientVisitorsLifecycleSeries.reduce((a, b) => a + b, 0)
+    const clientSourceTotal =
+      directCount + googleCount + socialCount + emailCount + referralCount +
+      salesCount + invitesCount + outboundCount + lifecycleCount
 
     const pct = (n: number) => (clientSourceTotal > 0 ? Math.round((n / clientSourceTotal) * 100) : 0)
     const clientSources: SourceGroup[] = [
@@ -207,6 +222,10 @@ export async function GET(request: NextRequest) {
       { label: "Social", count: socialCount, pct: pct(socialCount) },
       { label: "Email", count: emailCount, pct: pct(emailCount) },
       { label: "Referral", count: referralCount, pct: pct(referralCount) },
+      { label: "Sales", count: salesCount, pct: pct(salesCount) },
+      { label: "Invites", count: invitesCount, pct: pct(invitesCount) },
+      { label: "Outbound", count: outboundCount, pct: pct(outboundCount) },
+      { label: "Lifecycle", count: lifecycleCount, pct: pct(lifecycleCount) },
     ].sort((a, b) => b.pct - a.pct)
 
     // Pro sources card — Sales (Apollo) + Invites from cache. Other
