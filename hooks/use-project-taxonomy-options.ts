@@ -160,13 +160,15 @@ export const useProjectTaxonomyOptions = (supabase: SupabaseClient) => {
     async (isMounted: () => boolean) => {
       const { data, error } = await supabase
         .from("project_taxonomy_options")
-        .select("id, taxonomy_type, name, slug, sort_order, icon, budget_level")
-        .in("taxonomy_type", [
-          "project_style",
-          "building_type",
-          "size_range",
-          "budget_tier",
-        ])
+        .select("id, taxonomy_type, name, slug, sort_order, icon")
+        // Alleen project_style wordt hier nog gebruikt. De andere drie
+        // werden opgehaald en meteen weggegooid: building_type droeg
+        // scope-waarden die niet matchen met projects.building_type, en
+        // size_range en budget_tier hebben in 186 projecten nul
+        // selecties. Migratie 283 verwijdert die laatste twee, en een
+        // .in() met een verdwenen enumlabel is geen lege uitkomst maar
+        // een queryfout — vandaar dat dit vóór die migratie uit moet.
+        .in("taxonomy_type", ["project_style"])
         .eq("is_active", true)
         .order("sort_order", { ascending: true, nullsFirst: false })
         .order("name", { ascending: true })
@@ -184,25 +186,22 @@ export const useProjectTaxonomyOptions = (supabase: SupabaseClient) => {
         return
       }
 
-      const grouped = data.reduce<Record<ProjectTaxonomyOption["taxonomy_type"], ProjectTaxonomyOption[]>>(
-        (acc, option) => {
-          if (!acc[option.taxonomy_type]) {
-            acc[option.taxonomy_type] = []
-          }
-          acc[option.taxonomy_type].push(option)
-          return acc
-        },
-        {
-          project_style: [],
-          building_type: [],
-          size_range: [],
-          budget_tier: [],
-          location_feature: [],
-          material_feature: [],
-        },
-      )
+      // Partial, en zonder vooraf gevulde sleutels: zo blijft dit staan
+      // als het enum krimpt (283) of groeit, in plaats van te breken op
+      // een sleutel die niet meer bestaat.
+      // De rij die hier terugkomt is de smalle select, niet de volle
+      // ProjectTaxonomyOption — vandaar dat de waarde het type van data
+      // zelf draagt in plaats van de tabelrij.
+      const grouped: Partial<Record<ProjectTaxonomyOption["taxonomy_type"], typeof data>> = {}
+      for (const option of data) {
+        const key = option.taxonomy_type as ProjectTaxonomyOption["taxonomy_type"]
+        if (!grouped[key]) {
+          grouped[key] = []
+        }
+        grouped[key]!.push(option)
+      }
 
-      const styles = grouped.project_style
+      const styles = (grouped.project_style ?? [])
         .map<ProjectDetailsDropdownOption>((option) => ({
           value: option.id,
           label: option.name,
@@ -218,33 +217,14 @@ export const useProjectTaxonomyOptions = (supabase: SupabaseClient) => {
       // PROJECT_BUILDING_TYPES from lib/project-translations.ts.
       const buildingTypes: ProjectDetailsDropdownOption[] = []
 
-      const sizes = grouped.size_range
-        .map<ProjectDetailsDropdownOption>((option) => ({
-          value: option.id,
-          label: option.name,
-          sortOrder: option.sort_order,
-        }))
-        .sort(sortByOrderThenLabel)
-
-      const budgets = grouped.budget_tier
-        .reduce<ProjectDetailsDropdownOption[]>((acc, option) => {
-          const value = option.budget_level ?? option.slug ?? option.id
-          if (!value) {
-            return acc
-          }
-
-          if (acc.some((existing) => existing.value === value)) {
-            return acc
-          }
-
-          acc.push({
-            value,
-            label: option.name,
-            sortOrder: option.sort_order,
-          })
-          return acc
-        }, [])
-        .sort(sortByOrderThenLabel)
+      // Zelfde verhaal als building_type hierboven: size_range en
+      // budget_tier stonden wel in de DB maar zijn in 186 projecten nooit
+      // geselecteerd, dus deze twee afleidingen leverden altijd al een
+      // lege lijst op en de dropdowns kwamen hoe dan ook uit
+      // FALLBACK_SIZE_OPTIONS en FALLBACK_BUDGET_OPTIONS. Migratie 283
+      // haalt de rijen en de enumwaarden weg.
+      const sizes: ProjectDetailsDropdownOption[] = []
+      const budgets: ProjectDetailsDropdownOption[] = []
 
       setTaxonomyState((prev) => ({
         ...prev,

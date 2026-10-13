@@ -77,10 +77,7 @@ export type ProjectDetailsFormState = {
   projectType: string
   buildingType: string
   projectStyle: string
-  size: string
-  budget: string
   yearBuilt: string
-  buildingYear: string
   projectTitle: string
   projectDescription: string
   address: string
@@ -93,12 +90,12 @@ export type ProjectDetailsFormState = {
 
 export type ProjectDetailsSelectField = keyof Pick<
   ProjectDetailsFormState,
-  "category" | "projectType" | "buildingType" | "projectStyle" | "size" | "budget"
+  "category" | "projectType" | "buildingType" | "projectStyle"
 >
 
 export type ProjectDetailsTextField = keyof Pick<
   ProjectDetailsFormState,
-  "yearBuilt" | "buildingYear" | "projectTitle" | "projectDescription" | "address"
+  "yearBuilt" | "projectTitle" | "projectDescription" | "address"
 >
 
 export type ProjectDetailsDescriptionCommand =
@@ -239,10 +236,7 @@ export const generateYearErrorMessages = (
   const errors: Record<string, string> = {}
 
   const yearBuiltRaw = state.yearBuilt.trim()
-  const buildingYearRaw = state.buildingYear.trim()
-
   const parsedYearBuilt = parseYearValue(yearBuiltRaw)
-  const parsedBuildingYear = parseYearValue(buildingYearRaw)
 
   if (!yearBuiltRaw) {
     if (treatEmptyAsError) {
@@ -254,26 +248,7 @@ export const generateYearErrorMessages = (
     errors.yearBuilt = `Use a completion year between ${YEAR_LOWER_BOUND} and ${CURRENT_YEAR}.`
   }
 
-  if (!buildingYearRaw) {
-    if (treatEmptyAsError) {
-      errors.buildingYear = "Enter the original construction year."
-    }
-  } else if (parsedBuildingYear === null) {
-    errors.buildingYear = "Use a 4-digit year like 2010."
-  } else if (parsedBuildingYear < YEAR_LOWER_BOUND || parsedBuildingYear > CURRENT_YEAR) {
-    errors.buildingYear = `Use a construction year between ${YEAR_LOWER_BOUND} and ${CURRENT_YEAR}.`
-  }
-
-  if (
-    !errors.buildingYear &&
-    parsedYearBuilt !== null &&
-    parsedBuildingYear !== null &&
-    parsedBuildingYear > parsedYearBuilt
-  ) {
-    errors.buildingYear = "Original construction year can't be after the completion year."
-  }
-
-  return { errors, parsedYearBuilt, parsedBuildingYear }
+  return { errors, parsedYearBuilt }
 }
 
 export const getPlainTextFromHtml = (html: string) => {

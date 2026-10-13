@@ -111,17 +111,12 @@ export const SavedProjectsProvider = ({ children }: { children: ReactNode }) => 
           likes_count: row.likes_count,
           created_at: row.created_at,
           updated_at: row.updated_at,
-          budget_display: row.budget_display,
           // Include taxonomy fields for title construction
           project_type: row.project_type ?? null,
           style_preferences: row.style_preferences ?? null,
           // Add missing fields with null values to match ProjectSummaryRow type
           description: null,
-          budget_level: null,
-          budget_max: null,
-          budget_min: null,
           building_type: null,
-          building_year: null,
           client_avatar: null,
           client_first_name: null,
           client_last_name: null,

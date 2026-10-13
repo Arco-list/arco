@@ -418,7 +418,6 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
       group?.forEach((option) => {
         if (option.slug) map.set(option.slug, option.name)
         if (option.id) map.set(option.id, option.name)
-        if (option.budget_level) map.set(option.budget_level, option.name)
         map.set(option.name, option.name)
       })
     })
@@ -460,7 +459,7 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
         getId: (option) => option.id,
         getLabel: (option) => option.name,
         getPreferredToken: (option) => option.slug ?? option.name,
-        getExtraTokens: (option) => [option.budget_level, option.id, option.slug, option.name],
+        getExtraTokens: (option) => [option.id, option.slug, option.name],
       })
     })
     return result

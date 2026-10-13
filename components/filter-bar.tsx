@@ -477,7 +477,6 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
   const { categories, taxonomyOptions, cities = [], isLoading: taxonomyLoading } = taxonomy
 
   const styleOptions = taxonomyOptions.project_style ?? []
-  const buildingTypeOptions = taxonomyOptions.building_type ?? []
 
   const YEAR_MIN = 1800
   const YEAR_MAX = new Date().getFullYear()
@@ -576,7 +575,7 @@ export function FilterBar({ sortBy, onSortChange }: FilterBarProps) {
       tags.push({ type: "projectYear", value: `${min}-${max}`, label: `${min} – ${max}` })
     }
     return tags
-  }, [keyword, selectedSpace, selectedTypes, selectedLocations, selectedRegions, selectedStyles, selectedBuildingTypes, selectedScopes, projectYearRange, topLevelCategories, styleOptions, buildingTypeOptions, YEAR_MIN, YEAR_MAX, tSpaces, locale])
+  }, [keyword, selectedSpace, selectedTypes, selectedLocations, selectedRegions, selectedStyles, selectedBuildingTypes, selectedScopes, projectYearRange, topLevelCategories, styleOptions, YEAR_MIN, YEAR_MAX, tSpaces, locale])
 
   const totalCount = chips.length
 

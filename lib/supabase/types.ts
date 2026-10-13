@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "13.0.5"
   }
   public: {
     Tables: {
@@ -227,26 +227,35 @@ export type Database = {
         Row: {
           channel: string
           company_id: string | null
+          country: string | null
           created_at: string
           email: string | null
           id: string
+          machine_reason: string | null
           source_ref: string | null
+          user_agent: string | null
         }
         Insert: {
           channel: string
           company_id?: string | null
+          country?: string | null
           created_at?: string
           email?: string | null
           id?: string
+          machine_reason?: string | null
           source_ref?: string | null
+          user_agent?: string | null
         }
         Update: {
           channel?: string
           company_id?: string | null
+          country?: string | null
           created_at?: string
           email?: string | null
           id?: string
+          machine_reason?: string | null
           source_ref?: string | null
+          user_agent?: string | null
         }
         Relationships: [
           {
@@ -2972,9 +2981,6 @@ export type Database = {
       }
       project_taxonomy_options: {
         Row: {
-          budget_level:
-            | Database["public"]["Enums"]["project_budget_level"]
-            | null
           created_at: string | null
           description: string | null
           icon: string | null
@@ -2991,9 +2997,6 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
-          budget_level?:
-            | Database["public"]["Enums"]["project_budget_level"]
-            | null
           created_at?: string | null
           description?: string | null
           icon?: string | null
@@ -3010,9 +3013,6 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
-          budget_level?:
-            | Database["public"]["Enums"]["project_budget_level"]
-            | null
           created_at?: string | null
           description?: string | null
           icon?: string | null
@@ -3094,15 +3094,8 @@ export type Database = {
           address_postal_code: string | null
           address_region: string | null
           address_street: string | null
-          budget_level:
-            | Database["public"]["Enums"]["project_budget_level"]
-            | null
-          budget_max: number | null
-          budget_min: number | null
           building_type: string | null
-          building_year: number | null
           client_id: string | null
-          completion_date: string | null
           created_at: string | null
           description: string | null
           features: string[] | null
@@ -3115,7 +3108,6 @@ export type Database = {
           pinterest_pin_id: string | null
           pinterest_sync_error: string | null
           pinterest_synced_at: string | null
-          project_size: string | null
           project_type: string | null
           project_type_category_id: string | null
           project_year: number | null
@@ -3134,7 +3126,6 @@ export type Database = {
           share_exact_location: boolean
           slug: string | null
           source_url: string | null
-          start_date: string | null
           status: Database["public"]["Enums"]["project_status"] | null
           status_updated_at: string | null
           status_updated_by: string | null
@@ -3151,15 +3142,8 @@ export type Database = {
           address_postal_code?: string | null
           address_region?: string | null
           address_street?: string | null
-          budget_level?:
-            | Database["public"]["Enums"]["project_budget_level"]
-            | null
-          budget_max?: number | null
-          budget_min?: number | null
           building_type?: string | null
-          building_year?: number | null
           client_id?: string | null
-          completion_date?: string | null
           created_at?: string | null
           description?: string | null
           features?: string[] | null
@@ -3172,7 +3156,6 @@ export type Database = {
           pinterest_pin_id?: string | null
           pinterest_sync_error?: string | null
           pinterest_synced_at?: string | null
-          project_size?: string | null
           project_type?: string | null
           project_type_category_id?: string | null
           project_year?: number | null
@@ -3191,7 +3174,6 @@ export type Database = {
           share_exact_location?: boolean
           slug?: string | null
           source_url?: string | null
-          start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
           status_updated_at?: string | null
           status_updated_by?: string | null
@@ -3208,15 +3190,8 @@ export type Database = {
           address_postal_code?: string | null
           address_region?: string | null
           address_street?: string | null
-          budget_level?:
-            | Database["public"]["Enums"]["project_budget_level"]
-            | null
-          budget_max?: number | null
-          budget_min?: number | null
           building_type?: string | null
-          building_year?: number | null
           client_id?: string | null
-          completion_date?: string | null
           created_at?: string | null
           description?: string | null
           features?: string[] | null
@@ -3229,7 +3204,6 @@ export type Database = {
           pinterest_pin_id?: string | null
           pinterest_sync_error?: string | null
           pinterest_synced_at?: string | null
-          project_size?: string | null
           project_type?: string | null
           project_type_category_id?: string | null
           project_year?: number | null
@@ -3248,7 +3222,6 @@ export type Database = {
           share_exact_location?: boolean
           slug?: string | null
           source_url?: string | null
-          start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
           status_updated_at?: string | null
           status_updated_by?: string | null
@@ -3766,6 +3739,87 @@ export type Database = {
         }
         Relationships: []
       }
+      seo_page_metrics: {
+        Row: {
+          clicks: number
+          created_at: string
+          impressions: number
+          metric_date: string
+          page_type: string
+          page_url: string
+          position: number | null
+        }
+        Insert: {
+          clicks?: number
+          created_at?: string
+          impressions?: number
+          metric_date: string
+          page_type: string
+          page_url: string
+          position?: number | null
+        }
+        Update: {
+          clicks?: number
+          created_at?: string
+          impressions?: number
+          metric_date?: string
+          page_type?: string
+          page_url?: string
+          position?: number | null
+        }
+        Relationships: []
+      }
+      seo_query_metrics: {
+        Row: {
+          clicks: number
+          created_at: string
+          impressions: number
+          metric_date: string
+          page_type: string
+          position: number | null
+          query: string
+        }
+        Insert: {
+          clicks?: number
+          created_at?: string
+          impressions?: number
+          metric_date: string
+          page_type: string
+          position?: number | null
+          query: string
+        }
+        Update: {
+          clicks?: number
+          created_at?: string
+          impressions?: number
+          metric_date?: string
+          page_type?: string
+          position?: number | null
+          query?: string
+        }
+        Relationships: []
+      }
+      seo_sitemap_counts: {
+        Row: {
+          created_at: string
+          page_type: string
+          snapshot_date: string
+          url_count: number
+        }
+        Insert: {
+          created_at?: string
+          page_type: string
+          snapshot_date: string
+          url_count: number
+        }
+        Update: {
+          created_at?: string
+          page_type?: string
+          snapshot_date?: string
+          url_count?: number
+        }
+        Relationships: []
+      }
       spaces: {
         Row: {
           created_at: string
@@ -3989,14 +4043,7 @@ export type Database = {
       }
       mv_project_summary: {
         Row: {
-          budget_display: string | null
-          budget_level:
-            | Database["public"]["Enums"]["project_budget_level"]
-            | null
-          budget_max: number | null
-          budget_min: number | null
           building_type: string | null
-          building_year: number | null
           client_avatar: string | null
           client_first_name: string | null
           client_last_name: string | null
@@ -4014,7 +4061,6 @@ export type Database = {
           primary_category_slug: string | null
           primary_photo_alt: string | null
           primary_photo_url: string | null
-          project_size: string | null
           project_type: string | null
           project_year: number | null
           slug: string | null
@@ -4031,14 +4077,7 @@ export type Database = {
         Row: {
           address_city: string | null
           address_region: string | null
-          budget_display: string | null
-          budget_level:
-            | Database["public"]["Enums"]["project_budget_level"]
-            | null
-          budget_max: number | null
-          budget_min: number | null
           building_type: string | null
-          building_year: number | null
           client_avatar: string | null
           client_first_name: string | null
           client_last_name: string | null
@@ -4057,7 +4096,6 @@ export type Database = {
           primary_category_slug: string | null
           primary_photo_alt: string | null
           primary_photo_url: string | null
-          project_size: string | null
           project_type: string | null
           project_year: number | null
           scope_rotation: number | null
@@ -4094,6 +4132,38 @@ export type Database = {
         Returns: undefined
       }
       backfill_companies_first_touch_source: { Args: never; Returns: number }
+      brand_audience_counts: {
+        Args: never
+        Returns: {
+          companies_listed: number
+          companies_prospected: number
+          homeowners: number
+          paying_subscriptions: number
+          professional_users: number
+          projects_published: number
+        }[]
+      }
+      brand_page_type_performance: {
+        Args: { day_count?: number }
+        Returns: {
+          avg_position: number
+          clicks: number
+          ctr: number
+          impressions: number
+          page_type: string
+        }[]
+      }
+      brand_proof_counts: {
+        Args: never
+        Returns: {
+          cities: number
+          firms: number
+          firms_with_built_work: number
+          photos: number
+          projects: number
+          rooms: number
+        }[]
+      }
       check_redirect_chain: {
         Args: {
           max_depth?: number
@@ -4220,7 +4290,6 @@ export type Database = {
         | {
             Args: never
             Returns: {
-              budget_display: string
               created_at: string
               id: string
               likes_count: number
@@ -4239,7 +4308,6 @@ export type Database = {
         | {
             Args: { p_user_id: string }
             Returns: {
-              budget_display: string
               created_at: string
               id: string
               likes_count: number
@@ -4366,7 +4434,6 @@ export type Database = {
       }
       search_projects: {
         Args: {
-          budget_filter?: Database["public"]["Enums"]["project_budget_level"]
           category_filter?: string
           feature_filters?: string[]
           featured_only?: boolean
@@ -4378,7 +4445,6 @@ export type Database = {
           style_filters?: string[]
         }
         Returns: {
-          budget_display: string
           created_at: string
           id: string
           is_featured: boolean
@@ -4390,6 +4456,49 @@ export type Database = {
           slug: string
           title: string
           translations: Json
+        }[]
+      }
+      seo_metrics_by_bucket: {
+        Args: { bucket_count?: number; bucket_unit?: string }
+        Returns: {
+          avg_position: number
+          bucket_start: string
+          clicks: number
+          impressions: number
+          impressions_top10: number
+          page_type: string
+          urls: number
+        }[]
+      }
+      seo_top_pages: {
+        Args: { day_count?: number; row_limit?: number; types?: string[] }
+        Returns: {
+          avg_position: number
+          clicks: number
+          impressions: number
+          page_type: string
+          page_url: string
+        }[]
+      }
+      seo_top_queries: {
+        Args: { day_count?: number; row_limit?: number; types?: string[] }
+        Returns: {
+          avg_position: number
+          clicks: number
+          impressions: number
+          query: string
+        }[]
+      }
+      seo_weekly_by_type: {
+        Args: { week_count?: number }
+        Returns: {
+          avg_position: number
+          clicks: number
+          impressions: number
+          impressions_top10: number
+          page_type: string
+          urls: number
+          week_start: string
         }[]
       }
       set_company_hero_photo: {
@@ -4473,7 +4582,6 @@ export type Database = {
         | "unlisted"
         | "rejected"
         | "removed"
-      project_budget_level: "budget" | "mid_range" | "premium" | "luxury"
       project_status:
         | "draft"
         | "published"
@@ -4481,13 +4589,7 @@ export type Database = {
         | "completed"
         | "archived"
         | "rejected"
-      project_taxonomy_type:
-        | "project_style"
-        | "building_type"
-        | "location_feature"
-        | "material_feature"
-        | "size_range"
-        | "budget_tier"
+      project_taxonomy_type: "project_scope" | "project_style"
       prospect_status:
         | "prospect"
         | "contacted"
@@ -4675,7 +4777,6 @@ export const Constants = {
         "rejected",
         "removed",
       ],
-      project_budget_level: ["budget", "mid_range", "premium", "luxury"],
       project_status: [
         "draft",
         "published",
@@ -4684,14 +4785,7 @@ export const Constants = {
         "archived",
         "rejected",
       ],
-      project_taxonomy_type: [
-        "project_style",
-        "building_type",
-        "location_feature",
-        "material_feature",
-        "size_range",
-        "budget_tier",
-      ],
+      project_taxonomy_type: ["project_scope", "project_style"],
       prospect_status: [
         "prospect",
         "contacted",
