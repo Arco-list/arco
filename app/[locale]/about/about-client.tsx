@@ -79,7 +79,7 @@ function SectionHeader({ eyebrow, title, light = false }: { eyebrow: string; tit
   )
 }
 
-// ─── Number — serif, 36px, matches features-section ──────────────────────────
+// ─── Number — serif, 36px, matches how-arco-works ──────────────────────────
 // Defined inline so it works regardless of whether .how-number is in globals.css
 const NUM_STYLE: React.CSSProperties = {
   display: "block",

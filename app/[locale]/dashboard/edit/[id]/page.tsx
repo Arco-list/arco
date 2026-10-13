@@ -92,7 +92,6 @@ import { CompanyEditTour, type TourStep } from "@/components/company-edit/compan
 import { markTourSeen, getTourSeen } from "@/lib/tours/actions"
 import { Footer } from "@/components/footer"
 import { ProjectBasicsFields } from "@/components/project-details/project-basics-fields"
-import { ProjectMetricsFields } from "@/components/project-details/project-metrics-fields"
 import { ProjectNarrativeFields } from "@/components/project-details/project-narrative-fields"
 import { ProfessionalServiceCard } from "@/components/project-professional-service-card"
 import { FeaturePhotoSelectorModal } from "@/components/feature-photo-selector-modal"
@@ -149,7 +148,6 @@ import {
 import { Info, MailPlus, Pencil, XCircle } from "lucide-react"
 import { REJECTION_REASON_EMAIL_COPY, REJECTION_REASON_OPTIONS } from "@/lib/rejection-reasons"
 
-type ProjectBudgetLevel = Enums<"project_budget_level">
 type ProjectStatus = Enums<"project_status">
 type ProjectLocationUpdate = Pick<
   TablesUpdate<"projects">,
@@ -314,10 +312,7 @@ const EMPTY_DETAILS_FORM: ProjectDetailsFormState = {
   projectType: "",
   buildingType: "",
   projectStyle: "",
-  size: "",
-  budget: "",
   yearBuilt: "",
-  buildingYear: "",
   projectTitle: "",
   projectDescription: "",
   address: "",
@@ -637,8 +632,6 @@ export default function ListingEditorPage() {
     projectTaxonomyError,
     projectStyleOptions,
     buildingTypeOptions,
-    sizeOptions,
-    budgetOptions,
   } = useProjectTaxonomyOptions(supabase)
 
   const [detailsForm, setDetailsForm] = useState<ProjectDetailsFormState>({ ...EMPTY_DETAILS_FORM })
@@ -1000,7 +993,7 @@ export default function ListingEditorPage() {
       const { data: project, error } = await supabase
         .from("projects")
         .select(
-          "id, client_id, title, description, translations, project_type, project_type_category_id, building_type, project_size, budget_level, project_year, building_year, style_preferences, address_formatted, address_city, address_region, latitude, longitude, share_exact_location, updated_at, status, slug, rejection_reason",
+          "id, client_id, title, description, translations, project_type, project_type_category_id, building_type, project_year, style_preferences, address_formatted, address_city, address_region, latitude, longitude, share_exact_location, updated_at, status, slug, rejection_reason",
         )
         .eq("id", projectId)
         .maybeSingle()
@@ -1076,10 +1069,7 @@ export default function ListingEditorPage() {
         projectType: primaryCategoryId || projectTypeValue,
         buildingType: project.building_type ?? "",
         projectStyle: project.style_preferences?.[0] ?? "",
-        size: project.project_size ?? "",
-        budget: (project.budget_level as ProjectBudgetLevel | null) ?? "",
         yearBuilt: project.project_year ? String(project.project_year) : "",
-        buildingYear: project.building_year ? String(project.building_year) : "",
         projectTitle: getProjectTranslation(project, "title", locale) || project.title || "",
         projectDescription: getProjectTranslation(project, "description", locale) || project.description || "",
         address: project.address_formatted ?? "",
@@ -1406,8 +1396,6 @@ export default function ListingEditorPage() {
     () => [...buildingTypeOptions].sort(sortByOrderThenLabel),
     [buildingTypeOptions],
   )
-  const sortedSizeOptions = useMemo(() => [...sizeOptions].sort(sortByOrderThenLabel), [sizeOptions])
-  const sortedBudgetOptions = useMemo(() => [...budgetOptions].sort(sortByOrderThenLabel), [budgetOptions])
 
   const yearFieldValidation = useMemo(
     () => generateYearErrorMessages(detailsForm, { treatEmptyAsError: false }),
@@ -1569,7 +1557,6 @@ export default function ListingEditorPage() {
     setDetailsErrors((prev) => {
       const next = { ...prev }
       delete next.yearBuilt
-      delete next.buildingYear
 
       return Object.keys(errors).length > 0 ? { ...next, ...errors } : next
     })
@@ -1616,7 +1603,7 @@ export default function ListingEditorPage() {
   }
 
   const handleInputChange = (field: ProjectDetailsTextField, value: string) => {
-    if (field === "yearBuilt" || field === "buildingYear") {
+    if (field === "yearBuilt") {
       setDetailsForm((prev) => {
         const next = {
           ...prev,
@@ -1728,12 +1715,6 @@ export default function ListingEditorPage() {
     if (!detailsForm.projectStyle) {
       errors.projectStyle = tValid("select_style")
     }
-    if (!detailsForm.size) {
-      errors.size = tValid("select_size")
-    }
-    if (!detailsForm.budget) {
-      errors.budget = tValid("select_budget")
-    }
 
     const yearErrors = generateYearErrorMessages(detailsForm, { treatEmptyAsError: true }).errors
     Object.assign(errors, yearErrors)
@@ -1777,7 +1758,7 @@ export default function ListingEditorPage() {
     }
 
     const trimmedTitle = snapshot.projectTitle.trim()
-    const { parsedYearBuilt, parsedBuildingYear } = generateYearErrorMessages(snapshot, {
+    const { parsedYearBuilt } = generateYearErrorMessages(snapshot, {
       treatEmptyAsError: false,
     })
 
@@ -1787,10 +1768,7 @@ export default function ListingEditorPage() {
       project_type: snapshot.projectType || null,
       project_type_category_id: isUuid(snapshot.projectType) ? snapshot.projectType : null,
       building_type: snapshot.buildingType || null,
-      project_size: snapshot.size || null,
-      budget_level: (snapshot.budget || null) as ProjectBudgetLevel | null,
       project_year: parsedYearBuilt,
-      building_year: parsedBuildingYear,
       style_preferences: snapshot.projectStyle ? [snapshot.projectStyle] : null,
       ...buildLocationUpdate(snapshot),
     }

@@ -1,6 +1,7 @@
 // app/page.tsx
 // Updated to use .wrap class for consistent horizontal margins
 
+import type { Metadata } from "next"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
 import type { Database, Tables } from "@/lib/supabase/types"
@@ -8,7 +9,8 @@ import { Header } from "@/components/header"
 import { HeroSection, type HeroProject } from "@/components/hero-section"
 import { BrowseSection, type BrowseCard } from "@/components/browse-section"
 import { RecentProjects, type RecentProject } from "@/components/recent-projects"
-import { FeaturesSection } from "@/components/features-section"
+import { PositioningSection } from "@/components/positioning-section"
+import { HowArcoWorks } from "@/components/how-arco-works"
 import { MembershipCTA } from "@/components/membership-cta"
 import { PopularSearches, type PopularHubs } from "@/components/popular-searches"
 import { FeaturedCompanies, type FeaturedCompany } from "@/components/featured-companies"
@@ -19,6 +21,7 @@ import { getLocalizedName } from "@/lib/locale-name"
 import { getProjectTranslation, translateCategoryName } from "@/lib/project-translations"
 import { TrackPageView } from "@/components/track-view"
 import { getSiteUrl } from "@/lib/utils"
+import { localeAlternates } from "@/lib/seo-utils"
 import { getHubs } from "@/lib/project-hubs"
 import { orderFeaturedFeed } from "@/lib/projects/featured-shuffle"
 
@@ -526,6 +529,79 @@ async function loadLandingData(locale: string) {
   }
 }
 
+/**
+ * De drie benefits uit het merk, in de volgorde van de eyebrow:
+ * gerealiseerde architectuur · met eer aan de makers · redactioneel
+ * samengesteld. Elk in de concrete vorm — niet de kop maar wat hij
+ * betekent.
+ *
+ * HET AANTAL IS LIVE, niet vastgelegd. Dit is de meest gecrawlde
+ * pagina van de site, en een getal dat achterloopt is daar een
+ * onwaarheid op de plek waar hij het vaakst wordt gelezen. De pagina
+ * revalideert elke 300 seconden, dus de telling kost één count-query
+ * per vijf minuten per taal en kan nooit verouderen.
+ *
+ * LENGTE IS HIER EEN ONTWERPEIS. Google kapt rond de 158 tekens af.
+ * Deze versie komt op 151 en houdt alle drie de benefits heel; met
+ * "landschapsarchitect" in plaats van "hovenier" wordt het 162 en
+ * verdwijnt "samengesteld" — en dan verliest de derde claim zijn
+ * werkwoord. Vandaar het kortere woord, dat een opdrachtgever
+ * trouwens ook gebruikt.
+ *
+ * Dit verving de standaard uit app/layout.tsx: Engels op de
+ * Nederlandse pagina, met "post projects" en "browse portfolios" uit
+ * een ander product. En zonder eigen omschrijving schreef Google er
+ * zelf een, uit de footer — zo stond de oude tagline nog in de
+ * zoekresultaten.
+ */
+function homeDescription(locale: string, projects: number | null): string {
+  const n = projects == null ? null : projects.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")
+  if (locale === "nl") {
+    return n
+      ? `${n} gerealiseerde architectuurprojecten, professioneel gefotografeerd. Van aannemer tot hovenier, vermeld door de architect. Redactioneel samengesteld.`
+      : "Gerealiseerde architectuurprojecten, professioneel gefotografeerd. Van aannemer tot hovenier, vermeld door de architect. Redactioneel samengesteld."
+  }
+  return n
+    ? `${n} built architecture projects, professionally photographed. From contractor to landscape architect, credited by the architect. Editorially curated.`
+    : "Built architecture projects, professionally photographed. From contractor to landscape architect, credited by the architect. Editorially curated."
+}
+
+/** Count-query zonder rijen op te halen; faalt stil, want een
+ *  omschrijving zonder getal is beter dan een pagina zonder titel. */
+async function countPublishedProjects(): Promise<number | null> {
+  try {
+    const supabase = await createServerSupabaseClient()
+    const { count } = await supabase
+      .from("projects")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "published")
+    return count ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Canonical en hreflang — die ontbraken hier volledig.
+ *
+ * Zonder generateMetadata viel deze pagina terug op de standaard uit
+ * app/layout.tsx: geen canonical, geen hreflang, en een Engelse titel op
+ * de Nederlandse pagina. Gevolg in Search Console: / stond met 241
+ * vertoningen op positie 8,3 en /nl met 17 op positie 1,8 — twee URL's
+ * voor dezelfde pagina, waarvan Google de verkeerde koos.
+ *
+ * Titel en omschrijving staan hier bewust nog niet in; die komen uit de
+ * merkbeslissing en erven voorlopig de standaard.
+ */
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params
+  const projects = await countPublishedProjects()
+  return {
+    description: homeDescription(locale, projects),
+    alternates: localeAlternates(locale, ""),
+  }
+}
+
 export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
   const t = await getTranslations("home")
@@ -600,30 +676,26 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
         {/* 1. Hero — full bleed, editorial headline */}
         <HeroSection projects={heroProjects} isSuperAdmin={isSuperAdmin} />
 
-        {/* 2. Positioning Statement */}
-        <section className="py-16 max-md:py-10 bg-white">
-          <div className="wrap text-center">
-            <h2 className="arco-page-title mb-8 max-md:mb-5">
-              {t("positioning_title")}
-            </h2>
-            <p className="arco-body-text max-w-[900px] mx-auto">
-              {t("positioning_body")}
-            </p>
-          </div>
-        </section>
-
-        {/* 3. Browse Section - Projects, Spaces, Professionals */}
+        {/* 2. Browse Section - Projects, Spaces, Professionals */}
         <BrowseSection 
           projects={browseProjects}
           spaces={browseSpaces}
           professionals={browseProfessionals}
         />
 
+        {/* 3. Pay-off en merkverhaal — na de rail, als opmaat naar de
+            uitgelichte projecten: eerst het bladeren, dan wie erachter
+            zit, dan het werk zelf. */}
+        <PositioningSection />
+
         {/* 4. Recent Projects */}
         <RecentProjects projects={recentProjects} />
 
-        {/* 5. How Arco works */}
-        <FeaturesSection />
+
+        {/* 5. Hoe Arco werkt — na de uitgelichte projecten: een
+            gebruiksaanwijzing landt pas als iemand gezien heeft waar het
+            over gaat. Stap 3 is de conversiestap. */}
+        <HowArcoWorks />
 
         {/* 6. Featured Studios */}
         <FeaturedCompanies companies={featuredCompanies} />

@@ -1,9 +1,12 @@
+import type { Metadata } from "next"
+
 import { getTranslations } from "next-intl/server"
 import { headers } from "next/headers"
 
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { verifyClaimToken, type ClaimChannel } from "@/lib/claim/claim-token"
 import { loadClaimContext, loadPlatformStartContext } from "@/lib/claim/context"
+import { NO_INDEX } from "@/lib/seo-utils"
 
 import { Link } from "@/i18n/navigation"
 
@@ -12,6 +15,8 @@ import { HeaderLanguageSwitcher } from "@/components/header-language-switcher"
 import styles from "./claim.module.css"
 
 export const dynamic = "force-dynamic"
+
+export const metadata: Metadata = { robots: NO_INDEX }
 
 /**
  * /claim?t=… — the new company signup funnel, entered by a signed,
@@ -193,10 +198,21 @@ export default async function ClaimPage({
     }
     if (!ctx) ctx = await loadPlatformStartContext()
 
-    // The platform route: no token, so no e-mail and no scanner risk —
-    // nobody was mailed this link. Counted here rather than beside the
-    // token branch because that branch returns early on a broken link,
-    // and a broken link is not a platform arrival.
+    // The platform route. Counted here rather than beside the token
+    // branch because that branch returns early on a broken link, and a
+    // broken link is not a platform arrival.
+    //
+    // THE CONTEXT GOES ALONG, which it did not before. The reasoning was
+    // "no token, so no e-mail and no scanner risk — nobody was mailed
+    // this link", and that conflates mail scanners with machines in
+    // general: a crawler needs no invitation. The cost was not a wrong
+    // verdict but an unanswerable question — 48 arrivals in eleven days
+    // with no user agent and no country, because nobody asked for them,
+    // so there was no way to tell one visitor reloading from fifty.
+    const platformCtx = await (async () => {
+      const h = await headers()
+      return { country: h.get("x-vercel-ip-country"), userAgent: h.get("user-agent") }
+    })()
     void import("@/lib/claim/track-arrival")
       .then(({ trackClaimArrival }) => trackClaimArrival({
         // An expired link is not a platform arrival. The person was
@@ -204,6 +220,7 @@ export default async function ClaimPage({
         // site itself would quietly move outreach wins into organic.
         channel: expiredLink?.channel ?? "platform",
         companyId: seatCompanyId,
+        ctx: platformCtx,
       }))
       .catch(() => {})
   }

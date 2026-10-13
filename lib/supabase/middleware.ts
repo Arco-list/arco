@@ -7,7 +7,7 @@ import type { Database } from "./types";
 
 type EnvKey = "NEXT_PUBLIC_SUPABASE_URL" | "NEXT_PUBLIC_SUPABASE_ANON_KEY";
 
-const PROTECTED_PATH_PREFIXES = ["/dashboard", "/create-company", "/new-project", "/admin"];
+const PROTECTED_PATH_PREFIXES = ["/dashboard", "/create-company", "/admin"];
 
 const getRequiredEnvVar = (key: EnvKey) => {
   const value = process.env[key];

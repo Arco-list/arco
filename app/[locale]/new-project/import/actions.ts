@@ -2122,7 +2122,7 @@ Return ONLY this JSON:
       .from("project_taxonomy_options")
       .select("id")
       .eq("slug", scopeSlug)
-      .eq("taxonomy_type", "building_type")
+      .eq("taxonomy_type", "project_scope")
       .maybeSingle()
     if (scopeOpt) {
       const { data: existing } = await serviceSupabase
@@ -2213,7 +2213,7 @@ export async function regenerateDescription(projectId: string): Promise<Regenera
   // Fetch current project state
   let projQuery = db
     .from("projects")
-    .select("title, description, building_year, location, building_type, project_type, address_city, style_preferences")
+    .select("title, description, project_year, location, building_type, project_type, address_city, style_preferences")
     .eq("id", projectId)
   if (!isAdmin) projQuery = projQuery.eq("client_id", user.id)
   const { data: proj } = await projQuery.single()
@@ -2236,7 +2236,7 @@ export async function regenerateDescription(projectId: string): Promise<Regenera
     `Title: ${proj.title}`,
     proj.address_city     ? `City: ${proj.address_city}`              : null,
     proj.location         ? `Location: ${proj.location}`              : null,
-    proj.building_year    ? `Year: ${proj.building_year}`             : null,
+    proj.project_year     ? `Year: ${proj.project_year}`              : null,
     proj.building_type    ? `Building type: ${proj.building_type}`    : null,
     proj.project_type     ? `Scope: ${proj.project_type}`             : null,
   ].filter(Boolean).join("\n")

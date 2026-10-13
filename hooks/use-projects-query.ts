@@ -4,7 +4,7 @@ import { useLocale } from "next-intl"
 import { canonicalizeScope, getProjectTranslation, translateScope } from "@/lib/project-translations"
 
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
-import type { Enums, Tables } from "@/lib/supabase/types"
+import type { Tables } from "@/lib/supabase/types"
 import { PROJECT_TYPE_FILTERS, isAllowedProjectSubType, isAllowedProjectType } from "@/lib/project-type-filter-map"
 import { applyProjectSort, DEFAULT_PROJECT_SORT, type ProjectSort } from "@/lib/projects/sort"
 import { orderFeaturedFeed } from "@/lib/projects/featured-shuffle"
@@ -57,14 +57,6 @@ interface UseProjectsQueryOptions {
 // key on this equality.
 const DEFAULT_PAGE_SIZE = 30
 const MAX_PAGE_SIZE = 100
-type ProjectBudgetLevel = Enums<"project_budget_level">
-const ALLOWED_BUDGET_LEVELS = new Set<ProjectBudgetLevel>([
-  "budget",
-  "mid_range",
-  "premium",
-  "luxury",
-])
-
 type CategoryRow = Tables<"categories"> & {
   project_category_attributes?: Pick<Tables<"project_category_attributes">, "is_listable"> | null
 }
@@ -237,10 +229,6 @@ export function useProjectsQuery({
       buildingTypes: selectedBuildingTypes,
       scopes: selectedScopes,
       buildingFeatures: selectedBuildingFeatures,
-      sizes: selectedSizes,
-      budgets: selectedBudgets.filter((budget): budget is ProjectBudgetLevel =>
-        ALLOWED_BUDGET_LEVELS.has(budget as ProjectBudgetLevel),
-      ),
       projectYearRange,
       buildingYearRange,
       keyword: keyword.trim(),
@@ -255,8 +243,6 @@ export function useProjectsQuery({
       selectedBuildingTypes,
       selectedScopes,
       selectedBuildingFeatures,
-      selectedSizes,
-      selectedBudgets,
       projectYearRange,
       buildingYearRange,
       keyword,
@@ -429,14 +415,6 @@ export function useProjectsQuery({
         if (displayValues.length > 0) {
           query = query.in("project_type", displayValues)
         }
-      }
-
-      if (filters.sizes.length > 0) {
-        query = query.in("project_size", filters.sizes)
-      }
-
-      if (filters.budgets.length > 0) {
-        query = query.in("budget_level", filters.budgets)
       }
 
       if (filters.projectYearRange[0] !== null) {

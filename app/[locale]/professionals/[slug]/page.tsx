@@ -37,7 +37,9 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
   // slug. The page component below issues the actual 308 redirect.
   const supabase = await createServerSupabaseClient()
   const slug = await resolveCompanyRedirect(requestedSlug, supabase)
-  const professional = await fetchProfessionalMetadata(slug)
+  // Locale meegeven: zonder dit valt de dienstnaam terug op Engels,
+  // ook op de Nederlandse pagina.
+  const professional = await fetchProfessionalMetadata(slug, { locale })
 
   if (!professional) {
     // Hub fallback — /professionals/{slug} doubles as the URL level for
@@ -82,15 +84,28 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
     locales.map((l) => [l, `${baseUrl}/${l}/professionals/${slug}`])
   )
 
+  // {naam} — {hoofddienst} in {plaats}. De kale bedrijfsnaam verspilde
+  // het slot waar we het best staan: positie 8,5 met 0,51% CTR, waar op
+  // die positie 2 à 3% hoort. Een naam die de zoeker net zelf heeft
+  // ingetypt voegt niets toe; de dienst en de plaats wel.
+  const titleSuffix = professional.primaryService
+    ? professional.city
+      ? `${professional.primaryService} in ${professional.city}`
+      : professional.primaryService
+    : professional.city
+      ? `in ${professional.city}`
+      : null
+  const pageTitle = titleSuffix ? `${professional.name} — ${titleSuffix}` : professional.name
+
   return {
-    title: { absolute: professional.name },
+    title: { absolute: pageTitle },
     description,
     alternates: {
       canonical,
       languages: { ...languages, "x-default": xDefault },
     },
     openGraph: {
-      title: professional.name,
+      title: pageTitle,
       description,
       url: canonical,
       // og:image is provided by opengraph-image.tsx co-located with this

@@ -18,13 +18,11 @@ let taxonomyCache: {
 
 let inFlightPromise: Promise<void> | null = null
 
+// Alleen de dimensie die nog gevuld wordt. Zie migratie 283: de andere
+// vier hebben nul selecties over 186 projecten en verdwijnen uit het
+// enum, en een .in() met een verdwenen label geeft een queryfout.
 const TAXONOMY_TYPES: Tables<"project_taxonomy_options">["taxonomy_type"][] = [
   "project_style",
-  "building_type",
-  "size_range",
-  "budget_tier",
-  "location_feature",
-  "material_feature",
 ]
 
 type CategoryRow = Tables<"categories"> & {
@@ -92,7 +90,7 @@ export function useProjectTaxonomy(): ProjectTaxonomyState {
           supabase
             .from("project_taxonomy_options")
             .select(
-              "id,name,name_nl,slug,taxonomy_type,sort_order,icon,budget_level,size_min_sqm,size_max_sqm,is_active",
+              "id,name,name_nl,slug,taxonomy_type,sort_order,icon,is_active",
             )
             .eq("is_active", true)
             .in("taxonomy_type", TAXONOMY_TYPES)

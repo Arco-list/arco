@@ -1991,20 +1991,38 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     }
   }
 
+  /**
+   * Unieke pro's per bucket, met een sleutelcascade.
+   *
+   * Dit telde e-mailadressen ontdubbeld en alles zónder adres per RIJ:
+   * `seenEmails.size + anonymous`. Een outreach-aankomst draagt wel een
+   * company_id maar niet altijd een adres, en dezelfde firma keert terug:
+   * over dertig dagen waren dat 31 aankomsten van 2 bedrijven, die als 31
+   * bezoekers in de rij stonden. Op 5 oktober liep Pro Visitors daardoor
+   * op 37 waar 16 de eerlijke stand was.
+   *
+   * De cascade neemt de sterkste sleutel die de rij heeft: adres, anders
+   * bedrijf, anders de rij zelf. Dat laatste is geen ontdubbeling maar een
+   * eerlijke erkenning — zonder adres én zonder bedrijf is er niets om
+   * twee aankomsten aan elkaar te knopen, en doen alsof dat wel kan zou
+   * net zo fout zijn als ze allemaal los tellen.
+   */
   const bucketArrivals = (channel: ArrivalChannel | "all"): number[] =>
     buckets.starts.map((_, i) => {
-      const seenEmails = new Set<string>()
-      let anonymous = 0
+      const seen = new Set<string>()
       for (const row of claimArrivals) {
         if (!row.created_at) continue
         if (channel !== "all" && arrivalChannelOf(row) !== channel) continue
         const d = new Date(row.created_at)
         if (Number.isNaN(d.getTime()) || d < buckets.starts[i] || d >= buckets.ends[i]) continue
         const email = row.email?.trim().toLowerCase()
-        if (email) seenEmails.add(email)
-        else anonymous++
+        seen.add(
+          email ? `e:${email}`
+            : row.company_id ? `c:${row.company_id}`
+            : `r:${row.created_at}`,
+        )
       }
-      return seenEmails.size + anonymous
+      return seen.size
     })
 
   const proVisitorsSeries = bucketArrivals("all")

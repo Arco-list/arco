@@ -17,6 +17,13 @@ interface RecentProjectsProps {
 }
 
 function Card({ project, className }: { project: RecentProject; className?: string }) {
+  // Weer gewoon py-16 aan beide kanten. De onderkant was gehalveerd om
+  // samen met de bovenkant van Populaire architecten op 64px uit te
+  // komen, gelijk aan de lege my-16-spacer tussen de rails in de
+  // bladersectie — maar die koppeling bestaat niet meer, want Hoe Arco
+  // werkt staat er nu tussen. Padding valt niet samen zoals marges, dus
+  // twee secties met py-16 geven 128px: dezelfde overgang als onder
+  // Vermelde professionals. Binnen een sectie blijft het 64.
   return (
     <Link href={project.href} className={`discover-card ${className ?? ""}`}>
       <div className="discover-card-image-wrap">
@@ -53,7 +60,8 @@ export function RecentProjects({ projects }: RecentProjectsProps) {
         <div className="section-header">
           <h2 className="arco-section-title">{t("recent_projects")}</h2>
           <Link href="/projects" className="view-all-link">
-            {t("view_all_projects")}
+            <span className="arco-text-link-label">{t("view_all_projects")}</span>
+            <span aria-hidden>→</span>
           </Link>
         </div>
 

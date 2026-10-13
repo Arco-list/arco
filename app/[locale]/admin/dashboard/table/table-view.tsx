@@ -15,7 +15,8 @@ const DRIVER_COLORS: Record<string, string> = {
 // Model page so users see the same affordance across views. Stops click
 // propagation so opening the tooltip on an expandable row doesn't also
 // toggle its expansion.
-function InfoIcon({ definition, source }: { definition?: string; source?: string }) {
+/** Geëxporteerd voor /admin/seo — dezelfde i, dezelfde tooltip. */
+export function InfoIcon({ definition, source }: { definition?: string; source?: string }) {
   if (!definition && !source) return null
   return (
     <Tooltip>
@@ -58,7 +59,18 @@ function InfoIcon({ definition, source }: { definition?: string; source?: string
 
 // ─── Trendline with labels spanning all 6 columns ─────────────────────────────
 
-function TrendlineCell({ datapoints, labels, color }: { datapoints: number[]; labels: string[]; color: string }) {
+/**
+ * Geëxporteerd omdat /admin/seo dezelfde rij tekent. Eén definitie van
+ * de geometrie — de padding, de stippellijn naar de lopende periode, de
+ * plaatsing van de labels — in plaats van een kopie die er bijna op
+ * lijkt en langzaam afwijkt.
+ */
+export function TrendlineCell({ datapoints, labels, color, formatFn }: {
+  datapoints: number[]; labels: string[]; color: string
+  /** Vervangt de standaardweergave ("·" bij 0). Voor cijfers die niet
+   *  als geheel getal lezen: een positie met decimaal, een percentage. */
+  formatFn?: (v: number) => string
+}) {
   const max = Math.max(...datapoints, 1)
   const n = datapoints.length
   const padX = 6
@@ -107,7 +119,7 @@ function TrendlineCell({ datapoints, labels, color }: { datapoints: number[]; la
               className="absolute text-[11px] font-medium whitespace-nowrap"
               style={{ bottom: 5, left: "50%", transform: "translateX(-50%)", color: p.isRolling ? "#a1a1a0" : "#1c1c1a" }}
             >
-              {p.v > 0 ? p.v : "·"}
+              {formatFn ? formatFn(p.v) : p.v > 0 ? p.v : "·"}
             </span>
           </div>
         )
@@ -142,9 +154,15 @@ const SOURCE_LABEL: Record<string, { label: string; color: string }> = {
  * Same "·" for zero as everywhere else, and the rolling bucket stays
  * grey because it is still incomplete.
  */
-function SubNumbersCell({ datapoints }: { datapoints: number[] }) {
+export function SubNumbersCell({ datapoints, formatFn }: {
+  datapoints: number[]
+  /** Zie TrendlineCell. Met een eigen formatter vervalt ook de
+   *  "No data yet"-melding hieronder: wie zelf bepaalt hoe een nul
+   *  leest, bepaalt ook of een reeks nullen leeg is. */
+  formatFn?: (v: number) => string
+}) {
   const hasData = datapoints.some((v) => v > 0)
-  if (!hasData) {
+  if (!hasData && !formatFn) {
     return <div className="w-full flex items-center" style={{ height: 22 }}>
       <span className="text-[10px] text-[#c4c4c2] italic">No data yet</span>
     </div>
@@ -167,7 +185,7 @@ function SubNumbersCell({ datapoints }: { datapoints: number[] }) {
               color: isRolling ? "#c4c4c2" : "#6b6b68",
             }}
           >
-            {v > 0 ? v : "·"}
+            {formatFn ? formatFn(v) : v > 0 ? v : "·"}
           </span>
         )
       })}
@@ -220,17 +238,20 @@ function InlineCRCell({ numerator, denominator, pull = 6, immatureFromIndex }: {
 /** Raw-value row at CR size, x-aligned with the sparkline dots — the
  *  table's counterpart of the Model view's ValueRow (SEO Impressions /
  *  CTR / Clicks under Ranked pros & Ranked projects). */
-function ValueCell({ values, tone = "muted", format = "integer", pull = 6 }: {
+export function ValueCell({ values, tone = "muted", format = "integer", pull = 6, formatFn }: {
   values: number[]
   tone?: "muted" | "accent"
   format?: "integer" | "percent" | "decimal"
   pull?: number
+  /** Zie TrendlineCell — dezelfde reden, dezelfde afspraak. */
+  formatFn?: (v: number) => string
 }) {
   const color = tone === "accent" ? "var(--primary, #016D75)" : "#6b6b68"
   const n = values.length
   const padX = 6
   const w = 100
   const fmt = (v: number): string => {
+    if (formatFn) return formatFn(v)
     if (v <= 0) return "·"
     if (format === "percent") return `${v}%`
     if (v >= 10000) return `${Math.round(v / 1000)}k`

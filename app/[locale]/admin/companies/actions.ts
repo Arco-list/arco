@@ -105,7 +105,7 @@ export async function resendProfessionalInviteAction({ inviteId }: { inviteId: s
       .maybeSingle()
 
     const ownerName = [project?.profiles?.first_name, project?.profiles?.last_name].filter(Boolean).join(" ") || "An architect"
-    const { checkUserAndGenerateInviteUrl } = await import("@/app/new-project/actions")
+    const { checkUserAndGenerateInviteUrl } = await import("@/lib/email-service")
     const { confirmUrl } = await checkUserAndGenerateInviteUrl(invite.invited_email, invite.project_id)
     const { getSiteUrl } = await import("@/lib/utils")
     const baseUrl = getSiteUrl()

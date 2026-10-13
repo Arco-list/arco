@@ -174,8 +174,28 @@ export function HeroSection({ projects, isSuperAdmin = false }: HeroSectionProps
       <div className="hidden md:block absolute bottom-0 left-0 right-0 pb-12" style={{ zIndex: 20 }}>
         <div className="max-w-[1680px] mx-auto px-[80px] max-lg:px-[40px]">
 
-          {/* Large screens: Left (Title) | Right (Navigation) */}
-          <div className="lg:flex lg:items-end lg:justify-between lg:gap-8">
+          {/* Titel en navigatie staan pas náást elkaar vanaf 1400px.
+
+              Gemeten in Cormorant Garamond zelf: de langste kopregel is de
+              Nederlandse, "Uitzonderlijke architectuur.", 775px op 72px.
+              De navigatie is met vijf balken van 60px plus twee pijlen
+              424px, en met de tussenruimte van 32 kost ze 456. Op 1400
+              blijft er 1400 - 160 padding - 456 = 784px over: 9px speling.
+              Dun, maar het is een bovengrens — de meting telt alleen
+              letterbreedtes op, en kerning maakt een regel nooit breder.
+
+              Onder 1400 staat de navigatie eronder en heeft de titel de
+              volle breedte. Dat is vanaf 1024 ruim genoeg, omdat de clamp
+              het lettertype daar al heeft teruggeschaald.
+
+              Deze grens stond op 2xl (1536) toen de kop nog "Het netwerk
+              van professionals," was; die regel was 854px en paste pas
+              vanaf 1471.
+
+              LET OP bij het toevoegen van covers: elke extra balk kost 68px
+              aan titelbreedte. Een zesde cover duwt de grens naar ~1468.
+              Gaat het aantal omhoog, zet deze grens dan mee omhoog. */}
+          <div className="min-[1400px]:flex min-[1400px]:items-end min-[1400px]:justify-between min-[1400px]:gap-8">
 
             {/* Left Side - Title & Stats */}
             <div className="flex-1">
@@ -191,7 +211,7 @@ export function HeroSection({ projects, isSuperAdmin = false }: HeroSectionProps
 
             {/* Navigation - right on desktop, below title on tablet */}
             {projects.length > 1 && (
-              <div className="flex flex-col gap-3 mt-6 lg:mt-0">
+              <div className="flex flex-col gap-3 mt-6 min-[1400px]:mt-0">
                 {/* Progress Bars & Arrows Row */}
                 <div className="flex items-center gap-3">
                   <div className="flex gap-2">

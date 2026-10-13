@@ -10,6 +10,16 @@
 // Deliberately no credits/recency weighting here: position inside the band
 // is pure rotation, so every project gets time above the fold.
 //
+// THIS IS DUE TO CHANGE. A subscription tier that raises a company's
+// position in the results is planned, so the rotation below stops being
+// the whole ordering story — it becomes what happens BETWEEN the paid
+// placements, not instead of them. Whoever builds that: the brand
+// principles draw the line at reach, not standing (see /admin/brand,
+// "Geld koopt bereik, nooit geloofwaardigheid"). A paid tier may move a
+// company up this list; it may not buy a credit, a place through the
+// editorial selection, or access to the platform. Those three are what
+// the ordering is allowed to be trusted for.
+//
 // Used by BOTH the SSR discover query (lib/projects/queries.ts, seed per
 // request) and the client pagination hook (hooks/use-projects-query.ts,
 // seed per mount). The DB-level "featured" ORDER BY in lib/projects/sort.ts

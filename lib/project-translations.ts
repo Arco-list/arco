@@ -118,8 +118,9 @@ export function translateScopeInput(
 // canonicalize() just normalises casing and accepts a few common variants.
 //
 // PROJECT_BUILDING_TYPES is the source of truth for filter UI (replaces
-// the broken DB-backed "building_type" taxonomy that actually held scope
-// values). One place to add a value when the enum grows.
+// the DB taxonomy, die scope-waarden droeg onder de naam building_type
+// en sinds migratie 282 project_scope heet). One place to add a value
+// when the enum grows.
 
 export const PROJECT_BUILDING_TYPES = [
   "villa",

@@ -28,8 +28,8 @@ export const METRIC_DEFS: Record<string, MetricDef> = {
   // ── Clients ──────────────────────────────────────────────────────────
   client_visitors: {
     key: "client_visitors",
-    title: "Visitors (Clients)",
-    definition: "Unique visitors browsing projects and professionals pages. Excludes /businesses, /admin, and /dashboard traffic.",
+    title: "Visitors",
+    definition: "Unieke bezoekers, iedereen — ook wie via een claim-, outreach- of uitnodigingslink binnenkwam. Buiten de telling blijven alleen je eigen team, niet-productiehosts en mailscanners, dus dit getal ligt dicht bij PostHog maar wat lager.",
     source: "posthog",
     driver: "acquisition",
     user: "client",
@@ -45,6 +45,10 @@ export const METRIC_DEFS: Record<string, MetricDef> = {
       { key: "social", label: "Social", definition: "LinkedIn, Facebook, Instagram, X, Pinterest", source: "posthog" },
       { key: "email", label: "Email", definition: "Gmail, Outlook, email clients", source: "posthog" },
       { key: "referral", label: "Referral", definition: "Other websites linking to Arco", source: "posthog" },
+      { key: "sales", label: "Sales", definition: "Claim- en outreachlinks — bedrijven die wij hebben aangeschreven", source: "posthog" },
+      { key: "invites", label: "Invites", definition: "Uitnodigingen van een architect aan een vakman", source: "posthog" },
+      { key: "outbound", label: "Outbound", definition: "Prospectmail die een admin zelf heeft geschreven", source: "posthog" },
+      { key: "lifecycle", label: "Lifecycle", definition: "Mail aan wie al klant of pro is — drips, verlopende kaart", source: "posthog" },
     ],
   },
   client_signups: {

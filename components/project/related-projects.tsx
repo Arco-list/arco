@@ -40,7 +40,8 @@ export function RelatedProjects({ projects, architectName, architectSlug, hasMor
           <h2 className="arco-section-title">{t("more_from", { name: architectName })}</h2>
           {hasMore && architectSlug && (
             <Link href={`/professionals/${architectSlug}`} className="view-all-link">
-              {t("view_all_projects")}
+              <span className="arco-text-link-label">{t("view_all_projects")}</span>
+              <span aria-hidden>→</span>
             </Link>
           )}
         </div>

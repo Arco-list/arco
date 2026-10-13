@@ -30,7 +30,8 @@ function BrowseCarousel({ items, sectionTitle, viewAllHref, viewAllLabel }: {
       <div className="section-header">
         <h2 className="arco-section-title">{sectionTitle}</h2>
         <Link href={viewAllHref} className="view-all-link">
-{viewAllLabel}
+          <span className="arco-text-link-label">{viewAllLabel}</span>
+          <span aria-hidden>→</span>
         </Link>
       </div>
 
