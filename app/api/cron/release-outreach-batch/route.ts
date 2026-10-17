@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
 import { isWithinSendWindow } from "@/lib/date-utils"
+import { COLD_OUTREACH_PAUSED, COLD_OUTREACH_PAUSE_REASON, isShowcaseTrack } from "@/lib/outreach/cold-pause"
 
 /**
  * Daily auto-release — pushes prospects from Prospect → Contacted by
@@ -224,10 +225,12 @@ export async function GET(request: NextRequest) {
   // startProspectSequence reads the company's status and upgrades an
   // apollo contact at a showcased company to the showcase story, so
   // both sources arrive at the right mail through one path.
-  const { data: candidates, error: candidateError } = await supabase
-    .from("prospects")
-    .select("id, email, company_name, company_id, source, companies(status)")
-    .in("source", ["apollo", "arco"])
+  const CANDIDATE_COLUMNS = "id, email, company_name, company_id, source, companies(status)"
+  const baseFilters = <T extends {
+    eq: (c: string, v: unknown) => T; is: (c: string, v: null) => T
+    like: (c: string, v: string) => T; order: (c: string, o: { ascending: boolean }) => T
+    limit: (n: number) => T
+  }>(q: T) => q
     .eq("status", "prospect")
     .eq("sequence_status", "not_started")
     .is("bounced_at", null)
@@ -237,6 +240,45 @@ export async function GET(request: NextRequest) {
     .order("created_at", { ascending: true })
     .order("id", { ascending: true })
     .limit(perRun)
+
+  // MET DE KOUDE BAAN DICHT WORDT ER GERICHT GEVRAAGD, NIET BREED
+  // GESCAND. De selectie is FIFO over de hele lijst en die lijst is 95%
+  // koud: de zeven showcase-prospects van vandaag staan op FIFO-positie
+  // 210 tot 1843. Een greep ter grootte van het dagbudget — of zelfs
+  // een paar honderd rijen — haalt er één op en valt daarna stil, wat
+  // eruitziet alsof de pauze showcase óók heeft uitgezet.
+  //
+  // Showcase is twee dingen (resolveEffectiveTrack): source 'arco', of
+  // een contact bij een bedrijf met status 'prospected'. Dat is één OR
+  // over een gejoinde tabel, wat PostgREST niet in één filter doet, dus
+  // het zijn twee bevragingen die hier worden samengevoegd. Allebei
+  // begrensd op perRun, dus de kosten liggen vast.
+  type CandidateRow = {
+    id: string; email: string; company_name?: string | null
+    company_id?: string | null; source?: string | null
+    companies?: { status?: string | null } | null
+  }
+  let candidates: CandidateRow[] | null = null
+  let candidateError: { message: string } | null = null
+  if (COLD_OUTREACH_PAUSED) {
+    const [bySource, byCompany] = await Promise.all([
+      baseFilters((supabase.from("prospects").select(CANDIDATE_COLUMNS) as any).eq("source", "arco")),
+      baseFilters((supabase.from("prospects").select("id, email, company_name, company_id, source, companies!inner(status)") as any)
+        .in("source", ["apollo", "arco"])
+        .eq("companies.status", "prospected")),
+    ])
+    candidateError = (bySource.error ?? byCompany.error) as { message: string } | null
+    const merged = new Map<string, CandidateRow>()
+    for (const row of [...(bySource.data ?? []), ...(byCompany.data ?? [])] as CandidateRow[]) {
+      if (!merged.has(row.id)) merged.set(row.id, row)
+    }
+    candidates = [...merged.values()].slice(0, perRun)
+  } else {
+    const res = await baseFilters((supabase.from("prospects").select(CANDIDATE_COLUMNS) as any)
+      .in("source", ["apollo", "arco"]))
+    candidates = (res.data ?? null) as CandidateRow[] | null
+    candidateError = res.error as { message: string } | null
+  }
   if (candidateError) {
     return NextResponse.json({ error: candidateError.message }, { status: 500 })
   }
@@ -257,10 +299,23 @@ export async function GET(request: NextRequest) {
     // company. An arco row without one cannot be sent and would only
     // churn through the failure list every run.
     if (row.source === "arco" && !row.company_id) return false
+    // De poort zelf: alleen de showcase-baan mag erdoor zolang de
+    // koude baan dicht staat. Per baan en niet per route, want deze
+    // cron laat allebei los onder één budget.
+    // Vangnet. De bevraging hierboven levert al alleen showcase-rijen
+    // zolang de pauze aan staat; dit houdt de regel ook juist als die
+    // bevraging ooit verandert.
+    if (COLD_OUTREACH_PAUSED && !isShowcaseTrack(row)) return false
     return true
   })
   if (eligible.length === 0) {
-    return NextResponse.json({ ok: true, released: 0, reason: "no eligible prospects" })
+    return NextResponse.json({
+      ok: true, released: 0,
+      reason: COLD_OUTREACH_PAUSED
+        ? `no eligible showcase prospects — ${COLD_OUTREACH_PAUSE_REASON}`
+        : "no eligible prospects",
+      coldOutreachPaused: COLD_OUTREACH_PAUSED,
+    })
   }
 
   const { startProspectSequence } = await import("@/app/admin/sales/actions")
