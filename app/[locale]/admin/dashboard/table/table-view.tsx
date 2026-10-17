@@ -195,12 +195,24 @@ export function SubNumbersCell({ datapoints, formatFn }: {
 
 // ─── Inline conversion row (mirrors the Model view's "to X" rows) ─────────────
 
-/** Same formatting rules as the Model view: dot when not computable or
- *  zero, one decimal under 10%, whole numbers above. */
+/**
+ * Een lege noemer en een echte nul zijn niet hetzelfde antwoord.
+ *
+ * Allebei stonden hier als "·", en dat is precies de verwarring die
+ * deze tabel hoort weg te nemen: "5 bedrijven benaderd, niemand
+ * aangekomen" is een resultaat, "niemand benaderd" is het ontbreken van
+ * een resultaat. Op de Showcase-rij stonden die twee naast elkaar in
+ * twee opeenvolgende weken, identiek weergegeven, en de ene vraagt om
+ * actie terwijl de andere alleen zegt dat de toevoer stil ligt.
+ *
+ * "–" leest als "niet gemeten", "0%" als een gemeten uitkomst. Eén
+ * decimaal onder de 10% (6/1000 rondt anders af naar een misleidende
+ * 1%), hele getallen daarboven.
+ */
 function formatConversion(numerator: number, denominator: number): string {
-  if (!denominator) return "·"
+  if (!denominator) return "–"
   const pct = (numerator / denominator) * 100
-  if (pct === 0) return "·"
+  if (pct === 0) return "0%"
   if (pct < 10) return `${pct.toFixed(1)}%`
   return `${Math.round(pct)}%`
 }
