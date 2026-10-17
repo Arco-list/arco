@@ -1,6 +1,13 @@
+import type { Metadata } from "next"
+import { arcoPageMeta } from "@/lib/seo/copy"
 import { requirePhotographyAdmin } from "@/lib/photography-gate"
 import { fetchDiscoverPhotographers } from "@/lib/photographers/queries"
 import { PhotographyClient } from "./photography-client"
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params
+  return { ...arcoPageMeta("/businesses/photography", locale) }
+}
 
 export const dynamic = "force-dynamic"
 

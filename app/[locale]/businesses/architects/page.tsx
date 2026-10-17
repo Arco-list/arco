@@ -1,9 +1,19 @@
+import type { Metadata } from "next"
+import { arcoPageMeta } from "@/lib/seo/copy"
+import { localeAlternates } from "@/lib/seo-utils"
 import { Suspense } from "react"
 import { ArchitectsClient } from "./architects-client"
 import { fetchDiscoverProjects } from "@/lib/projects/queries"
 import { lookupCompanyByEmailDomain } from "@/app/businesses/actions"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import type { ProjectCard } from "@/components/landing/project-carousel"
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params
+  return { ...arcoPageMeta("/businesses/architects", locale),
+    alternates: localeAlternates(locale, "/businesses/architects"),
+   }
+}
 
 interface PageProps {
   params: Promise<{ locale: string }>

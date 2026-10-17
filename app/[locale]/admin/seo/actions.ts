@@ -160,7 +160,11 @@ export async function fetchSeoOverview(timeframe: SeoTimeframe = "weeks"): Promi
   const sides = ["all", "pro", "project", "arco"]
   const queryResults = await Promise.all(
     sides.map((side) =>
-      db.rpc<TopQueryRow>("seo_top_queries", { day_count: 28, types: typesForSide(side), row_limit: 10 }),
+      // 200 in plaats van 10: de tabel toont er tien, maar sorteert eerst.
+      // Op CTR is de top tien op vertoningen de verkeerde tien, en met 139
+      // zoekopdrachten boven de CTR-drempel van 10 vertoningen zou een
+      // kleinere pool er een deel van missen.
+      db.rpc<TopQueryRow>("seo_top_queries", { day_count: 28, types: typesForSide(side), row_limit: 200 }),
     ),
   )
   const queries: Record<string, QueryRow[]> = {}

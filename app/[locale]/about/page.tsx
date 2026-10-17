@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { arcoPageMeta } from "@/lib/seo/copy"
 
 import { createServiceRoleSupabaseClient, createServerSupabaseClient } from "@/lib/supabase/server"
 import { localeAlternates } from "@/lib/seo-utils"
@@ -101,7 +102,7 @@ async function fetchIsSuperAdmin(): Promise<boolean> {
  *  hreflang koos Google zelf, en hij koos de URL die omleidt. */
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params
-  return { alternates: localeAlternates(locale, "/about") }
+  return { ...arcoPageMeta("/about", locale), alternates: localeAlternates(locale, "/about") }
 }
 
 export default async function AboutPage() {

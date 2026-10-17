@@ -1,3 +1,6 @@
+import type { Metadata } from "next"
+import { arcoPageMeta } from "@/lib/seo/copy"
+import { localeAlternates } from "@/lib/seo-utils"
 import { getLocale } from "next-intl/server"
 import { headers } from "next/headers"
 import { lookupCompanyByEmailDomain } from "@/app/businesses/actions"
@@ -5,6 +8,13 @@ import { trackInviteLandingVisit } from "@/lib/invites/track-invite-landing"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { translateProfessionalService } from "@/lib/project-translations"
 import ProfessionalsLandingClient from "./professionals-landing-client"
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params
+  return { ...arcoPageMeta("/businesses/professionals", locale),
+    alternates: localeAlternates(locale, "/businesses/professionals"),
+   }
+}
 
 export interface RecentProfessional {
   id: string

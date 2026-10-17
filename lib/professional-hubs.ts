@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { proHubTitle, proHubDescription } from "@/lib/seo/copy"
 import { PROVINCES, cityLabel, provinceKey } from "@/lib/provinces"
 
 /**
@@ -40,7 +41,7 @@ export type ProHub = {
  *  appends an "s" to the stored name. */
 const SERVICE_PLURALS: Record<string, { nl: string; en: string }> = {
   architect: { nl: "Architecten", en: "Architects" },
-  "interior-designer": { nl: "Interieurontwerpers", en: "Interior designers" },
+  "interior-designer": { nl: "Interieurarchitecten", en: "Interior designers" },
   "garden-designer": { nl: "Tuinontwerpers", en: "Garden designers" },
 }
 
@@ -263,15 +264,20 @@ export function proHubCopy(hub: ProHub, locale: string): ProHubCopy {
       : (PROVINCES[hub.name] ? (nl ? PROVINCES[hub.name].nl : PROVINCES[hub.name].en) : hub.name)
     return {
       h1: nl ? `Professionals in ${where}` : `Professionals in ${where}`,
-      metaTitle: nl
-        ? `Architecten en interieurontwerpers in ${where}`
-        : `Architects & interior designers in ${where}`,
-      // ~155 chars: a description that fills the whole SERP snippet.
-      // Shorter ones got padded by Google with scraped breadcrumb +
-      // footer text ("Professionals/Nederland/ Arco Global BV.").
-      description: nl
-        ? `Vind architecten en interieurontwerpers in ${where} op Arco. Bekijk gerealiseerde projecten van lokale studio's, vergelijk hun werk en neem direct contact op.`
-        : `Find architects and interior designers in ${where} on Arco. Browse completed projects by local studios, compare their work and get in touch directly.`,
+      // De titel luidde "Architecten en interieurarchitecten in {plaats}"
+      // — dezelfde vorm als /professionals zelf, zodat de hub en het
+      // overzicht erboven om dezelfde zoekvraag concurreerden. "Met
+      // opgeleverd werk" is wat deze pagina's onderscheidt van elke
+      // andere branchegids.
+      metaTitle: proHubTitle(locale, {
+        service: nl ? "Architecten en vakmensen" : "Dutch architects and specialists",
+        place: where,
+      }),
+      description: proHubDescription(locale, {
+        count: hub.count,
+        service: nl ? "architecten en vakmensen" : "architects and specialists",
+        place: where,
+      }),
       crumb: where,
     }
   }
@@ -284,12 +290,12 @@ export function proHubCopy(hub: ProHub, locale: string): ProHubCopy {
         : (nl ? "Nederland" : "the Netherlands")
     return {
       h1: `${label} professionals in ${where}`,
-      metaTitle: nl
-        ? `${label} professionals in ${where} – bekijk hun projecten`
-        : `${label} professionals in ${where} – browse their projects`,
-      description: nl
-        ? `Vind ${label} professionals in ${where} op Arco. Bekijk hun gerealiseerde projecten, vergelijk studio's en neem direct contact op met het juiste bureau.`
-        : `Find ${label} professionals in ${where} on Arco. Browse their completed projects, compare studios and get in touch with the right firm directly.`,
+      metaTitle: proHubTitle(locale, { service: `${label} professionals`, place: where }),
+      description: proHubDescription(locale, {
+        count: hub.count,
+        service: `${label} professionals`,
+        place: where,
+      }),
       crumb: label,
     }
   }
@@ -301,12 +307,10 @@ export function proHubCopy(hub: ProHub, locale: string): ProHubCopy {
       : (nl ? "Nederland" : "the Netherlands")
   return {
     h1: `${plural} in ${where}`,
-    metaTitle: nl
-      ? `${plural} in ${where} – bekijk hun projecten`
-      : `${plural} in ${where} – browse their projects`,
-    description: nl
-      ? `Vind ${plural.toLowerCase()} in ${where} op Arco. Bekijk portfolio's met gerealiseerde projecten — van villa's tot interieurs — vergelijk studio's en neem direct contact op.`
-      : `Find ${plural.toLowerCase()} in ${where} on Arco. Browse portfolios of completed projects — from villas to interiors — compare studios and get in touch directly.`,
+    metaTitle: proHubTitle(locale, { service: plural, place: where }),
+    // "Portfolio's" is eruit: dat woord laat renders toe en ondergraaft
+    // daarmee de enige claim die Arco maakt.
+    description: proHubDescription(locale, { count: hub.count, service: plural, place: where }),
     crumb: plural,
   }
 }
@@ -339,7 +343,7 @@ export const SERVICE_HUB_PROSE: Record<string, Record<"nl" | "en", ServiceHubPro
         heading: "Vind jouw architect op Arco",
         paragraphs: [
           "Op Arco vind je momenteel {count} architectenbureaus met gerealiseerd werk in Nederland. Gebruik de filters om te zoeken op locatie of dienst, en bekijk per bureau afgeronde projecten — gefotografeerd ruimte voor ruimte, met de materialen en details zoals ze zijn opgeleverd.",
-          "Elk bureau heeft een eigen handschrift — de een excelleert in strakke nieuwbouw aan het water, de ander in het transformeren van monumentaal erfgoed. De beste voorspeller van jouw resultaat is werk dat al gebouwd is: herken je jouw ambitie in een gerealiseerd project, dan is de match gevonden. Je neemt rechtstreeks en kosteloos contact op met het bureau — en ziet per project ook de studio's waarmee is samengewerkt, van interieurontwerper tot landschapsarchitect.",
+          "Elk bureau heeft een eigen handschrift — de een excelleert in strakke nieuwbouw aan het water, de ander in het transformeren van monumentaal erfgoed. De beste voorspeller van jouw resultaat is werk dat al gebouwd is: herken je jouw ambitie in een gerealiseerd project, dan is de match gevonden. Je neemt rechtstreeks en kosteloos contact op met het bureau — en ziet per project ook de studio's waarmee is samengewerkt, van interieurarchitect tot landschapsarchitect.",
         ],
       },
       sections: [
@@ -432,7 +436,7 @@ export const SERVICE_HUB_PROSE: Record<string, Record<"nl" | "en", ServiceHubPro
   "interior-designer": {
     nl: {
       platform: {
-        heading: "Vind jouw interieurontwerper op Arco",
+        heading: "Vind jouw interieurarchitect op Arco",
         paragraphs: [
           "Op Arco vind je momenteel {count} interieurstudio's met gerealiseerd werk in Nederland. Gebruik de filters om te zoeken op locatie of dienst, en blader per studio door afgeronde interieurs — gefotografeerd ruimte voor ruimte, van keuken tot badkamer.",
           "Elke studio heeft een signatuur — warm minimalisme, klassiek met een moderne snede, uitgesproken kleur en verzamelde kunst. De beste manier om te weten of een studio bij je past, is kijken naar wat ze hebben gemaakt: herken je jouw smaak in een gerealiseerd interieur, dan heb je je match gevonden. Je neemt rechtstreeks en kosteloos contact op met de studio — en ziet per project het complete team erachter, van architect tot meubelmaker.",
@@ -440,9 +444,9 @@ export const SERVICE_HUB_PROSE: Record<string, Record<"nl" | "en", ServiceHubPro
       },
       sections: [
         {
-          heading: "Wat een interieurontwerper toevoegt",
+          heading: "Wat een interieurarchitect toevoegt",
           paragraphs: [
-            "Een interieur dat klopt, herken je meteen — al kun je niet altijd benoemen waarom. Dat is het werk van een goede interieurontwerper: licht, indeling, materialen, maatwerk en kunst die samen één verhaal vertellen, afgestemd op hoe jij woont. Waar een aannemer oplevert wat is getekend, tilt een ontwerper het project naar een hoger niveau — met keuzes die je zelf niet had bedacht en een samenhang die een woning blijvend waardevoller maakt.",
+            "Een interieur dat klopt, herken je meteen — al kun je niet altijd benoemen waarom. Dat is het werk van een goede interieurarchitect: licht, indeling, materialen, maatwerk en kunst die samen één verhaal vertellen, afgestemd op hoe jij woont. Waar een aannemer oplevert wat is getekend, tilt een ontwerper het project naar een hoger niveau — met keuzes die je zelf niet had bedacht en een samenhang die een woning blijvend waardevoller maakt.",
             "De studio's op Arco tonen dat niveau met gerealiseerde interieurs, gefotografeerd ruimte voor ruimte. Zo zie je niet alleen stijl, maar vakmanschap: de detaillering van een kastenwand, de overgang tussen materialen, de rust in een lichtplan.",
           ],
         },
@@ -453,26 +457,26 @@ export const SERVICE_HUB_PROSE: Record<string, Record<"nl" | "en", ServiceHubPro
           ],
         },
               ],
-      faqHeading: "Veelgestelde vragen over interieurontwerpers",
+      faqHeading: "Veelgestelde vragen over interieurarchitecten",
       faqs: [
         {
-          question: "Wat kost een interieurontwerper voor een complete woning?",
+          question: "Wat kost een interieurarchitect voor een complete woning?",
           answer: "Reken vanuit het totale interieurbudget — afwerking, maatwerk, meubels en verlichting samen — in plaats vanuit een uurtarief. Het ontwerphonorarium is daarvan doorgaans een beperkt deel, in de praktijk vaak in de orde van 10 tot 15%, meestal als vaste aanneemsom per fase afgesproken. Een goede studio verdient dat terug door dure missers te voorkomen en meer uit hetzelfde budget te halen.",
         },
         {
-          question: "Wat voegt een interieurontwerper toe die ik zelf niet kan?",
+          question: "Wat voegt een interieurarchitect toe die ik zelf niet kan?",
           answer: "Samenhang en niveau. Een ontwerper bewaakt het geheel — lichtplan, materialen, maatwerk, styling — en maakt keuzes die je zelf niet had bedacht: een indeling die beter werkt, materialen die mooier verouderen, details die het verschil maken. Het resultaat is een interieur dat als één geheel voelt en de woning blijvend waardevoller maakt.",
         },
         {
-          question: "Wat is het verschil tussen een interieurarchitect en een interieurontwerper?",
-          answer: "“Interieurarchitect” is een beschermde titel voor wie is ingeschreven in het Architectenregister; “interieurontwerper” mag iedereen zich noemen. De titel garandeert een erkende opleiding, maar zegt niet alles — er zijn uitstekende studio's zonder registratie. Beoordeel een studio daarom vooral op gerealiseerd werk.",
+          question: "Wat is het verschil tussen een interieurarchitect en een interieurarchitect?",
+          answer: "“Interieurarchitect” is een beschermde titel voor wie is ingeschreven in het Architectenregister; “interieurarchitect” mag iedereen zich noemen. De titel garandeert een erkende opleiding, maar zegt niet alles — er zijn uitstekende studio's zonder registratie. Beoordeel een studio daarom vooral op gerealiseerd werk.",
         },
         {
-          question: "Wanneer betrek ik een interieurontwerper bij mijn project?",
-          answer: "Zo vroeg mogelijk. Bij nieuwbouw of een grote verbouwing loont het om de interieurontwerper al tijdens het bouwkundig ontwerp aan te haken: lichtplan, installaties en maatwerk zitten dan vanaf het begin in de tekeningen, in plaats van dat ze er later ingepast moeten worden. Ook voor één ruimte — een keuken, badkamer of woonverdieping — begint een goed traject vóór de uitvoering.",
+          question: "Wanneer betrek ik een interieurarchitect bij mijn project?",
+          answer: "Zo vroeg mogelijk. Bij nieuwbouw of een grote verbouwing loont het om de interieurarchitect al tijdens het bouwkundig ontwerp aan te haken: lichtplan, installaties en maatwerk zitten dan vanaf het begin in de tekeningen, in plaats van dat ze er later ingepast moeten worden. Ook voor één ruimte — een keuken, badkamer of woonverdieping — begint een goed traject vóór de uitvoering.",
         },
         {
-          question: "Kan ik via Arco direct contact opnemen met een interieurontwerper?",
+          question: "Kan ik via Arco direct contact opnemen met een interieurarchitect?",
           answer: "Ja. Elke studio op Arco heeft een eigen pagina met gerealiseerde interieurs en contactgegevens. Je benadert de studio rechtstreeks en kosteloos — zonder tussenpersoon, leadformulier of commissie.",
         },
       ],

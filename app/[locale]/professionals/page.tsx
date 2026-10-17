@@ -1,4 +1,6 @@
 import type { Metadata } from "next"
+import { proDiscoverTitle, proDiscoverDescription } from "@/lib/seo/copy"
+import { fetchProDiscoverFacts } from "@/lib/seo/facts"
 import { Header } from "@/components/header"
 import { ProfessionalsFilterBar } from "@/components/professionals-filter-bar"
 import { ProfessionalsGrid } from "@/components/professionals-grid"
@@ -18,20 +20,12 @@ import { ServiceHubProse } from "@/components/professional/service-hub-prose"
 import { SERVICE_HUB_PROSE } from "@/lib/professional-hubs"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 
-// SEO copy is intentionally inline (not via messages/*.json). See the matching
-// note in app/[locale]/projects/page.tsx for the rationale.
-const PROFESSIONALS_META: Record<string, { title: string; description: string }> = {
-  nl: {
-    title: "Architecten en interieurontwerpers in Nederland",
-    description:
-      "Vind erkende architecten, interieurontwerpers, aannemers en bouwbedrijven in Nederland. Bekijk hun gerealiseerde projecten en neem direct contact op.",
-  },
-  en: {
-    title: "Architects & interior designers in the Netherlands",
-    description:
-      "Find verified architects, interior designers, contractors and construction companies across the Netherlands. Browse their built work and get in touch directly.",
-  },
-}
+// De teksten staan in lib/seo/copy.ts — zie de toelichting bij
+// app/[locale]/projects/page.tsx.
+//
+// "Erkende" is eruit: dat is een keurmerk dat Arco niet uitgeeft. Wat
+// deze pagina wél kan bewijzen staat er nu, met cijfers: hoeveel
+// bedrijven, en in welke plaatsen hun werk staat.
 
 export async function generateMetadata({
   params,
@@ -39,7 +33,11 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>
 }): Promise<Metadata> {
   const { locale } = await params
-  const meta = PROFESSIONALS_META[locale] ?? PROFESSIONALS_META.en
+  const facts = await fetchProDiscoverFacts()
+  const meta = {
+    title: proDiscoverTitle(locale),
+    description: proDiscoverDescription(locale, facts),
+  }
   const baseUrl = getSiteUrl()
   const canonical = `${baseUrl}/${locale}/professionals`
   const languages = Object.fromEntries(

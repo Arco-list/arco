@@ -19,9 +19,11 @@ import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/l
 import { isEntitledNow } from "@/lib/subscriptions/get-company-subscription"
 import { isProjectRow } from "@/lib/supabase/type-guards"
 import { getSiteUrl } from "@/lib/utils"
+import { projectDetailTitle, projectDetailDescription } from "@/lib/seo/copy"
+import { typeLabelSingular } from "@/lib/type-labels"
 import { SPACES, SPACE_SLUGS } from "@/lib/spaces"
 import { locales, defaultLocale } from "@/i18n/config"
-import { resolveHub, getHubProjects, getHubs, hubCopy } from "@/lib/project-hubs"
+import { resolveHub, getHubProjects, getHubs, hubCopy, CITY_DENYLIST } from "@/lib/project-hubs"
 import { fetchDiscoverProjects } from "@/lib/projects/queries"
 import { HubPage } from "@/components/project/hub-page"
 
@@ -77,7 +79,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     ? { data: null }
     : await supabase
         .from("projects")
-        .select("id, title, description, translations, seo_title, seo_description, slug")
+        .select("id, title, description, translations, seo_title, seo_description, slug, building_type, address_city")
         .eq("slug", finalSlug)
         .maybeSingle()
 
@@ -128,16 +130,31 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     .eq("is_project_owner", true)
     .maybeSingle()
   ownerName = ((ownerRow as { companies?: { name?: string | null } | null } | null)?.companies?.name) ?? null
-  const byLabel = metaLocale === "nl" ? "door" : "by"
+  // De vermelding van het bureau verhuist naar de OMSCHRIJVING; de
+  // titel draagt nu het bouwtype en de plaats — de twee dingen waarop
+  // gezocht wordt. "Villa Mel door Studio Piet Boon" zei wie het maakte
+  // tegen iemand die het bureau nog niet kent; "Villa Mel —
+  // nieuwbouwvilla in Bloemendaal" zegt wat het is.
   const titleBase = project.seo_title?.trim() || localizedMetaTitle
-  const title = !project.seo_title?.trim() && ownerName
-    ? `${titleBase} ${byLabel} ${ownerName}`
-    : titleBase
+  const placeRaw = project.address_city?.trim() || null
+  const place = placeRaw && !CITY_DENYLIST.has(placeRaw.toLowerCase().replace(/\s+/g, "-"))
+    ? placeRaw
+    : null
+  const title = project.seo_title?.trim()
+    ? titleBase
+    : projectDetailTitle(metaLocale, {
+        name: titleBase,
+        type: typeLabelSingular(project.building_type, metaLocale),
+        place,
+      })
 
+  // De zelfgeschreven projecttekst afgekapt op 155 tekens eindigde
+  // midden in een zin, met "…" als belofte. Deze noemt het bureau en
+  // de drie dingen die elke Arco-pagina belooft, in dezelfde volgorde
+  // als de eyebrow op de homepage. seo_description blijft winnen: dat
+  // is een bewuste ingreep van een redacteur.
   const description = project.seo_description?.trim() ||
-    (localizedMetaDesc ?
-      localizedMetaDesc.replace(/<[^>]*>/g, '').substring(0, 155) + '...' :
-      `Discover ${localizedMetaTitle}`)
+    projectDetailDescription(metaLocale, { firm: ownerName })
 
   const baseUrl = getSiteUrl()
   // Self-canonicalize per locale. The unprefixed URL 307-redirects to the

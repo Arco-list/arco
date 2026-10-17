@@ -69,7 +69,7 @@ export async function fetchBrandData(): Promise<BrandData> {
 
   const LABELS: Record<string, { label: string; title: string }> = {
     proHub: { label: "Hub — stad, dienst, categorie", title: "Architecten in Nederland – bekijk hun projecten" },
-    ovBedrijven: { label: "Overzicht bedrijven", title: "Architecten en interieurontwerpers in Nederland" },
+    ovBedrijven: { label: "Overzicht bedrijven", title: "Architecten en interieurarchitecten in Nederland" },
     bedrijfsprofiel: { label: "Bedrijfsprofiel", title: "Wolterinck" },
     projectpagina: { label: "Projectpagina", title: "Villa Mel" },
     projectHub: { label: "Hub — project", title: "Nieuwbouw in Gelderland – bekijk hun projecten" },
