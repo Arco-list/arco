@@ -319,7 +319,7 @@ export function ProfessionalsGrid({
                   onClick={() => setSelectedServices([...selectedServices, svc.id])}
                   className="credit-card service-quick-card"
                   // Flex column so a label wider than the 100px disc
-                  // ("Interieurontwerper") overflows symmetrically and
+                  // ("Interieurarchitect") overflows symmetrically and
                   // stays centered under the circle.
                   style={{ background: "none", border: "none", cursor: "pointer", padding: 0, width: 100, display: "flex", flexDirection: "column", alignItems: "center" }}
                 >

@@ -33,7 +33,7 @@ const base: ProfessionalCardData = {
   companyId: "preview",
   professionalId: "preview",
   name: "Studio Vermeer",
-  profession: "Interieurontwerper",
+  profession: "Interieurarchitect",
   primaryServiceSlug: "interior-designer",
   location: "Amsterdam",
   image: GREY("#a1a1a0"),

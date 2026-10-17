@@ -49,7 +49,7 @@ const PLURALS: Record<string, string> = {
   Meubelmaker: "Meubelmakers",
   Tuinontwerper: "Tuinontwerpers",
   Hovenier: "Hoveniers",
-  Interieurontwerper: "Interieurontwerpers",
+  Interieurarchitect: "Interieurarchitecten",
   Interieurstylist: "Interieurstylisten",
   Lichtontwerper: "Lichtontwerpers",
   Schilder: "Schilders",

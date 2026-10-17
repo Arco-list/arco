@@ -854,7 +854,7 @@ function renderWelcomeHomeowner(vars: EmailVariables, locale: EmailLocale = 'en'
         projectsIntro: 'Ontdek afgeronde architectuur- en interieurontwerpprojecten uit heel Nederland.',
         projectsButton: 'Bekijk projecten',
         professionalsHeading: 'Ontdek professionals',
-        professionalsIntro: 'Vind architecten, interieurontwerpers en aannemers en de projecten die ze hebben gerealiseerd.',
+        professionalsIntro: 'Vind architecten, interieurarchitecten en aannemers en de projecten die ze hebben gerealiseerd.',
         professionalsButton: 'Ontdek professionals',
       }
     : {
@@ -1046,7 +1046,7 @@ function renderFindProfessionals(vars: EmailVariables, locale: EmailLocale = 'en
         subject: 'Vind de juiste professional op Arco',
         h1: 'Stel je team samen',
         hi: (name?: string) => (name ? `Hoi ${name},` : 'Hoi,'),
-        intro: 'Op zoek naar een architect of interieurontwerper? Op Arco heeft elke professional credits op echte projecten — zo kun je ze beoordelen op wat ze hebben opgeleverd, niet alleen op wat ze beloven.',
+        intro: 'Op zoek naar een architect of interieurarchitect? Op Arco heeft elke professional credits op echte projecten — zo kun je ze beoordelen op wat ze hebben opgeleverd, niet alleen op wat ze beloven.',
         outro: 'Filter op dienst, locatie en de projecten waar ze aan hebben gewerkt. Sla je favorieten op en neem contact op wanneer je er klaar voor bent.',
         button: 'Ontdek professionals',
       }
@@ -2049,7 +2049,7 @@ function renderOwnedContributor(vars: EmailVariables, locale: EmailLocale = 'nl'
         subject: `Je pagina staat nog niet live — word vermeld door een pro`,
         h1: `Word vermeld op een project`,
         intro: `Je hebt ${companyName} geclaimd, maar je pagina staat nog niet live op Arco. Jouw pagina gaat live via de projecten waar je aan meewerkte: zodra een architect of ontwerper je vermeldt op een gepubliceerd project, verschijnt dat werk op je pagina.`,
-        work: `Werk je samen met een architect of interieurontwerper die op Arco staat? Vraag of ze je vermelden op het project — meer is het niet.`,
+        work: `Werk je samen met een architect of interieurarchitect die op Arco staat? Vraag of ze je vermelden op het project — meer is het niet.`,
         button: `Bekijk je pagina`,
       }
 

@@ -19,7 +19,7 @@ export function ProfessionalsDiscoverOutro({ locale, companyCount, projectCount 
 
   const platform = nl
     ? {
-        heading: "Vind jouw architect of interieurontwerper op Arco",
+        heading: "Vind jouw architect of interieurarchitect op Arco",
         paragraphs: [
           `Op Arco vind je momenteel ${companies} Nederlandse architectenbureaus en interieurstudio's, met samen ${projects} gerealiseerde projecten. Geen advertenties of leadformulieren: je beoordeelt elk bureau op gebouwd werk, gefotografeerd ruimte voor ruimte.`,
           "Gebruik de filters om te zoeken op dienst of locatie. Herken je jouw ambitie in een gerealiseerd project, dan neem je rechtstreeks en kosteloos contact op met de studio erachter.",
@@ -49,7 +49,7 @@ export function ProfessionalsDiscoverOutro({ locale, companyCount, projectCount 
         },
         {
           question: "Kan ik mijn eigen bureau op Arco vermelden?",
-          answer: "Ja. Architecten, interieurontwerpers en andere professionals kunnen hun bureau vermelden en gerealiseerde projecten publiceren via “Vermeld jouw bedrijf” bovenaan de pagina.",
+          answer: "Ja. Architecten, interieurarchitecten en andere professionals kunnen hun bureau vermelden en gerealiseerde projecten publiceren via “Vermeld jouw bedrijf” bovenaan de pagina.",
         },
       ]
     : [
