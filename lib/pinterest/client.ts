@@ -302,6 +302,15 @@ export async function listBoards(): Promise<CreateBoardOutput[]> {
   return out
 }
 
+/** PATCH /v5/boards/{id} with cover_pin_id. Pinterest's v5 spec
+ *  officially only documents name / description / privacy as writable,
+ *  but some accounts report cover_pin_id also being accepted here —
+ *  worst case it 400s or is silently ignored. Errors bubble so the
+ *  admin action can classify the outcome. */
+export async function updateBoardCover(boardId: string, coverPinId: string): Promise<void> {
+  await callPinterest<void>("PATCH", `/boards/${boardId}`, { cover_pin_id: coverPinId })
+}
+
 export async function createBoard(input: CreateBoardInput): Promise<CreateBoardOutput> {
   const body = {
     name: input.name,
