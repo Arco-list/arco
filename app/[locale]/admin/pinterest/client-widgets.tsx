@@ -8,6 +8,7 @@ import {
   disconnectPinterestAction,
   createMissingBoardsAction,
   reconcileOrphansAction,
+  refreshBoardCoversAction,
 } from "./actions"
 
 // ── Shared branded confirm dialog ────────────────────────────────────────
@@ -339,6 +340,48 @@ export function ReconcileOrphansButton() {
             }
             const failed = res.failures > 0 ? `, ${res.failures} failed` : ""
             toast.success(`Scanned ${res.pinterestPins} pin(s), ${res.known} tracked, ${res.deleted} orphan(s) deleted${failed}`)
+          })
+        }}
+      />
+    </>
+  )
+}
+
+export function RefreshBoardCoversButton() {
+  const [open, setOpen] = useState(false)
+  const [isPending, startTransition] = useTransition()
+  return (
+    <>
+      <button
+        type="button"
+        className="btn-tertiary"
+        onClick={() => setOpen(true)}
+        disabled={isPending}
+      >
+        {isPending ? "Refreshing…" : "Refresh board covers"}
+      </button>
+      <ConfirmDialog
+        open={open}
+        title="Refresh board covers"
+        body="For each mapped board, pick the most recently-synced pin and set it as the board cover. Pinterest's API doesn't officially expose the cover_pin_id field on board update, so some or all of these calls may 400 — the toast will report exactly what happened."
+        confirmLabel="Refresh covers"
+        isPending={isPending}
+        onCancel={() => setOpen(false)}
+        onConfirm={() => {
+          startTransition(async () => {
+            const res = await refreshBoardCoversAction()
+            setOpen(false)
+            if (!res.success) {
+              toast.error(res.error ?? "Refresh failed")
+              return
+            }
+            const summary = `Updated ${res.updated} of ${res.attempted} boards`
+            if (res.failures.length > 0) {
+              const firstFew = res.failures.slice(0, 3).map((f) => `${f.board}: ${f.reason}`).join(" · ")
+              toast.warning(`${summary}, ${res.failures.length} failed. ${firstFew}`)
+            } else {
+              toast.success(summary)
+            }
           })
         }}
       />

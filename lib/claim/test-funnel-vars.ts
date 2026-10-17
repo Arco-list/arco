@@ -190,7 +190,7 @@ export async function buildClaimTestFunnelVars(
     company_page_url: funnelUrl,
     company_name: "Olli",
     businessname: "Olli",
-    company_subtitle: "Interieurontwerper · Amsterdam",
+    company_subtitle: "Interieurarchitect · Amsterdam",
     logo_url: null,
     hero_image_url: OLLI_HERO,
     ...inviteVisuals,

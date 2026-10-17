@@ -2,6 +2,9 @@ import { AdminProjectsDataTable, type AdminProjectRow } from "@/components/admin
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import type { Tables } from "@/lib/supabase/types"
 import { logger } from "@/lib/logger"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Projects" }
 
 export const dynamic = "force-dynamic"
 

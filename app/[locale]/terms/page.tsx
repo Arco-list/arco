@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { arcoPageMeta } from "@/lib/seo/copy"
 
 import { localeAlternates } from "@/lib/seo-utils"
 import { Header } from "@/components/header"
@@ -14,8 +15,7 @@ import { Footer } from "@/components/footer"
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params
   return {
-    title: "Terms of Service",
-    description: "Read Arco's terms of service. Understand your rights and responsibilities when using our platform to connect with professionals.",
+    ...arcoPageMeta("/terms", locale),
     alternates: localeAlternates(locale, "/terms"),
   }
 }

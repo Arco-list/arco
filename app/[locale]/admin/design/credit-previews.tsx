@@ -35,7 +35,7 @@ type Row = {
 const buildRows = (t: (key: string) => string): Row[] => [
   { slug: "architect", company: "Bongers Architecten", service: "Architect", contact: "Jij", status: "owner", statusLabel: t("status_owner") },
   { slug: "tiles-stones", company: "Lucen", service: "Tegels & Natuursteen", contact: "Niek", status: "featured", statusLabel: t("status_accepted") },
-  { slug: "interior-designer", company: "Versteegh-Design", service: "Interieurontwerper", contact: "stephen@versteegh-design.com", status: "invited", statusLabel: t("status_invited") },
+  { slug: "interior-designer", company: "Versteegh-Design", service: "Interieurarchitect", contact: "stephen@versteegh-design.com", status: "invited", statusLabel: t("status_invited") },
 ]
 
 const CARDS = [

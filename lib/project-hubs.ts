@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { canonicalizeScope, type ProjectScope } from "@/lib/project-translations"
 import { PROVINCES, cityLabel } from "@/lib/provinces"
 import { typeLabel, scopeLabel } from "@/lib/type-labels"
+import { projectHubTitle, projectHubDescription } from "@/lib/seo/copy"
 
 export { typeLabel }
 
@@ -73,7 +74,7 @@ export const HUB_COPY: Record<string, Record<"nl" | "en", { title: string; descr
   renovatie: {
     nl: {
       title: "Renovatieprojecten in Nederland",
-      description: "Bekijk gerealiseerde renovatieprojecten van Nederlandse architecten en interieurontwerpers op Arco — van monumentale villa's tot complete transformaties — met de studio's erachter en hun contactgegevens.",
+      description: "Bekijk gerealiseerde renovatieprojecten van Nederlandse architecten en interieurarchitecten op Arco — van monumentale villa's tot complete transformaties — met de studio's erachter en hun contactgegevens.",
       intro: "Gerealiseerde renovaties van Nederlandse studio's — van monumentale villa's tot complete transformaties.",
     },
     en: {
@@ -128,12 +129,15 @@ export function hubCopy(hub: Hub, locale: string): HubCopy {
     const name = cityLabel(hub.name, locale)
     return {
       h1: nl ? `Projecten in ${name}` : `Projects in ${name}`,
-      metaTitle: nl
-        ? `Architectuur- en interieurprojecten in ${name}`
-        : `Architecture & interior projects in ${name}`,
-      description: nl
-        ? `Bekijk gerealiseerde architectuur- en interieurprojecten in ${name} op Arco — van villa's tot interieurs — met de studio's die ze maakten en hun contactgegevens.`
-        : `Browse completed architecture and interior projects in ${name} on Arco — from villas to interiors — with the studios that made them and how to reach them.`,
+      // "Gerealiseerde" vooraan, want de titel had bijna dezelfde vorm
+      // als /projects erboven en de twee concurreerden om dezelfde
+      // zoekvraag. Het woord draagt bovendien meteen de claim.
+      metaTitle: projectHubTitle(locale, { what: nl ? "architectuurprojecten" : "architecture projects", place: name }),
+      description: projectHubDescription(locale, {
+        count: hub.count,
+        what: nl ? "projecten" : "projects",
+        place: name,
+      }),
       intro: nl
         ? `Gerealiseerde projecten in ${name}, van de architecten en ontwerpers die ze maakten.`
         : `Completed projects in ${name}, by the architects and designers who made them.`,
@@ -150,12 +154,12 @@ export function hubCopy(hub: Hub, locale: string): HubCopy {
     const label = prov ? (nl ? prov.nl : prov.en) : hub.name
     return {
       h1: nl ? `Projecten in ${label}` : `Projects in ${label}`,
-      metaTitle: nl
-        ? `Architectuur- en interieurprojecten in ${label}`
-        : `Architecture & interior projects in ${label}`,
-      description: nl
-        ? `Bekijk gerealiseerde architectuur- en interieurprojecten in ${label} op Arco — van villa's tot interieurs — met de studio's die ze maakten en hun contactgegevens.`
-        : `Browse completed architecture and interior projects in ${label} on Arco — from villas to interiors — with the studios that made them and how to reach them.`,
+      metaTitle: projectHubTitle(locale, { what: nl ? "architectuurprojecten" : "architecture projects", place: label }),
+      description: projectHubDescription(locale, {
+        count: hub.count,
+        what: nl ? "projecten" : "projects",
+        place: label,
+      }),
       intro: nl
         ? `Gerealiseerde projecten in ${label}, van de architecten en ontwerpers die ze maakten.`
         : `Completed projects in ${label}, by the architects and designers who made them.`,
@@ -170,10 +174,12 @@ export function hubCopy(hub: Hub, locale: string): HubCopy {
     const title = `${noun} in ${where}`
     return {
       h1: title,
-      metaTitle: title,
-      description: nl
-        ? `Bekijk gerealiseerde ${noun.toLowerCase()} in ${where} op Arco — met foto's per ruimte, de studio's die ze maakten en hun contactgegevens.`
-        : `Browse completed ${noun.toLowerCase()} in ${where} on Arco — with photos per room, the studios that made them and how to get in touch.`,
+      metaTitle: projectHubTitle(locale, { what: noun.toLowerCase(), place: where }),
+      description: projectHubDescription(locale, {
+        count: hub.count,
+        what: noun.toLowerCase(),
+        place: where,
+      }),
       intro: nl
         ? `${noun} in ${where}, van de studio's die ze maakten.`
         : `${noun} in ${where}, by the studios that made them.`,
@@ -189,12 +195,12 @@ export function hubCopy(hub: Hub, locale: string): HubCopy {
         : (nl ? "Nederland" : "the Netherlands")
   return {
     h1: `${label} in ${where}`,
-    metaTitle: nl
-      ? `${label} in ${where} – architectuurprojecten`
-      : `${label} in ${where} – architecture projects`,
-    description: nl
-      ? `Bekijk gerealiseerde ${label.toLowerCase()} in ${where} op Arco — met foto's per ruimte, de architecten en studio's die ze ontwierpen en hun contactgegevens.`
-      : `Browse completed ${label.toLowerCase()} in ${where} on Arco — with photos per room, the architects and studios that designed them and how to reach them.`,
+    metaTitle: projectHubTitle(locale, { what: label.toLowerCase(), place: where }),
+    description: projectHubDescription(locale, {
+      count: hub.count,
+      what: label.toLowerCase(),
+      place: where,
+    }),
     intro: nl
       ? `${label} in ${where}, van de architecten en ontwerpers die ze maakten.`
       : `${label} in ${where}, by the architects and designers who made them.`,
@@ -229,7 +235,7 @@ export function citySlug(name: string): string {
 
 /** address_city values that aren't cities — junk data that would mint
  *  nonsense hubs ("Architectuur in Netherlands"). */
-const CITY_DENYLIST = new Set([
+export const CITY_DENYLIST = new Set([
   "netherlands", "nederland", "the-netherlands", "holland",
   // Province names filled into address_city by imports — they'd show as
   // bogus city chips and collide with province hub slugs.

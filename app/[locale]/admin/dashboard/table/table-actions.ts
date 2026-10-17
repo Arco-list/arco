@@ -262,6 +262,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     savedProjectsResult,
     savedCompaniesResult,
     prospectsResult,
+    claimTokensResult,
     claimArrivalsResult,
     publishableCategoriesResult,
     outboundLogsResult,
@@ -274,6 +275,12 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     fetchAllRows((f, t) => supabase.from("saved_projects").select("user_id, project_id, created_at").order("created_at").range(f, t)),
     fetchAllRows((f, t) => supabase.from("saved_companies").select("user_id, company_id, created_at").order("created_at").range(f, t)),
     fetchAllRows((f, t) => supabase.from("prospects").select("id, email, company_id, apollo_contact_id").order("id").range(f, t)),
+    // Het kanaal dat resolveClaimChannel koos toen de link werd gemunt:
+    // het enige signaal dat vastlegt WELKE pitch iemand kreeg. Bestaat
+    // pas sinds 3 september, vandaar de keten in laneByCompanyId.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fetchAllRows((f, t) => (supabase as any).from("claim_tokens")
+      .select("company_id, channel, consumed_at, created_at").order("id").range(f, t)),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     // machine_reason IS NULL: scanner arrivals are written now rather
     // than dropped (see trackClaimArrival), so the exclusion lives here
@@ -1222,18 +1229,27 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: salesEventsRaw } = await fetchAllRows((f, t) => (supabase as any)
     .from("email_events")
-    .select("recipient_email, occurred_at")
+    .select("recipient_email, occurred_at, template")
     .eq("event_type", "sent")
     .eq("campaign_kind", "sales_outbound")
     .gte("occurred_at", from.toISOString())
     .order("occurred_at")
     .range(f, t))
-  const salesContactEvents: ContactEvent[] = (salesEventsRaw ?? [])
-    .filter((r: any) => r.recipient_email && r.occurred_at)
-    .map((r: any) => ({
-      email: String(r.recipient_email).toLowerCase(),
-      date: new Date(r.occurred_at),
-    }))
+  // De twee reeksen uit app/[locale]/admin/sales/actions.ts:
+  //   SHOWCASE_SERIES = prospect-intro / -followup / -final
+  //   OUTREACH_SERIES = outreach-intro / -followup / -final
+  // Een mail zonder template telt als outreach: dat is 95% van het
+  // volume, dus daar is de gok het minst fout — en hij staat hier
+  // zichtbaar in plaats van in een stille catch-all.
+  const isShowcaseTemplate = (t: unknown) => String(t ?? "").startsWith("prospect-")
+  const toContactEvent = (r: any): ContactEvent => ({
+    email: String(r.recipient_email).toLowerCase(),
+    date: new Date(r.occurred_at),
+  })
+  const salesEventRows = (salesEventsRaw ?? []).filter((r: any) => r.recipient_email && r.occurred_at)
+  const showcaseContactEvents: ContactEvent[] = salesEventRows.filter((r: any) => isShowcaseTemplate(r.template)).map(toContactEvent)
+  const outreachContactEvents: ContactEvent[] = salesEventRows.filter((r: any) => !isShowcaseTemplate(r.template)).map(toContactEvent)
+  const salesContactEvents: ContactEvent[] = salesEventRows.map(toContactEvent)
   // Exclude is_project_owner=true rows — those are the project
   // creators (the inviters), not the invitees. Including them treats
   // owners as "contacted" pros and inflates the count.
@@ -1261,8 +1277,10 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     return set.size
   }
 
-  const salesContactedSeries = bucketUniqueByEmail(salesContactEvents)
-  const totalSalesContacted = totalUniqueByEmail(salesContactEvents)
+  const showcaseContactedSeries = bucketUniqueByEmail(showcaseContactEvents)
+  const totalShowcaseContacted = totalUniqueByEmail(showcaseContactEvents)
+  const outreachContactedSeries = bucketUniqueByEmail(outreachContactEvents)
+  const totalOutreachContacted = totalUniqueByEmail(outreachContactEvents)
   const inviteContactedSeries = bucketUniqueByEmail(inviteContactEvents)
   const totalInviteContacted = totalUniqueByEmail(inviteContactEvents)
 
@@ -1591,6 +1609,73 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     const cid = prospectIdToCompanyId.get(ev.prospectId)
     if (cid) salesClickerCompanyIds.add(cid)
   }
+
+  /**
+   * Which of the two sales lanes a company belongs to — and the honest
+   * admission that for most of them we do not know.
+   *
+   * NO SINGLE SIGNAL COVERS THIS, so there is a chain and a remainder.
+   *
+   *   1. The claim token's channel. resolveClaimChannel picked it when
+   *      the link was minted, so it records which pitch the person
+   *      actually received. Authoritative — but claim links only exist
+   *      since 3 September, and 13 of the 30 listed companies predate
+   *      them entirely.
+   *   2. The first sales template to that address: prospect-* is the
+   *      showcase pitch, outreach-* the cold one. Thinner than it
+   *      looks — only 16 of 43 listed prospect/company pairs carry one.
+   *   3. Neither: the company stays UNPLACED and is counted in its own
+   *      row.
+   *
+   * The unplaced used to fall to outreach, on the reasoning that
+   * outreach is 95% of the volume. That is how you get a confident
+   * 20-against-3 out of 6-against-3 of evidence. A residual that says
+   * "we cannot tell" is worth more than a lane total that is mostly
+   * assumption, and it shrinks on its own as the claim-token era grows.
+   */
+  const claimTokens = (claimTokensResult.data ?? []) as {
+    company_id?: string | null; channel?: string | null; consumed_at?: string | null; created_at?: string | null
+  }[]
+  const laneByCompanyId = new Map<string, "showcase" | "outreach">()
+  // Consumed tokens first, then the newest: a link somebody actually
+  // used beats one that was only sent.
+  const rankedTokens = [...claimTokens].sort((a, b) => {
+    const used = Number(Boolean(b.consumed_at)) - Number(Boolean(a.consumed_at))
+    if (used !== 0) return used
+    return String(b.created_at ?? "").localeCompare(String(a.created_at ?? ""))
+  })
+  for (const t of rankedTokens) {
+    const cid = t.company_id ? String(t.company_id) : null
+    if (!cid || laneByCompanyId.has(cid)) continue
+    if (t.channel === "showcase" || t.channel === "outreach") laneByCompanyId.set(cid, t.channel)
+  }
+  // Stap 2 vult alleen de gaten die stap 1 liet staan.
+  const laneByEmail = new Map<string, "showcase" | "outreach">()
+  const firstSalesMailAt = new Map<string, number>()
+  for (const r of salesEventRows as any[]) {
+    const email = String(r.recipient_email).toLowerCase()
+    const at = new Date(r.occurred_at).getTime()
+    const seen = firstSalesMailAt.get(email)
+    if (seen !== undefined && seen <= at) continue
+    firstSalesMailAt.set(email, at)
+    laneByEmail.set(email, isShowcaseTemplate(r.template) ? "showcase" : "outreach")
+  }
+  for (const pr of prospects as any[]) {
+    if (!pr.email || !pr.company_id) continue
+    const cid = String(pr.company_id)
+    if (laneByCompanyId.has(cid)) continue
+    const lane = laneByEmail.get(String(pr.email).toLowerCase())
+    if (lane) laneByCompanyId.set(cid, lane)
+  }
+  const showcaseClickerCompanyIds = new Set(
+    [...salesClickerCompanyIds].filter((cid) => laneByCompanyId.get(cid) === "showcase"),
+  )
+  const outreachClickerCompanyIds = new Set(
+    [...salesClickerCompanyIds].filter((cid) => laneByCompanyId.get(cid) === "outreach"),
+  )
+  const unplacedSalesCompanyIds = new Set(
+    [...salesClickerCompanyIds].filter((cid) => !laneByCompanyId.has(cid)),
+  )
   // Companies whose owner clicked an Invite landing at any point.
   // project_professionals.company_id is the recipient pro's company,
   // so this captures the right join directly.
@@ -1682,8 +1767,16 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
    */
   const newProsInvitesSeries = bucketNewProsBySet(inviteCreditedCompanyIds)
   const newProsInvitesTotal = newProsInvitesSeries.reduce((a, b) => a + b, 0)
-  const newProsSalesSeries = bucketNewProsBySet(salesClickerCompanyIds, [inviteCreditedCompanyIds])
-  const newProsSalesTotal = newProsSalesSeries.reduce((a, b) => a + b, 0)
+  // De twee verkoopbanen apart, in dezelfde voorrangsketen. Ze zijn al
+  // disjunct gebouwd; showcase staat toch expliciet in de uitsluiting
+  // van outreach, zodat de partitie leesbaar is en blijft kloppen als
+  // de indeling ooit overlappend wordt.
+  const newProsShowcaseSeries = bucketNewProsBySet(showcaseClickerCompanyIds, [inviteCreditedCompanyIds])
+  const newProsShowcaseTotal = newProsShowcaseSeries.reduce((a, b) => a + b, 0)
+  const newProsOutreachSeries = bucketNewProsBySet(outreachClickerCompanyIds, [inviteCreditedCompanyIds, showcaseClickerCompanyIds])
+  const newProsOutreachTotal = newProsOutreachSeries.reduce((a, b) => a + b, 0)
+  const newProsUnplacedSeries = bucketNewProsBySet(unplacedSalesCompanyIds, [inviteCreditedCompanyIds, showcaseClickerCompanyIds, outreachClickerCompanyIds])
+  const newProsUnplacedTotal = newProsUnplacedSeries.reduce((a, b) => a + b, 0)
   const newProsOutboundSeries = bucketNewProsBySet(outboundCompanyIds)
   const newProsOutboundTotal = newProsOutboundSeries.reduce((a, b) => a + b, 0)
 
@@ -1864,11 +1957,28 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     channel?: string | null; email?: string | null; created_at?: string | null; company_id?: string | null
   }[]
 
-  type ArrivalChannel = "invites" | "sales" | "outbound" | "organic"
+  /**
+   * Showcase and Outreach are their own channels, not one "Sales".
+   *
+   * They used to be merged because both are the same loop spending the
+   * same budget. But they are not the same offer: outreach pitches a
+   * platform, showcase pitches a page we already built from their own
+   * work. At equal cohort age that is a six-fold difference in listing
+   * rate — 16.7% against 2.8% past sixty days — and outreach is 95% of
+   * the volume, so the merged row WAS the outreach number wearing a
+   * name that promised both. A showcase improvement could not have
+   * moved it.
+   *
+   * The data was always here: claim_arrivals.channel carries the
+   * literal value and the link's utm carries arco_claim_showcase /
+   * arco_claim_outreach. Only the classifier threw it away.
+   */
+  type ArrivalChannel = "invites" | "showcase" | "outreach" | "outbound" | "organic"
   const arrivalChannelOf = (row: { channel?: string | null }): ArrivalChannel => {
     const c = String(row.channel ?? "")
     if (c === "invite") return "invites"
-    if (c === "outreach" || c === "showcase") return "sales"
+    if (c === "showcase") return "showcase"
+    if (c === "outreach") return "outreach"
     // A hand-written mail sent through the product. It has a landing
     // because we put one in it, which is what separates it from the
     // phone call that has no visitor step.
@@ -1905,7 +2015,11 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
         .map((r) => r.email?.trim().toLowerCase())
         .filter((e): e is string => Boolean(e)),
     )
-  const everVisitedSalesEmails = arrivalEmailsFor("sales")
+  // De twee banen apart, en hun unie voor alles wat "Sales" als geheel
+  // beschouwt — de ouderrij telt nog steeds één loop.
+  const everVisitedShowcaseEmails = arrivalEmailsFor("showcase")
+  const everVisitedOutreachEmails = arrivalEmailsFor("outreach")
+  const everVisitedSalesEmails = new Set([...everVisitedShowcaseEmails, ...everVisitedOutreachEmails])
   const everVisitedInviteEmails = arrivalEmailsFor("invites")
   const everVisitedEmails = new Set([...everVisitedSalesEmails, ...everVisitedInviteEmails])
 
@@ -1927,7 +2041,8 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   // a conversion that happened before the call.
   const clickableContactEvents = [...salesContactEvents, ...inviteContactEvents]
   const contactedCohort = cohortByFirstTouch(clickableContactEvents, everVisitedEmails)
-  const salesContactedCohort = cohortByFirstTouch(salesContactEvents, everVisitedSalesEmails)
+  const showcaseContactedCohort = cohortByFirstTouch(showcaseContactEvents, everVisitedShowcaseEmails)
+  const outreachContactedCohort = cohortByFirstTouch(outreachContactEvents, everVisitedOutreachEmails)
   const inviteContactedCohort = cohortByFirstTouch(inviteContactEvents, everVisitedInviteEmails)
 
   // "Ever created" — the email's linked company (via prospects.company_id
@@ -2028,7 +2143,8 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
   const proVisitorsSeries = bucketArrivals("all")
   const proVisitorsTotal = proVisitorsSeries.reduce((a, b) => a + b, 0)
   const claimInvitesSeries = bucketArrivals("invites")
-  const claimSalesSeries = bucketArrivals("sales")
+  const claimShowcaseSeries = bucketArrivals("showcase")
+  const claimOutreachSeries = bucketArrivals("outreach")
   const claimOrganicSeries = bucketArrivals("organic")
   const claimOutboundSeries = bucketArrivals("outbound")
 
@@ -2100,7 +2216,8 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
     "Of the companies whose first claim-page arrival fell in this period, the share that went live afterwards. Cohorted, so a listing counts in the period the visit happened, not the period it was published. Grey = still maturing."
   const proVisitorsCohort = arrivalCohort("all")
   const invitesArrivalCohort = arrivalCohort("invites")
-  const salesArrivalCohort = arrivalCohort("sales")
+  const showcaseArrivalCohort = arrivalCohort("showcase")
+  const outreachArrivalCohort = arrivalCohort("outreach")
   const outboundArrivalCohort = arrivalCohort("outbound")
   const sumOf = (xs: number[]) => xs.reduce((a, b) => a + b, 0)
 
@@ -2138,12 +2255,20 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
           customCR: { label: "to Pro Visitors (ever)", numerator: inviteContactedCohort.num, denominator: inviteContactedCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex },
         },
         {
-          key: "sales_contacted", label: "Sales", definition: "Unique pros contacted via Outreach (Apollo cold) or Showcase",
+          key: "showcase_contacted", label: "Showcase",
+          definition: "Unique pros mailed the showcase pitch (prospect-intro/-followup/-final): their page was built from their own work before we wrote. The small lane — a page has to exist first — and the one that converts.",
           source: "supabase" as MetricSource,
-          total: totalSalesContacted, datapoints: salesContactedSeries,
-          // Cohorted: of pros first Sales-contacted in the bucket, the
-          // share that ever clicked through to a landing.
-          customCR: { label: "to Pro Visitors (ever)", numerator: salesContactedCohort.num, denominator: salesContactedCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex },
+          total: totalShowcaseContacted, datapoints: showcaseContactedSeries,
+          // Cohorted: of pros first showcase-contacted in the bucket,
+          // the share that ever clicked through to a landing.
+          customCR: { label: "to Pro Visitors (ever)", numerator: showcaseContactedCohort.num, denominator: showcaseContactedCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex },
+        },
+        {
+          key: "outreach_contacted", label: "Outreach",
+          definition: "Unique pros mailed the cold pitch (outreach-intro/-followup/-final): nothing of theirs on the platform yet, so the mail pitches Arco rather than their page. 95% of all sales volume.",
+          source: "supabase" as MetricSource,
+          total: totalOutreachContacted, datapoints: outreachContactedSeries,
+          customCR: { label: "to Pro Visitors (ever)", numerator: outreachContactedCohort.num, denominator: outreachContactedCohort.denom, definition: COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex },
         },
         {
           key: "outbound_contacted", label: "Outbound",
@@ -2183,9 +2308,12 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
         { key: "invites", label: "Invites", definition: "Claim links from a project-invite mail. Deduped by the address the token was issued to.", source: "supabase" as MetricSource,
           total: sumOf(claimInvitesSeries), datapoints: claimInvitesSeries ,
           customCR: { label: "to New Pros", numerator: invitesArrivalCohort.num, denominator: invitesArrivalCohort.denom, definition: ARRIVAL_COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex }},
-        { key: "sales", label: "Sales", definition: "Claim links from Outreach or Showcase mail. Deduped by the address the token was issued to.", source: "supabase" as MetricSource,
-          total: sumOf(claimSalesSeries), datapoints: claimSalesSeries ,
-          customCR: { label: "to New Pros", numerator: salesArrivalCohort.num, denominator: salesArrivalCohort.denom, definition: ARRIVAL_COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex }},
+        { key: "showcase", label: "Showcase", definition: "Claim links from showcase mail — their page already existed when we wrote. Deduped by the address the token was issued to. Small n: read the count, not the trend, until it has run a few more weeks.", source: "supabase" as MetricSource,
+          total: sumOf(claimShowcaseSeries), datapoints: claimShowcaseSeries ,
+          customCR: { label: "to New Pros", numerator: showcaseArrivalCohort.num, denominator: showcaseArrivalCohort.denom, definition: ARRIVAL_COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex }},
+        { key: "outreach", label: "Outreach", definition: "Claim links from cold outreach mail — nothing of theirs on the platform when we wrote. Deduped by the address the token was issued to.", source: "supabase" as MetricSource,
+          total: sumOf(claimOutreachSeries), datapoints: claimOutreachSeries ,
+          customCR: { label: "to New Pros", numerator: outreachArrivalCohort.num, denominator: outreachArrivalCohort.denom, definition: ARRIVAL_COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex }},
         { key: "outbound", label: "Outbound", definition: "Claim links from a hand-written mail sent from the contact card. Deduped by the address the token was issued to. OVERLAPPING — someone another loop already brought in can arrive again through an outbound link, so the subs can add up to more than the row above.", source: "supabase" as MetricSource,
           total: sumOf(claimOutboundSeries), datapoints: claimOutboundSeries ,
           customCR: { label: "to New Pros", numerator: outboundArrivalCohort.num, denominator: outboundArrivalCohort.denom, definition: ARRIVAL_COHORT_DEF, immatureFromIndex: cohortImmatureFromIndex }},
@@ -2194,7 +2322,7 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
         // nothing to follow from the landing to a listing. It used to
         // show a period ratio, which looked like an answer because the
         // arithmetic ran — this leaves the column honestly empty.
-        { key: "organic", label: "Organisch", definition: "Arrivals with no token — the platform route. No identity to dedupe on, so this counts arrivals where the three above count people. Carries no company either, which is why it has no conversion.", source: "supabase" as MetricSource,
+        { key: "organic", label: "Organisch", definition: "Arrivals with no token — the platform route. Deduped by the same cascade as every other arrival: address, else company, else the arrival itself. This route usually carries neither, so in practice it still counts arrivals where the three above count people — but a repeat visit from a known company no longer counts twice. Carries no company either, which is why it has no conversion.", source: "supabase" as MetricSource,
           total: sumOf(claimOrganicSeries), datapoints: claimOrganicSeries },
       ],
     },
@@ -2224,10 +2352,12 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
       // down by the Sales+Invites click count to remove the overlap
       // — same trick used on the Pro visitors row.
       subs: [
-        // Invites › Sales › Outbound › Organic. One pro, one loop:
-        // each sub counts only what the loops above it did not claim,
-        // so the four add up to the row exactly and no company is
-        // counted twice.
+        // Invites › Showcase › Outreach › Outbound › Organic. One pro,
+        // one loop: each sub counts only what the loops above it did not
+        // claim, so they add up to the row exactly and no company is
+        // counted twice. Showcase sits above Outreach for the same
+        // reason Invites sits above both — it is the stronger claim on
+        // the conversion, and the two are disjoint anyway.
         //
         // The five first-touch channels that used to sit here — Email,
         // SEO, Social, Referral, Shares — are gone. They read from
@@ -2238,8 +2368,12 @@ export async function fetchMetricTable(timeframe: Timeframe = "months"): Promise
         // when the first-touch stamp is captured server-side.
         { key: "invites", label: "Invites", definition: "New pros that went live holding an accepted credit. Dated by listed_at, so a firm that accepts and never claims does not count. Photographers excluded.", source: "supabase" as MetricSource,
           total: newProsInvitesTotal, datapoints: newProsInvitesSeries },
-        { key: "sales", label: "Sales", definition: "New pros whose owner clicked a Sales landing and hold no accepted credit.", source: "supabase" as MetricSource,
-          total: newProsSalesTotal, datapoints: newProsSalesSeries },
+        { key: "showcase", label: "Showcase", definition: "New pros whose owner clicked a landing after the showcase pitch \u2014 their page was built from their own work before we wrote \u2014 and who hold no accepted credit. Lane assigned by the FIRST sales template that reached them, so a cold contact later promoted to showcase stays with the pitch that actually won them.", source: "supabase" as MetricSource,
+          total: newProsShowcaseTotal, datapoints: newProsShowcaseSeries },
+        { key: "outreach", label: "Outreach", definition: "New pros whose owner clicked a landing after the cold pitch and who hold no accepted credit. Lane from the claim token's channel, else the first sales template.", source: "supabase" as MetricSource,
+          total: newProsOutreachTotal, datapoints: newProsOutreachSeries },
+        { key: "sales_unplaced", label: "Sales (baan onbekend)", definition: "Reached by Sales, but no signal says which pitch. Claim links only exist since 3 September \u2014 13 of the 30 listed companies predate them \u2014 and the sales template is recorded for a minority. These used to be counted as Outreach, which turned 6 evidenced listings into 20. Shrinks on its own as the claim-token era grows.", source: "residual" as MetricSource,
+          total: newProsUnplacedTotal, datapoints: newProsUnplacedSeries },
         { key: "outbound", label: "Outbound", definition: "New pros we reached by outbound. OVERLAPPING — not part of the split above, so the four do not add up. Read as 'touched by', never 'thanks to'.", source: "supabase" as MetricSource,
           total: newProsOutboundTotal, datapoints: newProsOutboundSeries },
         { key: "organic", label: "Organisch", definition: "New pros that neither Invites nor Sales reached. A residual, so every attribution failure above lands here and it reads high rather than low.", source: "residual" as MetricSource,

@@ -1,6 +1,9 @@
 import { AdminCategoriesDataTable, type AdminCategoryRow, type AdminSpaceRow } from "@/components/admin-categories-data-table"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Categories" }
 
 export const dynamic = "force-dynamic"
 

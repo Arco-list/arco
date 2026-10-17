@@ -2527,6 +2527,14 @@ export async function startProspectSequence(prospectId: string) {
   // The showcase override that used to sit here moved into
   // resolveEffectiveTrack, so resume and restart apply it too.
   if (track === "apollo") {
+    // Dezelfde poort als in de cron, zodat een knop op /admin/sales de
+    // pauze niet per ongeluk opheft. Alleen de KOUDE baan: showcase
+    // valt hierboven in de arco-tak en start gewoon door.
+    const { COLD_OUTREACH_PAUSED, COLD_OUTREACH_PAUSE_REASON } = await import("@/lib/outreach/cold-pause")
+    if (COLD_OUTREACH_PAUSED) {
+      await supabase.from("prospects").update({ sequence_status: "not_started" }).eq("id", prospectId)
+      return { success: false, error: COLD_OUTREACH_PAUSE_REASON }
+    }
     const { dispatchOutreachIntro } = await import("@/lib/outreach/dispatch-outreach-intro")
     const firstName =
       (prospect.contact_name as string | null)?.trim().split(/\s+/)[0]
@@ -3760,6 +3768,14 @@ export async function restartProspectSequence(prospectId: string) {
 
   // ── Apollo-source restart: re-fire the Outreach intro + drip ──
   if (track === "apollo") {
+    // Dezelfde poort als in de cron, zodat een knop op /admin/sales de
+    // pauze niet per ongeluk opheft. Alleen de KOUDE baan: showcase
+    // valt hierboven in de arco-tak en start gewoon door.
+    const { COLD_OUTREACH_PAUSED, COLD_OUTREACH_PAUSE_REASON } = await import("@/lib/outreach/cold-pause")
+    if (COLD_OUTREACH_PAUSED) {
+      await supabase.from("prospects").update({ sequence_status: "not_started" }).eq("id", prospectId)
+      return { success: false, error: COLD_OUTREACH_PAUSE_REASON }
+    }
     const { dispatchOutreachIntro } = await import("@/lib/outreach/dispatch-outreach-intro")
     const firstName =
       (prospect.contact_name as string | null)?.trim().split(/\s+/)[0]

@@ -22,6 +22,8 @@ import { getProjectTranslation, translateCategoryName } from "@/lib/project-tran
 import { TrackPageView } from "@/components/track-view"
 import { getSiteUrl } from "@/lib/utils"
 import { localeAlternates } from "@/lib/seo-utils"
+import { homeTitle, homeDescription } from "@/lib/seo/copy"
+import { countPublishedProjects } from "@/lib/seo/facts"
 import { getHubs } from "@/lib/project-hubs"
 import { orderFeaturedFeed } from "@/lib/projects/featured-shuffle"
 
@@ -530,58 +532,6 @@ async function loadLandingData(locale: string) {
 }
 
 /**
- * De drie benefits uit het merk, in de volgorde van de eyebrow:
- * gerealiseerde architectuur · met eer aan de makers · redactioneel
- * samengesteld. Elk in de concrete vorm — niet de kop maar wat hij
- * betekent.
- *
- * HET AANTAL IS LIVE, niet vastgelegd. Dit is de meest gecrawlde
- * pagina van de site, en een getal dat achterloopt is daar een
- * onwaarheid op de plek waar hij het vaakst wordt gelezen. De pagina
- * revalideert elke 300 seconden, dus de telling kost één count-query
- * per vijf minuten per taal en kan nooit verouderen.
- *
- * LENGTE IS HIER EEN ONTWERPEIS. Google kapt rond de 158 tekens af.
- * Deze versie komt op 151 en houdt alle drie de benefits heel; met
- * "landschapsarchitect" in plaats van "hovenier" wordt het 162 en
- * verdwijnt "samengesteld" — en dan verliest de derde claim zijn
- * werkwoord. Vandaar het kortere woord, dat een opdrachtgever
- * trouwens ook gebruikt.
- *
- * Dit verving de standaard uit app/layout.tsx: Engels op de
- * Nederlandse pagina, met "post projects" en "browse portfolios" uit
- * een ander product. En zonder eigen omschrijving schreef Google er
- * zelf een, uit de footer — zo stond de oude tagline nog in de
- * zoekresultaten.
- */
-function homeDescription(locale: string, projects: number | null): string {
-  const n = projects == null ? null : projects.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")
-  if (locale === "nl") {
-    return n
-      ? `${n} gerealiseerde architectuurprojecten, professioneel gefotografeerd. Van aannemer tot hovenier, vermeld door de architect. Redactioneel samengesteld.`
-      : "Gerealiseerde architectuurprojecten, professioneel gefotografeerd. Van aannemer tot hovenier, vermeld door de architect. Redactioneel samengesteld."
-  }
-  return n
-    ? `${n} built architecture projects, professionally photographed. From contractor to landscape architect, credited by the architect. Editorially curated.`
-    : "Built architecture projects, professionally photographed. From contractor to landscape architect, credited by the architect. Editorially curated."
-}
-
-/** Count-query zonder rijen op te halen; faalt stil, want een
- *  omschrijving zonder getal is beter dan een pagina zonder titel. */
-async function countPublishedProjects(): Promise<number | null> {
-  try {
-    const supabase = await createServerSupabaseClient()
-    const { count } = await supabase
-      .from("projects")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "published")
-    return count ?? null
-  } catch {
-    return null
-  }
-}
-
-/**
  * Canonical en hreflang — die ontbraken hier volledig.
  *
  * Zonder generateMetadata viel deze pagina terug op de standaard uit
@@ -590,13 +540,24 @@ async function countPublishedProjects(): Promise<number | null> {
  * vertoningen op positie 8,3 en /nl met 17 op positie 1,8 — twee URL's
  * voor dezelfde pagina, waarvan Google de verkeerde koos.
  *
- * Titel en omschrijving staan hier bewust nog niet in; die komen uit de
- * merkbeslissing en erven voorlopig de standaard.
+ * Titel en omschrijving komen uit lib/seo/copy.ts, de codetegenhanger
+ * van de formuletabel op /admin/brand?tab=seo. Dit is de enige pagina
+ * waar het merk vooraan mag staan: hier is Arco het onderwerp, en dit
+ * is merkverkeer — 1,6% van de vertoningen en bijna de helft van alle
+ * kliks. Op elke andere pagina verspilt "Arco" de pixels die de
+ * paginanaam nodig heeft.
+ *
+ * HET AANTAL IN DE OMSCHRIJVING IS LIVE, niet vastgelegd. Dit is de
+ * meest gecrawlde pagina van de site, en een getal dat achterloopt is
+ * daar een onwaarheid op de plek waar hij het vaakst wordt gelezen. De
+ * pagina revalideert elke 300 seconden, dus de telling kost één
+ * count-query per vijf minuten per taal.
  */
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params
   const projects = await countPublishedProjects()
   return {
+    title: homeTitle(locale),
     description: homeDescription(locale, projects),
     alternates: localeAlternates(locale, ""),
   }

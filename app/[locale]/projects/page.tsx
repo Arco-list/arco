@@ -1,4 +1,6 @@
 import type { Metadata } from "next"
+import { projectDiscoverTitle, projectDiscoverDescription } from "@/lib/seo/copy"
+import { countPublishedProjects } from "@/lib/seo/facts"
 
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
@@ -16,22 +18,14 @@ import { TrackPageView } from "@/components/track-view"
 import { getSiteUrl } from "@/lib/utils"
 import { locales, defaultLocale } from "@/i18n/config"
 
-// SEO copy is intentionally inline (not via messages/*.json) because it's the
-// most search-sensitive copy on the site and lives best in one reviewable place.
-// Title pattern matches the per-detail-page convention: bare title here, the
-// root layout template adds " | Arco" exactly once.
-const PROJECTS_META: Record<string, { title: string; description: string }> = {
-  nl: {
-    title: "Architectuur- en interieurprojecten in Nederland",
-    description:
-      "Ontdek bijzondere architectuur-, interieur- en renovatieprojecten in Nederland. Filter op locatie, stijl en type, en vind inspiratie voor jouw volgende project.",
-  },
-  en: {
-    title: "Architecture & interior projects in the Netherlands",
-    description:
-      "Discover curated architecture, interior design and renovation projects from across the Netherlands. Filter by location, style and type, and find inspiration for your next build.",
-  },
-}
+// De teksten staan in lib/seo/copy.ts, de codetegenhanger van de
+// formuletabel op /admin/brand?tab=seo. Stonden ze hier, dan waren ze
+// niet te vergelijken met de zeven andere paginatypen — en dan kruipt de
+// titel van het overzicht weer naar die van de hubs eronder, zodat de
+// twee om dezelfde zoekvraag concurreren.
+//
+// "Bijzondere" stond hier als bijvoeglijk naamwoord zonder dekking. Het
+// aantal is er wel een: het telt live mee en kan dus niet verouderen.
 
 export async function generateMetadata({
   params,
@@ -39,7 +33,11 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>
 }): Promise<Metadata> {
   const { locale } = await params
-  const meta = PROJECTS_META[locale] ?? PROJECTS_META.en
+  const projects = await countPublishedProjects()
+  const meta = {
+    title: projectDiscoverTitle(locale),
+    description: projectDiscoverDescription(locale, projects),
+  }
   const baseUrl = getSiteUrl()
   const canonical = `${baseUrl}/${locale}/projects`
   const languages = Object.fromEntries(

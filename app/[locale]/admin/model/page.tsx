@@ -1,6 +1,9 @@
 import { fetchMetricTable } from "../dashboard/table/table-actions"
 import { getLastSyncedAt } from "./actions"
 import { GrowthModelClient } from "./model-client"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Model" }
 
 export const dynamic = "force-dynamic"
 

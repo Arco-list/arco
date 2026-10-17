@@ -302,7 +302,7 @@ const PROFESSIONAL_SERVICE_LABELS: Record<string, Record<ScopeLocale, string>> =
   "outdoor-garden": { en: "Outdoor & Garden", nl: "Buiten & Tuin" },
   // Design & Planning
   architect: { en: "Architect", nl: "Architect" },
-  "interior-designer": { en: "Interior Designer", nl: "Interieurontwerper" },
+  "interior-designer": { en: "Interior Designer", nl: "Interieurarchitect" },
   "garden-designer": { en: "Garden designer", nl: "Tuinontwerper" },
   "structural-engineer": { en: "Structural engineer", nl: "Constructeur" },
   "lighting-designer": { en: "Lighting Designer", nl: "Lichtontwerper" },

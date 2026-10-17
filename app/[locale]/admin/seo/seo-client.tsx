@@ -48,6 +48,49 @@ const int = (v: number) => (v > 0 ? v.toLocaleString("en-US") : "·")
 const dec1 = (v: number) => (v > 0 ? v.toLocaleString("en-US", { maximumFractionDigits: 1 }) : "·")
 const pct0 = (v: number) => (v > 0 ? `${Math.round(v)}%` : "·")
 const pct2 = (v: number) => (v > 0 ? `${v.toLocaleString("en-US", { maximumFractionDigits: 2 })}%` : "·")
+/** Search Console levert geen CTR per rij, alleen kliks en vertoningen.
+ *  Zelf delen is daarom de enige weg — en nul vertoningen geeft nul,
+ *  niet oneindig. */
+const ctrOf = (clicks: number | null | undefined, impressions: number) =>
+  impressions > 0 ? ((clicks ?? 0) / impressions) * 100 : 0
+
+/** Ondergrens voor de CTR-sortering. Zonder deze staat een zoekopdracht
+ *  met één vertoning en één klik bovenaan met 100% — waar en nutteloos.
+ *  Gemeten over 28 dagen: van 562 zoekopdrachten hebben er 12 een klik,
+ *  en 2 daarvan blijven onder de tien vertoningen. Tien laat dus de echte
+ *  tien staan en haalt precies de ruis weg. Rijen eronder krijgen −1 als
+ *  sorteerwaarde: ze blijven zichtbaar, maar zakken onder de nullen. */
+const CTR_MIN_IMPRESSIONS = 10
+const ctrSortValue = (clicks: number | null | undefined, impressions: number) =>
+  impressions >= CTR_MIN_IMPRESSIONS ? ctrOf(clicks, impressions) : -1
+
+/** Grove verwachtingscurve voor CTR per positie. Geen meting van Arco maar
+ *  de bekende vorm van een zoekresultatenpagina: plek 1 pakt het leeuwendeel,
+ *  daaronder zakt het hard, en voorbij de eerste pagina is alles ruis.
+ *
+ *  Hij is er niet om precies te zijn maar om de VERHOUDING te kleuren. Een
+ *  vaste CTR-drempel zou 0,3% op positie 50 rood maken (terwijl dat normaal
+ *  is) en 0,3% op positie 3 groen laten (terwijl dat een titelprobleem is).
+ *  Precies die omkering was de vondst bij Pro detail: positie 8,5 met 0,51%
+ *  waar 2 à 3% hoort — geen rankingprobleem maar een titelprobleem. */
+const expectedCtr = (pos: number): number =>
+  pos <= 1 ? 28 : pos <= 2 ? 15 : pos <= 3 ? 11 : pos <= 4 ? 8
+  : pos <= 5 ? 6 : pos <= 10 ? 3 : pos <= 20 ? 1 : 0.3
+
+/** Groen vanaf 80% van wat op die plek normaal is, oranje onder 40%.
+ *  Daartussen geen kleur: dat is gewoon gemiddeld, en een tabel die alles
+ *  kleurt zegt niets meer. Onder de vertoningsdrempel ook geen kleur —
+ *  met acht vertoningen weet je het nog niet. */
+const ctrTone = (clicks: number | null | undefined, impressions: number, pos: number | null): Tone => {
+  if (pos == null || impressions < CTR_MIN_IMPRESSIONS) return undefined
+  const ratio = ctrOf(clicks, impressions) / expectedCtr(pos)
+  return ratio >= 0.8 ? "good" : ratio < 0.4 ? "warn" : undefined
+}
+
+/** Positie is absoluut, dus hier wel vaste banden: eerste pagina groen,
+ *  voorbij de tweede oranje, daartussen niets. */
+const posTone = (pos: number | null): Tone =>
+  pos == null ? undefined : pos <= 10 ? "good" : pos > 20 ? "warn" : undefined
 
 const Chevron = ({ open }: { open: boolean }) => (
   <svg width="10" height="10" viewBox="0 0 10 10" className={`shrink-0 transition-transform ${open ? "rotate-90" : ""}`}>
@@ -246,7 +289,7 @@ export function SeoClient({ initialData }: { initialData: SeoOverview }) {
   )
 
   const queries = data.queries[side] ?? []
-  const pages = data.pages.filter((p) => side === "all" || p.side === side).slice(0, 10)
+  const pages = data.pages.filter((p) => side === "all" || p.side === side)
   const sideLabel = { all: "all types", pro: "Pro", project: "Project", arco: "Arco" }[side]
 
   return (
@@ -276,8 +319,17 @@ export function SeoClient({ initialData }: { initialData: SeoOverview }) {
           padding-SHORTHAND (0 60px), ongelaagd, en ongelaagde CSS wint
           van elke Tailwind-utility. Een pt-9 hier wordt stil genegeerd —
           vandaar dat het dashboard op zijn .wrap ook een inline stijl
-          gebruikt. */}
-      <div className="wrap" style={{ paddingTop: 36, paddingBottom: 96 }}>
+          gebruikt.
+
+          De 52 hangt vast aan de versheidspil hierboven: die staat op
+          top 12 en is 18px hoog (.status-pill — 10px regel, 2px padding
+          boven en onder, 1px rand), dus er blijft 22px onder over. Stond
+          op 36, waardoor dat 6px was en de pil tegen de kolomkoppen
+          plakte. De 52 is overgenomen van het groeidashboard, dat exact
+          dezelfde pil op dezelfde top-12 zet — twee adminpagina's met
+          hetzelfde element horen er dezelfde ruimte omheen te hebben.
+          Verander je het een, trek dan het ander mee. */}
+      <div className="wrap" style={{ paddingTop: 52, paddingBottom: 96 }}>
 
         {view === "metrics" && (W === 0 ? (
           <div className="border border-dashed border-[#d4d4d3] rounded-[3px] p-8 bg-[#FAFAF9] text-[#6b6b68] text-sm">
@@ -348,31 +400,45 @@ export function SeoClient({ initialData }: { initialData: SeoOverview }) {
           <>
           {/* ── tabellen ─────────────────────────────────────────── */}
           <div className="grid gap-5 md:grid-cols-2">
-            <Panel title="Top 10 queries" scope={`${sideLabel} · 28 days`} head={["Query", "Impr.", "Clicks", "Pos."]}>
-              {queries.length === 0 ? (
-                <tr><td colSpan={4} className="text-[#c4c4c2] text-[12.5px]">No queries for this type yet.</td></tr>
-              ) : queries.map((q) => (
-                <tr key={q.query}>
-                  <td className="text-[12.5px] max-w-[230px] truncate" title={q.query}>{q.query}</td>
-                  <Num v={int(q.impressions)} />
-                  <Num v={q.clicks ? String(q.clicks) : "·"} dim={!q.clicks} />
-                  <Num v={q.position != null ? dec1(q.position) : "·"} warn={(q.position ?? 0) > 20} />
-                </tr>
-              ))}
-            </Panel>
+            <Panel
+              title="Top 10 queries"
+              scope={`${sideLabel} · 28 days`}
+              rows={queries}
+              rowKey={(q) => q.query}
+              empty="No queries for this type yet."
+              cols={[
+                { key: "query", label: "Query", sort: (q) => q.query,
+                  cell: (q) => <td className="text-[12.5px] max-w-[230px] truncate" title={q.query}>{q.query}</td> },
+                { key: "impressions", label: "Impr.", sort: (q) => q.impressions,
+                  cell: (q) => <Num v={int(q.impressions)} /> },
+                { key: "clicks", label: "Clicks", sort: (q) => q.clicks ?? 0,
+                  cell: (q) => <Num v={q.clicks ? String(q.clicks) : "·"} dim={!q.clicks} /> },
+                { key: "ctr", label: "CTR", sort: (q) => ctrSortValue(q.clicks, q.impressions),
+                  cell: (q) => <Num v={pct2(ctrOf(q.clicks, q.impressions))} dim={!q.clicks} tone={ctrTone(q.clicks, q.impressions, q.position)} /> },
+                { key: "position", label: "Pos.", sort: (q) => q.position ?? 999,
+                  cell: (q) => <Num v={q.position != null ? dec1(q.position) : "·"} tone={posTone(q.position)} /> },
+              ]}
+            />
 
-            <Panel title="Top 10 pages" scope={`${sideLabel} · 28 days`} head={["Page", "Impr.", "Clicks", "Pos."]}>
-              {pages.length === 0 ? (
-                <tr><td colSpan={4} className="text-[#c4c4c2] text-[12.5px]">No pages for this type yet.</td></tr>
-              ) : pages.map((p) => (
-                <tr key={p.url}>
-                  <td className="max-w-[230px] truncate" title={p.url}><code className="text-[11.5px]">{p.url}</code></td>
-                  <Num v={int(p.impressions)} />
-                  <Num v={p.clicks ? String(p.clicks) : "·"} dim={!p.clicks} />
-                  <Num v={p.position != null ? dec1(p.position) : "·"} warn={(p.position ?? 0) > 20} />
-                </tr>
-              ))}
-            </Panel>
+            <Panel
+              title="Top 10 pages"
+              scope={`${sideLabel} · 28 days`}
+              rows={pages}
+              rowKey={(p) => p.url}
+              empty="No pages for this type yet."
+              cols={[
+                { key: "page", label: "Page", sort: (p) => p.url,
+                  cell: (p) => <td className="max-w-[230px] truncate" title={p.url}><code className="text-[11.5px]">{p.url}</code></td> },
+                { key: "impressions", label: "Impr.", sort: (p) => p.impressions,
+                  cell: (p) => <Num v={int(p.impressions)} /> },
+                { key: "clicks", label: "Clicks", sort: (p) => p.clicks ?? 0,
+                  cell: (p) => <Num v={p.clicks ? String(p.clicks) : "·"} dim={!p.clicks} /> },
+                { key: "ctr", label: "CTR", sort: (p) => ctrSortValue(p.clicks, p.impressions),
+                  cell: (p) => <Num v={pct2(ctrOf(p.clicks, p.impressions))} dim={!p.clicks} tone={ctrTone(p.clicks, p.impressions, p.position)} /> },
+                { key: "position", label: "Pos.", sort: (p) => p.position ?? 999,
+                  cell: (p) => <Num v={p.position != null ? dec1(p.position) : "·"} tone={posTone(p.position)} /> },
+              ]}
+            />
           </div>
 
           <p className="text-xs text-[#a1a1a0] mt-3 max-w-[80ch]">
@@ -396,6 +462,25 @@ export function SeoClient({ initialData }: { initialData: SeoOverview }) {
  * <tr>'s, dus een CSS :hover licht er maar één van op. De hover-groep
  * wordt hier bijgehouden zodat het hele blok tegelijk kleurt.
  */
+/** Hoe hard de percentageregel omhoog wordt getrokken in de lege
+ *  onderruimte van de sparkline erboven. 16 is de waarde die het
+ *  groeidashboard voor zijn eerste ouder-CR gebruikt; die pagina is hier
+ *  de norm, dus dit getal hoort hetzelfde te zijn.
+ *
+ *  Heeft even op 8 gestaan om de rijen lucht te geven. Dat was
+ *  symptoombestrijding: de krapte kwam niet hiervandaan maar van twee
+ *  extra klassen op de groepsrijen hieronder, die boven- en onderruimte
+ *  weghaalden waar het dashboard dat niet doet.
+ *
+ *  Label en getallen MOETEN dezelfde waarde gebruiken, anders lopen de
+ *  tekst links en de cijfers rechts verticaal uit elkaar. */
+const SUB_PULL = 16
+
+/** Dezelfde trek voor een CR onder een GROEPSrij. Het dashboard gebruikt
+ *  hier 10 en niet 16, omdat een sub-sparkline minder onderruimte heeft
+ *  dan een ouder-sparkline — zie de notitie bij InlineCRCell. */
+const SUB_ROW_PULL = 10
+
 function MetricBlock({
   metric: m, labels, allTypes, series, open, onToggle,
 }: {
@@ -421,8 +506,8 @@ function MetricBlock({
       {/* Ingeklapt is dit een gewone rij met zijn eigen onderrand; pas
           uitgeklapt hangt de conversierij eraan en laat hij die rand weg. */}
       <tr
-        className={`cursor-pointer ${open ? "arco-cr-attached" : ""}`}
-        style={{ ...(open ? { borderBottom: "none" } : {}), ...bg("parent") }}
+        className="cursor-pointer arco-cr-attached"
+        style={{ borderBottom: "none", ...bg("parent") }}
         onClick={onToggle}
         {...groupProps("parent")}
       >
@@ -439,41 +524,48 @@ function MetricBlock({
         </td>
       </tr>
 
-      {/* De conversie verschijnt pas bij uitklappen — ingeklapt is een
-          metriek zijn naam en zijn lijn, net als op het dashboard, waar
-          het CR-blok met de subs mee open en dicht gaat.
+      {/* De conversie staat er ALTIJD, ook ingeklapt — zoals de rijen op
+          het dashboard die geen subs hebben. Daar luidt de regel: een
+          percentage dat niemand kan openklappen is erger dan een
+          percentage dat er altijd staat. Hier was hij verstopt achter de
+          chevron, waardoor je de belangrijkste helft van een metriek
+          (CTR, % ranked) alleen zag als je ernaar zocht.
 
-          arco-cr-attached erbij zodat de rij zijn onderruimte inlevert:
-          de conversie hoort tegen de scheidingslijn aan te zitten, en
-          die lijn is tegelijk de grens naar de groepen eronder. */}
-      {open && (
-        <tr className="arco-cr-row arco-cr-attached" style={bg("parent")} {...groupProps("parent")}>
-          <td>
-            <div className="flex items-center gap-1.5" style={{ paddingLeft: 31, marginTop: -16 }}>
-              <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
-                {m.sub.label}
-              </span>
-              <InfoIcon definition={m.sub.tip} />
-            </div>
-          </td>
-          <td>
-            <ValueCell values={m.sub.calc(allTypes)} tone="accent" pull={16} formatFn={m.sub.format} />
-          </td>
-        </tr>
-      )}
+          arco-cr-attached alleen bij open: dan volgen de groepen en moet
+          de rij zijn onderruimte inleveren. Ingeklapt houdt hij die, want
+          dan is hij het einde van het blok. */}
+      <tr
+        className={`arco-cr-row ${open ? "arco-cr-attached" : ""}`}
+        style={bg("parent")}
+        {...groupProps("parent")}
+      >
+        <td>
+          <div className="flex items-center gap-1.5" style={{ paddingLeft: 31, marginTop: -SUB_PULL }}>
+            <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
+              {m.sub.label}
+            </span>
+            <InfoIcon definition={m.sub.tip} />
+          </div>
+        </td>
+        <td>
+          <ValueCell values={m.sub.calc(allTypes)} tone="accent" pull={SUB_PULL} formatFn={m.sub.format} />
+        </td>
+      </tr>
 
-      {open && PAGE_GROUPS.map((g, gi) => {
+      {open && PAGE_GROUPS.map((g) => {
         const keys = allTypes.filter((t) => GROUP_OF[t] === g)
-        // De laatste groep houdt zijn onderruimte: dat is de adempauze
-        // vóór de volgende metriek.
-        const isLast = gi === PAGE_GROUPS.length - 1
+        // Elke groeps-CR houdt nu zijn onderruimte, ook de laatste: dat
+        // is tegelijk de scheiding naar de volgende groep en de adempauze
+        // vóór de volgende metriek. Daarmee verviel de isLast-uitzondering.
         return (
           <Fragment key={g}>
-            {/* arco-cr-row én -attached: boven- én onderruimte ingeleverd,
-                zodat een groep met zijn conversie samen één compacte regel
-                vormt in plaats van twee volwaardige tabelrijen. */}
+            {/* Alleen -attached, net als een sub-rij op het dashboard: de
+                onderruimte gaat eraf omdat de conversie eronder hangt, maar
+                de bovenruimte blijft. Hier stond ook arco-cr-row, wat die
+                bovenruimte óók weghaalde — dat maakte de rijen zichtbaar
+                krapper dan dezelfde rijen op /dashboard. */}
             <tr
-              className="arco-cr-row arco-cr-attached"
+              className="arco-cr-attached"
               style={{ borderBottom: "none", ...bg(g) }}
               {...groupProps(g)}
             >
@@ -492,20 +584,26 @@ function MetricBlock({
                 <SubNumbersCell datapoints={series(keys, m.field)} formatFn={m.format} />
               </td>
             </tr>
+            {/* Exact de sub-CR van het groeidashboard: alleen
+                arco-cr-row, geen eigen padding, pull 10. Zie
+                table-view.tsx — "Sub sparklines carry ~10px of bottom
+                slack". Hier hebben een tijdje handmatige afwijkingen
+                gestaan (pull 0, eigen onderpadding); die maakten het
+                verschil met /dashboard groter in plaats van kleiner. */}
             <tr
-              className={`arco-cr-row${isLast ? "" : " arco-cr-attached"}`}
+              className="arco-cr-row"
               style={bg(g)}
               {...groupProps(g)}
             >
               <td>
-                <div className="flex items-center gap-1.5 pl-7" style={{ marginTop: -10 }}>
+                <div className="flex items-center gap-1.5 pl-7" style={{ marginTop: -SUB_ROW_PULL }}>
                   <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
                     {m.sub.label}
                   </span>
                 </div>
               </td>
               <td>
-                <ValueCell values={m.sub.calc(keys)} tone="accent" pull={10} formatFn={m.sub.format} />
+                <ValueCell values={m.sub.calc(keys)} tone="accent" pull={SUB_ROW_PULL} formatFn={m.sub.format} />
               </td>
             </tr>
           </Fragment>
@@ -515,17 +613,74 @@ function MetricBlock({
   )
 }
 
-function Num({ v, dim, warn }: { v: string; dim?: boolean; warn?: boolean }) {
+type Tone = "good" | "warn" | undefined
+
+function Num({ v, dim, tone }: { v: string; dim?: boolean; tone?: Tone }) {
+  const color = tone === "good" ? "#166534" : tone === "warn" ? "#92400e" : undefined
   return (
-    <td className={`text-right text-[12.5px] tabular-nums ${warn ? "text-[#92400e] font-semibold" : dim ? "text-[#c4c4c2]" : ""}`}>
+    <td
+      className={`text-right text-[12.5px] tabular-nums ${!color && dim ? "text-[#c4c4c2]" : ""}`}
+      style={color ? { color, fontWeight: 500 } : undefined}
+    >
       {v}
     </td>
   )
 }
 
-function Panel({ title, scope, head, children }: {
-  title: string; scope: string; head: string[]; children: React.ReactNode
+/** Eén kolom van een sorteerbaar paneel: wat er in de kop staat, hoe een
+ *  rij wordt getekend, en waarop hij sorteert. Die laatste twee zijn
+ *  bewust gescheiden — een cel toont "·" waar de sorteerwaarde 0 is, en
+ *  op de tekst sorteren zou alle lege rijen bij elkaar in het midden
+ *  zetten in plaats van onderaan. */
+type PanelCol<T> = {
+  key: string
+  label: string
+  sort: (row: T) => number | string
+  cell: (row: T) => React.ReactNode
+}
+
+/** Tabel met sorteerbare koppen. Standaard op de tweede kolom aflopend —
+ *  dat is overal vertoningen, en een top 10 die niet op grootte staat is
+ *  geen top 10. Klikken wisselt de richting; een andere kolom begint weer
+ *  aflopend, want bij deze cijfers is "veel" bijna altijd de vraag. De
+ *  enige uitzondering is positie, waar laag juist beter is: die begint
+ *  daarom oplopend. */
+function Panel<T>({ title, scope, cols, rows, rowKey, empty, limit = 10 }: {
+  title: string
+  scope: string
+  cols: PanelCol<T>[]
+  rows: T[]
+  rowKey: (row: T) => string
+  empty: string
+  /** De tabel toont er tien, maar kiest wélke tien NA het sorteren —
+   *  anders sorteer je alleen binnen de tien grootste. */
+  limit?: number
 }) {
+  // Standaard op CTR: vertoningen zeggen hoe vaak je getoond bent, CTR
+  // of dat iets opleverde — en dat laatste is de vraag op deze pagina.
+  const [sortKey, setSortKey] = useState(cols.some((c) => c.key === "ctr") ? "ctr" : (cols[1]?.key ?? cols[0].key))
+  const [asc, setAsc] = useState(false)
+
+  const sorted = useMemo(() => {
+    const col = cols.find((c) => c.key === sortKey)
+    if (!col) return rows
+    return [...rows].sort((a, b) => {
+      const x = col.sort(a)
+      const y = col.sort(b)
+      const d = typeof x === "number" && typeof y === "number"
+        ? x - y
+        : String(x).localeCompare(String(y))
+      return asc ? d : -d
+    }).slice(0, limit)
+  }, [rows, cols, sortKey, asc, limit])
+
+  const onSort = (key: string) => {
+    if (key === sortKey) { setAsc((v) => !v); return }
+    setSortKey(key)
+    // Positie is de enige kolom waar klein beter is.
+    setAsc(key === "position")
+  }
+
   return (
     <div className="arco-table-wrap rounded-[3px]">
       <div className="px-4 py-3 bg-[#FAFAF9] border-b border-[#e5e5e4] flex justify-between gap-2.5">
@@ -535,12 +690,34 @@ function Panel({ title, scope, head, children }: {
       <table className="arco-table" style={{ minWidth: 0 }}>
         <thead>
           <tr>
-            {head.map((h, i) => (
-              <th key={h} style={{ textAlign: i === 0 ? "left" : "right" }}>{h}</th>
+            {cols.map((c, i) => (
+              <th key={c.key} style={{ textAlign: i === 0 ? "left" : "right" }}>
+                <button
+                  type="button"
+                  onClick={() => onSort(c.key)}
+                  className="inline-flex items-center gap-1 hover:text-[#1c1c1a] transition-colors"
+                  style={{ color: c.key === sortKey ? "var(--arco-black)" : undefined }}
+                >
+                  {c.label}
+                  <span aria-hidden className="text-[8px]" style={{ opacity: c.key === sortKey ? 1 : 0 }}>
+                    {asc ? "▲" : "▼"}
+                  </span>
+                </button>
+              </th>
             ))}
           </tr>
         </thead>
-        <tbody>{children}</tbody>
+        <tbody>
+          {sorted.length === 0 ? (
+            <tr><td colSpan={cols.length} className="text-[#c4c4c2] text-[12.5px]">{empty}</td></tr>
+          ) : sorted.map((row) => (
+            <tr key={rowKey(row)}>
+              {cols.map((c) => (
+                <Fragment key={c.key}>{c.cell(row)}</Fragment>
+              ))}
+            </tr>
+          ))}
+        </tbody>
       </table>
     </div>
   )

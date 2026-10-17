@@ -96,7 +96,7 @@ export function PopularSearches({ hubs, locale }: { hubs: PopularHubs; locale: s
             </p>
             {[
               { href: "/professionals/architect", nl: "Architecten", en: "Architects" },
-              { href: "/professionals/interior-designer", nl: "Interieurontwerpers", en: "Interior designers" },
+              { href: "/professionals/interior-designer", nl: "Interieurarchitecten", en: "Interior designers" },
               { href: "/professionals", nl: "Alle professionals", en: "All professionals" },
             ].map((item) => (
               <p key={item.href} style={{ marginBottom: 8 }}>

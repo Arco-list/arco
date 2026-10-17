@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { arcoPageMeta } from "@/lib/seo/copy"
 
 import { localeAlternates } from "@/lib/seo-utils"
 
@@ -28,9 +29,7 @@ import { PricingClient } from "./pricing-client"
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params
   return {
-    title: "Plans & pricing — Arco",
-    description:
-      "Publishing projects on Arco is free, forever. Pro gives contributors unlimited project credits, a full company page and Arco Approved verification — €39/month, free during the founding period.",
+    ...arcoPageMeta("/pricing", locale),
     alternates: localeAlternates(locale, "/pricing"),
   }
 }

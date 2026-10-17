@@ -25,7 +25,7 @@ const GROUPS: { slug: string; label: string; services: { slug: string; label: st
     label: "Ontwerp & planning",
     services: [
       { slug: "architect", label: "Architect" },
-      { slug: "interior-designer", label: "Interieurontwerper" },
+      { slug: "interior-designer", label: "Interieurarchitect" },
       { slug: "garden-designer", label: "Tuinontwerper" },
       { slug: "structural-engineer", label: "Constructeur" },
       { slug: "lighting-designer", label: "Lichtontwerper" },

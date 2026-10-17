@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
+import type { Metadata } from "next"
 import {
   BackfillButton,
   DisconnectButton,
@@ -7,6 +8,8 @@ import {
   CreateMissingBoardsButton,
   ReconcileOrphansButton,
 } from "./client-widgets"
+
+export const metadata: Metadata = { title: "Pinterest" }
 
 export const dynamic = "force-dynamic"
 

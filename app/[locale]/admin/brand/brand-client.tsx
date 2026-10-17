@@ -735,16 +735,8 @@ export function BrandClient({ data }: { data: BrandData }) {
         </div>
       ) : (
         <div className="wrap" style={{ paddingTop: 36, paddingBottom: 96 }}>
-          <p className="m-0 max-w-[70ch] text-[13.5px] text-[#6b6b68]">{t.seo.intro}</p>
-
           {/* ── 1 ─────────────────────────────────────────── */}
-          <Section n={1} id="slots" title={t.seo.sections.slots}>
-            <Table headers={t.seo.slots.headers} rows={t.seo.slots.rows} firstCol />
-            <p className="text-xs text-[#a1a1a0] mt-3 max-w-[82ch]">{t.seo.slots.note}</p>
-          </Section>
-
-          {/* ── 2 ─────────────────────────────────────────── */}
-          <Section n={2} id="formules" title={t.seo.sections.formulas}>
+          <Section n={1} id="formules" title={t.seo.sections.formulas}>
             {/* Eerst alle negen typen in één tabel — ook die zonder
                 verkeer, want juist daar wordt nu niets gestuurd. Daarna
                 drie uitgewerkte voorbeelden: de drie typen waar de
@@ -757,13 +749,19 @@ export function BrandClient({ data }: { data: BrandData }) {
                 <div key={f.type}>
                   <h3 className="arco-label m-0 mb-3">{f.type}</h3>
                   <div className="grid gap-3 md:grid-cols-2">
-                    <Serp tag={t.seo.formulas.now} url={f.url} title={f.titleNow} desc={f.descNow} />
+                    <Serp tag={t.seo.formulas.pattern} url={f.url} title={f.titlePattern} desc={f.descPattern} />
                     <Serp tag={f.done ? t.seo.formulas.inCode : t.seo.formulas.proposed} url={f.url} title={f.titleNew} desc={f.descNew} done={f.done} />
                   </div>
                   <p className="text-xs text-[#a1a1a0] mt-3 max-w-[90ch]">{f.note}</p>
                 </div>
               ))}
             </div>
+          </Section>
+
+          {/* ── 2 ─────────────────────────────────────────── */}
+          <Section n={2} id="arco-paginas" title={t.seo.sections.pages}>
+            <Table headers={t.seo.pages.headers} rows={t.seo.pages.rows} firstCol />
+            <p className="text-xs text-[#a1a1a0] mt-3 max-w-[86ch]">{t.seo.pages.note}</p>
           </Section>
 
         </div>

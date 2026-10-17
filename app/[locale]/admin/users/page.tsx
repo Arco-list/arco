@@ -6,6 +6,9 @@ import { isSuperAdminUser } from "@/lib/auth-utils"
 import { logger } from "@/lib/logger"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import type { Tables } from "@/lib/supabase/types"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Users" }
 
 export const dynamic = "force-dynamic"
 

@@ -19,6 +19,8 @@ import { getSiteUrl } from "@/lib/utils"
 import { locales, defaultLocale } from "@/i18n/config"
 import { resolveCompanyRedirect } from "@/lib/company-slug"
 import { resolveProfessionalHub, getProfessionalHubs, proHubCopy } from "@/lib/professional-hubs"
+import { proDetailDescription } from "@/lib/seo/copy"
+import { fetchProDetailFacts } from "@/lib/seo/facts"
 import { ProfessionalHubPage } from "@/components/professional/professional-hub-page"
 
 type PageParams = {
@@ -68,11 +70,19 @@ export async function generateMetadata({ params }: { params: Promise<PageParams>
     }
   }
 
+  // Omschrijving uit het werk zelf, niet uit de zelfgeschreven
+  // bedrijfstekst. Die beloofde bij elk bedrijf iets anders en vaak
+  // iets wat Arco juist niet claimt; deze noemt alleen wat er staat.
+  // Heeft een bedrijf nog geen gepubliceerd werk, dan is er niets te
+  // noemen en is hun eigen tekst alsnog het beste wat er is.
+  const detailFacts = await fetchProDetailFacts(professional.id, locale)
   const description =
-    professional.description ??
-    (professional.location
-      ? t("discover_in_location", { name: professional.name, location: professional.location })
-      : t("discover_name", { name: professional.name }))
+    detailFacts.types.length > 0 || detailFacts.cities.length > 0
+      ? proDetailDescription(locale, { company: professional.name, ...detailFacts })
+      : professional.description ??
+        (professional.location
+          ? t("discover_in_location", { name: professional.name, location: professional.location })
+          : t("discover_name", { name: professional.name }))
 
   const baseUrl = getSiteUrl()
   // Self-canonicalize per locale (the unprefixed URL redirects; a

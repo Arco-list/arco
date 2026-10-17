@@ -13,7 +13,7 @@ export function ProjectsDiscoverOutro({ locale, projectCount }: { locale: string
         heading: "Ontdek gerealiseerde projecten op Arco",
         paragraphs: [
           `Op Arco ontdek je momenteel ${count} gerealiseerde architectuur- en interieurprojecten in Nederland — van rietgedekte villa's tot stadse penthouses. Filter op locatie, type, stijl of ruimte en bekijk elk project ruimte voor ruimte, gefotografeerd zoals het is opgeleverd.`,
-          "Elk project vermeldt de studio's die het maakten — architect, interieurontwerper, fotograaf. Spreekt een project je aan, dan bekijk je het portfolio van het bureau en neem je rechtstreeks contact op.",
+          "Elk project vermeldt de studio's die het maakten — architect, interieurarchitect, fotograaf. Spreekt een project je aan, dan bekijk je het portfolio van het bureau en neem je rechtstreeks contact op.",
         ],
       }
     : {
