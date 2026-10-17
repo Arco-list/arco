@@ -1,5 +1,8 @@
 import { fetchBrandData } from "./actions"
 import { BrandClient } from "./brand-client"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Brand" }
 
 export const dynamic = "force-dynamic"
 

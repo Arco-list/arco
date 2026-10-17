@@ -1,5 +1,8 @@
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { ProductsClient } from "./products-client"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Products" }
 
 export const dynamic = "force-dynamic"
 

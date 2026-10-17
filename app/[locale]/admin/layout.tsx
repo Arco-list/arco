@@ -6,6 +6,7 @@ import { isAdminUser } from "@/lib/auth-utils"
 import { Header, type NavItem } from "@/components/header"
 import { countUnreadInboundEmails } from "./inbox/actions"
 import { countProjectsToReview } from "./projects/actions"
+import type { Metadata } from "next"
 
 type AdminLayoutProps = {
   children: ReactNode
@@ -112,6 +113,18 @@ function buildAdminNavLinks({
       ],
     },
   ]
+}
+
+/**
+ * Elke /admin-pagina staat op noindex, hier in plaats van per pagina.
+ *
+ * Metadata erft naar beneden, dus één regel dekt alle achttien. De
+ * TITEL erft met opzet niet: dan droeg elk admin-tabblad dezelfde naam
+ * en zijn ze met tien open niet uit elkaar te houden. Die zet elke
+ * pagina zelf, en het is alleen de naam van de pagina.
+ */
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
 }
 
 export default async function AdminLayout({ children }: AdminLayoutProps) {

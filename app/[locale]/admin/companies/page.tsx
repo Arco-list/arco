@@ -3,6 +3,9 @@ import { getSubscribedSince } from "@/lib/subscriptions/subscriber-stats"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import type { Tables } from "@/lib/supabase/types"
 import { logger } from "@/lib/logger"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Companies" }
 
 export const dynamic = "force-dynamic"
 

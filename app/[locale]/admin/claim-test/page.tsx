@@ -1,6 +1,9 @@
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 
 import { ClaimTestClient } from "./claim-test-client"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Claim test" }
 
 export const dynamic = "force-dynamic"
 

@@ -1,6 +1,9 @@
 import { loadBillingPageProps } from "@/lib/subscriptions/billing-page-props"
 import { SubscriptionScreen } from "@/components/subscription-screen"
 import { WebhookHealth } from "@/components/webhook-health"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Subscriptions" }
 
 /**
  * The subscription screen, mounted inside admin.

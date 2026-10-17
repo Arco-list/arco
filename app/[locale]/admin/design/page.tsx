@@ -12,6 +12,9 @@ import { ServiceMarksPreview } from "./service-marks-preview"
 import { UiIconsPreview } from "./ui-icons-preview"
 import { CreditPreviews } from "./credit-previews"
 import { GardenDesignIcon, KitchenIcon } from "@/lib/icons/custom-service-icons"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Design" }
 
 export const dynamic = "force-dynamic"
 

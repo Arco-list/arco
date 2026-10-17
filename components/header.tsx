@@ -940,6 +940,11 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                                 design: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor" /><circle cx="17.5" cy="10.5" r=".5" fill="currentColor" /><circle cx="8.5" cy="7.5" r=".5" fill="currentColor" /><circle cx="6.5" cy="12.5" r=".5" fill="currentColor" /><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c3.31 0 6-2.69 6-6 0-5.52-4.5-10-10-10z" /></svg>,
                                 billing: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2" /><line x1="2" y1="10" x2="22" y2="10" /></svg>,
                                 pinterest: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M8 20l4-12" /><path d="M8 12a4 4 0 118 0c0 2.5-1.5 4-3.5 4S9 15 9 13" /></svg>,
+                                // Zelfde glyphs als ICONS.seo en ICONS.proposition in
+                                // app/[locale]/admin/layout.tsx: dit menu en de zijbalk
+                                // horen dezelfde pagina's met hetzelfde icoon te tonen.
+                                seo: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="8" y1="11" x2="14" y2="11" /></svg>,
+                                brand: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v18" /><path d="M5 8l7-5 7 5" /><circle cx="12" cy="14" r="3" /></svg>,
                               }
                               const adminGroups: { key: string; label: string; items: { href: string; label: string; icon: React.ReactNode }[] }[] = [
                                 { key: "marketplace", label: t("admin_marketplace"), items: [
@@ -953,6 +958,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                                 ]},
                                 { key: "growth", label: t("admin_growth"), items: [
                                   { href: "/admin/dashboard", label: t("admin_dashboard"), icon: adminIcons.dashboard },
+                                  { href: "/admin/seo", label: "SEO", icon: adminIcons.seo },
                                   { href: "/admin/sales", label: t("admin_sales"), icon: adminIcons.sales },
                                   { href: "/admin/inbox", label: t("admin_inbox"), icon: adminIcons.inbox },
                                   { href: "/admin/emails", label: t("admin_emails"), icon: adminIcons.emails },
@@ -962,6 +968,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                                   { href: "/admin/categories", label: t("admin_categories"), icon: adminIcons.categories },
                                   { href: "/admin/pinterest", label: "Pinterest", icon: adminIcons.pinterest },
                                   { href: "/admin/design", label: t("admin_design"), icon: adminIcons.design },
+                                  { href: "/admin/brand", label: "Brand", icon: adminIcons.brand },
                                   { href: "/admin/subscriptions", label: "Subscriptions", icon: adminIcons.billing },
                                 ]},
                               ]

@@ -2,6 +2,9 @@ import Link from "next/link"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { fetchInboundEmails, type InboundTab } from "./actions"
 import { InboxClient } from "./inbox-client"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Inbox" }
 
 export const dynamic = "force-dynamic"
 
