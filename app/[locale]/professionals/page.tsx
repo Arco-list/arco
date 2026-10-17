@@ -19,6 +19,7 @@ import { DiscoverBottomSwitcher } from "@/components/professional/discover-botto
 import { ServiceHubProse } from "@/components/professional/service-hub-prose"
 import { SERVICE_HUB_PROSE } from "@/lib/professional-hubs"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { noIndexWhenFiltered } from "@/lib/seo-utils"
 
 // De teksten staan in lib/seo/copy.ts — zie de toelichting bij
 // app/[locale]/projects/page.tsx.
@@ -29,10 +30,13 @@ import { createServerSupabaseClient } from "@/lib/supabase/server"
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }): Promise<Metadata> {
   const { locale } = await params
+  const filters = await searchParams
   const facts = await fetchProDiscoverFacts()
   const meta = {
     title: proDiscoverTitle(locale),
@@ -47,6 +51,7 @@ export async function generateMetadata({
   return {
     title: meta.title,
     description: meta.description,
+    ...noIndexWhenFiltered(filters),
     alternates: {
       canonical,
       languages: { ...languages, "x-default": `${baseUrl}/${defaultLocale}/professionals` },

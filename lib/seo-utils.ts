@@ -27,6 +27,26 @@ import { locales, defaultLocale } from "@/i18n/config"
 export const NO_INDEX = { index: false, follow: true } as const
 
 /**
+ * Een gefilterd overzicht is een duplicaat van het overzicht zelf.
+ *
+ * Google indexeerde /projects?type=apartment (241 vertoningen),
+ * ?location=Amsterdam, ?space=kitchen en ?space=exterior — allemaal
+ * dezelfde pagina met een andere selectie, die concurreren met de
+ * schone URL. De canonical wees al naar het overzicht en dat bleek niet
+ * genoeg; noindex is het signaal dat voor facetnavigatie wel werkt.
+ *
+ * follow blijft aan: de projectlinks op zo'n pagina mogen gewoon
+ * gevolgd worden — dat is juist hoe de detailpagina's gevonden worden.
+ *
+ * Elke parameter telt, niet alleen de bekende filters. Een nieuw filter
+ * dat later wordt toegevoegd hoort hier vanzelf onder te vallen, en een
+ * utm-variant hoort evenmin apart geïndexeerd te worden.
+ */
+export function noIndexWhenFiltered(searchParams: Record<string, string | string[] | undefined>) {
+  return Object.keys(searchParams ?? {}).length > 0 ? { robots: NO_INDEX } : {}
+}
+
+/**
  * Canonical + hreflang voor één pad, in de vorm die Google nodig heeft.
  *
  * Dezelfde constructie als `localizedUrls` in de sitemap, maar dan voor

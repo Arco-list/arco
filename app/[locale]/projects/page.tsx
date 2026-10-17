@@ -17,6 +17,7 @@ import { logger } from "@/lib/logger"
 import { TrackPageView } from "@/components/track-view"
 import { getSiteUrl } from "@/lib/utils"
 import { locales, defaultLocale } from "@/i18n/config"
+import { noIndexWhenFiltered } from "@/lib/seo-utils"
 
 // De teksten staan in lib/seo/copy.ts, de codetegenhanger van de
 // formuletabel op /admin/brand?tab=seo. Stonden ze hier, dan waren ze
@@ -29,10 +30,13 @@ import { locales, defaultLocale } from "@/i18n/config"
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }): Promise<Metadata> {
   const { locale } = await params
+  const filters = await searchParams
   const projects = await countPublishedProjects()
   const meta = {
     title: projectDiscoverTitle(locale),
@@ -47,6 +51,7 @@ export async function generateMetadata({
   return {
     title: meta.title,
     description: meta.description,
+    ...noIndexWhenFiltered(filters),
     alternates: {
       canonical,
       languages: { ...languages, "x-default": `${baseUrl}/${defaultLocale}/projects` },

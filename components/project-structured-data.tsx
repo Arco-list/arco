@@ -24,6 +24,30 @@ interface StructuredProfessional {
   roleName: string | null
 }
 
+/**
+ * De fotograafcredit, zoals de specs-balk hem ook krijgt.
+ *
+ * Fotografen staan NIET in `contributors`: de credits-query sluit ze uit
+ * (`companies.audience <> 'pro'`) omdat ze hun eigen plek in de specs-balk
+ * hebben en anders dubbel zouden staan. Wie de fotograaf hier uit de
+ * contributors probeert te vissen, zoekt in de enige lijst waar hij per
+ * definitie niet staat.
+ */
+interface StructuredPhotographer {
+  name: string
+  slug: string | null
+  /** Alleen een `listed` bedrijf heeft een pagina die rendert. */
+  isLive: boolean
+}
+
+interface StructuredPhoto {
+  url: string | null
+  altText?: string | null
+  caption?: string | null
+  width?: number | null
+  height?: number | null
+}
+
 interface StructuredRelatedProject {
   slug: string | null
   title: string
@@ -53,12 +77,16 @@ interface ProjectStructuredDataProps {
       shareExactLocation?: boolean | null
     }
   }
-  /** All project photo URLs in display order; first is the cover. */
-  imageUrls: string[]
+  /** All project photos in display order; first is the cover. Meer dan
+   *  alleen de URL, want de credits en de afmetingen zijn juist wat een
+   *  ImageObject onderscheidt van een kale string. */
+  photos: StructuredPhoto[]
   /** Project owner professional (single, primary credit) */
   owner: StructuredProfessional | null
   /** Other credited professionals */
   contributors: StructuredProfessional[]
+  /** Gecrediteerde fotograaf, bron voor `creditText` op elke foto */
+  photographer?: StructuredPhotographer | null
   /** Related projects from the same owner */
   relatedProjects: StructuredRelatedProject[]
 }
@@ -79,9 +107,10 @@ const buildProfessionalId = (baseUrl: string, slug: string | null): string | nul
 
 export function ProjectStructuredData({
   project,
-  imageUrls,
+  photos,
   owner,
   contributors,
+  photographer = null,
   relatedProjects,
 }: ProjectStructuredDataProps) {
   const baseUrl = getSiteUrl()
@@ -93,9 +122,60 @@ export function ProjectStructuredData({
   const descriptionRaw = stripHtml(project.description) ?? `Architectural project: ${project.title}`
   const description = truncate(descriptionRaw, 250)
 
-  // Cap images at 6 — enough to be eligible for image carousel rich results
-  // without inflating the JSON-LD payload.
-  const images = imageUrls.filter(Boolean).slice(0, 6)
+  /**
+   * Foto's als ImageObject in plaats van een rij URL-strings.
+   *
+   * Een string zegt Google alleen WAAR het beeld staat. Een ImageObject
+   * zegt wie het heeft gemaakt, en dat is op dit platform het hele punt:
+   * "geen beeld zonder herkomst" is een merkprincipe, en dit is de enige
+   * plek waar die herkomst machineleesbaar wordt. Google Afbeeldingen
+   * toont `creditText` bij het beeld, dus de fotograaf krijgt zijn naam
+   * ook buiten de projectpagina mee.
+   *
+   * De fotograaf komt uit de credits, niet uit een veld op de foto: op
+   * Arco credit de architect één fotograaf voor het hele project, en
+   * precies die vermelding is wat hem onderscheidt van een naam in een
+   * EXIF-veld dat niemand controleert. Daarom één fotograaf voor alle
+   * foto's van het project, en niet een per foto.
+   *
+   * `creator.url` alleen bij een `listed` bedrijf, dezelfde regel die de
+   * specs-balk volgt: een niet-listed fotograaf heeft geen pagina, en een
+   * url in de structured data die 404't is een belofte die we niet nakomen.
+   *
+   * GEEN `license` of `acquireLicensePage`. Die twee leveren het
+   * "Licensable"-label op in Google Afbeeldingen, en dat zou beweren dat
+   * deze beelden te licentiëren zijn. Dat is niet zo — ze zijn van de
+   * fotograaf en Arco verkoopt er niets van. Een badge die een onwaarheid
+   * vertelt is erger dan geen badge.
+   *
+   * Nog steeds gemaximeerd op zes: genoeg voor het afbeeldingencarrousel,
+   * zonder de JSON-LD op te blazen.
+   */
+  const photographerCredit = photographer
+    ? {
+        creditText: photographer.name,
+        creator: {
+          "@type": "Organization",
+          name: photographer.name,
+          ...(photographer.isLive && photographer.slug
+            ? { url: `${baseUrl}/photographers/${photographer.slug}` }
+            : {}),
+        },
+      }
+    : null
+  const images = photos
+    .filter((p) => Boolean(p.url))
+    .slice(0, 6)
+    .map((p) => ({
+      "@type": "ImageObject",
+      contentUrl: p.url as string,
+      ...(p.width ? { width: p.width } : {}),
+      ...(p.height ? { height: p.height } : {}),
+      ...(p.caption?.trim() || p.altText?.trim()
+        ? { caption: (p.caption?.trim() || p.altText?.trim()) as string }
+        : {}),
+      ...(photographerCredit ?? {}),
+    }))
 
   // Build the locationCreated block, honouring share_exact_location.
   // When false: emit city/region only, no streetAddress, no geo. This matches

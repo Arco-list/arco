@@ -891,7 +891,13 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
             shareExactLocation: project.share_exact_location,
           },
         }}
-        imageUrls={enrichedPhotos.map((p) => p.url).filter(Boolean) as string[]}
+        photos={enrichedPhotos.map((p) => ({
+          url: p.url,
+          altText: p.alt_text,
+          caption: p.caption,
+          width: p.width,
+          height: p.height,
+        }))}
         owner={
           structuredOwner
             ? {
@@ -902,6 +908,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
             : null
         }
         contributors={structuredContributors}
+        photographer={photographerCredit}
         relatedProjects={formattedRelatedProjects.map((rp) => ({
           slug: rp.slug,
           title: rp.title,
