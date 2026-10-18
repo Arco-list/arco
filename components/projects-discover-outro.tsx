@@ -1,4 +1,8 @@
 /**
+ * Zelfde regel als bij /professionals: de eerste alinea is wat Google
+ * als snippet kan tonen, dus hij draagt dezelfde boodschap als
+ * projectDiscoverTitle/Description en past binnen ~160 tekens.
+ *
  * Short platform block above the hub directory at the bottom of the
  * /projects discover root — the JE-style "what Arco adds" copy with the
  * live project count. No FAQ here on purpose: the inspiration intent
@@ -10,17 +14,19 @@ export function ProjectsDiscoverOutro({ locale, projectCount }: { locale: string
   const count = projectCount > 0 ? String(projectCount) : nl ? "honderden" : "hundreds of"
   const copy = nl
     ? {
-        heading: "Ontdek gerealiseerde projecten op Arco",
+        heading: "Gerealiseerde architectuurprojecten in Nederland",
         paragraphs: [
-          `Op Arco ontdek je momenteel ${count} gerealiseerde architectuur- en interieurprojecten in Nederland — van rietgedekte villa's tot stadse penthouses. Filter op locatie, type, stijl of ruimte en bekijk elk project ruimte voor ruimte, gefotografeerd zoals het is opgeleverd.`,
-          "Elk project vermeldt de studio's die het maakten — architect, interieurarchitect, fotograaf. Spreekt een project je aan, dan bekijk je het portfolio van het bureau en neem je rechtstreeks contact op.",
+          `Op Arco ontdek je ${count} gerealiseerde architectuur- en interieurprojecten in Nederland, per ruimte gefotografeerd zoals ze zijn opgeleverd — van rietgedekte villa's tot stadse penthouses.`,
+          "Bij elk project vind je iedereen die eraan werkte, van architect en interieurarchitect tot aannemer en meubelmaker. Erkenning wordt hier verdiend door gebouwd werk, niet door promotie.",
+          "Filter op locatie, type, stijl of ruimte. Spreekt een project je aan, dan bekijk je het portfolio van het bureau erachter en benader je het rechtstreeks.",
         ],
       }
     : {
-        heading: "Discover realized projects on Arco",
+        heading: "Built architecture projects in the Netherlands",
         paragraphs: [
-          `Arco currently features ${count} realized architecture and interior projects in the Netherlands — from thatched villas to urban penthouses. Filter by location, type, style or room, and browse every project room by room, photographed as delivered.`,
-          "Every project credits the studios that made it — architect, interior designer, photographer. When a project speaks to you, explore the firm's portfolio and get in touch directly.",
+          `Arco features ${count} built architecture and interior projects in the Netherlands, photographed room by room as they were delivered — from thatched villas to urban penthouses.`,
+          "Every project credits everyone who worked on it, from architect and interior designer to contractor and cabinet maker. Recognition is earned here by built work, not by promotion.",
+          "Filter by location, type, style or room. When a project speaks to you, explore the portfolio of the firm behind it and get in touch directly.",
         ],
       }
 

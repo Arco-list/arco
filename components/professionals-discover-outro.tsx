@@ -1,6 +1,21 @@
 import { FAQSection } from "@/components/landing/FAQSection"
 
 /**
+ * De eerste alinea hier IS in de praktijk de zoekresultaat-snippet:
+ * Google negeert onze meta description op deze pagina en pakt dit blok
+ * (gezien in de SERP, met "Read more" eronder). Daarom draagt hij
+ * dezelfde boodschap als proDiscoverTitle/Description in lib/seo/copy.ts,
+ * en staat het hele verhaal binnen ~160 tekens — daarna kapt Google af.
+ * De oude versie kapte af op "Geen advertenties of leadformulieren:",
+ * dus precies vóór het punt dat het verschil maakte.
+ *
+ * "binnenhuisarchitect" en "interieurontwerper" staan er bewust in. De
+ * merknaam is interieurarchitect en blijft dat in titels en koppen, maar
+ * de zoekvraag staat op de synoniemen (691 resp. 561 vertoningen in 90
+ * dagen tegen 808 voor interieurarchitect) en die kwamen op deze pagina
+ * nergens meer voor. Lopende tekst is de plek waar een synoniem kan
+ * staan zonder de merktaal te verwateren.
+ *
  * Bottom of the /professionals discover root, mirroring the projects root:
  * professional hub directory first, then the marketplace-level FAQ (left-
  * aligned, FAQPage JSON-LD), then the platform outro block (live counts,
@@ -19,17 +34,19 @@ export function ProfessionalsDiscoverOutro({ locale, companyCount, projectCount 
 
   const platform = nl
     ? {
-        heading: "Vind jouw architect of interieurarchitect op Arco",
+        heading: "Architecten en vakmensen in Nederland met opgeleverd werk",
         paragraphs: [
-          `Op Arco vind je momenteel ${companies} Nederlandse architectenbureaus en interieurstudio's, met samen ${projects} gerealiseerde projecten. Geen advertenties of leadformulieren: je beoordeelt elk bureau op gebouwd werk, gefotografeerd ruimte voor ruimte.`,
-          "Gebruik de filters om te zoeken op dienst of locatie. Herken je jouw ambitie in een gerealiseerd project, dan neem je rechtstreeks en kosteloos contact op met de studio erachter.",
+          `Op Arco vind je ${companies} Nederlandse bedrijven, van architect en interieurarchitect tot aannemer en meubelmaker. Samen leverden ze ${projects} projecten op, per ruimte gefotografeerd.`,
+          "Zoek je een binnenhuisarchitect of interieurontwerper? Wij helpen opdrachtgevers aan een netwerk van professionals — van interieurarchitect tot aannemer — die hun reputatie hebben verdiend door vakmanschap, niet door reclame.",
+          "Filter op dienst of locatie. Bij elk project staan de betrokken vakmensen, van interieurarchitect tot aannemer, vermeld door de architect die met ze samenwerkte.",
         ],
       }
     : {
-        heading: "Find your architect or interior designer on Arco",
+        heading: "Dutch architects and specialists with delivered work",
         paragraphs: [
-          `Arco currently features ${companies} Dutch architecture firms and interior studios, with ${projects} realized projects between them. No ads, no lead forms: you judge every firm by built work, photographed room by room.`,
-          "Use the filters to search by service or location. When you recognize your ambition in a realized project, you contact the studio behind it directly and free of charge.",
+          `Arco lists ${companies} Dutch companies, from architect and interior designer to contractor and cabinet maker. Together they delivered ${projects} projects, photographed room by room.`,
+          "Looking for an interior architect or interior designer? We connect clients with a network of professionals — from interior designer to contractor — who earned their reputation through craftsmanship, not advertising.",
+          "Filter by service or location. Every project credits the specialists involved, from interior designer to contractor, named by the architect who worked with them.",
         ],
       }
 
