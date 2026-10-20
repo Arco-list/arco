@@ -89,7 +89,7 @@ ${content}
 </td></tr>
 <tr><td style="padding:24px 0 0;border-top:1px solid #e8e8e6;">
 <p style="margin:0;font-size:12px;color:#a1a1a0;line-height:1.5;">
-<img src="https://www.arcolist.com/arco-logo-email.png" alt="Arco" width="36" height="10" style="display:inline-block;vertical-align:middle;opacity:0.4;margin-right:6px;" />Arco Global BV · The professional network architects trust.
+<img src="https://www.arcolist.com/arco-logo-email.png" alt="Arco" width="36" height="10" style="display:inline-block;vertical-align:middle;opacity:0.4;margin-right:6px;" />Arco Global BV · The network behind exceptional architecture.
 </p>
 </td></tr>
 </table>

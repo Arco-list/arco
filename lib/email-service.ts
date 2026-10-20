@@ -372,9 +372,13 @@ function baseLayout(
   unsubscribeUrl?: string,
 ): string {
   const base = logoBaseUrl || DEFAULT_LOGO_BASE
+  // Dezelfde pay-off als de site-footer en de homepage — messages/*.json
+  // onder `footer.tagline`. Die bundel is hier niet te importeren (dit
+  // draait buiten de next-intl-context), dus hij staat letterlijk; bij
+  // een merkwijziging moeten beide mee.
   const tagline = locale === 'nl'
-    ? 'Het professionele netwerk dat architecten vertrouwen.'
-    : 'The professional network architects trust.'
+    ? 'Het netwerk achter uitzonderlijke architectuur.'
+    : 'The network behind exceptional architecture.'
   // Visible footer link is only rendered for marketing/sales sends that
   // pass an unsubscribeUrl. Transactional emails (auth, lifecycle, project
   // status) intentionally omit it — they're not bulk marketing and would
