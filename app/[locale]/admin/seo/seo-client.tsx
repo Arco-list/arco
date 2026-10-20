@@ -338,6 +338,28 @@ export function SeoClient({ initialData }: { initialData: SeoOverview }) {
           </div>
         ) : (
           <div className="arco-table-wrap rounded-[3px]">
+            {/* De thead hieronder staat op mobiel uit, en daarmee verdwenen
+                ook de datumlabels — je zag cijfers zonder te weten over
+                welke periode. Zelfde strip als /dashboard, met dezelfde
+                6%/88%-verdeling zodat de labels boven de SVG-punten
+                vallen. */}
+            <div className="bg-[#fafaf9] border-b border-[#e5e5e4] md:hidden py-2 px-3">
+              <div className="relative" style={{ height: 16 }}>
+                {labels.map((l, i, arr) => (
+                  <span
+                    key={l}
+                    className="absolute text-xs font-medium whitespace-nowrap"
+                    style={{
+                      left: `${6 + (i / Math.max(arr.length - 1, 1)) * (100 - 12)}%`,
+                      transform: "translateX(-50%)",
+                      color: i === arr.length - 1 ? "#c4c4c2" : "#6b6b68",
+                    }}
+                  >
+                    {l}
+                  </span>
+                ))}
+              </div>
+            </div>
             <table className="arco-table md:table-fixed" style={{ minWidth: 0 }}>
               <colgroup className="hidden md:table-column-group">
                 <col style={{ width: "30%" }} />
@@ -506,7 +528,7 @@ function MetricBlock({
       {/* Ingeklapt is dit een gewone rij met zijn eigen onderrand; pas
           uitgeklapt hangt de conversierij eraan en laat hij die rand weg. */}
       <tr
-        className="cursor-pointer arco-cr-attached"
+        className="hidden md:table-row cursor-pointer arco-cr-attached"
         style={{ borderBottom: "none", ...bg("parent") }}
         onClick={onToggle}
         {...groupProps("parent")}
@@ -523,6 +545,24 @@ function MetricBlock({
           <TrendlineCell datapoints={series(allTypes, m.field)} labels={labels} color={color} formatFn={m.format} />
         </td>
       </tr>
+      {/* Mobiel: één cel over beide kolommen, label BOVEN de grafiek.
+          Naast elkaar hield de grafiek nog een derde van de breedte over
+          en liepen de waardelabels over elkaar heen. Zelfde oplossing als
+          /dashboard. */}
+      <tr
+        className="md:hidden cursor-pointer arco-cr-attached"
+        style={{ borderBottom: "none" }}
+        onClick={onToggle}
+      >
+        <td colSpan={2}>
+          <div className="flex items-center gap-1.5 mb-1">
+            <Chevron open={open} />
+            <span className="status-pill-dot shrink-0" style={{ background: color, width: 5, height: 5 }} />
+            <span className="text-[11px] font-medium text-[#1c1c1a]">{m.label}</span>
+          </div>
+          <TrendlineCell datapoints={series(allTypes, m.field)} labels={labels} color={color} formatFn={m.format} />
+        </td>
+      </tr>
 
       {/* De conversie staat er ALTIJD, ook ingeklapt — zoals de rijen op
           het dashboard die geen subs hebben. Daar luidt de regel: een
@@ -535,7 +575,7 @@ function MetricBlock({
           de rij zijn onderruimte inleveren. Ingeklapt houdt hij die, want
           dan is hij het einde van het blok. */}
       <tr
-        className={`arco-cr-row ${open ? "arco-cr-attached" : ""}`}
+        className={`hidden md:table-row arco-cr-row ${open ? "arco-cr-attached" : ""}`}
         style={bg("parent")}
         {...groupProps("parent")}
       >
@@ -549,6 +589,16 @@ function MetricBlock({
         </td>
         <td>
           <ValueCell values={m.sub.calc(allTypes)} tone="accent" pull={SUB_PULL} formatFn={m.sub.format} />
+        </td>
+      </tr>
+      <tr className={`md:hidden arco-cr-row ${open ? "arco-cr-attached" : ""}`}>
+        <td colSpan={2}>
+          <div className="flex items-center pl-3 mb-0.5">
+            <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
+              {m.sub.label}
+            </span>
+          </div>
+          <ValueCell values={m.sub.calc(allTypes)} tone="accent" formatFn={m.sub.format} />
         </td>
       </tr>
 
@@ -565,7 +615,7 @@ function MetricBlock({
                 bovenruimte óók weghaalde — dat maakte de rijen zichtbaar
                 krapper dan dezelfde rijen op /dashboard. */}
             <tr
-              className="arco-cr-attached"
+              className="hidden md:table-row arco-cr-attached"
               style={{ borderBottom: "none", ...bg(g) }}
               {...groupProps(g)}
             >
@@ -584,6 +634,19 @@ function MetricBlock({
                 <SubNumbersCell datapoints={series(keys, m.field)} formatFn={m.format} />
               </td>
             </tr>
+            <tr className="md:hidden arco-cr-attached" style={{ borderBottom: "none" }}>
+              <td colSpan={2}>
+                <div className="flex items-center gap-1.5 pl-3 mb-0.5">
+                  <span className="text-[11px] text-[#1c1c1a]">{GROUP_LABEL[g]}</span>
+                  {g === "overig" && (
+                    <span className="text-[9px] uppercase tracking-[0.06em] text-[#a1a1a0] border border-[#e5e5e4] rounded-[10px] px-1.5">
+                      alert
+                    </span>
+                  )}
+                </div>
+                <SubNumbersCell datapoints={series(keys, m.field)} formatFn={m.format} />
+              </td>
+            </tr>
             {/* Exact de sub-CR van het groeidashboard: alleen
                 arco-cr-row, geen eigen padding, pull 10. Zie
                 table-view.tsx — "Sub sparklines carry ~10px of bottom
@@ -591,7 +654,7 @@ function MetricBlock({
                 gestaan (pull 0, eigen onderpadding); die maakten het
                 verschil met /dashboard groter in plaats van kleiner. */}
             <tr
-              className="arco-cr-row"
+              className="hidden md:table-row arco-cr-row"
               style={bg(g)}
               {...groupProps(g)}
             >
@@ -604,6 +667,16 @@ function MetricBlock({
               </td>
               <td>
                 <ValueCell values={m.sub.calc(keys)} tone="accent" pull={SUB_ROW_PULL} formatFn={m.sub.format} />
+              </td>
+            </tr>
+            <tr className="md:hidden arco-cr-row">
+              <td colSpan={2}>
+                <div className="flex items-center pl-5 mb-0.5">
+                  <span className="text-[10px] font-medium" style={{ color: "var(--primary, #016D75)" }}>
+                    {m.sub.label}
+                  </span>
+                </div>
+                <ValueCell values={m.sub.calc(keys)} tone="accent" formatFn={m.sub.format} />
               </td>
             </tr>
           </Fragment>
