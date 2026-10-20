@@ -141,7 +141,8 @@ export function DiscoverClient({ initialProjects, initialSort = DEFAULT_PROJECT_
   // same page. With nothing selected the base page keeps its own title
   // and non-geo hubs (scope) fall back to their server-provided H1.
   const hasTitleFilters =
-    selectedTypes.length + selectedBuildingTypes.length + selectedLocations.length + selectedRegions.length > 0
+    selectedTypes.length + selectedBuildingTypes.length + selectedScopes.length
+    + selectedLocations.length + selectedRegions.length > 0
   // Until the taxonomy loads, selected category ids may still be raw URL
   // tokens — hold the server/fallback title rather than render them.
   const typesResolved = typesResolvedForLeaf
@@ -151,6 +152,7 @@ export function DiscoverClient({ initialProjects, initialSort = DEFAULT_PROJECT_
           .map((id) => pluralizeLabel(taxonomyLabelMap.get(id) ?? id, 2, locale))
           .filter(Boolean),
         buildingTypes: selectedBuildingTypes,
+        scopes: selectedScopes,
         locations: selectedLocations,
         // A province refined by a selected city inside it stays out of
         // the title — "Villa's in 's-Hertogenbosch", not "... in

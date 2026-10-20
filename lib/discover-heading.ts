@@ -1,5 +1,5 @@
 import { PROVINCES, cityLabel } from "@/lib/provinces"
-import { typeLabel } from "@/lib/type-labels"
+import { typeLabel, scopeNoun } from "@/lib/type-labels"
 
 /** "A", "A & B", "A, B & C" — the joining grammar shared by the discover
  * H1 and the results-count line so both always read identically. */
@@ -14,6 +14,14 @@ export interface DiscoverHeadingOpts {
   typeLabels: string[]
   /** Raw projects.building_type values (villa / apartment / …). */
   buildingTypes: string[]
+  /** Canonieke scopes (new_build / renovation / interior_design).
+   *
+   *  Stond hier niet, en dat kostte elke samengestelde scope-hub zijn
+   *  kop: /projects/noord-holland/nieuwbouw voerde "Projecten in
+   *  Noord-Holland" terwijl titel, description en breadcrumb alle drie
+   *  wél "nieuwbouw" zeiden. De scope zat in de filterstand en in de
+   *  kruimelpad-leaf — alleen deze functie vroeg er nooit om. */
+  scopes: string[]
   /** Raw address_city values. */
   locations: string[]
   /** Raw address_region keys (English, as stored). */
@@ -33,7 +41,11 @@ export function discoverHeading(opts: DiscoverHeadingOpts): string {
   const { locale } = opts
   const nl = locale === "nl"
   const buildingTypeLabels = opts.buildingTypes.map((v) => typeLabel(v, locale))
-  const types = [...buildingTypeLabels, ...opts.typeLabels].filter(Boolean)
+  // Scopes achteraan: bij een enkele scope en verder niets levert dat
+  // exact de kop die de server voor die hub zou zetten, zodat de titel
+  // niet verspringt zodra de client hem overneemt.
+  const scopeLabels = opts.scopes.map((v) => scopeNoun(v, locale))
+  const types = [...buildingTypeLabels, ...opts.typeLabels, ...scopeLabels].filter(Boolean)
   const typePart = types.length === 0 || types.length > 2 ? opts.defaultTypeLabel : joinAmp(types)
 
   // Regions render as a single label ("Noord-Holland") ahead of any

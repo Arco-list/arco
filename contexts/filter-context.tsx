@@ -309,6 +309,17 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
       ...((activeHub?.kind === "city" || activeHub?.kind === "type-city" || activeHub?.kind === "scope-city") && activeHub.cityName ? { selectedLocations: [activeHub.cityName] } : {}),
       ...((activeHub?.kind === "province" || activeHub?.kind === "type-province" || activeHub?.kind === "scope-province") && activeHub.region ? { selectedRegions: [activeHub.region] } : {}),
       ...((activeHub?.kind === "scope" || activeHub?.kind === "scope-city" || activeHub?.kind === "scope-province") && activeHub.scope ? { selectedScopes: [activeHub.scope] } : {}),
+      // Het type ontbrak hier als enige as. Gevolg: een type-hub stond
+      // met zijn eigen filter UIT in de zijbalk, en de kop die de client
+      // herberekent zodra er iets geselecteerd is, kende het type niet —
+      // /projects/amsterdam/villa kopte "Projecten in Amsterdam".
+      //
+      // typeValue is de categorie-SLUG, en dat is precies wat ?type=
+      // ook draagt; de bestaande resolutie maakt er een id van. Tot dat
+      // gebeurd is staat de servertitel er, want typesResolved blijft
+      // vals zolang de slug nog niet in de taxonomie zit — dus geen
+      // tussentitel die verspringt.
+      ...((activeHub?.kind === "type" || activeHub?.kind === "type-city" || activeHub?.kind === "type-province") && activeHub.typeValue ? { selectedTypes: [activeHub.typeValue] } : {}),
     }),
   )
   const {

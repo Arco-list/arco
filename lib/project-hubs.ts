@@ -1,7 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { canonicalizeScope, type ProjectScope } from "@/lib/project-translations"
 import { PROVINCES, cityLabel } from "@/lib/provinces"
-import { typeLabel, scopeLabel } from "@/lib/type-labels"
+import { typeLabel, scopeLabel, scopeNoun, SCOPE_NOUNS } from "@/lib/type-labels"
 import { projectHubTitle, projectHubDescription } from "@/lib/seo/copy"
 
 export { typeLabel }
@@ -58,12 +58,6 @@ export type HubProjectCard = {
 }
 
 /** Localized "{Scope}projecten" nouns for combo H1s. */
-const SCOPE_NOUNS: Record<string, { nl: string; en: string }> = {
-  renovation: { nl: "Renovatieprojecten", en: "Renovation projects" },
-  new_build: { nl: "Nieuwbouwprojecten", en: "New-build projects" },
-  interior_design: { nl: "Interieurprojecten", en: "Interior design projects" },
-}
-
 const SCOPE_HUB_DEFS: Array<{ slug: string; scope: ProjectScope }> = [
   { slug: "renovatie", scope: "renovation" },
   { slug: "nieuwbouw", scope: "new_build" },

@@ -58,3 +58,24 @@ export function scopeLabel(scope: string, locale: string): string {
   if (entry) return locale === "nl" ? entry.nl : entry.en
   return scope.charAt(0).toUpperCase() + scope.slice(1)
 }
+
+/** Volledige zelfstandignaamwoordvorm van dezelfde scopes — de kop van
+ * een pagina, waar "Nieuwbouw in Noord-Holland" te kaal is en
+ * "Nieuwbouwprojecten in Noord-Holland" de zin afmaakt.
+ *
+ * Deze stond als privé-const in project-hubs.ts, waar de SERVER de
+ * hub-h1 mee bouwt. De CLIENT bouwt diezelfde kop opnieuw zodra er een
+ * filter actief is, en moet dan letterlijk dezelfde string opleveren —
+ * anders springt de titel bij hydratatie. Eén bron dus, hier, want
+ * project-hubs.ts praat met de database en kan niet de client in. */
+export const SCOPE_NOUNS: Record<string, { nl: string; en: string }> = {
+  renovation: { nl: "Renovatieprojecten", en: "Renovation projects" },
+  new_build: { nl: "Nieuwbouwprojecten", en: "New-build projects" },
+  interior_design: { nl: "Interieurprojecten", en: "Interior design projects" },
+}
+
+export function scopeNoun(scope: string, locale: string): string {
+  const entry = SCOPE_NOUNS[scope]
+  if (entry) return locale === "nl" ? entry.nl : entry.en
+  return scopeLabel(scope, locale)
+}
