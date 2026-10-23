@@ -244,6 +244,28 @@ function upgradeToFullRes(url: string): string {
   //   generic — /thumbs?|small|medium|large/ → /large/
   upgraded = upgraded.replace(/\/_header(?:Small|Medium|Large)\//, "/_headerExtraLarge/")
 
+  // Showit zet de breedte als KAAL GETAL in het pad:
+  //   static.showit.co/400/<hash>/<account>/<bestand>.jpg
+  //
+  // De pagina draagt geen srcset — nul, op de hele pagina — en rendert
+  // desktop én mobiel in dezelfde HTML, dus er staan vijf maten door
+  // elkaar (200/400/800/1200/1600). Wat je importeert is de maat die
+  // die plek in de lay-out toevallig nodig had; elkespeck.nl leverde zo
+  // negen foto's op 400px.
+  //
+  // Geen van de regels hierboven raakt een getal als padsegment, dus
+  // Showit viel overal doorheen.
+  //
+  // 3200 is het plafond: meer vragen geeft gewoon het origineel terug
+  // (getest — /4000 levert exact dezelfde bytes als /3200), en een
+  // kleiner origineel levert zijn eigen maat zonder fout. Vier foto's
+  // nagemeten: 400→3200, en een logo met een kleiner origineel kwam
+  // netjes op 2560 uit in plaats van te breken.
+  upgraded = upgraded.replace(
+    /(\/\/static\.showit\.co)\/\d+\//,
+    "$1/3200/",
+  )
+
   // Wix keeps its resize in the PATH, so the query-param rules below
   // never see it: /media/<id>/v1/fill/w_25,h_25,…/file.png is a 25px
   // crop of an image that is served whole at /media/<id>.
@@ -306,11 +328,37 @@ function imageSizeKey(url: string): { key: string; rank: number } {
   for (const [re, r] of markers) {
     if (re.test(url)) { rank = r; break }
   }
+
+  /**
+   * Een breedte als kaal padsegment — /400/, /1200/ — zoals Showit het
+   * doet. De markers hierboven kennen alleen NAMEN (thumb, small,
+   * large), dus zo'n getal kreeg de neutrale rang en bleef in de
+   * sleutel staan. Daardoor waren /400/<hash>/foto.jpg en
+   * /1200/<hash>/foto.jpg twee verschillende foto's voor de dedupe en
+   * werd er niet gekozen.
+   *
+   * Streng afgebakend, want een getal in een pad is lang niet altijd
+   * een maat:
+   *   • 3 of 4 cijfers — /05/ (maand) valt af, /286815/ (account-id) ook
+   *   • geen jaartal — WordPress bewaart uploads onder /2024/05/, en
+   *     die samenvouwen zou foto's uit verschillende maanden met
+   *     dezelfde bestandsnaam op één hoop gooien
+   *
+   * Blijft over: een bedoelde breedte. Die wordt de rang, zodat de
+   * grootste variant wint, en verdwijnt uit de sleutel zodat de
+   * varianten elkaar überhaupt vinden.
+   */
+  const sizeSegment = url.match(/\/(\d{3,4})\//)
+  const asWidth = sizeSegment ? Number(sizeSegment[1]) : null
+  const isWidth = asWidth !== null && asWidth >= 100 && !(asWidth >= 1900 && asWidth <= 2100)
+  if (isWidth) rank = asWidth as number
+
   const key = url
     .replace(/_header(?:Small|Medium|Large|ExtraLarge)/gi, "")
     .replace(/\/(?:thumbs?|small|medium|large|original|full|source)\//gi, "/")
     .replace(/-scaled(\.\w+)/gi, "$1")
     .replace(/-\d+x\d+(\.\w+)/gi, "$1")
+    .replace(isWidth ? /\/(\d{3,4})\// : /(?!)/, "/")
     .toLowerCase()
   return { key, rank }
 }
