@@ -1,5 +1,6 @@
 "use server"
 
+import { logger } from "@/lib/logger"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 
 // Mirror of the free-mail skip set used in syncPlatformProspects — we
@@ -1335,24 +1336,49 @@ export async function sendContactEmail(input: {
     // or Companies) log against their company_contacts row instead —
     // the same column the retired Log popup wrote. Without this branch
     // those sends went out and counted as nothing.
+    // `outcome` blijft LEEG, en dat is de hele fix. Hier stond
+    // `outcome: "sent"`, maar outbound_outcome kent alleen positive |
+    // neutral | negative | no_answer — dus elke insert werd geweigerd
+    // op een ongeldige enum-waarde. Omdat niemand de fout uitlas ging
+    // het stil: outbound_contact_log bevat 13 rijen, allemaal 'call',
+    // en geen enkele van de zes mails die ooit met de hand verstuurd
+    // zijn. Een verstuurde mail heeft ook geen gespreksuitkomst; het
+    // veld hoort leeg te blijven tot iemand antwoordt.
+    //
+    // Dat raakte twee dingen: de Outbound-overlay op /admin/companies
+    // leest deze tabel, en de contactkaart toont de log als
+    // activiteitenregels. `prospects.last_outbound_at` hieronder kreeg
+    // zijn waarde wel, want die update staat ná de mislukte insert en
+    // er werd niets gegooid — vandaar dat de Outbound-pill op Sales
+    // wél klopte en dit nooit opviel.
+    const logError = async (error: { message?: string } | null) => {
+      if (!error) return
+      logger.warn("Outbound e-mail niet gelogd", {
+        scope: "outbound-log",
+        prospectId: input.prospectId ?? null,
+        companyContactId: input.companyContactId ?? null,
+        error: error.message,
+      })
+    }
+
     if (!input.prospectId) {
       if (input.companyContactId) {
-        await db.from("outbound_contact_log").insert({
+        const { error } = await db.from("outbound_contact_log").insert({
           company_contact_id: input.companyContactId,
           kind: "email",
-          outcome: "sent",
           body: subject,
         })
+        await logError(error)
       }
       return
     }
 
-    await db.from("outbound_contact_log").insert({
+    const { error: logInsertError } = await db.from("outbound_contact_log").insert({
       prospect_id: input.prospectId,
       kind: "email",
-      outcome: "sent",
       body: subject,
     })
+    await logError(logInsertError)
     await db.from("prospect_events").insert({
       prospect_id: input.prospectId,
       event_type: "email_sent",

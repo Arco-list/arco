@@ -659,9 +659,23 @@ function TimelineStream({
     })
     .filter((ev) => {
       if (ev.event_type !== "email_sent" && ev.event_type !== "email_resent") return true
-      // Sequence sends are covered by the sequence rows — but manual
-      // composes from the Email popup only exist as this event.
-      return (ev.metadata as { template?: string } | null)?.template === "manual-compose"
+      // Sequence sends are covered by the sequence rows — but a mail
+      // sent by hand from the Email popup only exists as this event.
+      //
+      // Dat onderscheid hing op `template === "manual-compose"`, en dat
+      // is precies de waarde die recordSend ALLEEN schrijft als de
+      // popup geen situatie had: `template?.id ?? "manual-compose"`.
+      // Koos je een situatie — en dat is het normale geval — dan stond
+      // er `owned_unlisted` of `visitor` en viel de mail uit de
+      // tijdlijn. Vijf van de zes handgestuurde mails ooit waren zo
+      // onzichtbaar; de mail naar info@martijnveldman.com was de
+      // laatste.
+      //
+      // `event_source` beantwoordt de vraag die hier gesteld wordt —
+      // wie heeft dit verstuurd — in plaats van hem af te leiden uit
+      // een templatenaam: 'admin' is met de hand, de dripwachtrij
+      // schrijft 'system'.
+      return ev.event_source === "admin"
     })
     .filter((ev) => !CHAPTER_EVENT_TYPES.has(ev.event_type) && !ev.event_type.startsWith("status_changed_to_"))
     .map((ev) => {

@@ -80,6 +80,12 @@ export type ProspectEvent = {
   id: string
   prospect_id: string
   event_type: string
+  /** Wie de rij schreef: 'admin' voor een handgestuurde mail uit de
+   *  Email-popup, 'system' voor de dripwachtrij, 'app' voor de site.
+   *  De tijdlijn onderscheidt er een losse mail mee van een
+   *  sequence-stap — zie prospect-timeline-fused. Kwam al mee met
+   *  `select("*")`, stond alleen niet in dit type. */
+  event_source?: string | null
   metadata: Record<string, unknown>
   created_at: string
 }
