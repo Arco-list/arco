@@ -454,6 +454,11 @@ export function EventHistoryRow({
       ? (event.metadata.body as string)
       : null
     : null
+  const manualSubject = isManual
+    ? typeof event.metadata?.subject === "string" && event.metadata.subject.trim()
+      ? (event.metadata.subject as string)
+      : null
+    : null
   const expandable =
     (isCompanyInvited && Object.keys(event.metadata ?? {}).length > 0) || Boolean(manualBody)
 
@@ -550,6 +555,13 @@ export function EventHistoryRow({
           <span className="text-[#1c1c1a] inline-flex items-center gap-2 min-w-0 w-full relative">
             <ExpandChevron visible={expandable} open={open} />
             <span>{kindLabel}</span>
+            {/* Alleen een mail heeft een onderwerp; bij een telefoontje
+                of notitie draagt `body` de notitie en blijft dit leeg.
+                De kopregel toont waar de mail over ging, de tekst zelf
+                staat in de uitklap eronder. */}
+            {manualSubject && (
+              <span className="text-[#6b6b68] truncate">{manualSubject}</span>
+            )}
             {outcome && MANUAL_OUTCOME_LABEL[outcome] && (
               <span className="inline-flex items-center gap-1 text-[#6b6b68]">
                 <span className={`h-1.5 w-1.5 rounded-full ${MANUAL_OUTCOME_DOT[outcome] ?? "bg-[#a1a1a0]"}`} />

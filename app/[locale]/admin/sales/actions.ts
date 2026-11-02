@@ -1761,7 +1761,7 @@ export async function fetchProspectEvents(prospectId: string) {
       .order("created_at", { ascending: false }),
     supabase
       .from("outbound_contact_log")
-      .select("id, prospect_id, kind, outcome, body, created_at, created_by, profiles:profiles!created_by(first_name, last_name)")
+      .select("id, prospect_id, kind, outcome, subject, body, created_at, created_by, profiles:profiles!created_by(first_name, last_name)")
       .eq("prospect_id", prospectId)
       .order("created_at", { ascending: false }),
   ])
@@ -1780,6 +1780,10 @@ export async function fetchProspectEvents(prospectId: string) {
     prospect_id: string
     kind: string
     outcome: string | null
+    /** Alleen bij kind='email': de onderwerpregel. Zie migratie 286 —
+     *  daarvoor stond het onderwerp in `body` en bleef de mailtekst
+     *  nergens. */
+    subject: string | null
     body: string | null
     created_at: string
     created_by: string | null
@@ -1799,6 +1803,7 @@ export async function fetchProspectEvents(prospectId: string) {
       metadata: {
         log_id: r.id,
         outcome: r.outcome,
+        subject: r.subject,
         body: r.body,
         author,
       } as Record<string, unknown>,

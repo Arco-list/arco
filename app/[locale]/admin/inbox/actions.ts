@@ -1366,7 +1366,8 @@ export async function sendContactEmail(input: {
         const { error } = await db.from("outbound_contact_log").insert({
           company_contact_id: input.companyContactId,
           kind: "email",
-          body: subject,
+          subject,
+          body: bodyText,
         })
         await logError(error)
       }
@@ -1376,7 +1377,12 @@ export async function sendContactEmail(input: {
     const { error: logInsertError } = await db.from("outbound_contact_log").insert({
       prospect_id: input.prospectId,
       kind: "email",
-      body: subject,
+      // `subject` op de kopregel, `body` is de mail zelf. Hier stond in
+      // beide takken `body: subject`, want de verstuurde tekst had
+      // nergens een plek — de tijdlijn klapte zo'n regel open en toonde
+      // dan de onderwerpregel nog een keer. Zie migratie 286.
+      subject,
+      body: bodyText,
     })
     await logError(logInsertError)
     await db.from("prospect_events").insert({

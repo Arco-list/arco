@@ -658,24 +658,18 @@ function TimelineStream({
       return !(linkedId && repliedInboundIds.has(linkedId))
     })
     .filter((ev) => {
-      if (ev.event_type !== "email_sent" && ev.event_type !== "email_resent") return true
-      // Sequence sends are covered by the sequence rows — but a mail
-      // sent by hand from the Email popup only exists as this event.
+      // Geen enkele `email_sent` krijgt een eigen regel. Een
+      // sequencemail staat al als SequenceRow in de stroom, en een
+      // handgestuurde mail staat er sinds de reparatie van recordSend
+      // als `manual.email` uit outbound_contact_log — mét onderwerp op
+      // de kopregel en de volledige tekst in de uitklap. Die regel is
+      // rijker dan deze; allebei tonen leverde "Unlisted Relist sent"
+      // bovenop "Email · Zal ik je pagina live zetten?".
       //
-      // Dat onderscheid hing op `template === "manual-compose"`, en dat
-      // is precies de waarde die recordSend ALLEEN schrijft als de
-      // popup geen situatie had: `template?.id ?? "manual-compose"`.
-      // Koos je een situatie — en dat is het normale geval — dan stond
-      // er `owned_unlisted` of `visitor` en viel de mail uit de
-      // tijdlijn. Vijf van de zes handgestuurde mails ooit waren zo
-      // onzichtbaar; de mail naar info@martijnveldman.com was de
-      // laatste.
-      //
-      // `event_source` beantwoordt de vraag die hier gesteld wordt —
-      // wie heeft dit verstuurd — in plaats van hem af te leiden uit
-      // een templatenaam: 'admin' is met de hand, de dripwachtrij
-      // schrijft 'system'.
-      return ev.event_source === "admin"
+      // Het event blijft wél geschreven worden: het draagt template,
+      // tone en linkKind, waar de funnel en de kanaaltoets op leunen.
+      // Het hoort alleen niet in een tijdlijn die de mens leest.
+      return ev.event_type !== "email_sent" && ev.event_type !== "email_resent"
     })
     .filter((ev) => !CHAPTER_EVENT_TYPES.has(ev.event_type) && !ev.event_type.startsWith("status_changed_to_"))
     .map((ev) => {
