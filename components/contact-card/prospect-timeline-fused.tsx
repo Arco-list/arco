@@ -646,6 +646,25 @@ function TimelineStream({
   const repliedInboundIds = new Set(
     bundle.inboundEmails.filter((m) => m.replied_text).map((m) => m.id),
   )
+  // Wanneer die antwoorden verstuurd zijn. Een mail die in een
+  // bestaande thread valt laat NOG een derde spoor na: recordSend
+  // schrijft hem ook in outbound_contact_log, en die regel komt als
+  // `manual.email` binnen. Zo stond er "Email · Re: (threaded)" bovenop
+  // "Email replied".
+  //
+  // De reply-regel wint. Die draagt een leesbaar label en de tekst van
+  // het antwoord, terwijl de logregel in dit geval alleen "Re:
+  // (threaded)" kan tonen — het onderwerp van de thread is op het
+  // moment van verzenden niet bekend.
+  //
+  // Gekoppeld op tijd, want de logregel heeft geen verwijzing naar de
+  // inbound. Beide writes zitten in dezelfde actie, dus ze liggen
+  // milliseconden uit elkaar; twee minuten is ruim en kan niets anders
+  // opslokken, omdat een verzending altijd maar één pad volgt.
+  const REPLY_MATCH_MS = 120_000
+  const replySentAt = bundle.inboundEmails
+    .filter((m) => m.replied_text)
+    .map((m) => new Date(m.replied_at ?? m.received_at).getTime())
   const enrichedEvents = bundle.events
     .filter((ev) => ev.event_type !== "replied")
     .filter((ev) => {
@@ -670,6 +689,13 @@ function TimelineStream({
       // tone en linkKind, waar de funnel en de kanaaltoets op leunen.
       // Het hoort alleen niet in een tijdlijn die de mens leest.
       return ev.event_type !== "email_sent" && ev.event_type !== "email_resent"
+    })
+    .filter((ev) => {
+      // De outbound-logregel van een mail die als antwoord in een
+      // thread ging — zie replySentAt hierboven.
+      if (ev.event_type !== "manual.email") return true
+      const ts = new Date(ev.created_at).getTime()
+      return !replySentAt.some((r) => Math.abs(r - ts) <= REPLY_MATCH_MS)
     })
     .filter((ev) => !CHAPTER_EVENT_TYPES.has(ev.event_type) && !ev.event_type.startsWith("status_changed_to_"))
     .map((ev) => {
