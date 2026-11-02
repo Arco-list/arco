@@ -114,6 +114,49 @@ export function matchesChannelFilter(
 }
 
 /**
+ * Bedrijven die een uitnodiging hebben gekregen — het invite-equivalent
+ * van lib/sales/showcase-evidence.ts, en om dezelfde reden.
+ *
+ * Companies las invite uit de CREDITS op een project. Dat is een
+ * huidige stand: trek je de credit later in, dan verdwijnt het bewijs
+ * dat we die club ooit hebben uitgenodigd. Arco Testbedrijf heeft twee
+ * credits op 'removed' staan en las daardoor niet als invite op
+ * Companies, terwijl Sales hem gewoon onder Invite toonde — precies de
+ * tegenspraak die we bij Showcase al hadden.
+ *
+ * De prospectrij met source='invites' wordt door
+ * dispatchProfessionalInvite geschreven en nooit meer weggehaald, dus
+ * die is het duurzame bewijs. Credits blijven ernaast staan als tweede
+ * bron (een bedrijf kan een credit hebben zonder dat er ooit een
+ * uitnodiging uitging).
+ *
+ * Gepagineerd: prospects telt 3.600+ rijen en PostgREST kapt een select
+ * zonder range stil af op 1.000. Het filter maakt het nu klein, maar
+ * dat is geen eigenschap om op te bouwen.
+ */
+export async function fetchInviteEvidence(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+): Promise<Set<string>> {
+  const invited = new Set<string>()
+  const PAGE = 1000
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("prospects")
+      .select("company_id")
+      .eq("source", "invites")
+      .not("company_id", "is", null)
+      .order("id")
+      .range(from, from + PAGE - 1)
+    if (error) break
+    const rows = (data ?? []) as Array<{ company_id: string | null }>
+    for (const r of rows) if (r.company_id) invited.add(r.company_id)
+    if (rows.length < PAGE) break
+  }
+  return invited
+}
+
+/**
  * Bedrijven met minstens één handmatige outbound-aanraking (bellen,
  * afspraak, handmatige mail, LinkedIn — no-answer meegerekend).
  *

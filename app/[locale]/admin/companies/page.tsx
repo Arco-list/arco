@@ -1,5 +1,5 @@
 import { AdminCompaniesDataTable, type AdminCompanyRow } from "@/components/admin-companies-data-table"
-import { fetchOutboundTouchedCompanies, resolveChannel, type Channel } from "@/lib/sales/channel"
+import { fetchInviteEvidence, fetchOutboundTouchedCompanies, resolveChannel, type Channel } from "@/lib/sales/channel"
 import { fetchShowcaseEvidence, isShowcase } from "@/lib/sales/showcase-evidence"
 import { getSubscribedSince } from "@/lib/subscriptions/subscriber-stats"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
@@ -331,6 +331,10 @@ async function loadAdminCompaniesData() {
   // ervoor in de plaats. Companies had dit signaal tot nu toe helemaal
   // niet, terwijl Sales en het dashboard het wel tonen.
   const outboundTouched = await fetchOutboundTouchedCompanies(supabase)
+  // Wie we hebben uitgenodigd. Credits alleen volstaan niet: die kunnen
+  // ingetrokken worden en nemen dan de geschiedenis mee — zie
+  // fetchInviteEvidence.
+  const inviteEvidence = await fetchInviteEvidence(supabase)
   // Herkomst → kanaal, alleen als geen enkel sterker bewijs iets zegt.
   // 'manual' (Add showcase) en 'admin' (Add company) vallen op organic:
   // met de hand aangemaakt worden is geen pitch die ze kregen, en het
@@ -356,6 +360,7 @@ async function loadAdminCompaniesData() {
     status: string | null,
     isPhotographer: boolean,
     showcaseHit: boolean,
+    inviteHit: boolean,
   ): Channel => {
     // Photographers exist on Arco ONLY by being assigned on a project —
     // the invite channel by construction. Their rows often carry source
@@ -375,6 +380,12 @@ async function loadAdminCompaniesData() {
     // only serves pre-token history. Owner rows never count: owning a
     // project is publishing, not being invited.
     //
+    // `inviteHit` is de verstuurde uitnodiging zelf (fetchInviteEvidence),
+    // en staat er juist naast de credits omdat een credit ingetrokken
+    // kan worden: dan verdwijnt op Companies het bewijs dat we die club
+    // ooit benaderd hebben, terwijl Sales hem gewoon onder Invite blijft
+    // tonen. Dezelfde huidige-stand-valkuil als bij Showcase.
+    //
     // Een geconsumeerd 'outbound'-token levert GEEN kanaal meer op. Dat
     // was een kanaalwaarde zonder label en zonder filteroptie, dus het
     // enige bedrijf dat hem droeg (Mint Interieur) was op kanaal
@@ -383,6 +394,7 @@ async function loadAdminCompaniesData() {
     return resolveChannel({
       invite:
         consumed === "invite"
+        || inviteHit
         || isPhotographer
         || (claimed
           ? acceptedCreditAtBirth
@@ -594,6 +606,7 @@ async function loadAdminCompaniesData() {
         String(displayStatus ?? ""),
         (company as { audience?: string | null }).audience === "pro",
         isShowcase(company.id, showcaseEvidence),
+        inviteEvidence.has(company.id),
       ),
       contacts: contactsByCompany.get(company.id) ?? [],
       seoIndexed: (company as any).seo_indexed ?? null,

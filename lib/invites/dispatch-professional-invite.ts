@@ -439,6 +439,36 @@ export async function dispatchProfessionalInvite(
     }).eq("id", existingProspect.id)
   }
 
+  // 2b. Zet het bedrijf in de uitnodigingslevenscyclus.
+  //
+  //     Zonder dit bleef een Apollo-import op status 'added' staan, en
+  //     /admin/companies laadt alleen rijen met source direct/manual/
+  //     invited óf een status uit de levenscyclus. Vijf uitgenodigde
+  //     bedrijven stonden daardoor wel op Sales en niet op Companies —
+  //     de pagina kende ze simpelweg niet. Spiegel van
+  //     promoteCompanyToShowcase, dat hetzelfde doet bij een showcase.
+  //
+  //     Alleen vooruit: 'added' en 'unclaimed' liggen vóór de
+  //     uitnodiging, al het andere ligt erna. Een bedrijf dat al
+  //     'verified', 'listed' of 'prospected' is terugzetten naar
+  //     'invited' zou een stap terug zijn op grond van een mail.
+  //
+  //     `source` blijft staan. Dat is herkomst, geen kanaal — de
+  //     contactkaart toont hem als Origin, en het kanaal leest de
+  //     uitnodiging uit het bewijs (zie fetchInviteEvidence).
+  const { data: companyLifecycle } = await supabase
+    .from("companies")
+    .select("status")
+    .eq("id", recipient.id)
+    .maybeSingle()
+  if (companyLifecycle && (companyLifecycle.status === "added" || companyLifecycle.status === "unclaimed")) {
+    await supabase
+      .from("companies")
+      .update({ status: "invited" } as never)
+      .eq("id", recipient.id)
+      .is("owner_id", null)
+  }
+
   // 3. Enqueue the three steps. Same partial-unique-index dedup as the
   //    prospect outreach: a duplicate enqueue for (lower(email),
   //    template) WHERE pending hits 23505 and silently no-ops. Per
