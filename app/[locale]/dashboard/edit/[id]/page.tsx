@@ -5442,24 +5442,25 @@ export default function ListingEditorPage() {
         .photo-edit-thumb:has(.photo-select-box input:checked) { outline: 2px solid #016D75; outline-offset: -2px; }
         /* COVER-badge — twee standen, want hij dient twee dingen.
 
-           IN RUST staat hij in de hoek op 6px van links en 6px van
-           boven: gelijke marges, en precies de inzet die de LOW
-           RES-badge aan de overkant al had. Eerder deelde hij de band
-           van 30px waarin het selectievakje centreert, en dan is de
-           afstand naar boven ruim het dubbele van die naar links.
+           IN RUST neemt hij exact de plek van het selectievakje in:
+           14px van links en van boven. Dat is waar het zichtbare
+           blokje van 18px uitkomt — het klikvlak begint op 8px en is
+           30px breed, dus het blokje zelf zit 6px naar binnen. Gelijke
+           marges dus, en de hoek ziet er hetzelfde uit of je nu de
+           badge of het vakje ziet.
 
            ZODRA HET VAKJE VERSCHIJNT — bij hover of selectie, en dat
-           zijn dezelfde twee regels als hieronder — schuift hij opzij
-           en zakt hij 9px, zodat hij naast het blokje staat in plaats
-           van erover. Het vakje beslaat 8px tot 38px met het zichtbare
-           blokje van 18px in het midden; 42px laat dat klikvlak heel.
+           zijn dezelfde twee regels als hieronder — schuift hij opzij.
+           Alleen horizontaal: op 14px staat hij al gelijk met de
+           bovenrand van het blokje, dus er valt verticaal niets te
+           verspringen. 42px laat het klikvlak van 30px heel.
 
            pointer-events: none, anders vangt de badge de klik die
            sinds kort de foto aan- of uitvinkt. */
-        .photo-cover-badge { position: absolute; left: 6px; top: 6px; z-index: 2; pointer-events: none; transition: left .15s, top .15s; }
+        .photo-cover-badge { position: absolute; left: 14px; top: 14px; z-index: 2; pointer-events: none; transition: left .15s; }
         .photo-cover-badge span { display: block; background: #016D75; color: #fff; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; letter-spacing: .04em; line-height: 1.4; }
         .photo-edit-thumb:hover .photo-cover-badge,
-        .photo-edit-thumb:has(.photo-select-box input:checked) .photo-cover-badge { left: 42px; top: 15px; }
+        .photo-edit-thumb:has(.photo-select-box input:checked) .photo-cover-badge { left: 42px; }
 
         /* Reorder arrows — bottom center, visible on hover */
         .photo-reorder-arrows { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; opacity: 0; transition: opacity .15s; z-index: 3; }
