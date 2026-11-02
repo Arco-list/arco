@@ -104,7 +104,7 @@ function pickCompanyPhone(contact: ApolloContact): string | null {
 export async function syncApolloList(
   listId: string,
   opts?: { startPage?: number; timeBudgetMs?: number },
-): Promise<{ synced: number; errorCount: number; lastError: string | null; nextPage: number | null }> {
+): Promise<{ synced: number; errorCount: number; skippedOwned: number; lastError: string | null; nextPage: number | null }> {
   const supabase = createServiceRoleSupabaseClient()
   // Resumable pagination: a 1000-contact list takes far longer than a
   // single serverless invocation allows (~10 Apollo pages x ~5 DB writes
@@ -116,6 +116,10 @@ export async function syncApolloList(
   let nextPage: number | null = null
   let totalSynced = 0
   let errorCount = 0
+  // Koude contacten die zijn overgeslagen omdat hun bedrijf al van ons
+  // is — zichtbaar in het resultaat, want stil overslaan en stil
+  // importeren zien er van buiten hetzelfde uit.
+  let skippedOwnedCount = 0
   let lastError: string | null = null
   let hasMore = true
 
@@ -165,6 +169,49 @@ export async function syncApolloList(
 
     for (const contact of contacts) {
       if (!contact.email) continue
+
+      /**
+       * Geen NIEUW koud contact in een bedrijf dat al van ons is.
+       *
+       * ARHK claimde zijn pagina op 6 juli; op 13 augustus zette deze
+       * import er een tweede, koude contactpersoon bij. Die rij staat
+       * nog op `prospect` / `not_started`, en omdat de Sales-kaart op de
+       * prospect-rij draait, is dát wat je ziet in plaats van de echte
+       * eigenaar. Twaalf bedrijven hadden zo'n rij; zeven ervan zijn
+       * nooit gemaild, en dat is puur geluk — de koude baan maakt geen
+       * onderscheid, dus de volgende had een cold pitch gekregen naar
+       * een bestaande klant.
+       *
+       * Alleen NIEUWE rijen worden geweigerd. Een bestaand contact bij
+       * een bedrijf dat later klant werd, blijft gewoon bijwerken: dat
+       * is een echte relatie met echte historie.
+       */
+      const guardEmail = contact.email.toLowerCase()
+      const guardDomain = guardEmail.split("@")[1] || null
+      if (guardDomain) {
+        const { data: priorProspect } = await supabase
+          .from("prospects")
+          .select("id")
+          .eq("email", guardEmail)
+          .eq("source", "apollo")
+          .maybeSingle()
+        if (!priorProspect?.id) {
+          const { data: ownedCompany } = await supabase
+            .from("companies")
+            .select("id")
+            .eq("domain", guardDomain)
+            .not("owner_id", "is", null)
+            .limit(1)
+            .maybeSingle()
+          if (ownedCompany?.id) {
+            skippedOwnedCount++
+            logger.info("[apollo-sync] skipped cold contact for an owned company", {
+              email: guardEmail, companyId: ownedCompany.id,
+            })
+            continue
+          }
+        }
+      }
 
       const contactName = [contact.first_name, contact.last_name]
         .filter(Boolean)
@@ -409,7 +456,7 @@ export async function syncApolloList(
   }
 
   logger.info("Apollo list sync complete", { listId, totalSynced, errorCount, nextPage })
-  return { synced: totalSynced, errorCount, lastError, nextPage }
+  return { synced: totalSynced, errorCount, skippedOwned: skippedOwnedCount, lastError, nextPage }
 }
 
 // ─── Sync email activity for all active prospects ───────────────────────────
