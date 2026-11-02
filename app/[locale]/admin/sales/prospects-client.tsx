@@ -78,6 +78,7 @@ export { SUBSCRIBED_CONFIG } from "@/lib/sales/prospect-status"
 // it is handled separately where the toggle happens.
 const ALL_STATUSES: (ProspectStatus | "subscribed")[] = [
   "subscribed", "active", "unlisted", "owned", "verified", "visitor", "contacted", "prospect",
+  "deactivated",
 ]
 
 export const SEQUENCE_CONFIG: Record<SequenceStatus, { label: string; dot: string }> = {
@@ -1390,6 +1391,7 @@ export function ProspectsClient({
           // and including Owned (they claimed — they left the track just
           // before Listed), so the chain rates stay honest.
           const unlistedCount = (funnel as any).unlisted ?? 0
+          const deactivatedCount = (funnel as any).deactivated ?? 0
           const ownedIdx = stageKeys.indexOf("owned")
           const listedIdx = stageKeys.indexOf("active")
           const cohorted = stageKeys.map((key, i) =>
@@ -1485,6 +1487,24 @@ export function ProspectsClient({
                   <span className="status-pill-dot shrink-0" style={{ background: "#a1a1a0" }} />
                   <span style={{ fontFamily: "var(--font-sans)", fontSize: 11, fontWeight: 400, color: "var(--text-primary)", whiteSpace: "nowrap" }}>Unlisted</span>
                   <span className="text-xs ml-auto" style={{ color: "var(--text-primary)" }}>{unlistedCount}</span>
+                </button>
+              </div>
+              {/* Tweede eindstand: Deactivated, helemaal links onder de
+                  eerste kolom — het bedrijf wilde niet en is met pagina
+                  en eigen projecten offline gehaald. Net als Unlisted
+                  geen stap in de keten, dus geen verbindingslijn.
+                  Dezelfde plek als op /admin/companies. */}
+              <div style={{ gridRow: 2, gridColumn: 1, display: "flex", flexDirection: "column" }}>
+                <div style={{ height: 6 }} />
+                <button
+                  type="button"
+                  onClick={() => toggleStatus("deactivated")}
+                  className={`rounded-[3px] border bg-white px-3 py-1.5 transition-colors hover:border-[#c4c4c2] flex items-center gap-[6px] ${statusFilter.includes("deactivated") ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4]"}`}
+                  style={{ width: 132 }}
+                >
+                  <span className="status-pill-dot shrink-0" style={{ background: "#dc2626" }} />
+                  <span style={{ fontFamily: "var(--font-sans)", fontSize: 11, fontWeight: 400, color: "var(--text-primary)", whiteSpace: "nowrap" }}>Deactivated</span>
+                  <span className="text-xs ml-auto" style={{ color: "var(--text-primary)" }}>{deactivatedCount}</span>
                 </button>
               </div>
             </div>

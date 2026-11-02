@@ -1,4 +1,5 @@
 import { AdminCompaniesDataTable, type AdminCompanyRow } from "@/components/admin-companies-data-table"
+import { fetchShowcaseEvidence, isShowcase } from "@/lib/sales/showcase-evidence"
 import { getSubscribedSince } from "@/lib/subscriptions/subscriber-stats"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import type { Tables } from "@/lib/supabase/types"
@@ -308,7 +309,20 @@ async function loadAdminCompaniesData() {
   for (const t of (consumedTokens ?? []) as unknown as { company_id: string; channel: string | null; consumed_at: string }[]) {
     if (t.channel && !consumedChannelByCompany.has(t.company_id)) consumedChannelByCompany.set(t.company_id, t.channel)
   }
-  const CHANNEL_FROM_SOURCE: Record<string, string> = { invited: "invite", manual: "showcase", apollo: "outreach", direct: "direct" }
+  // Showcase komt niet langer uit `companies.source`. 'manual' betekent
+  // "iemand heeft dit met de hand aangemaakt" en dat is geen bewijs dat
+  // we een showcasepagina bouwden — van de handmatige bedrijven had maar
+  // de helft ooit een showcase-pitch. Het echte bewijs staat in
+  // lib/sales/showcase-evidence.ts, dezelfde bron die de Sales-tabel en
+  // de contactkaart lezen; 'manual' valt hier terug op outreach en wordt
+  // door dat bewijs overruled waar het van toepassing is.
+  const showcaseEvidence = await fetchShowcaseEvidence(supabase)
+  // 'manual' valt terug op 'direct', niet op outreach: een handmatig
+  // aangemaakt bedrijf kreeg geen koude pitch, dus dat zou dezelfde
+  // soort onwaarheid zijn als het oude 'showcase' — alleen de andere
+  // kant op. 'direct' verfijnt zich daarna via first-touch, en het
+  // showcase-bewijs hierboven overruled het waar dat er is.
+  const CHANNEL_FROM_SOURCE: Record<string, string> = { invited: "invite", manual: "direct", apollo: "outreach", direct: "direct" }
   const DIRECT_REFINE: Record<string, string> = { google: "seo", social: "social", referral: "referral", shares: "shares" }
   // Ranking mirrors resolveClaimChannel: a project credit beats the
   // entry source — an Apollo import that later gets credited IS an
@@ -323,6 +337,7 @@ async function loadAdminCompaniesData() {
     claimed: boolean,
     status: string | null,
     isPhotographer: boolean,
+    showcaseHit: boolean,
   ): string => {
     // Photographers exist on Arco ONLY by being assigned on a project —
     // the invite channel by construction. Their rows often carry source
@@ -343,6 +358,7 @@ async function loadAdminCompaniesData() {
     // project is publishing, not being invited.
     let ch = consumed
       ?? (isPhotographer ? "invite" : null)
+      ?? (showcaseHit ? "showcase" : null)
       ?? (claimed
         ? (acceptedCreditAtBirth ? "invite" : null)
         : ((hasInviteCredit || status === "invited") ? "invite" : null))
@@ -552,6 +568,7 @@ async function loadAdminCompaniesData() {
         Boolean(company.owner_id),
         String(displayStatus ?? ""),
         (company as { audience?: string | null }).audience === "pro",
+        isShowcase(company.id, showcaseEvidence),
       ),
       contacts: contactsByCompany.get(company.id) ?? [],
       seoIndexed: (company as any).seo_indexed ?? null,

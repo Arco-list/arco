@@ -6,6 +6,7 @@ import { updateContactStage } from "@/lib/apollo-client"
 import { getSubscribedSince, getSubscriberStats } from "@/lib/subscriptions/subscriber-stats"
 
 import { PROSPECT_STATUS_RANK, channelForSource, type ProspectStatus } from "@/lib/sales/prospect-status"
+import { fetchShowcaseEvidence, isShowcase } from "@/lib/sales/showcase-evidence"
 export type { ProspectStatus }
 
 export type SequenceStatus = "not_started" | "active" | "paused" | "finished" | "replied"
@@ -412,6 +413,10 @@ export type SalesFunnel = {
   owned: number
   unlisted: number
   active: number
+  /** Afgeschreven: pagina en eigen projecten offline. Een eindstand,
+   *  net als op /admin/companies — hij hangt onder de funnel, niet erin,
+   *  want je passeert hem niet. */
+  deactivated: number
 }
 
 const SEQUENCE_RANK: Record<SequenceStatus, number> = {
@@ -1066,6 +1071,8 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   // backfill hasn't run yet).
   const emailEventCounts = await loadEmailEventCounts(supabase, groups)
   const nextScheduledByGroup = await loadNextScheduledByGroup(supabase, groups)
+  // Eén keer opgehaald, voor alle rijen — zie het sources-blok hieronder.
+  const showcaseEvidence = await fetchShowcaseEvidence(supabase)
 
   let rows: SalesCompanyRow[] = Array.from(groups.entries()).map(([key, g]): SalesCompanyRow => {
     const sortedContacts = sortContactsByRecency(g.contacts)
@@ -1081,7 +1088,13 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     // that went dark), but that firm never converted — its Sales row
     // keeps the contact stage instead of parking above Owned.
     const companyRowStatus: ProspectStatus | null =
-      claimed?.status === "listed" ? "active"
+      // Deactivated wint van alles. Het bedrijf is met pagina en
+      // projecten offline gehaald omdat het niet wilde; zonder deze tak
+      // viel de rij terug op de status van het CONTACT en bleef een
+      // afgeschreven bedrijf als Visitor of Contacted in de lijst staan
+      // — een open lead die er geen is.
+      claimed?.status === "deactivated" ? "deactivated"
+      : claimed?.status === "listed" ? "active"
       : claimed?.status === "unlisted" && claimed.ownerUserId ? "unlisted"
       : claimed?.status === "owned" ? "owned"
       : claimed?.status === "verified" ? "verified"
@@ -1129,7 +1142,14 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
       // ever Outreach, Showcase, Invite, Outbound and Email — one the
       // channel filter does not even offer.
       sources: (() => {
-        const showcased = claimed?.status === "prospected"
+        // Showcase komt nu uit het BEWIJS (verstuurde of klaarstaande
+        // showcase-mail, of een geconverteerd bedrijf dat als showcase
+        // binnenkwam) in plaats van uit `companies.status === 'prospected'`.
+        // Die status is een huidige stand: een showcasebedrijf dat gaat
+        // listen verlaat hem, waarna de tabel het kanaal kwijtraakt —
+        // precies bij de bedrijven die het bewijzen. Zie
+        // lib/sales/showcase-evidence.ts.
+        const showcased = isShowcase(g.companyId, showcaseEvidence)
         const mapped = agg.sources.map((s) => channelForSource(s, showcased))
         if (showcased && !mapped.includes("arco")) mapped.push("arco")
         return Array.from(new Set(mapped)).sort()
@@ -1360,6 +1380,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
 
 const EMPTY_SALES_FUNNEL: SalesFunnel = {
   total: 0, subscribed: 0, prospect: 0, contacted: 0, visitor: 0, verified: 0, owned: 0, unlisted: 0, active: 0,
+  deactivated: 0,
 }
 
 /**

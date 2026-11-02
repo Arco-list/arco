@@ -23,6 +23,12 @@ export type ProspectStatus =
   // syncPlatformProspects; parked under Listed in the funnel.
   | "unlisted"
   | "active"
+  // Spiegel van companies.status 'deactivated' — het bedrijf wilde niet
+  // en is met pagina en projecten offline gehaald. Dit is geen
+  // prospect_status in de database maar een WEERGAVE-stand, afgeleid
+  // van het bedrijf. Zonder dit viel zo'n rij terug op de status van het
+  // contact en las een afgeschreven bedrijf als open lead.
+  | "deactivated"
   | "removed"
 
 /**
@@ -42,6 +48,8 @@ export const PROSPECT_STATUS_CONFIG: Record<
   owned: { label: "Owned", cls: "bg-blue-50 text-blue-700", dot: "bg-[#2563eb]", dotHex: "#2563eb" },
   unlisted: { label: "Unlisted", cls: "bg-gray-50 text-gray-600", dot: "bg-[#a1a1a0]", dotHex: "#a1a1a0" },
   active: { label: "Listed", cls: "bg-purple-50 text-purple-800 font-semibold", dot: "bg-[#7c3aed]", dotHex: "#7c3aed" },
+  // Rood, net als op /admin/companies — een eindstand, geen tussenstap.
+  deactivated: { label: "Deactivated", cls: "bg-red-50 text-red-700", dot: "bg-[#dc2626]", dotHex: "#dc2626" },
   // Removed never renders in the funnel — the row hides any contact
   // with this status, and the company row drops entirely if every
   // contact is removed. Kept so stray rows don't crash a render.
@@ -123,6 +131,11 @@ export const COMPANY_STATUS_DOT_HEX: Record<string, string> = {
  * out at, not one you pass through.
  */
 export const PROSPECT_STATUS_RANK: Record<ProspectStatus, number> = {
+  // Onder prospect, naast removed: ook dit is een stand waar je UIT
+  // gehaald wordt, niet een die je passeert. Zo kan de voorwaartse
+  // guard hieronder een gedeactiveerd bedrijf nooit terugpromoveren
+  // op een laat binnenkomend signaal.
+  deactivated: -1,
   removed: -1,
   prospect: 0,
   contacted: 1,

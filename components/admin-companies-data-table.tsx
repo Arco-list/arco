@@ -1818,22 +1818,34 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
     onRowSelectionChange: setRowSelection,
   })
 
-  const totalCompanies = baseRows.filter((r) => r.status !== "invited").length
-  const totalInvites = baseRows.filter((r) => r.status === "invited").length
+  // Tellen op `type`, niet op `status`.
+  //
+  // De bedoeling is de SYNTHETISCHE uitnodigingsrijen eruit te houden —
+  // die met id `invite-<e-mail>` en een adres als naam, die geen bedrijf
+  // zijn. Maar `status` is hier de AFGELEIDE status: displayStatus zet
+  // elk onclaimed bedrijf waarvoor een uitnodiging uitging op "invited",
+  // ook al staat companies.status op added of created. Er staan er maar
+  // drie écht op invited; de rest kreeg dat label onderweg.
+  //
+  // Daardoor vielen echte bedrijven met domein, dienst en project uit de
+  // telling, terwijl de tabel ze wél toonde en de funnel ze wél telde:
+  // filteren op kanaal Invite gaf 66 kaarten boven en "17 companies"
+  // eronder. `type` is het veld dat het bedoelde onderscheid draagt.
+  const totalCompanies = baseRows.filter((r) => r.type !== "invite").length
+  const totalInvites = baseRows.filter((r) => r.type === "invite").length
   const filteredRows = table.getFilteredRowModel().rows
-  const filteredCompanies = filteredRows.filter((r) => r.original.status !== "invited").length
-  const filteredInvites = filteredRows.filter((r) => r.original.status === "invited").length
+  const filteredCompanies = filteredRows.filter((r) => r.original.type !== "invite").length
+  const filteredInvites = filteredRows.filter((r) => r.original.type === "invite").length
+  // Wat er NU op het scherm staat: getRowModel is het gepagineerde
+  // model, dus dit krimpt niet mee met een filter maar met "Load more".
+  // Zo leest de teller hetzelfde als op /admin/sales — zichtbaar van
+  // gefilterd — in plaats van gefilterd van het hele bestand.
+  const visibleCompanies = table.getRowModel().rows.filter((r) => r.original.type !== "invite").length
   // Channel and service live in React state, not in the table's own
   // filter model — they are applied upstream when filteredData is built.
   // Leaving them out here let the count read the pre-filter universe
   // while the rows below showed the filtered one: 121 companies over a
   // table of 82.
-  const isFiltered =
-    columnFilters.length > 0
-    || Boolean(table.getState().globalFilter)
-    || channelFilter.length > 0
-    || serviceFilter.length > 0
-
   // Status funnel: Added → Showcased → Created → Listed → Unlisted, with
   // Deactivated as the off-path leak (analogous to Rejected on the projects
   // funnel). Invited is excluded from CR math — invited companies come in
@@ -2609,15 +2621,8 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
       {/* Count — directly above the table, margins as on Users */}
       <div className="discover-results-meta" style={{ marginBottom: 0 }}>
         <p className="discover-results-count">
-          {isFiltered ? (
-            <>
-              <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{filteredCompanies}</strong> of {totalCompanies} {totalCompanies === 1 ? "company" : "companies"}
-            </>
-          ) : (
-            <>
-              <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{totalCompanies}</strong> {totalCompanies === 1 ? "company" : "companies"}
-            </>
-          )}
+          <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{visibleCompanies}</strong>
+          {" of "}{filteredCompanies} {filteredCompanies === 1 ? "company" : "companies"}
         </p>
       </div>
 
