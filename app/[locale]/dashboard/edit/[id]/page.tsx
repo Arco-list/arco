@@ -5440,26 +5440,26 @@ export default function ListingEditorPage() {
         .photo-select-box input:checked + span { background: #016D75; border-color: #016D75; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'><path d='M2.5 6.2l2.4 2.4 4.6-5' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>"); background-size: 14px; background-position: center; background-repeat: no-repeat; }
         /* The whole tile reads as picked, not just the corner. */
         .photo-edit-thumb:has(.photo-select-box input:checked) { outline: 2px solid #016D75; outline-offset: -2px; }
-        /* COVER-badge — op één lijn met het selectievakje.
+        /* COVER-badge — twee standen, want hij dient twee dingen.
 
-           Hij stond op left 34px / top 6px, en het vakje beslaat
-           8px tot 38px: de badge begon dus middenin dat klikvlak en
-           zat 8px hoger dan het blokje zelf. Nu deelt hij de band van
-           30px waarin het vakje verticaal centreert, zodat ze
-           uitgelijnd zijn zonder dat er een hoogte uitgerekend hoeft
-           te worden.
+           IN RUST staat hij in de hoek op 6px van links en 6px van
+           boven: gelijke marges, en precies de inzet die de LOW
+           RES-badge aan de overkant al had. Eerder deelde hij de band
+           van 30px waarin het selectievakje centreert, en dan is de
+           afstand naar boven ruim het dubbele van die naar links.
 
-           Links staat hij tegen de rand, want het vakje is er alleen
-           bij hover of selectie — dezelfde twee regels die het vakje
-           tonen, schuiven de badge opzij. Zo staat er nooit een gat
-           waar niets is.
+           ZODRA HET VAKJE VERSCHIJNT — bij hover of selectie, en dat
+           zijn dezelfde twee regels als hieronder — schuift hij opzij
+           en zakt hij 9px, zodat hij naast het blokje staat in plaats
+           van erover. Het vakje beslaat 8px tot 38px met het zichtbare
+           blokje van 18px in het midden; 42px laat dat klikvlak heel.
 
            pointer-events: none, anders vangt de badge de klik die
            sinds kort de foto aan- of uitvinkt. */
-        .photo-cover-badge { position: absolute; left: 8px; top: 8px; height: 30px; display: flex; align-items: center; z-index: 2; pointer-events: none; transition: left .15s; }
-        .photo-cover-badge span { background: #016D75; color: #fff; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; letter-spacing: .04em; line-height: 1.4; }
+        .photo-cover-badge { position: absolute; left: 6px; top: 6px; z-index: 2; pointer-events: none; transition: left .15s, top .15s; }
+        .photo-cover-badge span { display: block; background: #016D75; color: #fff; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; letter-spacing: .04em; line-height: 1.4; }
         .photo-edit-thumb:hover .photo-cover-badge,
-        .photo-edit-thumb:has(.photo-select-box input:checked) .photo-cover-badge { left: 42px; }
+        .photo-edit-thumb:has(.photo-select-box input:checked) .photo-cover-badge { left: 42px; top: 15px; }
 
         /* Reorder arrows — bottom center, visible on hover */
         .photo-reorder-arrows { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; opacity: 0; transition: opacity .15s; z-index: 3; }
