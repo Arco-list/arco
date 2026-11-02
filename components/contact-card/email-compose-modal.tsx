@@ -91,6 +91,15 @@ export function EmailComposeModal({
   const [subject, setSubject] = useState("")
   const [body, setBody] = useState("")
   const [aiDraft, setAiDraft] = useState("")
+  // Wat er aan het concept moet veranderen, in je eigen woorden. Zelfde
+  // veld als in de Respond-popup van de inbox: zonder sturing geeft
+  // Regenerate een nieuwe gok in plaats van de aanpassing die je voor
+  // ogen had.
+  const [instruction, setInstruction] = useState("")
+  // Het EERSTE concept, zodat Start over erop terug kan vallen. Apart
+  // van `aiDraft`, want die wordt door Regenerate overschreven — en dan
+  // valt er niets meer terug te vallen.
+  const [firstDraft, setFirstDraft] = useState("")
   const [generating, setGenerating] = useState(false)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -131,6 +140,7 @@ export function EmailComposeModal({
           const next = picked ? ensureMarker(draft.draft) : draft.draft
           setAiDraft(next)
           setBody(next)
+          setFirstDraft(next)
         }
       } else {
         // Fresh compose, written for the situation the state resolved
@@ -147,6 +157,7 @@ export function EmailComposeModal({
           })
           setAiDraft(filled)
           setBody(ensureMarker(filled))
+          setFirstDraft(ensureMarker(filled))
           setGenerating(false)
           return
         }
@@ -163,6 +174,7 @@ export function EmailComposeModal({
           const next = picked ? ensureMarker(draft.draft) : draft.draft
           setAiDraft(next)
           setBody(next)
+          setFirstDraft(next)
           if (!picked && draft.suggestedSubject) setSubject(draft.suggestedSubject)
         }
       }
@@ -388,6 +400,8 @@ export function EmailComposeModal({
       })
       setAiDraft(filled)
       setBody(ensureMarker(filled))
+      setFirstDraft(ensureMarker(filled))
+      setInstruction("")
       return
     }
     setSubject(picked.subject)
@@ -402,20 +416,39 @@ export function EmailComposeModal({
       const next = ensureMarker(draft.draft)
       setAiDraft(next)
       setBody(next)
+      setFirstDraft(next)
+      setInstruction("")
     } else if (draft.error) {
       setError(draft.error)
     }
   }
 
+  /** Terug naar het eerste concept. Geen modelaanroep — dat concept
+   *  staat al in `firstDraft`, en er nog eens om vragen zou een ander
+   *  antwoord opleveren dan waar je naar terug wilde. */
+  const handleStartOver = () => {
+    if (!firstDraft) return
+    setBody(firstDraft)
+    setAiDraft(firstDraft)
+    setInstruction("")
+    setError(null)
+  }
+
   const handleRegenerate = async () => {
     setGenerating(true)
     setError(null)
+    const instr = instruction.trim() || undefined
+    // Zodra er een instructie staat gaat het huidige concept ALTIJD mee,
+    // ook als er niets aan getypt is: "korter" moet iets hebben om
+    // korter te maken.
+    const currentDraft = hasEdited || instr ? body : undefined
     const draft = latestInboundId
-      ? await generateReplyDraft(latestInboundId, { force: true, userEdit: hasEdited ? body : undefined })
+      ? await generateReplyDraft(latestInboundId, { force: true, userEdit: currentDraft, instruction: instr })
       : await generateComposeDraft({
           email, prospectId, subject,
           intent: template ? `${TONE_INTENT[tone]}\n\n${template.intent}` : undefined,
-          userEdit: hasEdited ? body : undefined,
+          userEdit: currentDraft,
+          instruction: instr,
         })
     setGenerating(false)
     if (draft.success && draft.draft) {
@@ -586,14 +619,6 @@ export function EmailComposeModal({
                 {generating ? "genereren…" : hasEdited ? "bewerkt" : "AI-concept"}
               </span>
             </label>
-            <button
-              type="button"
-              onClick={handleRegenerate}
-              disabled={generating || sending}
-              className="text-[11px] text-[#016D75] hover:underline disabled:opacity-50"
-            >
-              {generating ? (hasEdited ? "Refining…" : "Generating…") : hasEdited ? "Refine with my edits" : "Regenerate"}
-            </button>
           </div>
         )}
 
@@ -692,6 +717,72 @@ export function EmailComposeModal({
             </>
           )}
         </div>
+
+        {/* Regenerate-blok, gelijk aan de Respond-popup in de inbox. Het
+            veld verving daar de losse Regenerate-link: in plaats van
+            "nog eens, maar anders" kun je zeggen WAT er anders moet.
+            Onder het concept, want dat is de leesvolgorde — eerst zien
+            wat er ligt, dan de bijsturing.
+
+            Start over doet geen modelaanroep: het eerste concept zit al
+            in de hand. */}
+        {threadLoaded && (() => {
+          const hasInstruction = instruction.trim().length > 0
+          const label = generating
+            ? "Regenerating…"
+            : hasInstruction
+              ? "Regenerate with instruction"
+              : hasEdited
+                ? "Refine with my edits"
+                : "Regenerate"
+          const dirty = firstDraft.length > 0 && body.trim() !== firstDraft.trim()
+          return (
+            <div className="mt-3">
+              <textarea
+                value={instruction}
+                onChange={(e) => setInstruction(e.target.value)}
+                disabled={generating || sending}
+                placeholder={hasThread
+                  ? "How should the reply change? e.g. shorter, mention the deadline, less formal"
+                  : "How should the email change? e.g. shorter, mention the deadline, less formal"}
+                rows={2}
+                style={{
+                  width: "100%",
+                  padding: "8px 10px",
+                  fontSize: 12,
+                  lineHeight: 1.5,
+                  fontFamily: "var(--font-sans)",
+                  color: "#1c1c1a",
+                  background: "#fafaf9",
+                  border: "1px solid var(--arco-rule, #e5e5e4)",
+                  borderRadius: 3,
+                  resize: "vertical",
+                  outline: "none",
+                }}
+              />
+              <div className="mt-1.5 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleRegenerate}
+                  disabled={generating || sending}
+                  className="h-8 px-3 text-[11px] font-medium border rounded-[3px] transition-colors disabled:opacity-50"
+                  style={{ borderColor: "var(--primary, #016D75)", color: "var(--primary, #016D75)" }}
+                >
+                  {label}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStartOver}
+                  disabled={generating || sending || !dirty}
+                  title={dirty ? "Back to the first AI draft" : "Already at the first AI draft"}
+                  className="h-8 px-3 text-[11px] font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors disabled:opacity-50"
+                >
+                  Start over
+                </button>
+              </div>
+            </div>
+          )
+        })()}
 
         {error && <p className="mt-2 text-xs text-red-700 break-all">{error}</p>}
 

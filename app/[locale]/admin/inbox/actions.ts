@@ -1451,6 +1451,14 @@ export async function generateComposeDraft(input: {
   subject?: string
   userEdit?: string
   /**
+   * Wat er aan het concept moet veranderen, in de woorden van de
+   * admin ("korter", "noem de deadline", "minder formeel"). Zelfde
+   * veld als in de Respond-popup van de inbox, en om dezelfde reden:
+   * zonder sturing krijg je bij Regenerate een nieuwe gok in plaats
+   * van de aanpassing die je voor ogen had.
+   */
+  instruction?: string
+  /**
    * The chosen template's brief. Steers what the mail is FOR; the voice
    * still comes from the few-shot examples below. Without one the model
    * invents a purpose, which is how a first-touch mail ends up claiming
@@ -1516,6 +1524,7 @@ export async function generateComposeDraft(input: {
 
   const subjectGiven = (input.subject ?? "").trim()
   const userEditTrimmed = (input.userEdit ?? "").trim()
+  const instructionTrimmed = (input.instruction ?? "").trim()
   const intentTrimmed = (input.intent ?? "").trim()
   const { LINK_MARKER } = await import("@/lib/outbound/templates")
 
@@ -1552,6 +1561,21 @@ export async function generateComposeDraft(input: {
           "",
           "My current draft:",
           userEditTrimmed,
+        ].join("\n")
+      : null,
+    // Achter het concept, niet ervoor: eerst lezen wat er ligt, dan wat
+    // eraan moet veranderen. Spiegel van generateReplyDraft. De popup
+    // stuurt het huidige concept altijd als `userEdit` mee zodra er een
+    // instructie staat — ook als de admin niets had getypt — zodat
+    // "korter" iets heeft om korter te maken.
+    instructionTrimmed
+      ? [
+          "",
+          "---",
+          "Apply this instruction to the draft:",
+          instructionTrimmed,
+          "",
+          "Keep everything the instruction does not touch, and keep the voice guidance above.",
         ].join("\n")
       : null,
   ].filter((s) => s !== null).join("\n")
