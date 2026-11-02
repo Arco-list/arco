@@ -60,6 +60,7 @@ export type OutboundSituationId =
   | "showcase"
   | "outreach"
   | "owned_unlisted"
+  | "unlisted_relist"
   | "listed_projects"
   | "listed_pros"
 
@@ -190,6 +191,32 @@ Arco · www.arcolist.com`,
       "They own their page but it is not live yet, because a company page needs an approved project before anyone can find it. Say plainly what is missing and roughly how long it takes. This is not a pitch — they already said yes, and something practical is in the way.",
     cta: "Maak je pagina af",
   },
+  // Niet hetzelfde als owned_unlisted hierboven, al is de status in de
+  // database dezelfde. Daar is de pagina nog nooit live geweest en is er
+  // écht een goedgekeurd project nodig; hier staat het werk er wel op en
+  // heeft de eigenaar hem zelf uitgezet (manually_unlisted). Studio
+  // Martijn Veldman kreeg zo de mail "daarvoor is één goedgekeurd project
+  // nodig" terwijl er negen live projecten op zijn pagina staan — een
+  // zin die de ontvanger meteen als onzin herkent.
+  unlisted_relist: {
+    id: "unlisted_relist",
+    label: "Weer online",
+    linkKind: "dashboard",
+    subject: "Je pagina staat offline",
+    body: `Hoi {{voornaam}},
+
+De pagina van {{bedrijf}} staat op dit moment uit. Het werk staat er wel op, alleen kan niemand het zien.
+
+[[LINK]]
+
+Was er iets mis, of kwam het gewoon even niet uit? Aanzetten is één klik — en laat je hem liever uit, dan hoor ik dat net zo graag.
+
+Niek
+Arco · www.arcolist.com`,
+    intent:
+      "Their page is finished and their work is on it, but they switched it off themselves, so nobody can find them. Do not sell Arco again and do not explain what the page is — they built it. Ask plainly whether something was wrong or the timing was off, mention that turning it back on is one click, and genuinely leave room for leaving it off.",
+    cta: "Zet je pagina weer online",
+  },
   listed_projects: {
     id: "listed_projects",
     label: "Projecten toevoegen",
@@ -248,7 +275,7 @@ export function outboundSituation(id: string | null | undefined): OutboundSituat
 // not depend on which claim funnel it once qualified for, and showing
 // the row anyway would invite a choice that changes nothing.
 
-export type EditorStatus = "prospect" | "contacted" | "visitor" | "owned" | "listed"
+export type EditorStatus = "prospect" | "contacted" | "visitor" | "owned" | "listed" | "unlisted"
 export type EditorChannel = "invite" | "showcase" | "outreach"
 
 export const EDITOR_STATUSES: { id: EditorStatus; label: string }[] = [
@@ -257,6 +284,10 @@ export const EDITOR_STATUSES: { id: EditorStatus; label: string }[] = [
   { id: "visitor", label: "Visitor" },
   { id: "owned", label: "Owned" },
   { id: "listed", label: "Listed" },
+  // Achter Listed, want dat is de stand waar je vandaan komt: de pagina
+  // heeft gedraaid en staat nu uit. In de funnel staat Unlisted om
+  // dezelfde reden geparkeerd onder Listed in plaats van ervoor.
+  { id: "unlisted", label: "Unlisted" },
 ]
 
 export const EDITOR_CHANNELS: { id: EditorChannel; label: string }[] = [
@@ -287,6 +318,8 @@ export function situationsFor(
       return ["owned_unlisted"]
     case "listed":
       return ["listed_projects", "listed_pros"]
+    case "unlisted":
+      return ["unlisted_relist"]
   }
 }
 

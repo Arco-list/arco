@@ -93,7 +93,7 @@ export async function resolveOutboundSituation(
 
   const { data: company, error } = await svc
     .from("companies")
-    .select("id, name, status, owner_id")
+    .select("id, name, status, owner_id, manually_unlisted")
     .eq("id", companyId)
     .maybeSingle()
 
@@ -106,7 +106,12 @@ export async function resolveOutboundSituation(
     logger.error("Could not read company state for an outbound mail", { companyId }, error as unknown as Error)
   }
 
-  const row = (company ?? null) as { name?: string | null; status?: string | null; owner_id?: string | null } | null
+  const row = (company ?? null) as {
+    name?: string | null
+    status?: string | null
+    owner_id?: string | null
+    manually_unlisted?: boolean | null
+  } | null
   const companyName = row?.name ?? null
   const owned = Boolean(row?.owner_id)
 
@@ -131,8 +136,24 @@ export async function resolveOutboundSituation(
   // ── Already theirs: nothing to claim, so nothing to mint ──────────
   if (owned) {
     if (!listed) {
+      // Twee manieren om niet-live te zijn, en ze vragen om een
+      // tegenovergestelde mail.
+      //
+      // AUTO: de pagina heeft nooit gedraaid, of is vanzelf uitgegaan
+      // toen het laatste gepubliceerde project wegviel
+      // (syncCompanyListedStatus). Dan is er daadwerkelijk één
+      // goedgekeurd project nodig, en klopt owned_unlisted.
+      //
+      // HANDMATIG: de eigenaar heeft hem zelf uitgezet via de
+      // zichtbaarheidspopup, en `manually_unlisted` houdt dat vast —
+      // precies zodat een nieuw credit hem niet stiekem terugzet. Het
+      // werk staat er dan gewoon op. Studio Martijn Veldman kreeg zo de
+      // zin "daarvoor is één goedgekeurd project nodig" voorgeschoteld
+      // met negen live projecten op zijn pagina.
+      const hiddenByOwner = Boolean(row?.manually_unlisted)
       return await withStored({
-        situation: "owned_unlisted", alternatives: [], creditId: null,
+        situation: hiddenByOwner ? "unlisted_relist" : "owned_unlisted",
+        alternatives: [], creditId: null,
         companyName, status, statusIsProspect, channel: "outreach", listed, owned,
       })
     }
