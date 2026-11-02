@@ -635,8 +635,28 @@ function TimelineStream({
   //   * lifecycle-transition events — see CHAPTER_EVENT_TYPES above.
   //   * `admin_replied` gets reply body hydrated from inbound_emails.
   const inboundById = new Map(bundle.inboundEmails.map((m) => [m.id, m]))
+  // Welke antwoorden `replyRows` hierboven al tekent. Eén verstuurde
+  // reply schrijft namelijk twee sporen: `replied_text` op de inbound
+  // (altijd) en een `admin_replied`-event (alleen als het contact aan
+  // een prospect hangt — zie inbox/actions.ts). Voor een gematcht
+  // contact tekenden ze allebei een regel, dus stond er twee keer
+  // "Email replied" op dezelfde minuut en leek de mail dubbel
+  // verstuurd. De synthetische regel wint: die draagt de tekst zelf en
+  // werkt ook voor een inbound zonder prospect.
+  const repliedInboundIds = new Set(
+    bundle.inboundEmails.filter((m) => m.replied_text).map((m) => m.id),
+  )
   const enrichedEvents = bundle.events
     .filter((ev) => ev.event_type !== "replied")
+    .filter((ev) => {
+      if (ev.event_type !== "admin_replied") return true
+      const linkedId = typeof ev.metadata?.inbound_email_id === "string"
+        ? ev.metadata.inbound_email_id
+        : null
+      // Geen gekoppelde inbound, of een inbound die geen reply-regel
+      // oplevert: dan is dit event het enige spoor en blijft het staan.
+      return !(linkedId && repliedInboundIds.has(linkedId))
+    })
     .filter((ev) => {
       if (ev.event_type !== "email_sent" && ev.event_type !== "email_resent") return true
       // Sequence sends are covered by the sequence rows — but manual
