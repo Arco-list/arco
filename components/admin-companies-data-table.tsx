@@ -84,6 +84,12 @@ import {
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import {
+  CHANNEL_LABEL,
+  CHANNEL_ORDER,
+  matchesChannelFilter,
+  type Channel,
+} from "@/lib/sales/channel"
 import type { Database } from "@/lib/supabase/types"
 
 type CompanyStatus = Database["public"]["Enums"]["company_status"]
@@ -100,22 +106,17 @@ const SOURCE_LABEL: Record<CompanySource, string> = {
   admin: "Admin",
   invited: "Invited",
 }
-// One Channel dimension replaces the old Sources filter: acquisition
-// channel (token-truth for funnel claims) with the Direct bucket split
-// by first-touch. Some splits carry no pro traffic yet — the empty
-// buckets are deliberate, they fill as those channels start working.
-const CHANNEL_VALUES = ["invite", "showcase", "outreach", "direct", "seo", "social", "referral", "shares"] as const
+// Dezelfde vijf opties als op /admin/sales en het dashboard — zie
+// lib/sales/channel.ts. De vier first-touch-splitsingen (SEO, Social,
+// Referral, Shares) zijn eruit: ze lazen `companies.first_touch_source`,
+// die alleen NULL, 'direct' en 'sales' bevat, dus geen van de vier kon
+// ooit een rij teruggeven.
+//
+// 'outbound' staat als LAATSTE en is geen kanaal maar een overlay: het
+// OR't naast het primaire kanaal, zodat een showcasebedrijf dat we ook
+// gebeld hebben onder Showcase én onder Outbound valt.
+const CHANNEL_VALUES = [...CHANNEL_ORDER, "outbound"] as const
 type CompanyChannel = (typeof CHANNEL_VALUES)[number]
-const CHANNEL_LABEL: Record<string, string> = {
-  invite: "Invite",
-  showcase: "Showcase",
-  outreach: "Outreach",
-  direct: "Direct",
-  seo: "SEO",
-  social: "Social",
-  referral: "Referral",
-  shares: "Shares",
-}
 
 function ServiceDropdown({ services, extraCount }: { services: string[]; extraCount: number }) {
   const [open, setOpen] = useState(false)
@@ -303,10 +304,13 @@ export type AdminCompanyRow = {
   canPublishProjects: boolean
   autoApproveProjects: boolean
   source: CompanySource | null
-  /** Acquisition channel: consumed claim-token channel for funnel
-   *  claims, else the source mapping; 'direct' refined by first-touch
-   *  (seo/social/referral/shares). Invite pseudo-rows are 'invite'. */
-  channel: string
+  /** Acquisitiekanaal, exclusief: invite › showcase › outreach ›
+   *  organic (lib/sales/channel.ts). Precies één per rij — een upgrade
+   *  vervangt, hij stapelt niet. Invite-pseudorijen zijn 'invite'. */
+  channel: Channel
+  /** Handmatig gebeld/gemaild/gesproken. OVERLAY naast `channel`, nooit
+   *  in plaats daarvan: 'touched by', niet 'thanks to'. */
+  outboundTouched: boolean
   /** audience='pro' — photographers channel as invite by construction,
    *  but they never sit in the Invited card and would flood the
    *  Invited→Verified conversion's denominator. */
@@ -923,7 +927,8 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
   const filteredData = useMemo(() => {
     let rows = baseRows
     if (channelFilter.length > 0) {
-      rows = rows.filter((row) => channelFilter.includes(row.channel as CompanyChannel))
+      rows = rows.filter((row) =>
+        matchesChannelFilter(channelFilter, row.channel, { outbound: row.outboundTouched }))
     }
     if (serviceFilter.length > 0) {
       const selected = new Set(serviceFilter)
@@ -1737,10 +1742,14 @@ export function AdminCompaniesDataTable({ data, serviceOptions }: Props) {
         accessorKey: "channel",
         header: "Channel",
         enableSorting: true,
-        cell: ({ row }) => {
-          const value = row.original.channel
-          return <span>{CHANNEL_LABEL[value] ?? value}</span>
-        },
+        cell: ({ row }) => (
+          <span className="arco-table-nowrap">
+            {CHANNEL_LABEL[row.original.channel]}
+            {row.original.outboundTouched && (
+              <span className="arco-table-secondary"> · Outbound</span>
+            )}
+          </span>
+        ),
       },
       {
         accessorKey: "seoImpressions28d",

@@ -3,7 +3,8 @@
 import { Fragment, useEffect, useRef, useState, useTransition, useCallback } from "react"
 import { ArrowUpRight } from "lucide-react"
 import { toast } from "sonner"
-import { PROSPECT_STATUS_CONFIG, SUBSCRIBED_CONFIG, channelForSource } from "@/lib/sales/prospect-status"
+import { PROSPECT_STATUS_CONFIG, SUBSCRIBED_CONFIG } from "@/lib/sales/prospect-status"
+import { CHANNEL_LABEL, channelLabel, resolveChannel } from "@/lib/sales/channel"
 import { templateDisplayName } from "@/lib/emails/template-names"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { EmailComposeModal } from "@/components/contact-card/email-compose-modal"
@@ -108,23 +109,26 @@ const SEQUENCE_FILTER_LABEL: Record<SequenceFilterValue, { label: string; dot: s
   SEQUENCE_FILTER_OPTIONS.map((o) => [o.value, { label: o.label, dot: o.dot }]),
 ) as Record<SequenceFilterValue, { label: string; dot: string }>
 
-// Channel-filter dropdown options. DB still stores the historical source
-// codes; sourceLabel renders them post-Apollo-cutover names.
-// "outbound" and "email" are synthetic channels: neither corresponds to
-// a prospects.source value.
-//   - outbound → any manual outbound touch logged (call/meeting/manual
-//     email/linkedin, incl. no-answer attempts). Read off
+// Kanaalfilter. De eerste drie matchen het primaire kanaal van de rij
+// (exclusief — zie lib/sales/channel.ts); outbound en email zijn
+// OVERLAYS die ernaast OR'en:
+//   - outbound → een handmatige aanraking gelogd (bellen, afspraak,
+//     handmatige mail, LinkedIn, no-answer meegerekend). Uit
 //     rows.lastOutboundAt.
-//   - email → an inbound reply has landed (inbound_emails linked to any
-//     of the row's prospects). Outgoing sends alone don't flip this —
-//     the pill signals "they replied", not "we sent". Read off
+//   - email → er is een antwoord binnengekomen (inbound_emails op een
+//     van de contacten). Uitgaande sends tellen niet: de pill zegt "ze
+//     hebben geantwoord", niet "wij hebben gestuurd". Uit
 //     rows.hasEmailActivity.
+//
+// 'organic' staat er niet bij, anders dan op /admin/companies: een rij
+// bestaat hier alleen omdat wij hem in de funnel zetten, dus de vierde
+// trede van de ladder kan op Sales niet voorkomen.
 const CHANNEL_OPTIONS: { value: string; label: string }[] = [
-  { value: "arco", label: "Showcase" },
-  { value: "invites", label: "Invite" },
-  { value: "apollo", label: "Outreach" },
-  { value: "outbound", label: "Outbound" },
-  { value: "email", label: "Email" },
+  { value: "invite", label: CHANNEL_LABEL.invite },
+  { value: "showcase", label: CHANNEL_LABEL.showcase },
+  { value: "outreach", label: CHANNEL_LABEL.outreach },
+  { value: "outbound", label: CHANNEL_LABEL.outbound },
+  { value: "email", label: CHANNEL_LABEL.email },
 ]
 
 // Recipient-suppression states from the Resend webhook + List-Unsubscribe.
@@ -179,25 +183,10 @@ const DRIVER_COLORS: Record<string, string> = {
   monetization: "#0f766e",
 }
 
-// Source labels shown in the multi-pill cell. The DB still stores the
-// historical source codes ('arco' | 'invites' | 'apollo') — this map
-// renders them as their post-Apollo-cutover names: Showcase (we built a
-// page + project), Invite (peer-to-peer from another professional), and
-// Outreach (cold outbound, formerly run from Apollo).
-const SOURCE_LABELS: Record<string, string> = {
-  arco: "Showcase",
-  invites: "Invite",
-  apollo: "Outreach",
-  // Kept for the Contact Card's Source field, which reports PROVENANCE
-  // and should say Manual. It never reaches a channel pill: those run
-  // through channelForSource first, because the channel vocabulary is
-  // Outreach, Showcase, Invite, Outbound and Email — and Manual is none
-  // of the five.
-  manual: "Manual",
-  outbound: "Outbound",
-  email: "Email",
-}
-const sourceLabel = (s: string): string => SOURCE_LABELS[s] ?? s.charAt(0).toUpperCase() + s.slice(1)
+// De oude SOURCE_LABELS-map stond hier. Die vertaalde `prospects.source`
+// naar een pill-label, en dat is precies de vermenging die weg moest:
+// herkomst is geen kanaal. Labels komen nu uit lib/sales/channel.ts, de
+// contactkaart toont de ruwe herkomst in zijn eigen Source-veld.
 
 // -- Helpers -----------------------------------------------------------------
 
@@ -754,7 +743,7 @@ export function ProspectsClient({
   // Its own flag, because `subscribed` is not a prospect status and
   // cannot ride along in statusFilter.
   const [subscribedOnly, setSubscribedOnly] = useState(false)
-  const [sourceFilter, setSourceFilter] = useState<string[]>([])
+  const [channelFilter, setChannelFilter] = useState<string[]>([])
   const [sequenceFilter, setSequenceFilter] = useState<SequenceFilterValue[]>([])
   // Toggle for the Call list button: when true, the table only renders
   // today's ranked call queue (max 10, tier order).
@@ -853,7 +842,7 @@ export function ProspectsClient({
       const result = await fetchSalesCompanies({
         statuses: statusFilter,
         subscribedOnly,
-        sources: sourceFilter,
+        channels: channelFilter,
         sequences: sequenceFilter,
         search,
         callListOnly,
@@ -876,7 +865,7 @@ export function ProspectsClient({
       setOffset(off)
       setHasMore(result.totalCompanies > off + result.companies.length)
     })
-  }, [statusFilter, subscribedOnly, sourceFilter, sequenceFilter, search, callListOnly, sortBy, sortDir])
+  }, [statusFilter, subscribedOnly, channelFilter, sequenceFilter, search, callListOnly, sortBy, sortDir])
 
   // Resend email backfill — pulls open/click events the webhook may have
   // missed. Cheap (throttled to once/hour server-side); refresh the table
@@ -892,16 +881,16 @@ export function ProspectsClient({
 
   const handleFilterChange = useCallback((opts: {
     statuses?: ProspectStatus[]
-    sources?: string[]
+    channels?: string[]
     sequences?: SequenceFilterValue[]
     callListOnly?: boolean
   }) => {
     if (opts.statuses !== undefined) setStatusFilter(opts.statuses)
-    if (opts.sources !== undefined) setSourceFilter(opts.sources)
+    if (opts.channels !== undefined) setChannelFilter(opts.channels)
     if (opts.sequences !== undefined) setSequenceFilter(opts.sequences)
     if (opts.callListOnly !== undefined) setCallListOnly(opts.callListOnly)
     const s = opts.statuses ?? statusFilter
-    const src = opts.sources ?? sourceFilter
+    const src = opts.channels ?? channelFilter
     const seq = opts.sequences ?? sequenceFilter
     const due = opts.callListOnly ?? callListOnly
     startTransition(async () => {
@@ -909,7 +898,7 @@ export function ProspectsClient({
         // subscribedOnly rides along. It was in this callback's deps but
         // never in its request, so picking any other filter silently
         // dropped the subscription filter the reader had set.
-        statuses: s, sources: src, sequences: seq, search, subscribedOnly,
+        statuses: s, channels: src, sequences: seq, search, subscribedOnly,
         callListOnly: due,
         offset: 0, limit: 50, sortBy, sortDir,
       })
@@ -923,7 +912,7 @@ export function ProspectsClient({
       // hidden selected row would still be picked up by bulk actions.
       setSelectedRowIds(new Set())
     })
-  }, [statusFilter, subscribedOnly, sourceFilter, sequenceFilter, search, callListOnly, sortBy, sortDir])
+  }, [statusFilter, subscribedOnly, channelFilter, sequenceFilter, search, callListOnly, sortBy, sortDir])
 
   useEffect(() => {
     const wantCalls = barTab === "calls"
@@ -940,11 +929,11 @@ export function ProspectsClient({
   }, [statusFilter, handleFilterChange])
 
   const toggleSource = useCallback((src: string) => {
-    const next = sourceFilter.includes(src)
-      ? sourceFilter.filter((s) => s !== src)
-      : [...sourceFilter, src]
-    handleFilterChange({ sources: next })
-  }, [sourceFilter, handleFilterChange])
+    const next = channelFilter.includes(src)
+      ? channelFilter.filter((s) => s !== src)
+      : [...channelFilter, src]
+    handleFilterChange({ channels: next })
+  }, [channelFilter, handleFilterChange])
 
   const toggleSequence = useCallback((seq: SequenceFilterValue) => {
     const next = sequenceFilter.includes(seq)
@@ -993,7 +982,7 @@ export function ProspectsClient({
     setSortDir(nextDir)
     startTransition(async () => {
       const result = await fetchSalesCompanies({
-        statuses: statusFilter, subscribedOnly, sources: sourceFilter, sequences: sequenceFilter, search,
+        statuses: statusFilter, subscribedOnly, channels: channelFilter, sequences: sequenceFilter, search,
         offset: 0, limit: 50, sortBy: field, sortDir: nextDir,
       })
       setCompanies(result.companies)
@@ -1003,7 +992,7 @@ export function ProspectsClient({
       setOffset(0)
       setHasMore(result.totalCompanies > result.companies.length)
     })
-  }, [sortBy, sortDir, statusFilter, sourceFilter, sequenceFilter, search])
+  }, [sortBy, sortDir, statusFilter, channelFilter, sequenceFilter, search])
 
   // Shared Contact Card mount. URL-driven so the panel is deep-linkable
   // and survives navigation. Every contact click (row, contact inline,
@@ -1269,18 +1258,18 @@ export function ProspectsClient({
               <button
                 type="button"
                 className={`w-[140px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 shrink-0 ${
-                  sourceFilter.length > 0
+                  channelFilter.length > 0
                     ? "border-[#1c1c1a] bg-[#fafaf9]"
                     : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
                 }`}
               >
                 <span className="flex items-center gap-1.5 truncate">
-                  {sourceFilter.length === 0 ? (
+                  {channelFilter.length === 0 ? (
                     <span className="text-[#6b6b68]">All channels</span>
-                  ) : sourceFilter.length === 1 ? (
-                    <span className="truncate">{sourceLabel(sourceFilter[0])}</span>
+                  ) : channelFilter.length === 1 ? (
+                    <span className="truncate">{channelLabel(channelFilter[0])}</span>
                   ) : (
-                    <span>{sourceFilter.length} channels</span>
+                    <span>{channelFilter.length} channels</span>
                   )}
                 </span>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
@@ -1292,7 +1281,7 @@ export function ProspectsClient({
               <DropdownMenuItem
                 onClick={(e) => {
                   e.preventDefault()
-                  if (sourceFilter.length > 0) handleFilterChange({ sources: [] })
+                  if (channelFilter.length > 0) handleFilterChange({ channels: [] })
                 }}
                 className="text-xs"
               >
@@ -1302,7 +1291,7 @@ export function ProspectsClient({
               {CHANNEL_OPTIONS.map((o) => (
                 <DropdownMenuCheckboxItem
                   key={o.value}
-                  checked={sourceFilter.includes(o.value)}
+                  checked={channelFilter.includes(o.value)}
                   onCheckedChange={() => toggleSource(o.value)}
                   onSelect={(e) => e.preventDefault()}
                   className="text-xs"
@@ -2310,15 +2299,13 @@ function CompanyRowView({
         </span>
       </td>
 
-      {/* Source (multi-pill) — Outbound + Email are appended when the
-          row has that activity (see hasEmailActivity / lastOutboundAt).
-          Single row: no wrap + horizontal-only overflow so long channel
-          lists don't push the row taller than the rest of the table. */}
+      {/* Kanaal — één primaire pill, met Outbound en Email als overlay
+          ernaast wanneer de rij die activiteit heeft. Eén regel: geen
+          wrap en alleen horizontale overflow, zodat de rij niet hoger
+          wordt dan de rest van de tabel. */}
       <td>
         <div className="flex items-center gap-1 flex-nowrap overflow-x-auto whitespace-nowrap">
-          {row.sources.map((s) => (
-            <span key={s} className="status-pill shrink-0">{sourceLabel(s)}</span>
-          ))}
+          <span className="status-pill shrink-0">{CHANNEL_LABEL[row.channel]}</span>
 
           {row.lastOutboundAt && (
             <span className="status-pill shrink-0">Outbound</span>
@@ -2496,17 +2483,20 @@ function ContactInline({ contact, afterName, companyShowcased = false }: { conta
   const suppression = getSuppressionState(contact)
   const sequenceCfg = suppression ?? SEQUENCE_CONFIG[contact.sequenceStatus] ?? SEQUENCE_CONFIG.not_started
   const displayName = contact.resolvedContact.name?.trim() || contact.contactName?.trim() || contact.email
-  // Showcase is an UPGRADE of the track: before any outreach touch the
-  // source pill is simply replaced ("Showcase"); once outreach has
-  // started, both pills show — the history plus the current state.
-  const outreachStarted =
-    contact.emailsSent > 0 || contact.sequenceStatus !== "not_started" || !!contact.lastOutboundAt
-  // 'manual' is a provenance, not a channel — translated to the one the
-  // company actually puts this contact in, so the pill row stays in the
-  // vocabulary the filter offers.
-  const channel = channelForSource(contact.source, companyShowcased)
-  const showcaseUpgrade = companyShowcased && channel !== "arco"
-  const replaceSourceWithShowcase = showcaseUpgrade && !outreachStarted
+  // Showcase is een UPGRADE van het spoor, en een upgrade VERVANGT.
+  // Hiervoor bleef de oude pill ernaast staan zodra er outreach was
+  // geweest, dus las de kaart "Outreach · Showcase" terwijl de tabel
+  // ernaast één kanaal toonde. Dezelfde ladder als de rij en als
+  // /admin/companies — lib/sales/channel.ts. De koude mails blijven in
+  // de tijdlijn eronder staan; alleen het label is bij.
+  //
+  // 'manual' heeft geen eigen tak: dat is herkomst, geen kanaal. Zo'n
+  // contact wordt via Showcase of Outreach benaderd als ieder ander.
+  const channel = resolveChannel({
+    invite: contact.source === "invites",
+    showcase: companyShowcased || contact.source === "arco",
+    outreach: contact.source === "apollo" || contact.source === "manual",
+  })
   return (
     <>
       <span className="arco-table-status">
@@ -2521,10 +2511,7 @@ function ContactInline({ contact, afterName, companyShowcased = false }: { conta
         <span className={`status-pill-dot ${sequenceCfg.dot}`} />
         {sequenceCfg.label}
       </span>
-      <span className="status-pill">{replaceSourceWithShowcase ? "Showcase" : sourceLabel(channel)}</span>
-      {showcaseUpgrade && !replaceSourceWithShowcase && (
-        <span className="status-pill">Showcase</span>
-      )}
+      <span className="status-pill">{CHANNEL_LABEL[channel]}</span>
       {contact.lastOutboundAt && (
         <span className="status-pill">Outbound</span>
       )}

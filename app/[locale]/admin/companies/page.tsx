@@ -1,4 +1,5 @@
 import { AdminCompaniesDataTable, type AdminCompanyRow } from "@/components/admin-companies-data-table"
+import { fetchOutboundTouchedCompanies, resolveChannel, type Channel } from "@/lib/sales/channel"
 import { fetchShowcaseEvidence, isShowcase } from "@/lib/sales/showcase-evidence"
 import { getSubscribedSince } from "@/lib/subscriptions/subscriber-stats"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
@@ -48,7 +49,7 @@ async function loadAdminCompaniesData() {
       supabase
         .from("companies")
         .select(
-          "id, name, slug, status, city, country, is_verified, is_featured, domain, logo_url, website, email, services_offered, primary_service_id, owner_id, created_at, listed_at, status_changed_at, auto_approve_projects, source, first_touch_source, audience, seo_indexed, seo_indexation_state, seo_impressions_28d, seo_clicks_28d, seo_ctr_28d, seo_position_28d"
+          "id, name, slug, status, city, country, is_verified, is_featured, domain, logo_url, website, email, services_offered, primary_service_id, owner_id, created_at, listed_at, status_changed_at, auto_approve_projects, source, audience, seo_indexed, seo_indexation_state, seo_impressions_28d, seo_clicks_28d, seo_ctr_28d, seo_position_28d"
         )
         .or("source.in.(direct,manual,invited),status.in.(invited,verified,created,owned,listed,unlisted,deactivated)"),
       supabase
@@ -297,10 +298,18 @@ async function loadAdminCompaniesData() {
       auth_user_id: string | null
     } | null
   }
-    // Channel per company: the CONSUMED claim token is the authority for
-  // funnel claims (what actually converted, upgrades included); rows
-  // without one fall back to the source mapping. 'direct' refines via
-  // first-touch attribution into seo/social/referral/shares.
+    // Channel per company — de ladder uit lib/sales/channel.ts, dezelfde
+  // die /admin/sales en de contactkaart lezen. Het geconsumeerde
+  // claim-token is het sterkste signaal binnen zijn eigen soort, maar
+  // staat niet langer BOVEN de ladder: een bedrijf met een
+  // outreach-token dat later een showcasepagina kreeg is Showcase.
+  //
+  // De oude first-touch-verfijning (direct → seo/social/referral/shares)
+  // is eruit. Die las `companies.first_touch_source`, een kolom die
+  // alleen NULL, 'direct' en 'sales' bevat — geen van de vier waarden
+  // waar de mapping op matcht. Vier filteropties die per constructie
+  // nul teruggaven, precies de reden waarom het dashboard ze al liet
+  // vallen.
   const { data: consumedTokens } = await supabase
     .from("claim_tokens" as never)
     .select("company_id, channel, consumed_at")
@@ -317,20 +326,29 @@ async function loadAdminCompaniesData() {
   // de contactkaart lezen; 'manual' valt hier terug op outreach en wordt
   // door dat bewijs overruled waar het van toepassing is.
   const showcaseEvidence = await fetchShowcaseEvidence(supabase)
-  // 'manual' valt terug op 'direct', niet op outreach: een handmatig
-  // aangemaakt bedrijf kreeg geen koude pitch, dus dat zou dezelfde
-  // soort onwaarheid zijn als het oude 'showcase' — alleen de andere
-  // kant op. 'direct' verfijnt zich daarna via first-touch, en het
-  // showcase-bewijs hierboven overruled het waar dat er is.
-  const CHANNEL_FROM_SOURCE: Record<string, string> = { invited: "invite", manual: "direct", apollo: "outreach", direct: "direct" }
-  const DIRECT_REFINE: Record<string, string> = { google: "seo", social: "social", referral: "referral", shares: "shares" }
+  // Wie we handmatig gebeld, gemaild of gesproken hebben. OVERLAY, geen
+  // kanaal: het komt naast Showcase of Outreach te staan in plaats van
+  // ervoor in de plaats. Companies had dit signaal tot nu toe helemaal
+  // niet, terwijl Sales en het dashboard het wel tonen.
+  const outboundTouched = await fetchOutboundTouchedCompanies(supabase)
+  // Herkomst → kanaal, alleen als geen enkel sterker bewijs iets zegt.
+  // 'manual' (Add showcase) en 'admin' (Add company) vallen op organic:
+  // met de hand aangemaakt worden is geen pitch die ze kregen, en het
+  // showcase-bewijs hierboven overruled het waar dat er wel is. 'admin'
+  // stond hier eerder niet in en viel stil door de bodem.
+  const CHANNEL_FROM_SOURCE: Record<string, Channel> = {
+    invited: "invite",
+    apollo: "outreach",
+    manual: "organic",
+    direct: "organic",
+    admin: "organic",
+  }
   // Ranking mirrors resolveClaimChannel: a project credit beats the
   // entry source — an Apollo import that later gets credited IS an
   // invite-channel company (that credit is what the funnel will ride),
   // regardless of how the row originally entered the database.
   const deriveCompanyChannel = (
     source: string | null,
-    firstTouch: string | null,
     consumed: string | null,
     hasInviteCredit: boolean,
     acceptedCreditAtBirth: boolean,
@@ -338,7 +356,7 @@ async function loadAdminCompaniesData() {
     status: string | null,
     isPhotographer: boolean,
     showcaseHit: boolean,
-  ): string => {
+  ): Channel => {
     // Photographers exist on Arco ONLY by being assigned on a project —
     // the invite channel by construction. Their rows often carry source
     // 'manual' (created from the details-bar assignment) and a credit
@@ -356,17 +374,24 @@ async function loadAdminCompaniesData() {
     // are caught by the consumed claim token anyway; this heuristic
     // only serves pre-token history. Owner rows never count: owning a
     // project is publishing, not being invited.
-    let ch = consumed
-      ?? (isPhotographer ? "invite" : null)
-      ?? (showcaseHit ? "showcase" : null)
-      ?? (claimed
-        ? (acceptedCreditAtBirth ? "invite" : null)
-        : ((hasInviteCredit || status === "invited") ? "invite" : null))
-      ?? CHANNEL_FROM_SOURCE[source ?? ""]
-      ?? "direct"
-    if (ch === "platform") ch = "direct"
-    if (ch === "direct") ch = DIRECT_REFINE[firstTouch ?? ""] ?? "direct"
-    return ch
+    //
+    // Een geconsumeerd 'outbound'-token levert GEEN kanaal meer op. Dat
+    // was een kanaalwaarde zonder label en zonder filteroptie, dus het
+    // enige bedrijf dat hem droeg (Mint Interieur) was op kanaal
+    // onvindbaar. Outbound is nu de overlay hierboven; het primaire
+    // kanaal valt gewoon door naar zijn herkomst.
+    return resolveChannel({
+      invite:
+        consumed === "invite"
+        || isPhotographer
+        || (claimed
+          ? acceptedCreditAtBirth
+          : hasInviteCredit || status === "invited")
+        || CHANNEL_FROM_SOURCE[source ?? ""] === "invite",
+      showcase: consumed === "showcase" || showcaseHit,
+      selfClaimed: consumed === "platform",
+      outreach: consumed === "outreach" || CHANNEL_FROM_SOURCE[source ?? ""] === "outreach",
+    })
   }
 
   const contactsByCompany = new Map<string, Array<{
@@ -554,9 +579,9 @@ async function loadAdminCompaniesData() {
       autoApproveProjects: Boolean((company as any).auto_approve_projects),
       source: company.source ?? null,
       isPhotographer: (company as { audience?: string | null }).audience === "pro",
+      outboundTouched: outboundTouched.has(company.id),
       channel: deriveCompanyChannel(
         company.source ?? null,
-        (company as { first_touch_source?: string | null }).first_touch_source ?? null,
         consumedChannelByCompany.get(company.id) ?? null,
         (companyProjectsList.get(company.id) ?? []).some((p) => !p.isProjectOwner && p.inviteStatus === "invited"),
         (() => {
@@ -623,7 +648,8 @@ async function loadAdminCompaniesData() {
         projectsPending: data.count,
         teamAccepted: 0,
         teamInvited: 0,
-        channel: "invite",
+        channel: "invite" as const,
+        outboundTouched: false,
         isPhotographer: false,
         projects: [],
         createdAt: data.latestInvitedAt,

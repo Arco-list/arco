@@ -5,7 +5,8 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { updateContactStage } from "@/lib/apollo-client"
 import { getSubscribedSince, getSubscriberStats } from "@/lib/subscriptions/subscriber-stats"
 
-import { PROSPECT_STATUS_RANK, channelForSource, type ProspectStatus } from "@/lib/sales/prospect-status"
+import { PROSPECT_STATUS_RANK, type ProspectStatus } from "@/lib/sales/prospect-status"
+import { matchesChannelFilter, resolveChannel, type Channel } from "@/lib/sales/channel"
 import { fetchShowcaseEvidence, isShowcase } from "@/lib/sales/showcase-evidence"
 export type { ProspectStatus }
 
@@ -335,8 +336,12 @@ export type SalesCompanyRow = {
   isSubscribed: boolean
   /** Single sequence value: active beats paused beats finished beats not_started. */
   sequenceStatus: SequenceStatus
-  /** Distinct contact sources, sorted alphabetically for stable rendering. */
-  sources: string[]
+  /** Het acquisitiekanaal, EXCLUSIEF: precies één (lib/sales/channel.ts).
+   *  Dit was een lijst, en daardoor las een gepromoveerd bedrijf
+   *  "Outreach · Showcase" en matchte het beide filters. Outbound en
+   *  Email staan er niet in: dat zijn overlays, zie lastOutboundAt en
+   *  hasEmailActivity. */
+  channel: Channel
   emailsSent: number
   emailsDelivered: number
   emailsOpened: number
@@ -484,9 +489,11 @@ async function fetchAllPagesChunked<T>(
 type FetchSalesCompaniesFilters = {
   /** Empty / undefined = no status filter (all statuses except 'removed'). */
   statuses?: ProspectStatus[]
-  /** Empty / undefined = no source filter. Multi-select; matches any
-   *  contact's source within the row. */
-  sources?: string[]
+  /** Empty / undefined = geen kanaalfilter. Multi-select over de vijf
+   *  waarden van het kanaalmenu: invite / showcase / outreach /
+   *  organic matchen het primaire kanaal, outbound en email OR'en als
+   *  overlay ernaast. */
+  channels?: string[]
   /** Empty / undefined = no sequence filter. Multi-select; values may
    *  be real sequence_status (active/paused/finished/not_started) or
    *  suppression states (bounced/complained/unsubscribed) which match
@@ -724,7 +731,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   const subscribedSince = await getSubscribedSince()
   const {
     statuses,
-    sources,
+    channels,
     sequences,
     search,
     offset = 0,
@@ -1127,33 +1134,35 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
       // a subscriber whose start date never got recorded is still one.
       isSubscribed: g.companyId ? subscribedSince.has(g.companyId) : false,
       sequenceStatus: agg.sequenceStatus,
-      // SHOWCASE IS A CHANNEL THIS ROW IS IN, not a label beside it.
-      // Membership comes from the company's lifecycle rather than any
-      // contact's source, and the table used to add the pill in the
-      // client — so a row reading "Outreach · Showcase" disappeared the
-      // moment you filtered on Showcase, and the funnel above never
-      // counted it either. Putting it in sources answers the question
-      // once: the pills, the filter and the funnel all read this.
+      // ÉÉN kanaal, niet een stapel. Een upgrade vervangt: een koud
+      // contact dat later een showcasepagina kreeg is Showcase, punt.
       //
-      // 'manual' is translated away here for the same reason: it is a
-      // provenance, not a channel. A hand-added contact is reached
-      // through Showcase or Outreach like anyone else, and rendering
-      // "Manual" put a fourth word in a row whose vocabulary is only
-      // ever Outreach, Showcase, Invite, Outbound and Email — one the
-      // channel filter does not even offer.
-      sources: (() => {
-        // Showcase komt nu uit het BEWIJS (verstuurde of klaarstaande
-        // showcase-mail, of een geconverteerd bedrijf dat als showcase
-        // binnenkwam) in plaats van uit `companies.status === 'prospected'`.
-        // Die status is een huidige stand: een showcasebedrijf dat gaat
-        // listen verlaat hem, waarna de tabel het kanaal kwijtraakt —
-        // precies bij de bedrijven die het bewijzen. Zie
-        // lib/sales/showcase-evidence.ts.
-        const showcased = isShowcase(g.companyId, showcaseEvidence)
-        const mapped = agg.sources.map((s) => channelForSource(s, showcased))
-        if (showcased && !mapped.includes("arco")) mapped.push("arco")
-        return Array.from(new Set(mapped)).sort()
-      })(),
+      // Hiervoor was dit een verzameling waar showcase-bewijs bij werd
+      // OPGETELD, dus zo'n bedrijf las "Outreach · Showcase", matchte
+      // beide filters en telde in twee funnelkolommen tegelijk. De
+      // ladder staat in lib/sales/channel.ts en wordt ook door
+      // /admin/companies gelezen.
+      //
+      // 'manual' heeft geen eigen tak: dat is herkomst, geen kanaal.
+      // Een met de hand toegevoegd contact wordt via Showcase of
+      // Outreach benaderd als ieder ander, en belandt hier dus op het
+      // bewijs dat er wél is.
+      //
+      // Showcase komt uit het BEWIJS (verstuurde of klaarstaande
+      // showcase-mail, of een geconverteerd bedrijf dat als showcase
+      // binnenkwam) in plaats van uit `companies.status === 'prospected'`.
+      // Die status is een huidige stand: een showcasebedrijf dat gaat
+      // listen verlaat hem, waarna de tabel het kanaal kwijtraakt —
+      // precies bij de bedrijven die het bewijzen. Zie
+      // lib/sales/showcase-evidence.ts.
+      channel: resolveChannel({
+        invite: agg.sources.includes("invites"),
+        showcase: agg.sources.includes("arco") || isShowcase(g.companyId, showcaseEvidence),
+        // 'manual' valt op outreach als er geen showcase boven ligt —
+        // dezelfde keuze die channelForSource maakte, nu als tak van de
+        // ladder in plaats van als vertaling vooraf.
+        outreach: agg.sources.includes("apollo") || agg.sources.includes("manual"),
+      }),
       emailsSent: hasEventCoverage ? events.sent : agg.emailsSent,
       emailsDelivered: hasEventCoverage ? events.delivered : agg.emailsDelivered,
       emailsOpened: hasEventCoverage ? events.opened : agg.emailsOpened,
@@ -1255,21 +1264,15 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   //     the toggle for that filter).
   // So we apply source + sequence + search first, compute the funnel
   // against that narrowed set, then apply status as a table-only filter.
-  if (sources && sources.length > 0) {
-    // "outbound" + "email" are synthetic channels — keyed off
-    // lastOutboundAt / hasEmailActivity rather than prospects.source.
-    // Both OR alongside real source values so picking "Outreach +
-    // Outbound + Email" returns any of the three.
-    const set = new Set(sources)
-    const wantsOutbound = set.has("outbound")
-    const wantsEmail = set.has("email")
-    const realSet = new Set([...set].filter((s) => s !== "outbound" && s !== "email"))
-    rows = rows.filter((r) => {
-      if (realSet.size > 0 && r.sources.some((s) => realSet.has(s))) return true
-      if (wantsOutbound && r.lastOutboundAt) return true
-      if (wantsEmail && r.hasEmailActivity) return true
-      return false
-    })
+  if (channels && channels.length > 0) {
+    // Het primaire kanaal matcht exact; outbound en email OR'en als
+    // overlay ernaast, zodat "Showcase + Outbound" alles teruggeeft dat
+    // showcase IS of outbound geraakt is — en een showcasebedrijf dat we
+    // gebeld hebben onder beide valt.
+    rows = rows.filter((r) => matchesChannelFilter(channels, r.channel, {
+      outbound: Boolean(r.lastOutboundAt),
+      email: r.hasEmailActivity,
+    }))
   }
   if (sequences && sequences.length > 0) {
     // Suppression beats real sequence_status for display, so mirror that
