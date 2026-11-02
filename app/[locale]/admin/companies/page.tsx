@@ -1,5 +1,11 @@
 import { AdminCompaniesDataTable, type AdminCompanyRow } from "@/components/admin-companies-data-table"
-import { fetchInviteEvidence, fetchOutboundTouchedCompanies, resolveChannel, type Channel } from "@/lib/sales/channel"
+import {
+  fetchInviteEvidence,
+  fetchOutboundTouchedCompanies,
+  fetchOutreachEvidence,
+  resolveChannel,
+  type Channel,
+} from "@/lib/sales/channel"
 import { fetchShowcaseEvidence, isShowcase } from "@/lib/sales/showcase-evidence"
 import { getSubscribedSince } from "@/lib/subscriptions/subscriber-stats"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
@@ -310,7 +316,16 @@ async function loadAdminCompaniesData() {
   // waar de mapping op matcht. Vier filteropties die per constructie
   // nul teruggaven, precies de reden waarom het dashboard ze al liet
   // vallen.
-  const { data: consumedTokens } = await supabase
+  //
+  // SERVICE ROLE, geen sessie-client. `claim_tokens` heeft RLS aan en
+  // NUL policies, dus met de sessie-client gaf deze query altijd nul
+  // rijen — zonder fout, zonder lege-resultaatmelding. De hele
+  // tokentak hieronder, in de commentaren "de autoriteit voor
+  // funnelclaims" genoemd, heeft dus nooit iets gedaan op deze pagina.
+  // Een policy toevoegen zou de tabel voor elke ingelogde gebruiker
+  // openen, en een claim-token is een geheim; de service-role-lezing
+  // blijft binnen deze serverpagina.
+  const { data: consumedTokens } = await createServiceRoleSupabaseClient()
     .from("claim_tokens" as never)
     .select("company_id, channel, consumed_at")
     .not("consumed_at", "is", null)
@@ -335,6 +350,11 @@ async function loadAdminCompaniesData() {
   // ingetrokken worden en nemen dan de geschiedenis mee — zie
   // fetchInviteEvidence.
   const inviteEvidence = await fetchInviteEvidence(supabase)
+  // Wie een koude pitch kreeg. Ook dit uit de CONTACTEN en niet uit
+  // `companies.source`: de mail ging naar de persoon, en een met de
+  // hand aangemaakt bedrijf met een Apollo-contact is wel degelijk
+  // koud benaderd. Zie fetchOutreachEvidence.
+  const outreachEvidence = await fetchOutreachEvidence(supabase)
   // Herkomst → kanaal, alleen als geen enkel sterker bewijs iets zegt.
   // 'manual' (Add showcase) en 'admin' (Add company) vallen op organic:
   // met de hand aangemaakt worden is geen pitch die ze kregen, en het
@@ -361,6 +381,7 @@ async function loadAdminCompaniesData() {
     isPhotographer: boolean,
     showcaseHit: boolean,
     inviteHit: boolean,
+    outreachHit: boolean,
   ): Channel => {
     // Photographers exist on Arco ONLY by being assigned on a project —
     // the invite channel by construction. Their rows often carry source
@@ -386,11 +407,12 @@ async function loadAdminCompaniesData() {
     // ooit benaderd hebben, terwijl Sales hem gewoon onder Invite blijft
     // tonen. Dezelfde huidige-stand-valkuil als bij Showcase.
     //
-    // Een geconsumeerd 'outbound'-token levert GEEN kanaal meer op. Dat
-    // was een kanaalwaarde zonder label en zonder filteroptie, dus het
-    // enige bedrijf dat hem droeg (Mint Interieur) was op kanaal
-    // onvindbaar. Outbound is nu de overlay hierboven; het primaire
-    // kanaal valt gewoon door naar zijn herkomst.
+    // Twee tokenkanalen leveren GEEN bewijs op. 'outbound' was een
+    // kanaalwaarde zonder label en zonder filteroptie, dus het enige
+    // bedrijf dat hem droeg (Mint Interieur) was op kanaal onvindbaar;
+    // dat is nu de overlay hierboven. En 'platform' zegt HOE iemand
+    // converteerde, niet wie hem bereikt heeft — zie resolveChannel.
+    // Allebei vallen ze gewoon door naar het bewijs eronder.
     return resolveChannel({
       invite:
         consumed === "invite"
@@ -401,8 +423,10 @@ async function loadAdminCompaniesData() {
           : hasInviteCredit || status === "invited")
         || CHANNEL_FROM_SOURCE[source ?? ""] === "invite",
       showcase: consumed === "showcase" || showcaseHit,
-      selfClaimed: consumed === "platform",
-      outreach: consumed === "outreach" || CHANNEL_FROM_SOURCE[source ?? ""] === "outreach",
+      outreach:
+        consumed === "outreach"
+        || outreachHit
+        || CHANNEL_FROM_SOURCE[source ?? ""] === "outreach",
     })
   }
 
@@ -607,6 +631,7 @@ async function loadAdminCompaniesData() {
         (company as { audience?: string | null }).audience === "pro",
         isShowcase(company.id, showcaseEvidence),
         inviteEvidence.has(company.id),
+        outreachEvidence.has(company.id),
       ),
       contacts: contactsByCompany.get(company.id) ?? [],
       seoIndexed: (company as any).seo_indexed ?? null,

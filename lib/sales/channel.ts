@@ -61,24 +61,27 @@ export type ChannelEvidence = {
   /** Showcase-bewijs uit lib/sales/showcase-evidence.ts, of een
    *  geconsumeerd showcase-token. */
   showcase?: boolean
-  /** Een koude pitch: apollo-herkomst of een geconsumeerd
-   *  outreach-token. */
+  /** Een koude pitch: een apollo-contact, apollo-herkomst of een
+   *  geconsumeerd outreach-token. */
   outreach?: boolean
-  /** Ze vonden ons zelf en claimden vanaf de site (claim_tokens.channel
-   *  'platform'). Positief bewijs, en daarom sterker dan de
-   *  apollo-herkomst eronder: een oude import die nooit op een mail van
-   *  ons klikte is organisch binnengekomen, niet via outreach. */
-  selfClaimed?: boolean
 }
 
 /**
  * Hoogste bewijs wint. `organic` is de bodem, geen bewijs — wie door de
  * hele ladder valt is door niemand van ons bereikt.
+ *
+ * Er zat hier even een vierde tree tussen: een geconsumeerd
+ * 'platform'-token ("ze vonden ons zelf en claimden vanaf de site")
+ * sloeg outreach over. Dat is verkeerd om. Zo'n token zegt HOE iemand
+ * converteerde, niet WIE hem bereikt heeft, en acht bedrijven die we
+ * eerst koud gemaild hadden lazen daardoor als organisch. Een
+ * verstuurde pitch verdampt niet doordat de ontvanger later zelf de
+ * URL intypte. Het token levert nu simpelweg geen bewijs op, en wie
+ * verder niets heeft valt via de bodem alsnog op organic.
  */
 export function resolveChannel(ev: ChannelEvidence): Channel {
   if (ev.invite) return "invite"
   if (ev.showcase) return "showcase"
-  if (ev.selfClaimed) return "organic"
   if (ev.outreach) return "outreach"
   return "organic"
 }
@@ -154,6 +157,47 @@ export async function fetchInviteEvidence(
     if (rows.length < PAGE) break
   }
   return invited
+}
+
+/**
+ * Bedrijven die een koude pitch hebben gekregen — het derde lid van
+ * dezelfde familie als fetchInviteEvidence en showcase-evidence.
+ *
+ * Companies las outreach uit `companies.source`, Sales uit de bron van
+ * het CONTACT. Dat loopt uiteen zodra iemand het bedrijf met de hand
+ * aanmaakte terwijl de contactpersoon uit een Apollo-import kwam: ARHK,
+ * NEST en Studio Martijn Veldman stonden op Sales onder Outreach en op
+ * Companies onder Organisch. De koude mail ging naar de persoon, dus
+ * daar hoort het bewijs ook vandaan te komen.
+ *
+ * 'manual' telt mee om dezelfde reden als in de Sales-ladder: een met
+ * de hand toegevoegd contact wordt via Showcase of Outreach benaderd
+ * als ieder ander, en showcase ligt in de ladder er al boven.
+ *
+ * Verwijderde contacten tellen niet mee — die verdwijnen ook van Sales,
+ * dus zouden ze hier een bedrijf opleveren dat daar niet bestaat.
+ */
+export async function fetchOutreachEvidence(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+): Promise<Set<string>> {
+  const pitched = new Set<string>()
+  const PAGE = 1000
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("prospects")
+      .select("company_id")
+      .in("source", ["apollo", "manual"])
+      .neq("status", "removed")
+      .not("company_id", "is", null)
+      .order("id")
+      .range(from, from + PAGE - 1)
+    if (error) break
+    const rows = (data ?? []) as Array<{ company_id: string | null }>
+    for (const r of rows) if (r.company_id) pitched.add(r.company_id)
+    if (rows.length < PAGE) break
+  }
+  return pitched
 }
 
 /**
