@@ -71,10 +71,11 @@ export const SHOWCASE_TEMPLATE_PATTERNS = ["prospect-%", "%showcase%"] as const
 export type ShowcaseEvidence = {
   /** Bedrijven met een verstuurde of klaarstaande showcase-mail. */
   pitched: Set<string>
-  /** Bedrijven die NU op `prospected` staan — wij hebben een pagina uit
-   *  hun werk gebouwd, de pitch moet nog. Companies toont die status
-   *  letterlijk als "Showcased", dus een ander kanaal ernaast is een
-   *  tegenspraak in één rij. */
+  /** Bedrijven waarvoor wij een pagina bouwen of gebouwd hebben, maar
+   *  waar de pitch nog moet: status `prospected`, plus de WIP-stand
+   *  `added` + `manual` die de Add-showcase-knop achterlaat. Companies
+   *  toont `prospected` letterlijk als "Showcased", dus een ander
+   *  kanaal ernaast is een tegenspraak in één rij. */
   pageBuilt: Set<string>
   /** Bedrijven die als showcase binnenkwamen en inmiddels geconverteerd
    *  zijn — zie `historical` hieronder. */
@@ -123,6 +124,10 @@ export function isShowcase(companyId: string | null | undefined, ev: ShowcaseEvi
  * Het blijft wel een werkvoorraad, geen conversiebewijs — wie listing
  * rate per kanaal meet, moet zich realiseren dat deze groep een pagina
  * heeft maar nooit een pitch kreeg.
+ *
+ * REGEL 3b — de showcase die nog op de tekentafel ligt: `added` +
+ * `manual`, de handtekening van de Add-showcase-knop. Zelfde tier als
+ * regel 3 en om dezelfde reden; de toelichting staat bij de code.
  */
 export async function fetchShowcaseEvidence(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -203,6 +208,42 @@ export async function fetchShowcaseEvidence(
     if (pitched.has(r.id)) continue
     if (r.status === "prospected") pageBuilt.add(r.id)
     else if (arcoCompanies.has(r.id)) historical.add(r.id)
+  }
+
+  // REGEL 3b — de showcase die nog op de tekentafel ligt.
+  //
+  // `added` + `manual` is de handtekening van de Add-showcase-knop:
+  // adminAddCompanyAction schrijft precies die twee. De andere makers
+  // van een bedrijfsrij zijn eraan te onderscheiden — Add company zet
+  // `admin`, een projectcredit maakt de rij op `unlisted` aan, en de
+  // Apollo-import schrijft `apollo`. Promoveren vanuit Outreach landt
+  // op `prospected` en valt dus al onder regel 3.
+  //
+  // Zonder deze regel las elk net toegevoegd showcasebedrijf als
+  // Organisch tot iemand de status met de hand op Showcased zette —
+  // "niemand heeft ze bereikt", terwijl wij juist bezig waren hun
+  // pagina te bouwen.
+  //
+  // Fotografen vallen eruit. Die rijen dragen ook `added` + `manual`
+  // (ze ontstaan uit de toewijzing in de detailbalk), maar een fotograaf
+  // komt via een architectcredit op Arco en krijgt nooit een
+  // showcasepitch. In de ladder wint invite toch al van showcase; hier
+  // uitsluiten houdt het BEWIJS zelf eerlijk in plaats van te leunen op
+  // een correctie verderop.
+  const wipRows = await fetchAll<{ id: string; audience: string | null }>(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (from, to) => (supabase as any)
+      .from("companies")
+      .select("id, audience")
+      .eq("status", "added")
+      .eq("source", "manual")
+      .order("id")
+      .range(from, to),
+  )
+  for (const r of wipRows) {
+    if (r.audience === "pro") continue
+    if (pitched.has(r.id) || historical.has(r.id)) continue
+    pageBuilt.add(r.id)
   }
 
   return { pitched, historical, pageBuilt }
