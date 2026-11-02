@@ -222,8 +222,23 @@ export default function DashboardListingsPage() {
         if ("error" in result) throw new Error(result.error)
         toast.success(t("delete_modal_done_leave"))
       } else {
-        const { error } = await supabase.from("projects").delete().eq("id", deleting.project.id)
+        // `.select()` erbij, want een DELETE die door RLS wordt
+        // tegengehouden is GEEN fout: PostgREST raakt nul rijen en
+        // meldt gewoon succes. De kaart verdween dan uit de lijst
+        // hiernaast en stond na een refresh terug — I + Y Interior
+        // Architecture had twee drafts die zo onverwijderbaar bleken.
+        //
+        // Het enige DELETE-beleid op `projects` is
+        // `auth.uid() = client_id`, dus alleen degene die het project
+        // aanmaakte kan het weghalen. Nul rijen terug betekent hier
+        // dus: dit is jouw project niet.
+        const { data: deleted, error } = await supabase
+          .from("projects")
+          .delete()
+          .eq("id", deleting.project.id)
+          .select("id")
         if (error) throw error
+        if (!deleted?.length) throw new Error("delete_blocked")
         toast.success(t("delete_modal_done_owner"))
       }
       // Gone from the list either way: one because it no longer exists,
@@ -880,14 +895,24 @@ export default function DashboardListingsPage() {
 
     try {
       // Delete the project (RLS will ensure user can only delete their own projects)
-      const { error } = await supabase
+      //
+      // Zie het zusje hierboven: zonder `.select()` is een geweigerde
+      // DELETE niet van een geslaagde te onderscheiden. De
+      // `.eq("client_id", userId)` hieronder maakt dat hier zelfs
+      // expliciet — raakt die niets, dan is het project van iemand
+      // anders — maar zonder teruggave meldde ook dit pad succes.
+      const { data: deleted, error } = await supabase
         .from("projects")
         .delete()
         .eq("id", pendingDeleteProject.id)
         .eq("client_id", userId)
+        .select("id")
 
       if (error) {
         throw error
+      }
+      if (!deleted?.length) {
+        throw new Error("delete_blocked")
       }
 
       // Remove from local state
