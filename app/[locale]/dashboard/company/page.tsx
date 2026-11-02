@@ -212,7 +212,11 @@ export default async function CompanySettingsPage({
       // It also stops ended credits eating slots in the limit below,
       // which could push live projects off a company's own page.
       .not("status", "in", "(rejected,removed)")
-      .limit(10),
+      // Ruimer dan de tien die de pagina toont: de filter hieronder
+      // gooit nog contributor-credits op niet-gepubliceerde projecten
+      // weg, en die mogen geen plek innemen die anders naar een live
+      // project was gegaan.
+      .limit(30),
     // Fetch projects this company is invited to (for setup mode go-live)
     isSetupMode
       ? supabase
@@ -272,6 +276,22 @@ export default async function CompanySettingsPage({
   // here. Two cards sharing a React key was the other half of it.
   const linkByProject = new Map<string, any>()
   for (const link of (projectLinks ?? []) as any[]) {
+    // Een contributor ziet een project pas als het gepubliceerd is.
+    //
+    // De query hierboven filtert op de status van de CREDIT, nergens op
+    // die van het PROJECT, dus een credit op een afgewezen project kwam
+    // er gewoon door — en de kaart rendert dan de projectstatus als
+    // badge. Aannemer Raymond kreeg zo "Rejected" op zijn eigen pagina,
+    // met een Accept-knop op iets dat niet te accepteren valt: de
+    // afwijzing van iemand anders, bij hem in de etalage.
+    //
+    // Dezelfde poort die de uitnodiging al hanteert
+    // (dispatchProfessionalInvite weigert alles wat niet published of
+    // completed is), zodat de mail en de pagina hetzelfde verhaal
+    // vertellen. 'draft' hoort er net zo goed bij als 'rejected': ook
+    // daar is nog niets van de grond gekomen. De OWNER houdt al zijn
+    // projecten, want die moet ze kunnen herzien en opnieuw indienen.
+    if (!link.is_project_owner && ["draft", "rejected"].includes(link.projects?.status)) continue
     const existing = linkByProject.get(link.project_id)
     if (!existing || (link.is_project_owner && !existing.is_project_owner)) {
       linkByProject.set(link.project_id, link)
@@ -344,8 +364,9 @@ export default async function CompanySettingsPage({
     })
     .filter((p): p is NonNullable<typeof p> => Boolean(p))
 
-  // Deduplicate by project id
-  const uniqueProjects = Array.from(new Map(projects.map((p) => [p.id, p])).values())
+  // Deduplicate by project id. De tien staat nu hier in plaats van op
+  // de query, zodat weggefilterde credits geen gaten in de rij slaan.
+  const uniqueProjects = Array.from(new Map(projects.map((p) => [p.id, p])).values()).slice(0, 10)
 
   // Architect-collaborations count for photographer profiles. Surface only
   // for audience='pro' companies; resolves the "Collaborations" cell on the
