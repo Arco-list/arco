@@ -4647,8 +4647,8 @@ export default function ListingEditorPage() {
                 </label>
 
                 {isSpaceCover && (
-                  <div style={{ position: "absolute", left: 34, top: 6, background: "#016D75", color: "white", fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 3, textTransform: "uppercase", letterSpacing: "0.04em", zIndex: 2 }}>
-                    {tPhoto("cover_badge")}
+                  <div className="photo-cover-badge">
+                    <span>{tPhoto("cover_badge")}</span>
                   </div>
                 )}
 
@@ -5440,6 +5440,26 @@ export default function ListingEditorPage() {
         .photo-select-box input:checked + span { background: #016D75; border-color: #016D75; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'><path d='M2.5 6.2l2.4 2.4 4.6-5' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>"); background-size: 14px; background-position: center; background-repeat: no-repeat; }
         /* The whole tile reads as picked, not just the corner. */
         .photo-edit-thumb:has(.photo-select-box input:checked) { outline: 2px solid #016D75; outline-offset: -2px; }
+        /* COVER-badge — op één lijn met het selectievakje.
+
+           Hij stond op left 34px / top 6px, en het vakje beslaat
+           8px tot 38px: de badge begon dus middenin dat klikvlak en
+           zat 8px hoger dan het blokje zelf. Nu deelt hij de band van
+           30px waarin het vakje verticaal centreert, zodat ze
+           uitgelijnd zijn zonder dat er een hoogte uitgerekend hoeft
+           te worden.
+
+           Links staat hij tegen de rand, want het vakje is er alleen
+           bij hover of selectie — dezelfde twee regels die het vakje
+           tonen, schuiven de badge opzij. Zo staat er nooit een gat
+           waar niets is.
+
+           pointer-events: none, anders vangt de badge de klik die
+           sinds kort de foto aan- of uitvinkt. */
+        .photo-cover-badge { position: absolute; left: 8px; top: 8px; height: 30px; display: flex; align-items: center; z-index: 2; pointer-events: none; transition: left .15s; }
+        .photo-cover-badge span { background: #016D75; color: #fff; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; letter-spacing: .04em; line-height: 1.4; }
+        .photo-edit-thumb:hover .photo-cover-badge,
+        .photo-edit-thumb:has(.photo-select-box input:checked) .photo-cover-badge { left: 42px; }
 
         /* Reorder arrows — bottom center, visible on hover */
         .photo-reorder-arrows { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; opacity: 0; transition: opacity .15s; z-index: 3; }
