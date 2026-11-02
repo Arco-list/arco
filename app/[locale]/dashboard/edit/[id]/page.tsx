@@ -778,6 +778,11 @@ export default function ListingEditorPage() {
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<Set<string>>(new Set())
   const [lastPickedPhotoId, setLastPickedPhotoId] = useState<string | null>(null)
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+  // Ruimte van de hele selectie wijzigen. `busy` houdt de knop vast
+  // zolang de foto's één voor één verhuizen — zonder dat kon je er
+  // tijdens de rit een tweede ruimte overheen kiezen.
+  const [bulkSpaceOpen, setBulkSpaceOpen] = useState(false)
+  const [bulkSpaceBusy, setBulkSpaceBusy] = useState(false)
 
   const statusModalProject = useMemo(() => {
     const coverPhotoUrl =
@@ -4299,6 +4304,31 @@ export default function ListingEditorPage() {
     // Untagged views show a derived order, so dragging is disabled there.
     const canDragReorder = Boolean(activeEditFeature && activeEditFeature !== "__untagged__")
 
+    /** Aan- of uitvinken, met shift voor het bereik sinds de vorige
+     *  keuze. Stond alleen in de checkbox-handler; de foto zelf roept
+     *  hem nu ook aan, want een raster van dertig tegels aanklikken op
+     *  een vakje van 18 bij 18 pixels is precisiewerk dat niets
+     *  oplevert. */
+    const togglePhotoSelection = (photoId: string, shiftKey: boolean) => {
+      setSelectedPhotoIds((prev) => {
+        const next = new Set(prev)
+        if (shiftKey && lastPickedPhotoId) {
+          const ids = filteredPhotos.map((p) => p.id)
+          const from = ids.indexOf(lastPickedPhotoId)
+          const to = ids.indexOf(photoId)
+          if (from !== -1 && to !== -1) {
+            const [lo, hi] = from < to ? [from, to] : [to, from]
+            for (let i = lo; i <= hi; i++) next.add(ids[i])
+            return next
+          }
+        }
+        if (next.has(photoId)) next.delete(photoId)
+        else next.add(photoId)
+        return next
+      })
+      setLastPickedPhotoId(photoId)
+    }
+
     const handleDragEnd = (event: DragEndEvent) => {
       const { active, over } = event
       if (!over || active.id === over.id || !activeEditFeature) return
@@ -4356,6 +4386,23 @@ export default function ListingEditorPage() {
             <span style={{ fontSize: 12, color: "#6b6b68" }}>
               {selectedPhotoIds.size} geselecteerd
             </span>
+            {/* Ruimte van de hele selectie. Per foto kon het al via het
+                balkje onderaan de tegel; dertig keer hetzelfde menu
+                openen voor één verhuizing is het werk dat een selectie
+                juist hoort weg te nemen. */}
+            <button
+              type="button"
+              onClick={() => setBulkSpaceOpen(true)}
+              disabled={bulkSpaceBusy}
+              style={{
+                height: 28, padding: "0 12px", fontSize: 12,
+                color: "#1c1c1a", background: "transparent",
+                border: "1px solid var(--arco-rule, #e5e5e4)", borderRadius: 14,
+                cursor: bulkSpaceBusy ? "default" : "pointer", opacity: bulkSpaceBusy ? 0.5 : 1,
+              }}
+            >
+              {bulkSpaceBusy ? "Verplaatsen…" : "Space"}
+            </button>
             <button
               type="button"
               onClick={() => setBulkDeleteOpen(true)}
@@ -4378,6 +4425,40 @@ export default function ListingEditorPage() {
             >
               {tActions("cancel")}
             </button>
+          </div>
+        )}
+
+        {/* Ruimtekiezer voor de selectie — dezelfde pillen als op een
+            losse tegel, zodat het dezelfde handeling blijft. De foto's
+            gaan één voor één: movePhotoToSpace regelt per foto het
+            loskoppelen van de oude ruimte en het aanmaken van de nieuwe
+            als die nog niet bestaat, en een bulk-RPC zou die logica
+            moeten verdubbelen. */}
+        {bulkSpaceOpen && (
+          <div className="photo-space-overlay" onClick={() => setBulkSpaceOpen(false)}>
+            <div className="photo-space-pills" onClick={(e) => e.stopPropagation()}>
+              {orderedFeatureOptions.map((opt) => (
+                <button
+                  key={opt.id}
+                  className="photo-space-pill"
+                  onClick={async () => {
+                    setBulkSpaceOpen(false)
+                    setBulkSpaceBusy(true)
+                    try {
+                      for (const id of Array.from(selectedPhotoIds)) {
+                        await movePhotoToSpace(id, opt.id)
+                      }
+                    } finally {
+                      setBulkSpaceBusy(false)
+                      setSelectedPhotoIds(new Set())
+                      setLastPickedPhotoId(null)
+                    }
+                  }}
+                >
+                  {translateSpaceLabel(opt.slug, opt.name)}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -4513,7 +4594,19 @@ export default function ListingEditorPage() {
                 className={`photo-edit-thumb${isDragging ? " is-dragging" : ""}`}
                 {...(photoIndex === 0 ? { "data-tour": "project-photo-tile", "data-photo-id": photo.id } : {})}
               >
-                <img src={photo.url} alt="" />
+                {/* De foto zelf is het aanvinkvlak. Een drag begint pas
+                    na 5px (MouseSensor activationConstraint), dus een
+                    klik zonder beweging komt hier terecht en een
+                    verslepen niet — `isDragging` vangt de rest af. */}
+                <img
+                  src={photo.url}
+                  alt=""
+                  onClick={(e) => {
+                    if (isDragging) return
+                    togglePhotoSelection(photo.id, e.shiftKey)
+                  }}
+                  style={{ cursor: "pointer" }}
+                />
 
                 {/* Select — top left, opposite the delete icon.
                     Shift-click takes the range from the last tile you
@@ -4529,23 +4622,7 @@ export default function ListingEditorPage() {
                     aria-label={`Selecteer foto ${photoIndex + 1}`}
                     onChange={(e) => {
                       const nativeEvent = e.nativeEvent as unknown as { shiftKey?: boolean }
-                      setSelectedPhotoIds((prev) => {
-                        const next = new Set(prev)
-                        if (nativeEvent.shiftKey && lastPickedPhotoId) {
-                          const ids = filteredPhotos.map((p) => p.id)
-                          const from = ids.indexOf(lastPickedPhotoId)
-                          const to = ids.indexOf(photo.id)
-                          if (from !== -1 && to !== -1) {
-                            const [lo, hi] = from < to ? [from, to] : [to, from]
-                            for (let i = lo; i <= hi; i++) next.add(ids[i])
-                            return next
-                          }
-                        }
-                        if (next.has(photo.id)) next.delete(photo.id)
-                        else next.add(photo.id)
-                        return next
-                      })
-                      setLastPickedPhotoId(photo.id)
+                      togglePhotoSelection(photo.id, Boolean(nativeEvent.shiftKey))
                     }}
                   />
                   <span aria-hidden />
