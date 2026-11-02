@@ -844,8 +844,21 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     source: p.source,
     status: p.status,
     phone: (p as any).phone ?? null,
+    // Active betekent: er staat een mail klaar. De opgeslagen vlag zegt
+    // dat niet — die springt alleen op 'finished' als een `-final`
+    // daadwerkelijk uitgaat of als de claim via prospect-ref landt, en
+    // 452 contacten lazen daardoor Active met een lege wachtrij (307
+    // Visitors die hun nudge allang gehad hebben). De wachtrij wint nu
+    // in beide richtingen, niet alleen omhoog.
+    //
+    // De KOLOM blijft wat hij is: hij stuurt release-outreach-batch
+    // (`sequence_status = 'not_started'`), Pause/Finish/Restart en de
+    // Apollo-webhook. Dit is een weergave, zoals displayStatus op
+    // /admin/companies.
     sequenceStatus: pendingMailEmails.has(p.email.toLowerCase()) ? "active"
-      : (p as any).replied_at ? "replied" : p.sequence_status,
+      : (p as any).replied_at ? "replied"
+      : p.sequence_status === "active" ? "finished"
+      : p.sequence_status,
     emailsSent: p.emails_sent ?? 0,
     emailsDelivered: p.emails_delivered ?? 0,
     emailsOpened: p.emails_opened ?? 0,
@@ -1673,8 +1686,12 @@ export async function fetchSalesContactForProspect(prospectId: string): Promise<
     source: p.source,
     status: p.status,
     phone: (p as any).phone ?? null,
+    // Zie de toelichting bij het zusje hierboven: lege wachtrij maakt
+    // van een opgeslagen 'active' een Finished.
     sequenceStatus: pendingRow ? "active"
-      : (p as any).replied_at ? "replied" : p.sequence_status,
+      : (p as any).replied_at ? "replied"
+      : p.sequence_status === "active" ? "finished"
+      : p.sequence_status,
     emailsSent: p.emails_sent ?? 0,
     emailsDelivered: p.emails_delivered ?? 0,
     emailsOpened: p.emails_opened ?? 0,

@@ -29,6 +29,7 @@ import {
   templateDisplayName,
 } from "@/app/admin/sales/prospects-client"
 import { SUBSCRIBED_CONFIG } from "@/lib/sales/prospect-status"
+import { CHANNEL_LABEL, resolveChannel } from "@/lib/sales/channel"
 import { EmailPreviewModal } from "@/components/admin/email-preview-modal"
 import {
   getTransactionalEmails,
@@ -235,6 +236,27 @@ function ActivitySection({
   // sequence flavor a Start would launch.
   if ((p as { companyStatus?: string | null } | null)?.companyStatus === "prospected" && !channels.includes("Showcase")) {
     channels.push("Showcase")
+  }
+  // Niets uit de reeks? Dan de ladder, niet een streepje.
+  //
+  // De afleiding hierboven leest alleen de templates die in de
+  // wachtrij staan, en levenscyclusmails als visitor-nudge of
+  // owned-welcome dragen geen kanaal. Joep Verheijen had negen mails
+  // gehad en las toch "Channel —", met twee regels eronder "Outreach".
+  // Dezelfde ladder die Sales en Companies lezen (lib/sales/channel.ts)
+  // beantwoordt het wel: zijn contactbron is apollo.
+  //
+  // Alleen als terugval, want de reeks kan er MEERDERE tonen — een
+  // contact verzamelt kanalen over zijn leven heen, en dat is hier
+  // juist de informatie.
+  if (channels.length === 0 && p) {
+    const src = (p as { source?: string | null }).source ?? ""
+    const derived = resolveChannel({
+      invite: src === "invites",
+      showcase: src === "arco" || (p as { companyStatus?: string | null }).companyStatus === "prospected",
+      outreach: src === "apollo" || src === "manual",
+    })
+    if (derived !== "organic") channels.push(CHANNEL_LABEL[derived])
   }
 
   // The sequence line reads "[status] · [funnel stage] · [audience]" —
