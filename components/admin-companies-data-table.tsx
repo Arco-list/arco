@@ -95,17 +95,6 @@ import type { Database } from "@/lib/supabase/types"
 type CompanyStatus = Database["public"]["Enums"]["company_status"]
 type CompanySource = Database["public"]["Enums"]["company_source"]
 
-// Filter dropdown only exposes the sources that /admin/companies actually
-// serves — Apollo cold-imports are scoped out at the page query and
-// live in /admin/sales instead. The `apollo` label is kept so historical
-// rows in other views still render.
-const SOURCE_LABEL: Record<CompanySource, string> = {
-  apollo: "Apollo",
-  direct: "Direct",
-  manual: "Manual",
-  admin: "Admin",
-  invited: "Invited",
-}
 // Dezelfde vijf opties als op /admin/sales en het dashboard — zie
 // lib/sales/channel.ts. De vier first-touch-splitsingen (SEO, Social,
 // Referral, Shares) zijn eruit: ze lazen `companies.first_touch_source`,
@@ -715,13 +704,6 @@ function formatRelativeDate(iso: string | null): string {
   } catch {
     return iso
   }
-}
-
-const SOURCE_LABELS: Record<string, string> = {
-  apollo: "Apollo",
-  direct: "Direct",
-  manual: "Manual",
-  invited: "Invited",
 }
 
 /** Canonical bare-domain form ("valkdesign.nl") — strips protocol, www,

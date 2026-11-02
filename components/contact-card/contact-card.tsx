@@ -590,8 +590,8 @@ function DetailsSection({
           </div>
         )}
         <DetailField
-          label="Source"
-          value={primaryProspect?.source ? capitalize(primaryProspect.source) : null}
+          label="Origin"
+          value={primaryProspect?.source ? originLabel(primaryProspect.source) : null}
         />
       </div>
     </Section>
@@ -755,6 +755,29 @@ function capitalize(s: string): string {
   if (!s) return s
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
+
+/**
+ * HERKOMST, niet kanaal — hoe deze rij in de funnel kwam.
+ *
+ * Bewust in andere woorden dan het kanaalvocabulaire (Invite, Showcase,
+ * Outreach, Organisch, Outbound, Email; zie lib/sales/channel.ts).
+ * Sinds een upgrade het kanaal VERVANGT, is dit het enige veld dat nog
+ * zegt waar een bedrijf vandaan kwam: "Channel: Showcase · Origin:
+ * Apollo import" leest als koud binnengekomen, via showcase gewonnen.
+ * Zouden beide dezelfde woorden gebruiken, dan las het als een
+ * tegenspraak.
+ *
+ * Hiervoor stond hier capitalize() over de ruwe kolomwaarde, wat
+ * "Arco" opleverde — een kolomwaarde, geen woord dat iets betekent
+ * voor wie de kaart leest.
+ */
+const ORIGIN_LABELS: Record<string, string> = {
+  apollo: "Apollo import",
+  arco: "Showcase build",
+  invites: "Project credit",
+  manual: "Manual add",
+}
+const originLabel = (s: string): string => ORIGIN_LABELS[s] ?? capitalize(s)
 
 // ── Company row (styled like a mini profile card) ─────────────────────
 
