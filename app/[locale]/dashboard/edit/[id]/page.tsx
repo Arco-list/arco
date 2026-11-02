@@ -4389,20 +4389,72 @@ export default function ListingEditorPage() {
             {/* Ruimte van de hele selectie. Per foto kon het al via het
                 balkje onderaan de tegel; dertig keer hetzelfde menu
                 openen voor één verhuizing is het werk dat een selectie
-                juist hoort weg te nemen. */}
-            <button
-              type="button"
-              onClick={() => setBulkSpaceOpen(true)}
-              disabled={bulkSpaceBusy}
-              style={{
-                height: 28, padding: "0 12px", fontSize: 12,
-                color: "#1c1c1a", background: "transparent",
-                border: "1px solid var(--arco-rule, #e5e5e4)", borderRadius: 14,
-                cursor: bulkSpaceBusy ? "default" : "pointer", opacity: bulkSpaceBusy ? 0.5 : 1,
-              }}
-            >
-              {bulkSpaceBusy ? "Verplaatsen…" : "Space"}
-            </button>
+                juist hoort weg te nemen.
+
+                Een eigen menu, niet de overlay van de tegel. Die is
+                `position: absolute; inset: 0` en hoort bij een tegel,
+                die relatief gepositioneerd is. Hier was de dichtstbij
+                gepositioneerde voorouder een heel ander blok, dus de
+                pillen landden midden over de hero-afbeelding — zichtbaar,
+                maar buiten bereik van de muis. */}
+            <div style={{ position: "relative" }}>
+              <button
+                type="button"
+                onClick={() => setBulkSpaceOpen((v) => !v)}
+                disabled={bulkSpaceBusy}
+                style={{
+                  height: 28, padding: "0 10px 0 12px", fontSize: 12,
+                  display: "inline-flex", alignItems: "center", gap: 5,
+                  color: "#1c1c1a", background: "transparent",
+                  border: "1px solid var(--arco-rule, #e5e5e4)", borderRadius: 14,
+                  cursor: bulkSpaceBusy ? "default" : "pointer", opacity: bulkSpaceBusy ? 0.5 : 1,
+                }}
+              >
+                {bulkSpaceBusy ? "Verplaatsen…" : "Space"}
+                {/* Hetzelfde pijltje als op de tegel: zonder dat leest
+                    de knop als "doe iets" in plaats van "kies iets". */}
+                {!bulkSpaceBusy && (
+                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M4 6l4 4 4-4" />
+                  </svg>
+                )}
+              </button>
+
+              {bulkSpaceOpen && (
+                <>
+                  {/* Vangt de klik ernaast. Geen ref en geen effect
+                      nodig, en hij sluit ook bij een klik op de foto's. */}
+                  <div
+                    onClick={() => setBulkSpaceOpen(false)}
+                    style={{ position: "fixed", inset: 0, zIndex: 40 }}
+                  />
+                  <div className="bulk-space-menu">
+                    {orderedFeatureOptions.map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        className="bulk-space-item"
+                        onClick={async () => {
+                          setBulkSpaceOpen(false)
+                          setBulkSpaceBusy(true)
+                          try {
+                            for (const id of Array.from(selectedPhotoIds)) {
+                              await movePhotoToSpace(id, opt.id)
+                            }
+                          } finally {
+                            setBulkSpaceBusy(false)
+                            setSelectedPhotoIds(new Set())
+                            setLastPickedPhotoId(null)
+                          }
+                        }}
+                      >
+                        {translateSpaceLabel(opt.slug, opt.name)}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
             <button
               type="button"
               onClick={() => setBulkDeleteOpen(true)}
@@ -4425,40 +4477,6 @@ export default function ListingEditorPage() {
             >
               {tActions("cancel")}
             </button>
-          </div>
-        )}
-
-        {/* Ruimtekiezer voor de selectie — dezelfde pillen als op een
-            losse tegel, zodat het dezelfde handeling blijft. De foto's
-            gaan één voor één: movePhotoToSpace regelt per foto het
-            loskoppelen van de oude ruimte en het aanmaken van de nieuwe
-            als die nog niet bestaat, en een bulk-RPC zou die logica
-            moeten verdubbelen. */}
-        {bulkSpaceOpen && (
-          <div className="photo-space-overlay" onClick={() => setBulkSpaceOpen(false)}>
-            <div className="photo-space-pills" onClick={(e) => e.stopPropagation()}>
-              {orderedFeatureOptions.map((opt) => (
-                <button
-                  key={opt.id}
-                  className="photo-space-pill"
-                  onClick={async () => {
-                    setBulkSpaceOpen(false)
-                    setBulkSpaceBusy(true)
-                    try {
-                      for (const id of Array.from(selectedPhotoIds)) {
-                        await movePhotoToSpace(id, opt.id)
-                      }
-                    } finally {
-                      setBulkSpaceBusy(false)
-                      setSelectedPhotoIds(new Set())
-                      setLastPickedPhotoId(null)
-                    }
-                  }}
-                >
-                  {translateSpaceLabel(opt.slug, opt.name)}
-                </button>
-              ))}
-            </div>
           </div>
         )}
 
@@ -5454,6 +5472,14 @@ export default function ListingEditorPage() {
         .photo-edit-thumb:hover .photo-room-bar { opacity: 1; pointer-events: auto; }
         .photo-room-trigger { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: rgba(255,255,255,.92); background: none; border: none; cursor: pointer; padding: 2px 4px; border-radius: 3px; white-space: nowrap; transition: background .12s; }
         .photo-room-trigger:hover { background: rgba(255,255,255,.14); }
+        /* Ruimtekiezer voor een SELECTIE — een echt menu onder de knop.
+           De overlay hieronder is van de tegel: die vult een tegel en
+           leunt op diens relatieve positionering, en op de selectiebalk
+           zou hij over de hero landen. Lichte stijl, want hij staat op
+           wit en niet over een foto. */
+        .bulk-space-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 41; min-width: 160px; max-height: 320px; overflow-y: auto; padding: 4px; background: #fff; border: 1px solid var(--arco-rule, #e5e5e4); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.10); display: flex; flex-direction: column; }
+        .bulk-space-item { padding: 7px 10px; font-size: 12px; text-align: left; color: #1c1c1a; background: none; border: none; border-radius: 5px; cursor: pointer; white-space: nowrap; }
+        .bulk-space-item:hover { background: #f5f5f4; }
         /* Space picker overlay */
         .photo-space-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.72); display: flex; align-items: center; justify-content: center; z-index: 10; cursor: pointer; overflow-y: auto; }
         .photo-space-pills { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; padding: 16px; max-width: 90%; }
