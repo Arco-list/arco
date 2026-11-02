@@ -643,7 +643,17 @@ export async function disconnectGmailConnection(
  */
 export async function generateReplyDraft(
   id: string,
-  opts: { force?: boolean; userEdit?: string } = {},
+  opts: {
+    force?: boolean
+    userEdit?: string
+    /**
+     * Expliciete aanwijzing van de admin: "korter", "noem de deadline",
+     * "minder formeel". Staat los van userEdit — dat is wat er NU in het
+     * veld staat, dit is wat ermee moet gebeuren. Samen leveren ze de
+     * nuttigste vorm: hier is de concepttekst, pas hem zo aan.
+     */
+    instruction?: string
+  } = {},
 ): Promise<{
   success: boolean
   draft?: string
@@ -814,6 +824,7 @@ export async function generateReplyDraft(
   // and tightens it rather than starting over.
   const cachedAIDraft = (row.ai_draft_text as string | null)?.trim() ?? ""
   const userEditTrimmed = opts.userEdit?.trim() ?? ""
+  const instructionTrimmed = opts.instruction?.trim() ?? ""
   const isRefineMode =
     userEditTrimmed.length > 0
     && (cachedAIDraft === "" || userEditTrimmed !== cachedAIDraft)
@@ -836,6 +847,24 @@ export async function generateReplyDraft(
           "",
           "My current draft:",
           userEditTrimmed,
+        ].join("\n")
+      : null,
+    // De aanwijzing staat ACHTER het concept, niet ervoor: zo leest het
+    // model eerst wat er ligt en dan wat eraan moet veranderen. Hij komt
+    // ook zonder bewerking mee — "korter" op een ongewijzigd concept is
+    // een volstrekt normale vraag, en in dat geval is er verder niets
+    // dat de instructie context geeft, dus plakken we het concept erbij.
+    instructionTrimmed
+      ? [
+          "",
+          "---",
+          "Apply this instruction to the draft:",
+          instructionTrimmed,
+          ...(isRefineMode
+            ? []
+            : ["", "The draft to change:", userEditTrimmed || cachedAIDraft]),
+          "",
+          "Keep everything the instruction does not touch, and keep the voice guidance above.",
         ].join("\n")
       : null,
   ]

@@ -154,6 +154,13 @@ export function InboxClient({
   // Regenerate button can switch into Refine mode (server gets the
   // edit + refines instead of regenerating from scratch).
   const [respondAIDraft, setRespondAIDraft] = useState("")
+  // Het ALLEREERSTE concept van deze sessie, apart bewaard zodat "Start
+  // over" ernaartoe terug kan zonder het model opnieuw te bevragen —
+  // het staat al in de hand, dus opnieuw genereren zou alleen tijd en
+  // geld kosten voor een tekst die we hebben.
+  const [respondFirstDraft, setRespondFirstDraft] = useState("")
+  // Vrije aanwijzing bij Regenerate ("korter", "noem de deadline").
+  const [respondInstruction, setRespondInstruction] = useState("")
   const [respondOriginal, setRespondOriginal] = useState<string>("")
   const [respondGenerating, setRespondGenerating] = useState(false)
   const [respondSending, setRespondSending] = useState(false)
@@ -281,6 +288,8 @@ export function InboxClient({
     setRespondTarget(row)
     setRespondDraft("")
     setRespondAIDraft("")
+    setRespondFirstDraft("")
+    setRespondInstruction("")
     setRespondOriginal("")
     setRespondError(null)
     setRespondGenerating(true)
@@ -290,6 +299,7 @@ export function InboxClient({
       if (result.success && result.draft) {
         setRespondDraft(result.draft)
         setRespondAIDraft(result.draft)
+        setRespondFirstDraft(result.draft)
         setRespondOriginal(result.originalBody ?? "")
       } else {
         setRespondError(result.error ?? "Could not generate draft")
@@ -302,6 +312,8 @@ export function InboxClient({
     setRespondTarget(null)
     setRespondDraft("")
     setRespondAIDraft("")
+    setRespondFirstDraft("")
+    setRespondInstruction("")
     setRespondOriginal("")
     setRespondError(null)
     setRespondGenerating(false)
@@ -330,6 +342,8 @@ export function InboxClient({
     setRespondTarget(null)
     setRespondDraft("")
     setRespondAIDraft("")
+    setRespondFirstDraft("")
+    setRespondInstruction("")
     setRespondOriginal("")
     setRespondError(null)
     setRespondGenerating(false)
@@ -352,16 +366,32 @@ export function InboxClient({
       const result = await generateReplyDraft(respondTarget.id, {
         force: true,
         userEdit,
+        instruction: respondInstruction.trim() || undefined,
       })
       setRespondGenerating(false)
       if (result.success && result.draft) {
         setRespondDraft(result.draft)
         setRespondAIDraft(result.draft)
+        // Het eerste concept blijft staan — dat is het ankerpunt waar
+        // Start over naartoe terugkeert, hoe vaak je ook regenereert.
+        if (!respondFirstDraft) setRespondFirstDraft(result.draft)
         if (result.originalBody) setRespondOriginal(result.originalBody)
       } else {
         setRespondError(result.error ?? "Could not regenerate draft")
       }
     })
+  }
+
+  /** Terug naar het concept waarmee de pop-up opende. Puur lokaal: de
+   *  tekst is al binnen, dus het model hoeft er niet aan te pas te
+   *  komen. Ook respondAIDraft gaat mee terug, anders zou de pop-up
+   *  denken dat je het hebt bewerkt. */
+  const handleStartOver = () => {
+    if (!respondFirstDraft) return
+    setRespondDraft(respondFirstDraft)
+    setRespondAIDraft(respondFirstDraft)
+    setRespondInstruction("")
+    setRespondError(null)
   }
 
   return (
@@ -844,35 +874,21 @@ export function InboxClient({
             )}
 
             {(() => {
-              // hasEdited drives both the label and the Regenerate vs
-              // Refine button copy, so the admin sees what'll happen.
+              // hasEdited bepaalt alleen nog het bijschrift. De knop is
+              // naar het blok onder het tekstveld verhuisd, zodat je
+              // eerst het concept leest en dan pas zegt wat eraan moet.
               const hasEdited =
                 respondDraft.trim().length > 0
                 && respondDraft.trim() !== respondAIDraft.trim()
-              const buttonLabel = respondGenerating
-                ? hasEdited
-                  ? "Refining…"
-                  : "Generating…"
-                : hasEdited
-                  ? "Refine with my edits"
-                  : "Regenerate"
               return (
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[10px] font-medium text-[#a1a1a0] uppercase tracking-wider">
                     Your reply {respondGenerating
                       ? "(generating…)"
                       : hasEdited
-                        ? "(edited — refine will incorporate your changes)"
+                        ? "(edited — regenerate will keep your changes)"
                         : "(AI-drafted, edit before sending)"}
                   </span>
-                  <button
-                    type="button"
-                    onClick={handleRegenerateDraft}
-                    disabled={respondGenerating || respondSending}
-                    className="text-[11px] text-[#016D75] hover:underline disabled:opacity-50"
-                  >
-                    {buttonLabel}
-                  </button>
                 </div>
               )
             })()}
@@ -897,6 +913,73 @@ export function InboxClient({
                 outline: "none",
               }}
             />
+
+            {/* Regenerate-blok. Het veld vervangt de oude Regenerate-link:
+                in plaats van "nog eens, maar anders" kun je zeggen WAT er
+                anders moet. Staat onder het concept, want dat is de
+                leesvolgorde — eerst zien wat er ligt, dan de bijsturing.
+
+                Start over is bewust geen tweede modelaanroep: het eerste
+                concept zit al in de hand. */}
+            {(() => {
+              const hasEdited =
+                respondDraft.trim().length > 0
+                && respondDraft.trim() !== respondAIDraft.trim()
+              const hasInstruction = respondInstruction.trim().length > 0
+              const label = respondGenerating
+                ? "Regenerating…"
+                : hasInstruction
+                  ? "Regenerate with instruction"
+                  : hasEdited
+                    ? "Refine with my edits"
+                    : "Regenerate"
+              const dirty = respondFirstDraft.length > 0
+                && respondDraft.trim() !== respondFirstDraft.trim()
+              return (
+                <div className="mt-3">
+                  <textarea
+                    value={respondInstruction}
+                    onChange={(e) => setRespondInstruction(e.target.value)}
+                    disabled={respondGenerating || respondSending}
+                    placeholder="How should the reply change? e.g. shorter, mention the deadline, less formal"
+                    rows={2}
+                    style={{
+                      width: "100%",
+                      padding: "8px 10px",
+                      fontSize: 12,
+                      lineHeight: 1.5,
+                      fontFamily: "var(--font-sans)",
+                      color: "#1c1c1a",
+                      background: "#fafaf9",
+                      border: "1px solid var(--arco-rule, #e5e5e4)",
+                      borderRadius: 3,
+                      resize: "vertical",
+                      outline: "none",
+                    }}
+                  />
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleRegenerateDraft}
+                      disabled={respondGenerating || respondSending}
+                      className="h-8 px-3 text-[11px] font-medium border rounded-[3px] transition-colors disabled:opacity-50"
+                      style={{ borderColor: "var(--primary, #016D75)", color: "var(--primary, #016D75)" }}
+                    >
+                      {label}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleStartOver}
+                      disabled={respondGenerating || respondSending || !dirty}
+                      title={dirty ? "Back to the first AI draft" : "Already at the first AI draft"}
+                      className="h-8 px-3 text-[11px] font-medium border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#fafaf9] transition-colors disabled:opacity-50"
+                    >
+                      Start over
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
 
             {respondError && (
               <p className="mt-2 text-xs text-red-700 break-all">{respondError}</p>
