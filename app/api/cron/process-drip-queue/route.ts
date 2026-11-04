@@ -252,7 +252,11 @@ async function sendOne(
     "outreach-final",
     // Queue rows carry the abstract 'visitor-nudge'; the concrete
     // variant (invite/showcase/platform) is resolved at send below.
+    // Stap 2 volgt vijf werkdagen later en resolvet via dezelfde
+    // builder, zodat een bezoeker wiens credit tussentijds binnenkwam
+    // alsnog de invite-variant krijgt.
     "visitor-nudge",
+    "visitor-nudge-2",
     "verified-reminder",
     // Abstract too — resolves to owned-publisher / owned-contributor.
     "owned-welcome",
@@ -300,6 +304,7 @@ async function sendOne(
     "outreach-followup": 1,
     "outreach-final": 1,
     "visitor-nudge": 2,
+    "visitor-nudge-2": 2,
     "verified-reminder": 3,
     "owned-welcome": 4,
   }
@@ -435,10 +440,14 @@ async function sendOne(
   // appeared overnight upgrades the mail to the invite experience.
   let sendTemplate = row.template
   let resolutionError: string | null = null
-  if (row.template === "visitor-nudge") {
+  if (row.template === "visitor-nudge" || row.template === "visitor-nudge-2") {
     try {
       const { buildVisitorNudge } = await import("@/lib/visitor-nudge")
-      const nudge = await buildVisitorNudge(row.company_id, recipient)
+      const nudge = await buildVisitorNudge(
+        row.company_id,
+        recipient,
+        row.template === "visitor-nudge-2" ? 2 : 1,
+      )
       sendTemplate = nudge.template
       Object.assign(variables, nudge.variables)
     } catch (err) {

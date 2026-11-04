@@ -827,7 +827,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
         "outreach-intro", "outreach-followup", "outreach-final",
         "prospect-intro", "prospect-followup", "prospect-final",
         "new-professional-invite", "new-professional-followup", "new-professional-final",
-        "visitor-nudge", "verified-reminder", "owned-welcome",
+        "visitor-nudge", "visitor-nudge-2", "verified-reminder", "owned-welcome",
         "company-live", "listed-professionals", "listed-backlink",
       ])
     for (const r of (pendingRows ?? []) as Array<{ email: string | null }>) {
@@ -1673,7 +1673,7 @@ export async function fetchSalesContactForProspect(prospectId: string): Promise<
       "outreach-intro", "outreach-followup", "outreach-final",
       "prospect-intro", "prospect-followup", "prospect-final",
       "new-professional-invite", "new-professional-followup", "new-professional-final",
-      "visitor-nudge", "verified-reminder", "owned-welcome",
+      "visitor-nudge", "visitor-nudge-2", "verified-reminder", "owned-welcome",
         "company-live", "listed-professionals", "listed-backlink",
     ])
     .limit(1)
@@ -3202,7 +3202,7 @@ const OUTREACH_SERIES = ["outreach-intro", "outreach-followup", "outreach-final"
 const SHOWCASE_SERIES = ["prospect-intro", "prospect-followup", "prospect-final"] as const
 const SERIES_TEMPLATES: readonly string[] = [...OUTREACH_SERIES, ...SHOWCASE_SERIES]
 /** Stage mails: always queued, one row each, no live path. */
-const STAGE_TEMPLATES = ["visitor-nudge", "verified-reminder", "owned-welcome", "company-live", "listed-professionals", "listed-backlink"] as const
+const STAGE_TEMPLATES = ["visitor-nudge", "visitor-nudge-2", "verified-reminder", "owned-welcome", "company-live", "listed-professionals", "listed-backlink"] as const
 const CAMPAIGN_TEMPLATES: readonly string[] = [...SERIES_TEMPLATES, ...STAGE_TEMPLATES]
 
 async function fetchOutreachEventsByTemplate(
@@ -3468,7 +3468,7 @@ export async function getProspectSequence(prospectId: string): Promise<{
     .from("email_drip_queue")
     .select("template, send_at, sent_at, cancelled_at, cancelled_reason, attempt_count, last_error, opened_at, clicked_at, last_event_cached")
     .eq("email", contactEmail)
-    .in("template", [introTemplateQueue, followupTemplate, finalTemplate, "visitor-nudge", "verified-reminder", "owned-welcome", "company-live", "listed-professionals", "listed-backlink"])
+    .in("template", [introTemplateQueue, followupTemplate, finalTemplate, "visitor-nudge", "visitor-nudge-2", "verified-reminder", "owned-welcome", "company-live", "listed-professionals", "listed-backlink"])
     .order("created_at", { ascending: false })
 
   // Build a map: template → most recent row (we sorted desc above)

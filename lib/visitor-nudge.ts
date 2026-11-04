@@ -11,6 +11,20 @@ export type VisitorNudgeTemplate =
   | "visitor-nudge-invite"
   | "visitor-nudge-showcase"
   | "visitor-nudge-platform"
+  | "visitor-nudge-2-invite"
+  | "visitor-nudge-2-showcase"
+  | "visitor-nudge-2-platform"
+
+/** Welke van de twee Visitor-mails. De variantkeuze is identiek — pas
+ *  bij het samenstellen van de naam loopt het uiteen, zodat er maar
+ *  één plek is die weet hoe een bezoeker in een funnel valt. */
+export type VisitorNudgeStep = 1 | 2
+
+const nudgeTemplate = (
+  variant: "invite" | "showcase" | "platform",
+  step: VisitorNudgeStep,
+): VisitorNudgeTemplate =>
+  (step === 2 ? `visitor-nudge-2-${variant}` : `visitor-nudge-${variant}`) as VisitorNudgeTemplate
 
 /**
  * The Visitor-nudge is ONE sequence step with three copy variants —
@@ -29,6 +43,7 @@ export type VisitorNudgeTemplate =
 export async function buildVisitorNudge(
   companyId: string | null,
   email: string,
+  step: VisitorNudgeStep = 1,
 ): Promise<{ template: VisitorNudgeTemplate; variables: EmailVariables }> {
   const svc = createServiceRoleSupabaseClient()
 
@@ -42,7 +57,7 @@ export async function buildVisitorNudge(
       .limit(1)
       .maybeSingle()
     return {
-      template: "visitor-nudge-platform",
+      template: nudgeTemplate("platform", step),
       variables: {
         company_name: prospect?.company_name ?? undefined,
         ref_url: `${SITE_URL}/claim`,
@@ -103,7 +118,7 @@ export async function buildVisitorNudge(
       inviterName = (owner as { companies?: { name?: string } } | null)?.companies?.name ?? undefined
     }
     return {
-      template: "visitor-nudge-invite",
+      template: nudgeTemplate("invite", step),
       variables: {
         ...base,
         project_title: project?.title ?? undefined,
@@ -117,7 +132,7 @@ export async function buildVisitorNudge(
 
   if (resolved.channel === "showcase") {
     return {
-      template: "visitor-nudge-showcase",
+      template: nudgeTemplate("showcase", step),
       variables: {
         ...base,
         company_page_url: company?.slug ? `${SITE_URL}/professionals/${company.slug}` : undefined,
@@ -129,5 +144,5 @@ export async function buildVisitorNudge(
 
   // Outreach-resolved companies get the platform copy — the nudge is
   // for someone already standing in the funnel, not a cold pitch.
-  return { template: "visitor-nudge-platform", variables: base }
+  return { template: nudgeTemplate("platform", step), variables: base }
 }

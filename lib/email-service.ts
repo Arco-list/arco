@@ -212,6 +212,9 @@ export type EmailTemplate =
   | 'visitor-nudge-invite'
   | 'visitor-nudge-showcase'
   | 'visitor-nudge-platform'
+  | 'visitor-nudge-2-invite'
+  | 'visitor-nudge-2-showcase'
+  | 'visitor-nudge-2-platform'
   | 'verified-reminder'
   | 'owned-publisher'
   | 'owned-contributor'
@@ -1881,6 +1884,125 @@ function renderVisitorNudgeShowcase(vars: EmailVariables, locale: EmailLocale = 
   }
 }
 
+// ── Visitor-nudge, tweede stap ────────────────────────────────────────
+//
+// Vijf werkdagen na de eerste. Dezelfde drie varianten en dezelfde
+// resolutie bij verzenden, maar bewust een ANDER argument: de eerste
+// mail leidt met het bezit ("je vermelding staat klaar"), deze met wat
+// het kost om niets te doen. Herhalen van de eerste zou de tweede
+// alleen maar goedkoper maken.
+//
+// Hetzelfde copy-contract als stap 1: de Visitor-stempel kan van een
+// mailscanner komen, dus nergens staat "we zagen je kijken".
+
+function renderVisitorNudge2Invite(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'je bedrijf' : 'your company')
+  const projectName = vars.project_title || (locale === 'nl' ? 'een project' : 'a project')
+  const inviterName = vars.inviter_company_name || (locale === 'nl' ? 'Een bureau' : 'A studio')
+  const claimUrl = vars.claim_url || 'https://www.arcolist.com/claim'
+
+  const copy = locale === 'en'
+    ? {
+        subject: `Your name is on ${projectName}, your page is not`,
+        h1: `Your name is on ${projectName}`,
+        intro: `${inviterName} credited ${companyName} on ${projectName}, and that credit is live. It just does not lead anywhere yet — there is no page of yours behind it. Confirming takes two minutes and costs nothing.`,
+        button: `Confirm your credit`,
+      }
+    : {
+        subject: `Je naam staat op ${projectName}, je pagina nog niet`,
+        h1: `Je naam staat op ${projectName}`,
+        intro: `${inviterName} heeft ${companyName} vermeld op ${projectName}, en die vermelding staat live. Alleen leidt hij nog nergens heen — er is nog geen pagina van jullie achter. Bevestigen kost twee minuten en is gratis.`,
+        button: `Bevestig je vermelding`,
+      }
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
+      ${vars.project_link ? linkedProjectCard(vars, vars.project_link) : projectCard(vars)}
+      ${button(copy.button, claimUrl)}
+    `, locale),
+  }
+}
+
+function renderVisitorNudge2Showcase(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'Je bedrijf' : 'Your company')
+  const companyPageUrl = vars.company_page_url || 'https://www.arcolist.com/professionals'
+  const claimUrl = vars.claim_url || 'https://www.arcolist.com/claim'
+  const card = companyCard({
+    name: companyName,
+    href: companyPageUrl,
+    logoUrl: vars.logo_url,
+    heroUrl: vars.hero_image_url,
+    subtitle: vars.company_subtitle ?? null,
+  })
+
+  const copy = locale === 'en'
+    ? {
+        subject: `${companyName} is online, but not yours yet`,
+        h1: `${companyName} is online, but not yours yet`,
+        intro: `The page for ${companyName} was built from your own published work, and it is still there. What you cannot do yet is change anything on it — the text, the projects, which work leads. Claiming settles that in two minutes.`,
+        button: `Claim your page`,
+        signoffRole: 'Founder, Arco',
+      }
+    : {
+        subject: `${companyName} staat online, maar nog niet op jouw naam`,
+        h1: `${companyName} staat online, maar nog niet op jouw naam`,
+        intro: `De pagina van ${companyName} is gemaakt uit jullie eigen gepubliceerde werk, en hij staat er nog steeds. Wat nog niet kan: er zelf iets aan veranderen — de tekst, de projecten, welk werk vooraan staat. Claimen regelt dat in twee minuten.`,
+        button: `Claim je pagina`,
+        signoffRole: 'Oprichter, Arco',
+      }
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
+      ${card}
+      ${button(copy.button, claimUrl)}
+      <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
+        Niek van Leeuwen<br/>
+        <span style="color:#a1a1a0;">${copy.signoffRole}</span>
+      </p>
+    `, locale),
+  }
+}
+
+function renderVisitorNudge2Platform(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
+  const companyName = vars.company_name || (locale === 'nl' ? 'je bedrijf' : 'your company')
+  const refUrl = vars.ref_url || vars.claim_url || 'https://www.arcolist.com/claim'
+
+  const copy = locale === 'en'
+    ? {
+        subject: `One project is enough to be found`,
+        h1: `One project is enough`,
+        intro: `${companyName} has no page on Arco yet. One published project is enough to be findable for clients searching in your region — free, and it takes a few minutes. If it is not for you, that is a fine answer too; just let me know.`,
+        button: `Add your first project`,
+        signoffRole: 'Founder, Arco',
+      }
+    : {
+        subject: `Eén project is genoeg om gevonden te worden`,
+        h1: `Eén project is genoeg`,
+        intro: `${companyName} heeft nog geen pagina op Arco. Eén gepubliceerd project is genoeg om vindbaar te zijn voor opdrachtgevers die in jullie regio zoeken — gratis, en het kost een paar minuten. Is het niets voor jullie, dan is dat ook een prima antwoord; laat het gerust weten.`,
+        button: `Voeg je eerste project toe`,
+        signoffRole: 'Oprichter, Arco',
+      }
+
+  return {
+    subject: copy.subject,
+    html: lb(vars, `
+      ${heading(copy.h1)}
+      ${body(copy.intro)}
+      ${button(copy.button, refUrl)}
+      <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
+        Niek van Leeuwen<br/>
+        <span style="color:#a1a1a0;">${copy.signoffRole}</span>
+      </p>
+    `, locale),
+  }
+}
+
 function renderVisitorNudgePlatform(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
   const companyName = vars.company_name || (locale === 'nl' ? 'je bedrijf' : 'your company')
   const refUrl = vars.ref_url || vars.claim_url || 'https://www.arcolist.com/claim'
@@ -2687,6 +2809,9 @@ const TEMPLATE_RENDERERS: Record<EmailTemplate, TemplateRenderer> = {
   'visitor-nudge-invite': renderVisitorNudgeInvite,
   'visitor-nudge-showcase': renderVisitorNudgeShowcase,
   'visitor-nudge-platform': renderVisitorNudgePlatform,
+  'visitor-nudge-2-invite': renderVisitorNudge2Invite,
+  'visitor-nudge-2-showcase': renderVisitorNudge2Showcase,
+  'visitor-nudge-2-platform': renderVisitorNudge2Platform,
   'verified-reminder': renderVerifiedReminder,
   'owned-publisher': renderOwnedPublisher,
   'owned-contributor': renderOwnedContributor,
@@ -2837,6 +2962,7 @@ export async function sendTransactionalEmail(
   // cannot fix it any faster than the button can.
   const isPersonalSeries = template.startsWith('prospect-') || template.startsWith('outreach-')
     || template === 'visitor-nudge-showcase' || template === 'visitor-nudge-platform'
+    || template === 'visitor-nudge-2-showcase' || template === 'visitor-nudge-2-platform'
     || template.startsWith('founding-')
 
   try {

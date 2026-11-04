@@ -174,6 +174,12 @@ const INITIAL_TEMPLATES: EmailTemplate[] = [
   { id: "visitor-nudge-invite", name: "Invite Visitor Nudge", type: "marketing", audience: "professional", description: "Funnel opened, not claimed — invite variant leads with the credited project", trigger: "Drip queue · 1 day after funnel visit · variant resolved at send", subject: "Je vermelding op [Project] staat klaar", sends: 0, deliveryRate: 100, active: true, drip: "visitor-nudge", dripDay: 1, from: SENDERS.arco },
   { id: "visitor-nudge-showcase", name: "Showcase Visitor Nudge", type: "marketing", audience: "professional", description: "Funnel opened, not claimed — showcase variant leads with the built page", trigger: "Drip queue · 1 day after funnel visit · variant resolved at send", subject: "[Company] op Arco staat voor je klaar", sends: 0, deliveryRate: 100, active: true, drip: "visitor-nudge", dripDay: 1, from: SENDERS.niek },
   { id: "visitor-nudge-platform", name: "Outreach Visitor Nudge", type: "marketing", audience: "professional", description: "Funnel opened, not claimed — outreach variant (nothing on the platform yet) leads with the company name", trigger: "Drip queue · 1 day after funnel visit · variant resolved at send", subject: "Maak [Company] af op Arco", sends: 0, deliveryRate: 100, active: true, drip: "visitor-nudge", dripDay: 1, from: SENDERS.niek },
+  // Tweede stap, vijf werkdagen later. Zelfde drie varianten en
+  // dezelfde resolutie bij verzenden, maar een ander argument: stap 1
+  // leidt met het bezit, stap 2 met wat stilzitten kost.
+  { id: "visitor-nudge-2-invite", name: "Invite Visitor Nudge 2", type: "marketing", audience: "professional", description: "Still not claimed — the credit is live but leads nowhere without a page", trigger: "Drip queue · 6 days after funnel visit · variant resolved at send", subject: "Je naam staat op [Project], je pagina nog niet", sends: 0, deliveryRate: 100, active: true, drip: "visitor-nudge", dripDay: 6, from: SENDERS.arco },
+  { id: "visitor-nudge-2-showcase", name: "Showcase Visitor Nudge 2", type: "marketing", audience: "professional", description: "Still not claimed — the page is online and they cannot edit it yet", trigger: "Drip queue · 6 days after funnel visit · variant resolved at send", subject: "[Company] staat online, maar nog niet op jouw naam", sends: 0, deliveryRate: 100, active: true, drip: "visitor-nudge", dripDay: 6, from: SENDERS.niek },
+  { id: "visitor-nudge-2-platform", name: "Outreach Visitor Nudge 2", type: "marketing", audience: "professional", description: "Still nothing on the platform — one project is enough to be found", trigger: "Drip queue · 6 days after funnel visit · variant resolved at send", subject: "Eén project is genoeg om gevonden te worden", sends: 0, deliveryRate: 100, active: true, drip: "visitor-nudge", dripDay: 6, from: SENDERS.niek },
   // Verified-reminder — cart abandonment: step 1 confirmed, no commit.
   { id: "verified-reminder", name: "Verified Reminder", type: "marketing", audience: "professional", description: "Step 1 confirmed without the account commit — details are saved, one step left", trigger: "Drip queue · 1 day after Verified · stops at Owned", subject: "Nog één stap: je account voor [Company]", sends: 0, deliveryRate: 100, active: true, drip: "verified-reminder", dripDay: 1, from: SENDERS.arco },
   // Owned-reminder — one drip step ('owned-welcome' in the queue),
@@ -287,9 +293,9 @@ const FUNNEL_LANES: FunnelLane[] = [
     stop: "Stopt bij: promotie naar Verified",
     transactional: [],
     sequences: [
-      { channel: "Invite", templateIds: ["visitor-nudge-invite"] },
-      { channel: "Showcase", templateIds: ["visitor-nudge-showcase"] },
-      { channel: "Outreach", templateIds: ["visitor-nudge-platform"] },
+      { channel: "Invite", templateIds: ["visitor-nudge-invite", "visitor-nudge-2-invite"] },
+      { channel: "Showcase", templateIds: ["visitor-nudge-showcase", "visitor-nudge-2-showcase"] },
+      { channel: "Outreach", templateIds: ["visitor-nudge-platform", "visitor-nudge-2-platform"] },
     ],
     ghosts: [],
   },

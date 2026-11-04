@@ -222,7 +222,7 @@ const CONTACTED_SERIES_TEMPLATES = [
 ];
 
 /**
- * Schedule the one-step visitor-nudge (+1 business day) for a prospect
+ * Schedule the two-step visitor-nudge (+1 and +6 business days) for a prospect
  * that just became a Visitor, first retiring the contacted-series
  * mails the visit outran. Shared by BOTH promotion paths — the
  * ref-code landing visit here and the email-click promotion in the
@@ -253,19 +253,31 @@ export async function enqueueVisitorNudge(
     .from("email_drip_queue")
     .select("id")
     .ilike("email", email)
-    .eq("template", "visitor-nudge")
+    .in("template", ["visitor-nudge", "visitor-nudge-2"])
     .limit(1)
     .maybeSingle()
   if (existing) return
+  // TWEE stappen, in één keer ingepland. De tweede komt vijf werkdagen
+  // na de eerste en voert een ander argument: stap 1 leidt met het
+  // bezit ("je vermelding staat klaar"), stap 2 met wat stilzitten
+  // kost. Beide rijen dragen een abstracte template; welke van de drie
+  // varianten eruit komt wordt pas bij verzenden bepaald, dus een
+  // bezoeker wiens credit tussentijds binnenkomt krijgt bij stap 2
+  // alsnog de invite-copy.
+  //
+  // De dedupe hierboven kijkt naar allebei: één bezoek levert één
+  // reeks op, hoe vaak iemand ook terugkomt.
   const { nextBusinessSlot } = await import("@/lib/date-utils")
-  await (supabase.from("email_drip_queue") as any).insert({
+  const common = {
     email,
-    template: "visitor-nudge",
     sequence: "visitor-nudge",
     company_id: prospect.company_id ?? null,
-    send_at: nextBusinessSlot(1).toISOString(),
     variables: { company_name: prospect.company_name ?? undefined },
-  })
+  }
+  await (supabase.from("email_drip_queue") as any).insert([
+    { ...common, template: "visitor-nudge", send_at: nextBusinessSlot(1).toISOString() },
+    { ...common, template: "visitor-nudge-2", send_at: nextBusinessSlot(6).toISOString() },
+  ])
 }
 
 /**
@@ -281,7 +293,7 @@ async function cancelOvertakenDripRows(
   stage: "visitor" | "verified" | "owned",
 ): Promise<void> {
   const templates = [...CONTACTED_SERIES_TEMPLATES];
-  if (stage !== "visitor") templates.push("visitor-nudge");
+  if (stage !== "visitor") templates.push("visitor-nudge", "visitor-nudge-2");
   if (stage === "owned") templates.push("verified-reminder");
   try {
     await (supabase.from("email_drip_queue") as any)

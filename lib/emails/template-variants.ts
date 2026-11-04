@@ -33,6 +33,7 @@ import "server-only"
  */
 export const ABSTRACT_TEMPLATE_VARIANTS: Record<string, readonly string[]> = {
   "visitor-nudge": ["visitor-nudge-platform", "visitor-nudge-showcase", "visitor-nudge-invite"],
+  "visitor-nudge-2": ["visitor-nudge-2-platform", "visitor-nudge-2-showcase", "visitor-nudge-2-invite"],
   "owned-welcome": ["owned-publisher", "owned-contributor", "owned-invited"],
   "company-live": ["company-live-publisher", "company-live-contributor"],
   "listed-professionals": ["listed-professionals-publisher", "listed-professionals-contributor"],
@@ -68,9 +69,14 @@ export async function resolveTemplateVariant(
 
   try {
     switch (template) {
-      case "visitor-nudge": {
+      case "visitor-nudge":
+      case "visitor-nudge-2": {
         const { buildVisitorNudge } = await import("@/lib/visitor-nudge")
-        const { template: resolved } = await buildVisitorNudge(companyId, email ?? "")
+        const { template: resolved } = await buildVisitorNudge(
+          companyId,
+          email ?? "",
+          template === "visitor-nudge-2" ? 2 : 1,
+        )
         return resolved
       }
       case "owned-welcome": {
