@@ -342,14 +342,30 @@ async function sendOne(
     if (gateCompanyId) {
       const { data: gateCompany } = await supabase
         .from("companies")
-        .select("status")
+        .select("status, owner_id")
         .eq("id", gateCompanyId)
         .maybeSingle()
-      const s = (gateCompany as { status?: string } | null)?.status
+      const gate = gateCompany as { status?: string; owner_id?: string | null } | null
+      const s = gate?.status
+      // `unlisted` betekent twee tegengestelde dingen, en alleen de
+      // eigenaar maakt het verschil.
+      //
+      // GECLAIMD: was live, de eigenaar zette hem offline — vergevorderd,
+      // trede 5 klopt. ONCLAIMED: zojuist uit een projectcredit geboren
+      // (dashboard/edit/actions.ts zet nieuwe bedrijven op 'unlisted'),
+      // dus er is nog niets gebeurd.
+      //
+      // Zonder dit onderscheid liep elke invite-visitor tegen een poort
+      // aan die voor Outreach en Showcase niet bestaat: die bedrijven
+      // staan op 'added' of 'prospected' en komen in deze vertaling
+      // helemaal niet voor. Resultaat: van de invite-nudges ging 90%
+      // niet uit (2 van de 20) tegen 5% bij Outreach, en juist die mail
+      // heeft de sterkste propositie — "je vermelding staat klaar".
+      const claimed = Boolean(gate?.owner_id)
       companyIdx =
         s === "verified" ? STAGE_LADDER.indexOf("verified")
         : s === "owned" ? STAGE_LADDER.indexOf("owned")
-        : s === "unlisted" ? STAGE_LADDER.indexOf("unlisted")
+        : s === "unlisted" ? (claimed ? STAGE_LADDER.indexOf("unlisted") : -1)
         : s === "listed" ? STAGE_LADDER.indexOf("active")
         : -1
     }

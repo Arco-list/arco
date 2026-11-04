@@ -448,20 +448,37 @@ export async function dispatchProfessionalInvite(
   //     de pagina kende ze simpelweg niet. Spiegel van
   //     promoteCompanyToShowcase, dat hetzelfde doet bij een showcase.
   //
-  //     Alleen vooruit: 'added' en 'unclaimed' liggen vóór de
-  //     uitnodiging, al het andere ligt erna. Een bedrijf dat al
-  //     'verified', 'listed' of 'prospected' is terugzetten naar
-  //     'invited' zou een stap terug zijn op grond van een mail.
+  //     Alleen vooruit: 'added', 'unclaimed' en een ONCLAIMED
+  //     'unlisted' liggen vóór de uitnodiging, al het andere ligt
+  //     erna. Een bedrijf dat al 'verified', 'listed' of 'prospected'
+  //     is terugzetten naar 'invited' zou een stap terug zijn op grond
+  //     van een mail.
+  //
+  //     Die derde stond hier eerst niet bij, omdat 'unlisted' klinkt
+  //     als verder gevorderd. Voor een GECLAIMD bedrijf is dat ook zo
+  //     (live geweest, zelf offline gezet), maar een bedrijf dat uit
+  //     een projectcredit ontstaat wordt juist geboren op 'unlisted'
+  //     — zie dashboard/edit/actions.ts. Door ze over te slaan bleven
+  //     precies de invite-bedrijven op die geboortestand staan, en de
+  //     dripwachtrij leest 'unlisted' als trede 5 van 6: zo werd 90%
+  //     van hun visitor-nudges afgebroken voor hij uitging. De
+  //     `.is("owner_id", null)` hieronder houdt de geclaimde gevallen
+  //     buiten de deur.
   //
   //     `source` blijft staan. Dat is herkomst, geen kanaal — de
   //     contactkaart toont hem als Origin, en het kanaal leest de
   //     uitnodiging uit het bewijs (zie fetchInviteEvidence).
   const { data: companyLifecycle } = await supabase
     .from("companies")
-    .select("status")
+    .select("status, owner_id")
     .eq("id", recipient.id)
     .maybeSingle()
-  if (companyLifecycle && (companyLifecycle.status === "added" || companyLifecycle.status === "unclaimed")) {
+  const PRE_INVITE_STATUSES = ["added", "unclaimed", "unlisted"]
+  if (
+    companyLifecycle
+    && !companyLifecycle.owner_id
+    && PRE_INVITE_STATUSES.includes(String(companyLifecycle.status))
+  ) {
     await supabase
       .from("companies")
       .update({ status: "invited" } as never)
