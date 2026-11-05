@@ -7,7 +7,9 @@ import { logger } from "@/lib/logger"
 const APOLLO_API_URL = "https://api.apollo.io/api/v1"
 
 function getApiKey() {
-  const key = process.env.APOLLO_API_KEY
+  // Zie apollo-client.ts: een meegekomen regeleinde geeft dezelfde 401
+  // als een ingetrokken sleutel.
+  const key = process.env.APOLLO_API_KEY?.trim()
   if (!key) throw new Error("APOLLO_API_KEY is not set")
   return key
 }

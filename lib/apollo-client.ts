@@ -3,7 +3,13 @@ import { logger } from "@/lib/logger";
 const APOLLO_BASE_URL = "https://api.apollo.io";
 
 function getApiKey(): string {
-  const key = process.env.APOLLO_API_KEY;
+  // .trim() omdat een geplakte sleutel in een omgevingsvariabele
+  // makkelijk een regeleinde of spatie meeneemt. Apollo antwoordt daar
+  // met exact dezelfde 401 als op een ingetrokken sleutel
+  // (AUTH.AUTHENTICATION.API_KEY_INVALID), dus die twee oorzaken zijn
+  // van buitenaf niet te onderscheiden. Eén van de twee kan hiermee
+  // niet meer bestaan.
+  const key = process.env.APOLLO_API_KEY?.trim();
   if (!key) {
     throw new Error("Missing APOLLO_API_KEY environment variable");
   }

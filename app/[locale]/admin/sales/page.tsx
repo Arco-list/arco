@@ -44,8 +44,19 @@ export default async function ProspectsPage() {
     .order("started_at", { ascending: false })
     .limit(1)
     .maybeSingle()
+  // `connected` testte of de VARIABELE bestond, niet of hij werkt. Op
+  // 5 november stond Apollo daardoor een hele dag als verbonden
+  // gemeld terwijl elke aanroep een 401 gaf: de sleutel was ingetrokken
+  // en niets op dit scherm liet dat zien.
+  //
+  // De laatste sync-run weet het wél, en die rij wordt hierboven toch
+  // al opgehaald. Geen extra netwerkaanroep bij elke paginaweergave —
+  // een authenticatiefout in de laatste run zet het lampje uit tot een
+  // geslaagde run hem weer aanzet.
+  const lastError = (lastRun as { last_error?: string | null } | null)?.last_error ?? null
+  const authFailed = /\b401\b|API_KEY_INVALID|invalid api key|not authenticated/i.test(lastError ?? "")
   const apolloSyncStatus = {
-    connected: Boolean(process.env.APOLLO_API_KEY),
+    connected: Boolean(process.env.APOLLO_API_KEY?.trim()) && !authFailed,
     lastSyncAt: (lastRun as { started_at?: string } | null)?.started_at ?? null,
     hadError: ((lastRun as { error_count?: number } | null)?.error_count ?? 0) > 0,
   }
