@@ -3769,16 +3769,90 @@ export async function finishProspectSequence(prospectId: string) {
  *     followup + final back into the drip queue).
  *   - 'arco'    → re-send prospect-intro and re-enqueue followup + final.
  */
+/**
+ * Een handmatige Start of Restart overstemt de statuspoort.
+ *
+ * Migratie 274 hangt een trigger op email_drip_queue die een rij METEEN
+ * annuleert als het contact op 'visitor' staat, of als zijn
+ * sequence_status 'finished' of 'paused' is. Voor een automatische mail
+ * klopt dat: die hoort iemand niet in te halen die al verder is. Voor
+ * een mens die op Restart drukt klopt het niet — Marion Alders kreeg op
+ * 5 november twee keer drie rijen die op dezelfde microseconde werden
+ * aangemaakt en geannuleerd, en de knop meldde gewoon succes.
+ *
+ * In plaats van de trigger te verzwakken draaien we hier terug wat hij
+ * zojuist deed, en alleen dat: rijen uit DEZE aanroep, geannuleerd op
+ * het moment van aanmaken, nog niet verstuurd, met een verzendmoment in
+ * de toekomst. Dat is dezelfde vingerafdruk — cancelled_at =
+ * created_at — die migratie 274 zelf gebruikte om een lichting te
+ * repareren. Annuleringen die daarna komen (een bounce, een reply, de
+ * stagepoort in de cron) blijven gewoon staan.
+ *
+ * Levert ook het antwoord op dat de knop tot nu toe niet gaf: hoeveel
+ * er echt klaarstaat, en zo niet, waarom niet.
+ */
+async function releaseManualEnqueue(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  email: string,
+  since: string,
+): Promise<{ queued: number; revived: number }> {
+  const { data } = await supabase
+    .from("email_drip_queue")
+    .select("id, created_at, cancelled_at, sent_at, send_at")
+    .ilike("email", email)
+    .gte("created_at", since)
+  const rows = (data ?? []) as Array<{
+    id: string; created_at: string; cancelled_at: string | null
+    sent_at: string | null; send_at: string
+  }>
+  const now = Date.now()
+  const birthCancelled = rows.filter((r) =>
+    r.sent_at === null
+    && r.cancelled_at !== null
+    && r.cancelled_at === r.created_at
+    && new Date(r.send_at).getTime() > now)
+  if (birthCancelled.length > 0) {
+    await supabase
+      .from("email_drip_queue")
+      .update({ cancelled_at: null, cancelled_reason: null })
+      .in("id", birthCancelled.map((r) => r.id))
+  }
+  const queued = rows.filter((r) =>
+    r.sent_at === null
+    && (r.cancelled_at === null || birthCancelled.some((b) => b.id === r.id))).length
+  return { queued, revived: birthCancelled.length }
+}
+
+/** Waarom er niets kon worden ingepland. Deze vier blokkeren het
+ *  verzenden vóór de wachtrij, dus er ontstaat geen rij om te
+ *  annuleren — en zonder uitleg leest dat als "er gebeurde niets". */
+function enqueueBlockedReason(p: {
+  bounced_at?: string | null; complained_at?: string | null
+  unsubscribed_at?: string | null; not_interested_at?: string | null
+}): string | null {
+  if (p.complained_at) return "This address marked us as spam — nothing can be sent to it."
+  if (p.bounced_at) return "This address bounced earlier. Nothing will be sent until a different address is on the contact."
+  if (p.unsubscribed_at) return "This contact unsubscribed."
+  if (p.not_interested_at) return "This contact is marked not interested."
+  return null
+}
+
 export async function restartProspectSequence(prospectId: string) {
   const supabase = createServiceRoleSupabaseClient()
   const { data: prospect } = await supabase
     .from("prospects")
-    .select("id, email, company_id, company_name, contact_name, source, emails_sent, emails_delivered, sequence_status, project_id")
+    .select("id, email, company_id, company_name, contact_name, source, emails_sent, emails_delivered, sequence_status, project_id, bounced_at, complained_at, unsubscribed_at, not_interested_at")
     .eq("id", prospectId)
     .single()
 
   if (!prospect) return { success: false, error: "Prospect not found" }
 
+  const blocked = enqueueBlockedReason(prospect as never)
+  if (blocked) return { success: false, error: blocked }
+
+  // Vanaf hier tellen we alleen rijen die DEZE aanroep aanmaakt.
+  const enqueuedSince = new Date().toISOString()
   const previousStatus = prospect.sequence_status ?? "not_started"
   await supabase.from("prospects").update({ sequence_status: "active" }).eq("id", prospectId)
 
@@ -3815,7 +3889,11 @@ export async function restartProspectSequence(prospectId: string) {
       event_type: "email_resent",
       metadata: { template: "new_professional_invite", email: prospect.email },
     })
-    return { success: true }
+    const inv = await releaseManualEnqueue(supabase, prospect.email, enqueuedSince)
+    if (inv.queued === 0) {
+      return { success: false, error: "The invite was accepted but nothing stayed in the queue — check the contact's status." }
+    }
+    return { success: true, warning: inv.revived > 0 ? `${inv.revived} mail(s) were auto-cancelled on insert and have been restored.` : undefined }
   }
 
   // ── Apollo-source restart: re-fire the Outreach intro + drip ──
@@ -3851,7 +3929,16 @@ export async function restartProspectSequence(prospectId: string) {
       event_type: "sequence_restarted",
       metadata: { track: "outreach", email: prospect.email },
     })
-    return { success: true, warning: result.warning }
+    const out = await releaseManualEnqueue(supabase, prospect.email, enqueuedSince)
+    if (out.queued === 0) {
+      return { success: false, error: "Nothing stayed in the queue — check the contact's status." }
+    }
+    return {
+      success: true,
+      warning: out.revived > 0
+        ? `${out.revived} mail(s) were auto-cancelled on insert and have been restored.`
+        : result.warning,
+    }
   }
 
   // ── Arco-source restart ──
@@ -3878,7 +3965,16 @@ export async function restartProspectSequence(prospectId: string) {
     metadata: { track: "showcase", email: prospect.email },
   })
 
-  return { success: true, warning: result.warning }
+  const sc = await releaseManualEnqueue(supabase, prospect.email, enqueuedSince)
+  if (sc.queued === 0) {
+    return { success: false, error: "Nothing stayed in the queue — check the contact's status." }
+  }
+  return {
+    success: true,
+    warning: sc.revived > 0
+      ? `${sc.revived} mail(s) were auto-cancelled on insert and have been restored.`
+      : result.warning,
+  }
   } catch (err) {
     await supabase.from("prospects").update({ sequence_status: previousStatus }).eq("id", prospectId)
     return { success: false, error: err instanceof Error ? err.message : String(err) }
