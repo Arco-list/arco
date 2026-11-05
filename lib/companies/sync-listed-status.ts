@@ -29,7 +29,7 @@ export async function syncCompanyListedStatus(companyId: string) {
 
   const { data: company } = await supabase
     .from("companies")
-    .select("status, manually_unlisted, owner_id, audience")
+    .select("status, manually_unlisted, owner_id, audience, source")
     .eq("id", companyId)
     .maybeSingle()
 
@@ -83,6 +83,23 @@ export async function syncCompanyListedStatus(companyId: string) {
     // + tour firing on subsequent loads.
     const update: Record<string, unknown> = { status: targetStatus }
     if ((company.status === "created" || company.status === "owned") && hasOwner) update.setup_completed = true
+    // Een Apollo-rij mag niet op 'prospected' staan — de constraint
+    // companies_apollo_not_showcased verbiedt die combinatie, en terecht:
+    // hij houdt tegen dat een BULK-import ongezien als showcase opduikt.
+    //
+    // Maar hier is niets bulk aan. Iemand heeft met de hand een project
+    // voor dit bedrijf aangemaakt en gepubliceerd; dat is dezelfde
+    // bewuste handeling per bedrijf die promoteCompanyToShowcase doet,
+    // en die herclassificeert om dezelfde reden naar 'manual'. Zonder
+    // dat werd de update stil geweigerd: Spanjers Architect en Bas
+    // Vogelpoel Architecten kregen een gepubliceerd project en bleven
+    // op 'added' staan, buiten het Showcase-kanaal.
+    //
+    // De herkomst gaat niet verloren — die blijft in apollo_account_id
+    // staan, en de contactkaart leest hem als Origin.
+    if (targetStatus === "prospected" && (company as { source?: string | null }).source === "apollo") {
+      update.source = "manual"
+    }
     const { error: updateError } = await supabase.from("companies").update(update).eq("id", companyId)
     if (updateError) {
       // Was unchecked, so a refused update still logged as a success —
