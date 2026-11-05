@@ -2532,6 +2532,19 @@ export async function startProspectSequence(prospectId: string) {
 
   if (!prospect) return { success: false, error: "Prospect not found" }
 
+  // Start betekent start. Loopt er al een reeks, dan is nog een keer
+  // drukken een vergissing en geen opdracht — Restart vervangt, Start
+  // niet. Zonder deze poort leverde twee keer klikken twee volledige
+  // sets mails op; zie retirePendingSequence voor waarom de
+  // unique-index dat niet ving.
+  const alreadyQueued = await pendingSequenceMail(supabase, prospect.email)
+  if (alreadyQueued) {
+    return {
+      success: false,
+      error: `A sequence is already queued for this contact — ${alreadyQueued.template} goes out ${new Date(alreadyQueued.send_at).toLocaleDateString("nl-NL")}. Use Restart to replace it.`,
+    }
+  }
+
   // Set sequence to active up front; rolled back to not_started if the send fails.
   await supabase.from("prospects").update({ sequence_status: "active" }).eq("id", prospectId)
 
@@ -3769,6 +3782,61 @@ export async function finishProspectSequence(prospectId: string) {
  *     followup + final back into the drip queue).
  *   - 'arco'    → re-send prospect-intro and re-enqueue followup + final.
  */
+/** De drie verkoopreeksen. Stage-mails (visitor-nudge, owned-welcome,
+ *  company-live) vallen er bewust buiten: die mogen gewoon klaarstaan
+ *  terwijl je een reeks start of herstart. */
+const SEQUENCE_TEMPLATE_FILTER =
+  "template.like.outreach-%,template.like.prospect-%,template.like.new-professional-%"
+
+/** Staat er al een verkoopreeks klaar voor dit adres? */
+async function pendingSequenceMail(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  email: string,
+): Promise<{ template: string; send_at: string } | null> {
+  const { data } = await supabase
+    .from("email_drip_queue")
+    .select("template, send_at")
+    .ilike("email", email)
+    .is("sent_at", null)
+    .is("cancelled_at", null)
+    .or(SEQUENCE_TEMPLATE_FILTER)
+    .order("send_at", { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  return (data as { template: string; send_at: string } | null) ?? null
+}
+
+/**
+ * Een herstart vervangt, hij stapelt niet.
+ *
+ * Marion Alders kreeg op 5 november twee volledige sets van drie mails
+ * omdat er negen seconden tussen twee klikken zat: de knop is tijdens
+ * de aanroep uitgeschakeld, maar de eerste was allang klaar — en had
+ * stil niets opgeleverd, dus een tweede klik was een redelijke reactie.
+ *
+ * De partiële unique-index op (lower(email), template) WHERE pending
+ * had dat moeten vangen, maar de eerste set stond toen al op
+ * cancelled: niet pending, dus geen conflict. Dat gat gaat hier dicht
+ * aan de voorkant, door de vorige reeks met zoveel woorden in te
+ * trekken voordat de nieuwe wordt ingepland.
+ */
+async function retirePendingSequence(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  email: string,
+): Promise<number> {
+  const { data } = await supabase
+    .from("email_drip_queue")
+    .update({ cancelled_at: new Date().toISOString(), cancelled_reason: "restarted" })
+    .ilike("email", email)
+    .is("sent_at", null)
+    .is("cancelled_at", null)
+    .or(SEQUENCE_TEMPLATE_FILTER)
+    .select("id")
+  return ((data ?? []) as unknown[]).length
+}
+
 /**
  * Een handmatige Start of Restart overstemt de statuspoort.
  *
@@ -3850,6 +3918,10 @@ export async function restartProspectSequence(prospectId: string) {
 
   const blocked = enqueueBlockedReason(prospect as never)
   if (blocked) return { success: false, error: blocked }
+
+  // Eerst de vorige reeks intrekken, dan pas de nieuwe inplannen —
+  // anders levert twee keer klikken twee volledige sets op.
+  await retirePendingSequence(supabase, prospect.email)
 
   // Vanaf hier tellen we alleen rijen die DEZE aanroep aanmaakt.
   const enqueuedSince = new Date().toISOString()
