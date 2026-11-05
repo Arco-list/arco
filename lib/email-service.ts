@@ -2004,31 +2004,67 @@ function renderVisitorNudge2Platform(vars: EmailVariables, locale: EmailLocale =
 }
 
 function renderVisitorNudgePlatform(vars: EmailVariables, locale: EmailLocale = 'nl'): { subject: string; html: string } {
-  const companyName = vars.company_name || (locale === 'nl' ? 'je bedrijf' : 'your company')
+  const companyName = vars.company_name || (locale === 'nl' ? 'jullie bureau' : 'your firm')
   const refUrl = vars.ref_url || vars.claim_url || 'https://www.arcolist.com/claim'
 
+  // GEEN verwijzing naar een bezoek. Dit was "Maak X af op Arco", met
+  // "nog één stap verwijderd" en "Ga verder met claimen" — drie zinnen
+  // die alle drie veronderstellen dat we iemand halverwege hebben zien
+  // stoppen. Dat leest als meekijken, en het klopt vaak niet eens: de
+  // Visitor-stempel kan van een mailscanner komen die de link voor de
+  // ontvanger uit opende.
+  //
+  // In plaats daarvan dezelfde opbouw als de Outreach-intro — wat Arco
+  // is, waarin het verschilt, drie concrete punten, hoe je begint —
+  // zodat dit een tweede benadering is in plaats van een herinnering
+  // aan iets wat je niet hebt afgemaakt.
   const copy = locale === 'en'
     ? {
-        subject: `Finish ${companyName} on Arco`,
-        h1: `Finish ${companyName} on Arco`,
-        intro: `Your free page for ${companyName} is one step away — finishing takes less than two minutes. Clients can then view your work and reach out directly.`,
-        button: `Continue claiming`,
+        subject: `Your projects on Arco`,
+        h1: `Your projects on Arco`,
+        intro: `Arco is an editorially curated network: architects publish their best work and name the craftspeople who realised it. Every project is reviewed before it goes online.`,
+        bullets: [
+          `Publish unlimited projects — free, forever`,
+          `Everyone who worked on the project gets their own credit`,
+          `Be found by clients searching in your region`,
+        ],
+        howItStarts: `Setting up a page takes a few minutes: paste a link to a project on your own site and we pull the photos, the description and the location out of it automatically.`,
+        button: `Create your company page`,
+        secondaryLead: `Want to look around first?`,
+        secondary: `See how Arco works`,
         signoffRole: 'Founder, Arco',
       }
     : {
-        subject: `Maak ${companyName} af op Arco`,
-        h1: `Maak ${companyName} af op Arco`,
-        intro: `Je gratis pagina voor ${companyName} is nog één stap verwijderd — afronden kost minder dan twee minuten. Opdrachtgevers kunnen daarna je werk bekijken en direct contact opnemen.`,
-        button: `Ga verder met claimen`,
+        subject: `Jullie projecten op Arco`,
+        h1: `Jullie projecten op Arco`,
+        intro: `Arco is een redactioneel gecureerd netwerk: architecten publiceren hun beste werk en vermelden de vakmensen die het hebben gerealiseerd. Elk project wordt beoordeeld voordat het online komt.`,
+        bullets: [
+          `Onbeperkt projecten publiceren — gratis, voor altijd`,
+          `Iedereen die aan het project werkte krijgt een eigen vermelding`,
+          `Gevonden worden door opdrachtgevers die in jullie regio zoeken`,
+        ],
+        howItStarts: `Een pagina aanmaken kost een paar minuten: plak een link naar een project op jullie eigen site en wij halen de foto's, de omschrijving en de locatie er automatisch uit.`,
+        button: `Maak je bedrijfspagina aan`,
+        secondaryLead: `Eerst even rondkijken?`,
+        secondary: `Bekijk hoe Arco werkt`,
         signoffRole: 'Oprichter, Arco',
       }
+
+  const bulletList = `<ul style="margin:0 0 16px;padding:0 0 0 18px;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
+${copy.bullets.map((b) => `<li style="margin:0 0 6px;">${b}</li>`).join('')}
+</ul>`
 
   return {
     subject: copy.subject,
     html: lb(vars, `
       ${heading(copy.h1)}
       ${body(copy.intro)}
+      ${bulletList}
+      ${body(copy.howItStarts)}
       ${button(copy.button, refUrl)}
+      <p style="margin:0 0 20px;font-size:14px;font-weight:300;line-height:1.6;color:#4a4a48;">
+        ${copy.secondaryLead} <a href="https://www.arcolist.com/businesses/architects?ref=outreach" style="color:#016D75;text-decoration:underline;">${copy.secondary} &rarr;</a>
+      </p>
       <p style="margin:0;font-size:15px;font-weight:300;line-height:1.6;color:#4a4a48;">
         Niek van Leeuwen<br/>
         <span style="color:#a1a1a0;">${copy.signoffRole}</span>

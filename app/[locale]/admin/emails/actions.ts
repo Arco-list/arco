@@ -220,6 +220,10 @@ const SUBJECT_TO_TEMPLATE: [RegExp, string, string][] = [
   [/^Your credit on .* is ready$/i, "visitor-nudge-invite", "Invite Visitor Nudge"],
   [/^Maak .* af op Arco$/i, "visitor-nudge-platform", "Outreach Visitor Nudge"],
   [/^Finish .* on Arco$/i, "visitor-nudge-platform", "Outreach Visitor Nudge"],
+  // Onderwerp herschreven 5 nov; de twee regels hierboven blijven staan
+  // voor de mails die al verstuurd zijn met de oude kop.
+  [/^Jullie projecten op Arco$/i, "visitor-nudge-platform", "Outreach Visitor Nudge"],
+  [/^Your projects on Arco$/i, "visitor-nudge-platform", "Outreach Visitor Nudge"],
   [/^Je naam staat op .*, je pagina nog niet$/i, "visitor-nudge-2-invite", "Invite Visitor Nudge 2"],
   [/^Your name is on .*, your page is not$/i, "visitor-nudge-2-invite", "Invite Visitor Nudge 2"],
   [/staat online, maar nog niet op jouw naam$/i, "visitor-nudge-2-showcase", "Showcase Visitor Nudge 2"],
