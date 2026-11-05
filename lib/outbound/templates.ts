@@ -115,24 +115,36 @@ Arco · www.arcolist.com`,
       "Someone published a project on Arco and credited this firm for their part in it. Their work is already live on another company's page; what is missing is a page of their own to attach it to. Lead with that project, because it is theirs and it is real. Claiming is free and takes a couple of minutes.",
     cta: "Bekijk het project en claim je pagina",
   },
+  // GEEN verwijzing naar een bezoek, in de copy noch in de brief.
+  //
+  // Dit was "Je was er bijna" met "je hebt de pagina laatst bekeken,
+  // maar het claimen is blijven liggen", en de intent droeg de drafter
+  // op dat ook te doen ("acknowledge lightly that they had a look").
+  // Dat leest als meekijken, en het klopt lang niet altijd: de
+  // Visitor-stand kan van een mailscanner komen die de link namens de
+  // ontvanger opent.
+  //
+  // Nu hetzelfde register als de Contacted-mail hierboven: kort,
+  // persoonlijk, leidt met de pagina, vraagt om een reactie en laat
+  // een nee open.
   visitor: {
     id: "visitor",
-    label: "Was al langs geweest",
+    label: "Pagina nog niet geclaimd",
     linkKind: "claim",
-    subject: "Je was er bijna",
+    subject: "Je pagina staat klaar",
     body: `Hoi {{voornaam}},
 
-Je hebt de pagina van {{bedrijf}} laatst bekeken, maar het claimen is blijven liggen.
+De pagina van {{bedrijf}} staat klaar op Arco. Claimen kost een paar minuten en is gratis.
 
 [[LINK]]
 
-Liep je ergens tegenaan? Laat het gerust weten — ook als het gewoon niet past, dan hoor ik dat liever dan dat ik je nog eens mail.
+Klopt er iets niet, of mis je er werk op? Ik hoor het graag — ook als het niets voor jullie is, dan weet ik dat liever dan dat ik je nog eens mail.
 
 Niek
 Arco · www.arcolist.com`,
     intent:
-      "They opened their claim page once and did not finish. Do not start over and do not explain Arco again — pick up where they left off. Acknowledge lightly that they had a look, ask whether something got in the way, and make finishing the easy option. Genuinely leave room for 'not interested'.",
-    cta: "Ga verder waar je gebleven was",
+      "A second approach to someone whose page is ready and still unclaimed. NEVER reference a visit, a click, or anything else you observed about them — the funnel stamp can come from a mail scanner opening the link on their behalf, and it reads as surveillance either way. Lead with the page and what claiming gets them, ask plainly whether something is wrong or missing, and genuinely leave room for 'not interested'. Do not explain Arco from scratch; they have heard from you before.",
+    cta: "Bekijk en claim je pagina",
   },
   showcase: {
     id: "showcase",
