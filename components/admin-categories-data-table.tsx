@@ -108,7 +108,6 @@ export type AdminProductCategoryRow = {
   parentId: string | null
   parentName: string | null
   orderIndex: number
-  productCount: number
 }
 
 interface Props {
@@ -1328,12 +1327,6 @@ function ProductCategoriesTab({ productCategories }: { productCategories: AdminP
     })
   }
 
-  const totalCount = (id: string): number => {
-    const own = productCategories.find((c) => c.id === id)?.productCount ?? 0
-    const children = childrenMap.get(id) ?? []
-    return own + children.reduce((sum, c) => sum + totalCount(c.id), 0)
-  }
-
   const handleSwap = (a: AdminProductCategoryRow, b: AdminProductCategoryRow) => {
     startTransition(async () => {
       const { swapProductCategoryOrderAction } = await import("@/app/admin/categories/actions")
@@ -1380,21 +1373,19 @@ function ProductCategoriesTab({ productCategories }: { productCategories: AdminP
         <thead>
           <tr>
             <th>Category</th>
-            <th style={{ textAlign: "right" }}>Products</th>
             <th style={{ width: 60 }}>Order</th>
           </tr>
         </thead>
         <tbody>
           {parents.length === 0 ? (
             <tr>
-              <td colSpan={3} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>No product categories found.</td>
+              <td colSpan={2} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>No product categories found.</td>
             </tr>
           ) : (
             parents.map((parent) => {
               const isExpanded = expanded.has(parent.id)
               const children = childrenMap.get(parent.id) ?? []
               const hasSubs = children.length > 0
-              const count = totalCount(parent.id)
 
               return (
                 <Fragment key={parent.id}>
@@ -1423,14 +1414,12 @@ function ProductCategoriesTab({ productCategories }: { productCategories: AdminP
                         </div>
                       </div>
                     </td>
-                    <td style={{ textAlign: "right" }}>{count > 0 ? count : <span className="arco-table-secondary" style={{ marginTop: 0 }}>0</span>}</td>
                     <td><ArrowButtons item={parent} siblings={parents} /></td>
                   </tr>
                   {isExpanded && children.map((child) => {
                     const grandchildren = childrenMap.get(child.id) ?? []
                     const hasGrand = grandchildren.length > 0
                     const isChildExpanded = expanded.has(child.id)
-                    const childCount = totalCount(child.id)
 
                     return (
                       <Fragment key={child.id}>
@@ -1459,7 +1448,6 @@ function ProductCategoriesTab({ productCategories }: { productCategories: AdminP
                               </div>
                             </div>
                           </td>
-                          <td style={{ textAlign: "right" }}>{childCount > 0 ? childCount : <span className="arco-table-secondary" style={{ marginTop: 0 }}>0</span>}</td>
                           <td><ArrowButtons item={child} siblings={children} /></td>
                         </tr>
                         {isChildExpanded && grandchildren.map((gc) => (
@@ -1470,7 +1458,6 @@ function ProductCategoriesTab({ productCategories }: { productCategories: AdminP
                                 <div className="arco-table-secondary">{gc.slug}</div>
                               </div>
                             </td>
-                            <td style={{ textAlign: "right" }}>{gc.productCount > 0 ? gc.productCount : <span className="arco-table-secondary" style={{ marginTop: 0 }}>0</span>}</td>
                             <td><ArrowButtons item={gc} siblings={grandchildren} /></td>
                           </tr>
                         ))}

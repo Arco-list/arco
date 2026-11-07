@@ -48,18 +48,6 @@ export default async function CategoriesPage() {
     .select("id, slug, name, parent_id, order_index")
     .order("order_index")
 
-  // Count products per product category
-  const { data: productCategoryProducts } = await serviceSupabase
-    .from("products")
-    .select("category_id")
-    .not("category_id", "is", null)
-
-  const productCountByProductCategory = new Map<string, number>()
-  for (const row of productCategoryProducts ?? []) {
-    const catId = (row as any).category_id as string
-    productCountByProductCategory.set(catId, (productCountByProductCategory.get(catId) ?? 0) + 1)
-  }
-
   const productCategoryNameMap = new Map<string, string>()
   for (const row of productCategoriesData ?? []) {
     productCategoryNameMap.set(row.id, row.name)
@@ -72,7 +60,6 @@ export default async function CategoriesPage() {
     parentId: row.parent_id ?? null,
     parentName: row.parent_id ? productCategoryNameMap.get(row.parent_id) ?? null : null,
     orderIndex: row.order_index ?? 0,
-    productCount: productCountByProductCategory.get(row.id) ?? 0,
   }))
 
   // Fetch counts for categories and spaces

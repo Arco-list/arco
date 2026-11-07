@@ -28,7 +28,7 @@ export default async function AdminBrandDetailPage({ params }: { params: Promise
     .order("created_at", { ascending: false })
 
   // Series, niet producten: de merkenlaag gaat merk → serie → foto.
-  // Producten zijn uit deze pagina; de tabel volgt zodra de code weg is.
+  // De producttabel is weg (migratie 290).
   const [{ data: families }, { data: projectLinks }] = await Promise.all([
     (supabase as any)
       .from("product_families")

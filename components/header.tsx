@@ -284,12 +284,6 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
   const hasProfessionalRole = userTypes?.includes("professional") ?? false;
   const hasAdminRole = userTypes?.includes("admin") ?? false;
 
-  // Products nav link — visible to admins only (Phase 1).
-  // Only add to defaultNavLinks (not admin layout's custom navLinks).
-  if (hasAdminRole && !navLinks && !resolvedNavLinks.some(l => !isNavGroup(l) && l.href === "/products")) {
-    resolvedNavLinks.push({ href: "/products", label: "Products" })
-  }
-
   // Admin badge counts. The admin layout bakes them into navLinks
   // server-side, which makes them correct on load but frozen after it:
   // archiving an email mutates the DB, and the layout is a server
@@ -1040,7 +1034,6 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                                 companies: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>,
                                 projects: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></svg>,
                                 brands: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>,
-                                products: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>,
                                 dashboard: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>,
                                 sales: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" /></svg>,
                                 inbox: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12" /><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z" /></svg>,
@@ -1062,9 +1055,6 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                                   { href: "/admin/companies", label: t("admin_companies"), icon: adminIcons.companies },
                                   { href: "/admin/projects", label: t("admin_projects"), icon: adminIcons.projects },
                                   { href: "/admin/brands", label: t("admin_brands"), icon: adminIcons.brands },
-                                ]},
-                                { key: "catalog", label: t("admin_catalog"), items: [
-                                  { href: "/admin/products", label: t("admin_products"), icon: adminIcons.products },
                                 ]},
                                 { key: "growth", label: t("admin_growth"), items: [
                                   { href: "/admin/dashboard", label: t("admin_dashboard"), icon: adminIcons.dashboard },

@@ -1,15 +1,13 @@
 /**
- * Products section gate.
+ * Brands section gate.
  *
- * Phase 1 of Arco Products is admin-only — the catalog, brand pages,
- * product detail pages, and all admin tools are gated behind this check
- * so we can build, scrape, and stage content without exposing it to the
- * public. Flip the gate (or remove the calls) when Phase 4 ships.
+ * The brands layer (brand → series → photo) is admin-only while it is
+ * being filled. The public /brands/[brand] and /brands/[brand]/[series]
+ * pages will call this so content can be staged without being exposed;
+ * flip the gate (or remove the calls) when the layer goes public.
  *
- * Used by:
- *   - app/[locale]/products/page.tsx           (discover)
- *   - app/[locale]/products/[slug]/page.tsx    (product detail)
- *   - app/[locale]/brands/[slug]/page.tsx      (brand detail)
+ * The product catalog that first used this gate is gone (migration 290).
+ * The function name stays so the call sites read the same.
  *
  * Admin tables under /admin/* are already gated by the admin layout.
  */

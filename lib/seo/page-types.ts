@@ -114,8 +114,8 @@ export const MARKET_SIDE: Record<PageGroup, "pro" | "project" | "arco" | "restba
  */
 const ARCO_PATHS = new Set([
   "about", "pricing", "businesses", "list-with-us", "help-center",
-  "privacy", "terms", "homeowner", "photographers", "products", "brands",
-  "styles", "components", "brands",
+  "privacy", "terms", "homeowner", "photographers", "brands",
+  "styles", "components",
 ])
 
 const LOCALES = new Set(["nl", "en"])

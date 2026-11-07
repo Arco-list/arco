@@ -2073,135 +2073,6 @@ export type Database = {
           },
         ]
       }
-      product_photos: {
-        Row: {
-          alt_text: string | null
-          attribution: string | null
-          created_at: string
-          height: number | null
-          id: string
-          is_primary: boolean
-          order_index: number
-          product_id: string
-          url: string
-          width: number | null
-        }
-        Insert: {
-          alt_text?: string | null
-          attribution?: string | null
-          created_at?: string
-          height?: number | null
-          id?: string
-          is_primary?: boolean
-          order_index?: number
-          product_id: string
-          url: string
-          width?: number | null
-        }
-        Update: {
-          alt_text?: string | null
-          attribution?: string | null
-          created_at?: string
-          height?: number | null
-          id?: string
-          is_primary?: boolean
-          order_index?: number
-          product_id?: string
-          url?: string
-          width?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "product_photos_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      products: {
-        Row: {
-          brand_id: string
-          category_id: string | null
-          created_at: string
-          description: string | null
-          family_id: string | null
-          id: string
-          is_featured: boolean
-          name: string
-          scraped_at: string | null
-          slug: string
-          source_url: string | null
-          spec_groups: Json | null
-          spec_order: Json | null
-          specs: Json | null
-          status: Database["public"]["Enums"]["product_status"]
-          updated_at: string
-          variants: Json | null
-        }
-        Insert: {
-          brand_id: string
-          category_id?: string | null
-          created_at?: string
-          description?: string | null
-          family_id?: string | null
-          id?: string
-          is_featured?: boolean
-          name: string
-          scraped_at?: string | null
-          slug: string
-          source_url?: string | null
-          spec_groups?: Json | null
-          spec_order?: Json | null
-          specs?: Json | null
-          status?: Database["public"]["Enums"]["product_status"]
-          updated_at?: string
-          variants?: Json | null
-        }
-        Update: {
-          brand_id?: string
-          category_id?: string | null
-          created_at?: string
-          description?: string | null
-          family_id?: string | null
-          id?: string
-          is_featured?: boolean
-          name?: string
-          scraped_at?: string | null
-          slug?: string
-          source_url?: string | null
-          spec_groups?: Json | null
-          spec_order?: Json | null
-          specs?: Json | null
-          status?: Database["public"]["Enums"]["product_status"]
-          updated_at?: string
-          variants?: Json | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "products_brand_id_fkey"
-            columns: ["brand_id"]
-            isOneToOne: false
-            referencedRelation: "brands"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "products_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "product_categories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "products_family_id_fkey"
-            columns: ["family_id"]
-            isOneToOne: false
-            referencedRelation: "product_families"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       professionals: {
         Row: {
           bio: string | null
@@ -2786,93 +2657,6 @@ export type Database = {
           },
           {
             foreignKeyName: "project_photos_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      project_products: {
-        Row: {
-          confidence: number | null
-          created_at: string
-          id: string
-          photo_id: string
-          pin_x: number | null
-          pin_y: number | null
-          product_id: string
-          project_id: string
-          rejection_reason: string | null
-          reviewed_at: string | null
-          reviewed_by_user_id: string | null
-          source: Database["public"]["Enums"]["product_link_source"]
-          status: Database["public"]["Enums"]["product_link_status"]
-          suggested_by_user_id: string | null
-        }
-        Insert: {
-          confidence?: number | null
-          created_at?: string
-          id?: string
-          photo_id: string
-          pin_x?: number | null
-          pin_y?: number | null
-          product_id: string
-          project_id: string
-          rejection_reason?: string | null
-          reviewed_at?: string | null
-          reviewed_by_user_id?: string | null
-          source: Database["public"]["Enums"]["product_link_source"]
-          status?: Database["public"]["Enums"]["product_link_status"]
-          suggested_by_user_id?: string | null
-        }
-        Update: {
-          confidence?: number | null
-          created_at?: string
-          id?: string
-          photo_id?: string
-          pin_x?: number | null
-          pin_y?: number | null
-          product_id?: string
-          project_id?: string
-          rejection_reason?: string | null
-          reviewed_at?: string | null
-          reviewed_by_user_id?: string | null
-          source?: Database["public"]["Enums"]["product_link_source"]
-          status?: Database["public"]["Enums"]["product_link_status"]
-          suggested_by_user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_products_photo_id_fkey"
-            columns: ["photo_id"]
-            isOneToOne: false
-            referencedRelation: "project_photos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_products_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_products_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "mv_project_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_products_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "project_search_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_products_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -3733,32 +3517,6 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      saved_products: {
-        Row: {
-          created_at: string
-          product_id: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          product_id: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          product_id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "saved_products_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -4699,7 +4457,6 @@ export type Database = {
         | "pro_suggest"
         | "admin_manual"
       product_link_status: "pending" | "live" | "rejected"
-      product_status: "listed" | "unlisted"
       professional_project_status:
         | "invited"
         | "listed"
@@ -4893,7 +4650,6 @@ export const Constants = {
         "admin_manual",
       ],
       product_link_status: ["pending", "live", "rejected"],
-      product_status: ["listed", "unlisted"],
       professional_project_status: [
         "invited",
         "listed",
