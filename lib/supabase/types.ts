@@ -1697,6 +1697,7 @@ export type Database = {
           kind: Database["public"]["Enums"]["outbound_kind"]
           outcome: Database["public"]["Enums"]["outbound_outcome"] | null
           prospect_id: string | null
+          subject: string | null
         }
         Insert: {
           body?: string | null
@@ -1707,6 +1708,7 @@ export type Database = {
           kind: Database["public"]["Enums"]["outbound_kind"]
           outcome?: Database["public"]["Enums"]["outbound_outcome"] | null
           prospect_id?: string | null
+          subject?: string | null
         }
         Update: {
           body?: string | null
@@ -1717,6 +1719,7 @@ export type Database = {
           kind?: Database["public"]["Enums"]["outbound_kind"]
           outcome?: Database["public"]["Enums"]["outbound_outcome"] | null
           prospect_id?: string | null
+          subject?: string | null
         }
         Relationships: [
           {
@@ -2025,31 +2028,40 @@ export type Database = {
           brand_id: string
           created_at: string
           description: string | null
+          designer: string | null
           hero_image_url: string | null
           id: string
+          launch_year: number | null
           name: string
           slug: string
           updated_at: string
+          url: string | null
         }
         Insert: {
           brand_id: string
           created_at?: string
           description?: string | null
+          designer?: string | null
           hero_image_url?: string | null
           id?: string
+          launch_year?: number | null
           name: string
           slug: string
           updated_at?: string
+          url?: string | null
         }
         Update: {
           brand_id?: string
           created_at?: string
           description?: string | null
+          designer?: string | null
           hero_image_url?: string | null
           id?: string
+          launch_year?: number | null
           name?: string
           slug?: string
           updated_at?: string
+          url?: string | null
         }
         Relationships: [
           {
@@ -2358,6 +2370,119 @@ export type Database = {
           website?: string | null
         }
         Relationships: []
+      }
+      project_brands: {
+        Row: {
+          brand_id: string
+          confidence: number | null
+          created_at: string
+          family_id: string | null
+          id: string
+          note: string | null
+          photo_id: string | null
+          pin_x: number | null
+          pin_y: number | null
+          project_id: string
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by_user_id: string | null
+          source: Database["public"]["Enums"]["product_link_source"]
+          space_id: string | null
+          status: Database["public"]["Enums"]["product_link_status"]
+          suggested_by_user_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          confidence?: number | null
+          created_at?: string
+          family_id?: string | null
+          id?: string
+          note?: string | null
+          photo_id?: string | null
+          pin_x?: number | null
+          pin_y?: number | null
+          project_id: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by_user_id?: string | null
+          source?: Database["public"]["Enums"]["product_link_source"]
+          space_id?: string | null
+          status?: Database["public"]["Enums"]["product_link_status"]
+          suggested_by_user_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          confidence?: number | null
+          created_at?: string
+          family_id?: string | null
+          id?: string
+          note?: string | null
+          photo_id?: string | null
+          pin_x?: number | null
+          pin_y?: number | null
+          project_id?: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by_user_id?: string | null
+          source?: Database["public"]["Enums"]["product_link_source"]
+          space_id?: string | null
+          status?: Database["public"]["Enums"]["product_link_status"]
+          suggested_by_user_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_brands_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_brands_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "product_families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_brands_photo_id_fkey"
+            columns: ["photo_id"]
+            isOneToOne: false
+            referencedRelation: "project_photos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_brands_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_brands_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "project_search_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_brands_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_brands_space_id_fkey"
+            columns: ["space_id"]
+            isOneToOne: false
+            referencedRelation: "spaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       project_categories: {
         Row: {

@@ -79,12 +79,15 @@ function buildAdminNavLinks({
         { href: "/admin/users", label: "Users", icon: ICONS.users },
         { href: "/admin/companies", label: "Companies", icon: ICONS.companies },
         { href: "/admin/projects", label: "Projects", icon: ICONS.projects, badge: projectsToReviewCount },
+        // Merken horen bij de marktplaats, niet bij een catalogus: het
+        // zijn partijen met een pagina en een acquisitiefunnel, net als
+        // bedrijven. Catalog blijft tot de productcode weg is.
+        { href: "/admin/brands", label: "Brands", icon: ICONS.brands },
       ],
     },
     {
       label: "Catalog",
       children: [
-        { href: "/admin/brands", label: "Brands", icon: ICONS.brands },
         { href: "/admin/products", label: "Products", icon: ICONS.products },
       ],
     },

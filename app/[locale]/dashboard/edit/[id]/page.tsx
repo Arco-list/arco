@@ -138,6 +138,7 @@ import {
 import { createUnlistedCompanyAction, confirmLinkExistingCompanyAction, sendInviteEmailAction, getCompanyOwnerEmailAction } from "@/app/dashboard/edit/actions"
 import { enrichCompanyAction } from "@/app/dashboard/edit/enrich-company-actions"
 import { PhotographerSpecCell } from "./photographer-spec-cell"
+import { ProjectBrandsEditor } from "./project-brands-editor"
 import { isAdminUser } from "@/lib/auth-utils"
 import { trackProjectPublished, trackProfessionalInvited } from "@/lib/tracking"
 import {
@@ -7373,6 +7374,12 @@ export default function ListingEditorPage() {
             </div>
           )}
         </section>
+
+        {/* Merken — fase 1 van de merkenlaag, alleen voor admins. Eigen
+            sectie en eigen acties (brand-actions.ts), los van de credits
+            hierboven: de eigenaar krijgt hem later door de guard te
+            verruimen, niet door hier iets te verbouwen. */}
+        {isAdmin && projectId && <ProjectBrandsEditor projectId={projectId} />}
 
       </div>
 

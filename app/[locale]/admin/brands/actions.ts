@@ -376,7 +376,10 @@ export async function scrapeProduct(rawUrl: string, brandId: string): Promise<{ 
 /**
  * Update a brand's name, description, and/or logo. Admin only.
  */
-export async function updateBrand(brandId: string, fields: { name?: string; description?: string; logo_url?: string }): Promise<{ ok: true } | { error: string }> {
+export async function updateBrand(
+  brandId: string,
+  fields: { name?: string; description?: string; logo_url?: string; website?: string | null; country?: string | null; founded_year?: number | null },
+): Promise<{ ok: true } | { error: string }> {
   const guard = await requireAdmin()
   if ("error" in guard) return guard
 
@@ -385,10 +388,18 @@ export async function updateBrand(brandId: string, fields: { name?: string; desc
   if (fields.name !== undefined) patch.name = fields.name
   if (fields.description !== undefined) patch.description = fields.description
   if (fields.logo_url !== undefined) patch.logo_url = fields.logo_url
+  if (fields.website !== undefined) patch.website = fields.website?.trim() || null
+  if (fields.country !== undefined) patch.country = fields.country?.trim() || null
+  if (fields.founded_year !== undefined) {
+    if (fields.founded_year !== null && (!Number.isInteger(fields.founded_year) || fields.founded_year < 1500 || fields.founded_year > 2100)) {
+      return { error: "Founded year must be a four-digit year." }
+    }
+    patch.founded_year = fields.founded_year
+  }
 
   if (Object.keys(patch).length === 0) return { ok: true }
 
-  const { error } = await supabase.from("brands").update(patch).eq("id", brandId)
+  const { error } = await (supabase as any).from("brands").update(patch).eq("id", brandId)
   if (error) return { error: error.message }
 
   revalidatePath("/admin/brands")
@@ -555,7 +566,14 @@ export async function upsertProductFamily(
  */
 export async function updateProductFamily(
   familyId: string,
-  fields: { name?: string; hero_image_url?: string | null },
+  fields: {
+    name?: string
+    hero_image_url?: string | null
+    description?: string | null
+    designer?: string | null
+    launch_year?: number | null
+    url?: string | null
+  },
 ): Promise<{ ok: true } | { error: string }> {
   const guard = await requireAdmin()
   if ("error" in guard) return guard
@@ -570,6 +588,16 @@ export async function updateProductFamily(
     patch.slug = slugify(trimmed)
   }
   if (fields.hero_image_url !== undefined) patch.hero_image_url = fields.hero_image_url
+  // Wat een seriepagina toont en een catalogus niet geeft (migratie 289).
+  if (fields.description !== undefined) patch.description = fields.description?.trim() || null
+  if (fields.designer !== undefined) patch.designer = fields.designer?.trim() || null
+  if (fields.url !== undefined) patch.url = fields.url?.trim() || null
+  if (fields.launch_year !== undefined) {
+    if (fields.launch_year !== null && (!Number.isInteger(fields.launch_year) || fields.launch_year < 1800 || fields.launch_year > 2100)) {
+      return { error: "Launch year must be a four-digit year." }
+    }
+    patch.launch_year = fields.launch_year
+  }
 
   if (Object.keys(patch).length === 0) return { ok: true }
 
@@ -650,7 +678,9 @@ export async function deleteProductFamily(
     .from("products")
     .update({ family_id: null })
     .eq("family_id", familyId)
-  if (detachError) return { error: detachError.message }
+  // Tolerant voor de dag dat de products-tabel weg is: een ontbrekende
+  // relatie is geen reden om een serie te houden die je wilt verwijderen.
+  if (detachError && !/does not exist|schema cache/i.test(detachError.message)) return { error: detachError.message }
 
   const { error } = await supabase.from("product_families").delete().eq("id", familyId)
   if (error) return { error: error.message }
