@@ -570,7 +570,7 @@ async function sendOne(
     }
   }
 
-  let result: { success: boolean; messageId?: string; message?: string }
+  let result: { success: boolean; messageId?: string; message?: string; skipped?: "opted_out" }
   if (resolutionError) {
     result = { success: false, message: resolutionError }
   } else try {
@@ -588,6 +588,36 @@ async function sendOne(
       success: false,
       message: err instanceof Error ? err.message : "Unknown send error",
     }
+  }
+
+  // EEN GEWEIGERDE MAIL IS GEEN VERSTUURDE MAIL.
+  //
+  // sendTransactionalEmail geeft `{ success: true, skipped: 'opted_out' }`
+  // terug wanneer de ontvanger zich heeft uitgeschreven — terecht: het
+  // is geen fout, er hoort alleen niets te vertrekken. De cron las
+  // alleen `success` en zette de rij op verstuurd. Resultaat bij
+  // Sebastiaan van Maanen: een Visitor Nudge die als "Sent" in de kaart
+  // staat, met een lege resend_message_id, terwijl er niets is
+  // aangekomen. De mail is dus níét naar een uitgeschreven adres
+  // gegaan — maar de kaart en de statistieken beweren van wel.
+  //
+  // Annuleren is wat het is: deze rij vertrekt nooit meer.
+  if (result.success && result.skipped) {
+    const { error } = await supabase
+      .from("email_drip_queue")
+      .update({
+        cancelled_at: new Date().toISOString(),
+        cancelled_reason: result.skipped === "opted_out" ? "unsubscribed" : "skipped",
+        last_error: null,
+      } as never)
+      .eq("id", row.id)
+    if (error) {
+      logger.error("cron-drip-queue: Failed to mark row skipped", { rowId: row.id, supabaseError: error })
+    }
+    logger.info("cron-drip-queue: Skipped, not sent", {
+      rowId: row.id, template: row.template, email: recipient, reason: result.skipped,
+    })
+    return "cancelled"
   }
 
   if (result.success) {

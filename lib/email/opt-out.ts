@@ -66,3 +66,27 @@ export async function isOptedOutOfMarketing(
     return false
   }
 }
+
+/**
+ * Dezelfde vraag, voor het moment van INPLANNEN.
+ *
+ * De regel is simpel en kent geen uitzonderingen: staat er Unsubscribed,
+ * Complained of Not Interested op een contact, dan wordt er geen mail
+ * meer ingepland en vertrekt er geen mail meer. Bounced hoort in
+ * hetzelfde rijtje — een dood adres nog eens proberen kost alleen
+ * reputatie.
+ *
+ * De verzendpoort hierboven dekte dat al af, maar pas op het laatste
+ * moment, en dan nog alleen voor templates die als marketing gelden.
+ * Wie onderweg nee zei hield daardoor dagenlang Scheduled-regels in zijn
+ * kaart staan die nooit zouden vertrekken, en iedere nieuwe inplanplek
+ * moest er zelf aan denken. Dit is dezelfde lijst, één keer, om vóór een
+ * insert te stellen.
+ *
+ * Faalt net als zijn tweelingbroer OPEN: een hapering in de database mag
+ * de funnel niet stilleggen. De verzendpoort vangt het alsnog af.
+ */
+export async function isSuppressedForBulk(email: string | null | undefined): Promise<boolean> {
+  if (!email) return false
+  return isOptedOutOfMarketing(email, null)
+}

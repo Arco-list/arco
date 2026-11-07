@@ -237,6 +237,15 @@ export async function enqueueVisitorNudge(
 ): Promise<void> {
   const email = prospect.email
   if (!email) return
+  // Unsubscribed / Complained / Not Interested / Bounced: niets inplannen.
+  // Deze reeks werd gestart door een klik, en tot vandaag telde een klik
+  // op de uitschrijflink daar gewoon in mee.
+  const { isSuppressedForBulk } = await import("@/lib/email/opt-out")
+  if (await isSuppressedForBulk(email)) {
+    logger.info("Visitor nudge not enqueued — contact is suppressed", { email })
+    await cancelOvertakenDripRows(supabase, email, "visitor")
+    return
+  }
   await cancelOvertakenDripRows(supabase, email, "visitor")
   // A contact who already wrote back is in a human conversation — the
   // nudge would read as a tone-deaf robot butting in. Same policy as
@@ -360,7 +369,33 @@ export async function advanceProspectStage(
   if (stage === "verified" && isClaimer) {
     try {
       const email = ((prospect as any).email as string | null) ?? identifier.email ?? null;
-      if (email) {
+      // DE STATUS OPNIEUW LEZEN, VLAK VOOR HET INPLANNEN.
+      //
+      // Deze functie wordt aangeroepen zonder await (claim/actions.ts
+      // doet `void import(...).then(...)`), dus de staart ervan kan
+      // minuten na het antwoord draaien. In de tussentijd kan het
+      // bedrijf live zijn gegaan: de DB-trigger zet de prospect dan op
+      // 'active' en de Listed-serie vertrekt. Bij Spanjers Architect
+      // ging het bedrijf om 14:19 listed en verscheen er om 14:29 nog
+      // een verified-reminder — een herinnering om iets af te maken
+      // dat tien minuten eerder al af was.
+      //
+      // De `prospect` in de hand is een momentopname van vóór dat
+      // alles. De cron ving hem bij verzenden alsnog af, maar tot die
+      // tijd stond er een Scheduled-regel in de kaart die niet ging
+      // gebeuren. Wat telt is de stand van nu.
+      const { data: fresh } = await supabase
+        .from("prospects")
+        .select("status")
+        .eq("id", prospect.id)
+        .maybeSingle();
+      const freshStatus = (fresh as { status?: string | null } | null)?.status ?? null;
+      if (freshStatus && statusIndex(freshStatus) > statusIndex("verified")) {
+        logger.info("Verified reminder skipped — contact already past verified", {
+          prospectId: prospect.id,
+          status: freshStatus,
+        });
+      } else if (email) {
         const { data: existing } = await supabase
           .from("email_drip_queue")
           .select("id")
@@ -368,7 +403,12 @@ export async function advanceProspectStage(
           .eq("template", "verified-reminder")
           .limit(1)
           .maybeSingle();
-        if (!existing) {
+        const { isSuppressedForBulk } = await import("@/lib/email/opt-out");
+        if (existing) {
+          // niets te doen
+        } else if (await isSuppressedForBulk(email)) {
+          logger.info("Verified reminder not enqueued — contact is suppressed", { email });
+        } else {
           const { nextBusinessSlot } = await import("@/lib/date-utils");
           await (supabase.from("email_drip_queue") as any).insert({
             email,
@@ -393,7 +433,21 @@ export async function advanceProspectStage(
   if (stage === "owned" && isClaimer) {
     try {
       const email = ((prospect as any).email as string | null) ?? identifier.email ?? null;
-      if (email) {
+      // Zelfde herlezing als bij de verified-reminder hierboven, om
+      // dezelfde reden: tussen het begin van deze aanroep en dit punt
+      // kan het bedrijf live zijn gegaan.
+      const { data: fresh } = await supabase
+        .from("prospects")
+        .select("status")
+        .eq("id", prospect.id)
+        .maybeSingle();
+      const freshStatus = (fresh as { status?: string | null } | null)?.status ?? null;
+      if (freshStatus && statusIndex(freshStatus) > statusIndex("owned")) {
+        logger.info("Owned welcome skipped — contact already past owned", {
+          prospectId: prospect.id,
+          status: freshStatus,
+        });
+      } else if (email) {
         const { data: existing } = await supabase
           .from("email_drip_queue")
           .select("id")
@@ -401,7 +455,12 @@ export async function advanceProspectStage(
           .eq("template", "owned-welcome")
           .limit(1)
           .maybeSingle();
-        if (!existing) {
+        const { isSuppressedForBulk } = await import("@/lib/email/opt-out");
+        if (existing) {
+          // niets te doen
+        } else if (await isSuppressedForBulk(email)) {
+          logger.info("Owned welcome not enqueued — contact is suppressed", { email });
+        } else {
           const { nextBusinessSlot } = await import("@/lib/date-utils");
           await (supabase.from("email_drip_queue") as any).insert({
             email,

@@ -52,6 +52,9 @@ export type EnrolOutreachResult = {
   /** Per-step send_at the cron will respect — handy for callers that
    *  want to log when the first touch is scheduled. */
   scheduled?: { intro: string; followup: string; final: string }
+  /** Niets ingepland omdat het contact is uitgeschreven, heeft geklaagd,
+   *  op niet-geïnteresseerd staat of bouncet. Geen fout — een weigering. */
+  suppressed?: boolean
 }
 
 const FOLLOWUP_DAYS = 3
@@ -84,6 +87,18 @@ export async function enrolOutreachContact(
   // claims in dispatch-outreach-intro and in the admin re-enrol actions
   // had none, and those are the rows that arrived in pairs. It now lives
   // in claimSequenceSlots, where every caller gets it.
+  // Unsubscribed / Complained / Not Interested / Bounced: niet enrollen.
+  // Dezelfde poort die dispatch-outreach-intro en de invite-dispatcher al
+  // stellen; deze plek stelde hem niet, dus een contact dat ooit nee zei
+  // kon via een her-enrolment alsnog drie rijen in de wachtrij krijgen.
+  {
+    const { isSuppressedForBulk } = await import("@/lib/email/opt-out")
+    if (await isSuppressedForBulk(email)) {
+      logger.info("outreach: enrolment skipped — contact is suppressed", { email })
+      return { success: true, suppressed: true }
+    }
+  }
+
   const [introSlot, followupSlot, finalSlot] = await claimSequenceSlots(supabase, [
     nextBusinessSlot(0),
     nextBusinessSlot(FOLLOWUP_DAYS),

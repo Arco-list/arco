@@ -56,6 +56,8 @@ export async function POST(request: NextRequest) {
   // Whether this open is a machine prefetch (set below, used by both the
   // event metadata and the prospect-counter guard).
   let machineOpen = false
+  // Buiten de try hieronder, want de prospect-afhandeling verderop leest hem ook.
+  let isUnsubscribeClick = false
 
   // Mirror every engagement event into email_events as the unified source
   // of truth. Per-table cache writes below stay running unchanged — they
@@ -85,6 +87,18 @@ export async function POST(request: NextRequest) {
         // Resend's email.clicked payload carries the clicked URL under
         // data.click.link (not in our typed shape — hence the cast).
         const clickLink = (data as unknown as { click?: { link?: string } } | null)?.click?.link ?? null
+        // EEN KLIK OP UITSCHRIJVEN IS GEEN BELANGSTELLING.
+        //
+        // Elke klik telde als betrokkenheid en promoveerde een
+        // 'contacted' naar Visitor. De uitschrijflink staat in diezelfde
+        // mail, dus Sebastiaan van Maanen klikte zich op 26 oktober in
+        // één beweging uit de lijst én naar status Visitor — waarna de
+        // Visitor-reeks voor hem werd ingepland. Het tegenovergestelde
+        // van wat hij vroeg.
+        //
+        // De rauwe gebeurtenis blijft bewaard; hij telt alleen nergens
+        // meer in mee.
+        isUnsubscribeClick = Boolean(clickLink && /\/api\/unsubscribe\b/.test(clickLink))
         // Machine detection, for opens AND clicks.
         //
         // Gateways and Apple-MPP prefetch the open pixel while scanning;
@@ -150,8 +164,11 @@ export async function POST(request: NextRequest) {
               .eq("recipient_email", recipientEmail ?? "")
               .gte("occurred_at", windowStart)
               .lte("occurred_at", windowEnd)
+            // De sleutel is `link` — zo wordt hij hieronder weggeschreven.
+            // Hij werd hier als `click_link` gelezen, dus deze lijst was
+            // altijd leeg en regel 1 heeft nooit één scanner gevangen.
             const otherLinks = ((siblings ?? []) as Array<{ metadata: Record<string, unknown> | null }>)
-              .map((s) => (s.metadata?.click_link as string | undefined) ?? null)
+              .map((s) => (s.metadata?.link as string | undefined) ?? null)
               .filter((l): l is string => Boolean(l) && l !== clickLink)
             if (otherLinks.length > 0) machineOpen = true
           }
@@ -337,6 +354,9 @@ export async function POST(request: NextRequest) {
           // seconds after her intro was sent, on two links six
           // milliseconds apart.
           if (machineOpen) break
+          // Zie isUnsubscribeClick hierboven: wie op uitschrijven klikt
+          // vraagt om minder mail, niet om de volgende stap.
+          if (isUnsubscribeClick) break
           updates.emails_clicked = (prospect.emails_clicked ?? 0) + 1
           updates.last_email_clicked_at = now
           if ((prospect as { status?: string }).status === "contacted") {

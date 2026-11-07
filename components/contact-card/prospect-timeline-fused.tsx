@@ -110,7 +110,7 @@ export function ProspectTimelineFused({ prospectId, email, emails, contactLabel,
     Promise.all([
       fetchProspectById(prospectId),
       fetchProspectEvents(prospectId),
-      getProspectSequence(prospectId),
+      getProspectSequence(prospectId, emailsKey.split("\n")),
       fetchProspectInboundEmails(prospectId, emailsKey.split("\n")),
       getTransactionalEmails(emailsKey.split("\n")),
     ])
@@ -494,7 +494,16 @@ function TimelineStream({
   // show twice. The send row upgrades the sequence row's template to
   // the concrete variant (full display name + the right preview) and is
   // dropped from the transactional stream below.
-  const nudgeSends = bundle.transactional.filter((t) => (t.template ?? "").startsWith("visitor-nudge"))
+  //
+  // Twee stappen, twee verzendingen: stap 2 gaat uit als
+  // 'visitor-nudge-2-<variant>'. Zonder dat onderscheid pakte stap 1 de
+  // eerste de beste nudge-verzending, ook als dat die van stap 2 was,
+  // en bleef stap 2 zelf onder zijn abstracte naam staan terwijl zijn
+  // verzendregel hieronder al was weggefilterd.
+  const nudgeSends = bundle.transactional.filter(
+    (t) => (t.template ?? "").startsWith("visitor-nudge") && !(t.template ?? "").startsWith("visitor-nudge-2"),
+  )
+  const nudge2Sends = bundle.transactional.filter((t) => (t.template ?? "").startsWith("visitor-nudge-2"))
   const ownedSends = bundle.transactional.filter((t) => (t.template ?? "").startsWith("owned-"))
   const companyLiveSends = bundle.transactional.filter((t) => (t.template ?? "").startsWith("company-live-"))
   const listedProSends = bundle.transactional.filter((t) => (t.template ?? "").startsWith("listed-professionals-"))
@@ -507,6 +516,8 @@ function TimelineStream({
     .map((s) => {
       const step = s.template === "visitor-nudge" && nudgeSends.length > 0
         ? { ...s, template: nudgeSends[0].template as string }
+        : s.template === "visitor-nudge-2" && nudge2Sends.length > 0
+        ? { ...s, template: nudge2Sends[0].template as string }
         : s.template === "owned-welcome" && ownedSends.length > 0
           ? { ...s, template: ownedSends[0].template as string }
           : s.template === "company-live" && companyLiveSends.length > 0
@@ -745,13 +756,28 @@ function TimelineStream({
   // are campaign_kind sales_outbound/invite and excluded at the query;
   // drip stage mails (visitor-nudge, verified-reminder) already render
   // as their SequenceRow, so their send registration is dropped here.
+  //
+  // ALLEEN ALS DIE REEKSREGEL ER OOK ECHT IS. De aanname was dat een
+  // verzonden stage-mail altijd een verzonden stap naast zich heeft;
+  // staat de wachtrijrij op een ander adres dan de prospect, dan is er
+  // geen stap en verdween de mail uit beeld in plaats van dubbel te
+  // staan. Zo werd de "pagina is live"-mail van Spanjers Architect
+  // nergens getoond terwijl hij netjes bezorgd en geopend was.
+  const sentStepTemplates = new Set(
+    bundle.sequence.filter((s) => s.status === "sent" && s.timestamp).map((s) => s.template),
+  )
+  const renderedAsStep = (tpl: string): boolean => {
+    if (tpl.startsWith("visitor-nudge-2")) return sentStepTemplates.has("visitor-nudge-2")
+    if (tpl.startsWith("visitor-nudge")) return sentStepTemplates.has("visitor-nudge")
+    if (tpl.startsWith("owned-")) return sentStepTemplates.has("owned-welcome")
+    if (tpl.startsWith("company-live")) return sentStepTemplates.has("company-live")
+    if (tpl.startsWith("listed-professionals")) return sentStepTemplates.has("listed-professionals")
+    if (tpl === "listed-backlink") return sentStepTemplates.has("listed-backlink")
+    if (tpl === "verified-reminder") return sentStepTemplates.has("verified-reminder")
+    return false
+  }
   const transactionalRows: StreamRow[] = bundle.transactional
-    .filter((t) => {
-      const tpl = t.template ?? ""
-      return !tpl.startsWith("visitor-nudge") && !tpl.startsWith("owned-")
-        && !tpl.startsWith("company-live") && !tpl.startsWith("listed-")
-        && tpl !== "verified-reminder"
-    })
+    .filter((t) => !renderedAsStep(t.template ?? ""))
     .map((t) => ({
       kind: "transactional" as const,
       ts: t.occurred_at,

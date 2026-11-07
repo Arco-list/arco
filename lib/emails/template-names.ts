@@ -34,8 +34,8 @@ const TEMPLATE_NAMES: Record<string, string> = {
   "outreach-intro": "Outreach Intro",
   "outreach-followup": "Outreach Follow-up",
   "outreach-final": "Outreach Final",
-  // Visitor-nudge — one drip step; the queue row is abstract, the sent
-  // variant ids carry the channel.
+  // Visitor-nudge — twee drip-stappen; de queue-rij is abstract, de
+  // verzonden variant-id draagt het kanaal.
   "visitor-nudge": "Visitor Nudge",
   "visitor-nudge-invite": "Invite Visitor Nudge",
   "visitor-nudge-showcase": "Showcase Visitor Nudge",
@@ -43,6 +43,11 @@ const TEMPLATE_NAMES: Record<string, string> = {
   // it); the audience is outreach prospects — the "platform" was only
   // ever the tokenless landing this variant links to.
   "visitor-nudge-platform": "Outreach Visitor Nudge",
+  // Stap 2, vijf werkdagen later. Zelfde drie varianten, ander argument.
+  "visitor-nudge-2": "Visitor Nudge 2",
+  "visitor-nudge-2-invite": "Invite Visitor Nudge 2",
+  "visitor-nudge-2-showcase": "Showcase Visitor Nudge 2",
+  "visitor-nudge-2-platform": "Outreach Visitor Nudge 2",
   "verified-reminder": "Verified Reminder",
   "owned-welcome": "Owned Reminder",
   "owned-publisher": "Publisher Reminder",

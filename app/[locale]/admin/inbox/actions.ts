@@ -631,6 +631,21 @@ export async function disconnectGmailConnection(
 }
 
 /**
+ * Stempel op een gecachet concept: welke promptopbouw het heeft
+ * voortgebracht. Verhoog hem zodra de prompt wezenlijk verandert.
+ *
+ * Zonder dit stempel overleefde een concept elke verbetering: het werd
+ * één keer gegenereerd, op de rij bewaard, en bij elke volgende opening
+ * teruggegeven zonder dat het model er nog aan te pas kwam. De
+ * threadgeschiedenis die ik hieronder toevoegde was voor Dennis dus
+ * onzichtbaar — hij zag het concept van vóór die wijziging terug en
+ * concludeerde terecht dat er niets veranderd was. Een oud stempel
+ * geldt nu als geen concept: de eerstvolgende opening genereert
+ * opnieuw, daarna is het weer gratis.
+ */
+const DRAFT_PROMPT_VERSION = 2
+
+/**
  * Generate (or return cached) AI draft reply for an inbound email.
  *
  * Uses Anthropic's API (claude-sonnet-4-6) with a system prompt
@@ -671,7 +686,7 @@ export async function generateReplyDraft(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("inbound_emails")
-    .select("id, from_email, from_name, subject, body_text, body_html, snippet, ai_draft_text, prospect_id")
+    .select("id, from_email, from_name, subject, body_text, body_html, snippet, ai_draft_text, prospect_id, received_at, metadata")
     .eq("id", id)
     .maybeSingle()
   if (error || !data) return { success: false, error: error?.message ?? "Email not found" }
@@ -688,7 +703,8 @@ export async function generateReplyDraft(
     || (row.snippet as string | null)
     || ""
 
-  if (!opts.force && row.ai_draft_text) {
+  const cachedVersion = Number((row.metadata as { ai_draft_version?: unknown } | null)?.ai_draft_version ?? 0)
+  if (!opts.force && row.ai_draft_text && cachedVersion === DRAFT_PROMPT_VERSION) {
     return {
       success: true,
       draft: row.ai_draft_text,
@@ -759,17 +775,64 @@ export async function generateReplyDraft(
     console.error("[generateReplyDraft] KB retrieval failed (non-fatal)", err)
   }
 
+  // WAT ER IN DEZE THREAD AL GEZEGD IS.
+  //
+  // De popup liet de admin "Previous emails (2)" zien, maar het model
+  // kreeg alleen de ene inbound-mail. Het wist dus niet wat Niek zelf
+  // in dezelfde conversatie had geschreven, en beantwoordde dezelfde
+  // mail opnieuw — Denkkamer kreeg een concept dat zinnen letterlijk
+  // herhaalde uit het antwoord van 18 mei.
+  //
+  // DE VALKUIL ZIT IN DE VORM VAN EEN THREAD. Een antwoord van Niek is
+  // geen eigen rij: het hangt als `replied_text` aan de inbound die het
+  // beantwoordde. Er is hier dus maar één rij, met een antwoord eraan
+  // dat twee weken jonger is dan de mail zelf. "Alles van vóór deze
+  // mail" — mijn eerste poging — gooit daarmee precies het antwoord weg
+  // dat meegenomen moest worden.
+  //
+  // Dus op identiteit filteren, niet op tijd: weg met de inbound die
+  // hieronder al als "Original email" staat, en al het andere blijft,
+  // Nieks antwoord erop voorop.
+  let threadContext = ""
+  let alreadyAnswered = false
+  try {
+    const { items } = await getContactEmailThread(row.from_email as string)
+    const currentAt = new Date((row.received_at as string | null) ?? 0).getTime()
+    const rest = items.filter(
+      (it) => !(it.direction === "in" && new Date(it.at).getTime() === currentAt),
+    )
+    // Heeft Niek het laatste woord gehad? Dan is dit geen antwoord meer
+    // maar een vervolg, en dat verandert de opdracht wezenlijk.
+    alreadyAnswered = rest.length > 0 && rest[rest.length - 1].direction === "out"
+    const lines = rest.slice(-6).map((it) => {
+      const who = it.direction === "out" ? "You (Niek) wrote" : "They wrote"
+      const body = it.body.trim()
+      const capped = body.length > 1200 ? body.slice(0, 1200) + "…" : body
+      return `${who}:\n${capped}`
+    })
+    if (lines.length > 0) threadContext = lines.join("\n\n---\n\n")
+  } catch (err) {
+    console.error("[generateReplyDraft] thread context failed (non-fatal)", err)
+  }
+
   // Few-shot examples: the last N inbound emails Niek has personally
   // replied to. Pair each (original body) with (admin's actual reply
   // text) so the model picks up real voice, real tone, real formatting
   // from edited sends — not just the static system-prompt instructions.
   // Cheaper than RAG and updates organically every time Niek sends.
+  //
+  // Nooit een mail van DEZE afzender: een exemplaar wordt nagevolgd,
+  // en een assistant-turn uit dezelfde conversatie komt er bijna
+  // woordelijk weer uit (Denkkamer kreeg zijn eigen antwoord van 18 mei
+  // terug). Die uitwisseling hoort hierboven als threadgeschiedenis,
+  // waar hij als context geldt en niet als voorbeeld van de toon.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: examples } = await (supabase as any)
     .from("inbound_emails")
     .select("subject, from_name, from_email, body_text, snippet, replied_text")
     .not("replied_text", "is", null)
     .neq("id", id)
+    .not("from_email", "ilike", row.from_email as string)
     .order("replied_at", { ascending: false })
     .limit(5)
 
@@ -807,6 +870,12 @@ export async function generateReplyDraft(
     "If the email asks to be removed / unsubscribed, confirm warmly and offer no further pitch.",
     "If the email is positive interest, propose a clear next step (e.g. 'Hop on a 15-min call?' / 'Stuur ik je een uitnodiging?').",
     "If the email asks how Arco works, give a 2-3 sentence pitch then ask one focused follow-up question.",
+    threadContext
+      ? "The user message includes what was already said in this same conversation, including your own previous replies. Treat those as said and done: never restate or re-send a point, explanation or question that is already in there."
+      : "",
+    alreadyAnswered
+      ? "IMPORTANT: you ALREADY replied to the email quoted below — your reply is the last message in the conversation. You are not answering it again; you are writing the NEXT message in the thread, after a silence. Open accordingly, refer back only briefly if at all, and make a fresh, short point or ask. Reproducing your earlier reply is the single worst outcome here."
+      : "",
     kbContext
       ? `\nReference info from Arco's Help Center (use to ground product answers; quote naturally, don't paste verbatim; ignore chunks that aren't relevant):\n\n${kbContext}`
       : "",
@@ -832,6 +901,17 @@ export async function generateReplyDraft(
 
   const userMessage = [
     prospectContext ? `Sender context:\n${prospectContext}\n` : null,
+    threadContext
+      ? [
+          "This conversation so far, oldest first:",
+          threadContext,
+          "",
+          alreadyAnswered
+            ? "You already sent the last message above. The email quoted below is the one you were answering — it is included for context, NOT as something still awaiting a reply. Write the next message in this thread instead."
+            : "Do not repeat points you already made above — build on them. If you already answered a question, do not answer it again; move the conversation forward.",
+          "---",
+        ].join("\n")
+      : null,
     `From: ${fromLabel}`,
     `Subject: ${row.subject ?? "(no subject)"}`,
     "",
@@ -902,11 +982,18 @@ export async function generateReplyDraft(
 
     if (!draft) return { success: false, error: "Model returned empty draft" }
 
-    // Cache it so re-opening the popup doesn't re-bill.
+    // Cache it so re-opening the popup doesn't re-bill — mét het
+    // stempel, anders is de cache niet te onderscheiden van een concept
+    // uit een oudere promptopbouw. Samenvoegen, niet overschrijven:
+    // metadata draagt meer dan dit veld.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any)
       .from("inbound_emails")
-      .update({ ai_draft_text: draft, updated_at: new Date().toISOString() })
+      .update({
+        ai_draft_text: draft,
+        metadata: { ...((row.metadata as Record<string, unknown> | null) ?? {}), ai_draft_version: DRAFT_PROMPT_VERSION },
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", id)
 
     return { success: true, draft, locale, originalBody }

@@ -3218,6 +3218,14 @@ const SERIES_TEMPLATES: readonly string[] = [...OUTREACH_SERIES, ...SHOWCASE_SER
 const STAGE_TEMPLATES = ["visitor-nudge", "visitor-nudge-2", "verified-reminder", "owned-welcome", "company-live", "listed-professionals", "listed-backlink"] as const
 const CAMPAIGN_TEMPLATES: readonly string[] = [...SERIES_TEMPLATES, ...STAGE_TEMPLATES]
 
+/** De twee Visitor-stappen, in volgorde. Eén plek, omdat de kaart ze op
+ *  twee plekken rendert en de tweede stap er bij de eerste uitbreiding
+ *  al uit viel. */
+const VISITOR_NUDGE_STEPS = [
+  ["visitor-nudge", "Visitor Nudge"],
+  ["visitor-nudge-2", "Visitor Nudge 2"],
+] as const
+
 async function fetchOutreachEventsByTemplate(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
@@ -3293,7 +3301,32 @@ function mergeStepWithEvents(
   }
 }
 
-export async function getProspectSequence(prospectId: string): Promise<{
+/**
+ * Elk adres waar deze contactpersoon op luistert, als PostgREST-or.
+ *
+ * De Listed-serie wordt in de wachtrij gezet op het adres dat het
+ * BEDRIJF draagt, en dat is niet altijd dat van de prospect. Bij
+ * Spanjers Architect staan company-live en listed-professionals onder
+ * bas@, terwijl de prospect linda@ is: een zoekopdracht op één adres
+ * liet daardoor noch de mail zien die al verstuurd was, noch die van
+ * 10 november die nog klaarstond. De kaart kent de aliassen allang —
+ * hij geeft ze aan de thread en aan de transactionele mails — alleen
+ * de reeksquery keek er niet naar.
+ */
+function addressOrFilter(addresses: string[]): string {
+  return addresses
+    .map((a) => a.trim())
+    .filter(Boolean)
+    .map((a) => `email.ilike.${a}`)
+    .join(",")
+}
+
+export async function getProspectSequence(
+  prospectId: string,
+  /** Primair adres + aliassen. Weggelaten → alleen het adres van de
+   *  prospect zelf, zoals voorheen. */
+  emails?: string[],
+): Promise<{
   success: boolean
   steps?: ProspectSequenceStep[]
   /** Language the sequence went out in (or will go out in) — resolved
@@ -3312,6 +3345,10 @@ export async function getProspectSequence(prospectId: string): Promise<{
 
   if (!prospect) return { success: false, error: "Prospect not found" }
 
+  const addresses = Array.from(
+    new Set([prospect.email, ...(emails ?? [])].filter(Boolean).map((e) => String(e).trim().toLowerCase())),
+  )
+
   // Outreach (Apollo source): all three steps live in email_drip_queue
   // (auto-enrol queues the intro alongside followup/final instead of
   // firing live).
@@ -3319,7 +3356,7 @@ export async function getProspectSequence(prospectId: string): Promise<{
     const { data: outreachQueueRows } = await supabase
       .from("email_drip_queue")
       .select("template, send_at, sent_at, cancelled_at, cancelled_reason, attempt_count, last_error, opened_at, clicked_at, last_event_cached")
-      .ilike("email", prospect.email)
+      .or(addressOrFilter(addresses))
       // prospect-* included: a showcase promotion mid-track swaps the
       // remaining steps to the showcase drip — those rows must show.
       .in("template", CAMPAIGN_TEMPLATES)
@@ -3408,10 +3445,14 @@ export async function getProspectSequence(prospectId: string): Promise<{
       outreachSteps.push(mergeStepWithEvents(queueRowToProspectStep(tpl, label, row), events))
     }
 
-    // Visitor-nudge: one abstract queue row (copy variant resolves at
-    // send) — rendered only when it exists, queued or sent.
-    const nudgeRow = outreachByTemplate.get("visitor-nudge")
-    if (nudgeRow) outreachSteps.push(queueRowToProspectStep("visitor-nudge", "Visitor Nudge", nudgeRow))
+    // Visitor-nudge: TWEE abstracte queue-rijen (de copy-variant valt
+    // pas bij verzenden) — elk zichtbaar zodra hij bestaat, gepland of
+    // verstuurd. Alleen stap 1 tonen loog over wat er klaarstaat: de
+    // tweede mail stond wel in de queue, maar niet in de kaart.
+    for (const [tpl, label] of VISITOR_NUDGE_STEPS) {
+      const row = outreachByTemplate.get(tpl)
+      if (row) outreachSteps.push(queueRowToProspectStep(tpl, label, row))
+    }
     const verifiedRow = outreachByTemplate.get("verified-reminder")
     if (verifiedRow) outreachSteps.push(queueRowToProspectStep("verified-reminder", "Verified Reminder", verifiedRow))
     const ownedRow = outreachByTemplate.get("owned-welcome")
@@ -3480,7 +3521,7 @@ export async function getProspectSequence(prospectId: string): Promise<{
   const { data: queueRows } = await supabase
     .from("email_drip_queue")
     .select("template, send_at, sent_at, cancelled_at, cancelled_reason, attempt_count, last_error, opened_at, clicked_at, last_event_cached")
-    .eq("email", contactEmail)
+    .or(addressOrFilter(addresses))
     .in("template", [introTemplateQueue, followupTemplate, finalTemplate, "visitor-nudge", "visitor-nudge-2", "verified-reminder", "owned-welcome", "company-live", "listed-professionals", "listed-backlink"])
     .order("created_at", { ascending: false })
 
@@ -3526,9 +3567,12 @@ export async function getProspectSequence(prospectId: string): Promise<{
     queueRowToProspectStep(finalTemplate, "Final", finalRow),
   ]
 
-  // Visitor-nudge: only when a row exists — no phantom "missing" step.
-  const nudgeRow = queueByTemplate.get("visitor-nudge")
-  if (nudgeRow) steps.push(queueRowToProspectStep("visitor-nudge", "Visitor Nudge", nudgeRow))
+  // Visitor-nudge: beide stappen, elk alleen als er een rij voor is —
+  // geen spook-"missing" stap.
+  for (const [tpl, label] of VISITOR_NUDGE_STEPS) {
+    const row = queueByTemplate.get(tpl)
+    if (row) steps.push(queueRowToProspectStep(tpl, label, row))
+  }
   const verifiedRow = queueByTemplate.get("verified-reminder")
   if (verifiedRow) steps.push(queueRowToProspectStep("verified-reminder", "Verified Reminder", verifiedRow))
   const ownedRow = queueByTemplate.get("owned-welcome")
@@ -3653,6 +3697,16 @@ export async function resumeProspectSequence(prospectId: string) {
     // via architect credit, not outbound prospect outreach — re-enqueuing
     // a sequence on resume would spam them. Only meaningful when company_id
     // is set; Outreach without a linked company skips this guard.
+    // Unsubscribed / Complained / Not Interested / Bounced: hervatten
+    // plant niets meer in. De knop staat in de kaart naast een contact
+    // dat al nee heeft gezegd, en tot nu toe deed hij gewoon zijn werk.
+    {
+      const { isSuppressedForBulk } = await import("@/lib/email/opt-out")
+      if (await isSuppressedForBulk(prospect.email)) {
+        return { success: false, error: "Contact is uitgeschreven of op niet-geïnteresseerd gezet — niets ingepland." }
+      }
+    }
+
     let skipResumeDrip = false
     if (prospect.company_id) {
       const { isProAudienceCompany } = await import("@/lib/drip-queue")
