@@ -37,19 +37,79 @@ export type ProHub = {
   categoryNameNl?: string
 }
 
-/** Plural display forms for the service hubs we expect; fallback
- *  appends an "s" to the stored name. */
+/**
+ * Meervoud per dienst, voor de hub-h1 en het headermenu.
+ *
+ * Alle 34 diensten staan hier, niet alleen de drie die vandaag een hub
+ * hebben. De oude lijst had er drie en plakte voor de rest een "s"
+ * achter de opgeslagen naam, wat op /professionals live "Meubelss",
+ * "Verlichtings", "Vloerens" en "Keukenss" opleverde — en het
+ * headermenu zet zulke labels op élke pagina.
+ *
+ * Twee vormen, naar wat het bedrijf ís:
+ *   - een BEROEP wordt gewoon meervoud: architect -> architecten.
+ *   - een PRODUCTCATEGORIE ("Meubels", "Verlichting") is geen beroep
+ *     en kan niet verbogen worden; die wordt "{categorie}specialisten".
+ *     "Vind 5 meubels in Nederland" belooft meubels, geen bedrijven.
+ *
+ * 'cabinet-maker' (Meubelmaker) blijft daarom apart van 'furniture'
+ * (Meubels) — twee categorieën die anders dezelfde naam zouden voeren.
+ */
 const SERVICE_PLURALS: Record<string, { nl: string; en: string }> = {
+  // Ontwerp & Planning
   architect: { nl: "Architecten", en: "Architects" },
   "interior-designer": { nl: "Interieurarchitecten", en: "Interior designers" },
   "garden-designer": { nl: "Tuinontwerpers", en: "Garden designers" },
+  "lighting-designer": { nl: "Lichtontwerpers", en: "Lighting designers" },
+  photographer: { nl: "Fotografen", en: "Photographers" },
+  "structural-engineer": { nl: "Constructeurs", en: "Structural engineers" },
+  // Afwerking
+  "interior-stylist": { nl: "Interieurstylisten", en: "Interior stylists" },
+  "cabinet-maker": { nl: "Meubelmakers", en: "Cabinet makers" },
+  painter: { nl: "Schilders", en: "Painters" },
+  upholstery: { nl: "Stoffeerders", en: "Upholsterers" },
+  furniture: { nl: "Meubelspecialisten", en: "Furniture specialists" },
+  lighting: { nl: "Verlichtingsspecialisten", en: "Lighting specialists" },
+  flooring: { nl: "Vloerenspecialisten", en: "Flooring specialists" },
+  fireplace: { nl: "Haardenspecialisten", en: "Fireplace specialists" },
+  art: { nl: "Kunstspecialisten", en: "Art specialists" },
+  // Bouw
+  builder: { nl: "Aannemers", en: "Builders" },
+  roofing: { nl: "Dakdekkers", en: "Roofers" },
+  kitchens: { nl: "Keukenspecialisten", en: "Kitchen specialists" },
+  bathrooms: { nl: "Badkamerspecialisten", en: "Bathroom specialists" },
+  "swimming-pools": { nl: "Zwembadbouwers", en: "Swimming pool builders" },
+  wellness: { nl: "Wellnessspecialisten", en: "Wellness specialists" },
+  "tiles-stones": { nl: "Tegel- en natuursteenspecialisten", en: "Tile & stone specialists" },
+  "windows-doors": { nl: "Ramen- en deurenspecialisten", en: "Window & door specialists" },
+  "stairs-elevator": { nl: "Trappen- en liftenbouwers", en: "Stair & elevator specialists" },
+  // Buiten & Tuin
+  gardener: { nl: "Hoveniers", en: "Gardeners" },
+  "shed-builder": { nl: "Schuurbouwers", en: "Shed builders" },
+  "outdoor-furniture": { nl: "Tuinmeubelspecialisten", en: "Outdoor furniture specialists" },
+  "outdoor-lighting": { nl: "Buitenverlichtingsspecialisten", en: "Outdoor lighting specialists" },
+  "fencing-gates": { nl: "Hekwerkspecialisten", en: "Fencing & gate specialists" },
+  // Installaties
+  "electrical-systems": { nl: "Elektriciens", en: "Electricians" },
+  "heating-ventilation": { nl: "Verwarmingsspecialisten", en: "Heating & ventilation specialists" },
+  "security-systems": { nl: "Beveiligingsspecialisten", en: "Security specialists" },
+  "smart-homes": { nl: "Smart home-installateurs", en: "Smart home installers" },
+  "solar-installer": { nl: "Zonnepaneelinstallateurs", en: "Solar installers" },
+}
+
+/** Meervoud bij een dienstSLUG — dezelfde lijst, zonder een hub nodig
+ *  te hebben. Het headermenu bouwt zijn kolommen uit de taxonomie. */
+export function servicePluralBySlug(slug: string, locale: string, fallback?: string | null): string {
+  const known = SERVICE_PLURALS[slug]
+  if (known) return locale === "nl" ? known.nl : known.en
+  // GEEN "s" erachter: een onbekende dienst voert liever zijn eigen
+  // naam dan een verbuiging die nergens op slaat.
+  return fallback ?? slug
 }
 
 export function servicePlural(hub: ProHub, locale: string): string {
-  const known = hub.serviceSlug ? SERVICE_PLURALS[hub.serviceSlug] : undefined
-  if (known) return locale === "nl" ? known.nl : known.en
-  const base = (locale === "nl" ? hub.serviceNameNl : hub.serviceName) ?? hub.serviceName ?? hub.slug
-  return `${base}s`
+  const fallback = (locale === "nl" ? hub.serviceNameNl : hub.serviceName) ?? hub.serviceName ?? hub.slug
+  return servicePluralBySlug(hub.serviceSlug ?? hub.slug, locale, fallback)
 }
 
 export function proCitySlug(name: string): string {
@@ -68,6 +128,8 @@ type MvRow = {
   primary_specialty_slug: string | null
   primary_service_name: string | null
   primary_service_name_nl: string | null
+  /** Alle dienstnamen van het bedrijf, hoofddienst incluis. */
+  services_offered: string[] | null
 }
 
 export async function getProfessionalHubs(): Promise<ProHub[]> {
@@ -75,7 +137,7 @@ export async function getProfessionalHubs(): Promise<ProHub[]> {
   const [{ data }, { data: cats }] = await Promise.all([
     supabase
       .from("mv_professional_summary")
-      .select("company_city, company_state_region, primary_specialty_slug, primary_service_name, primary_service_name_nl")
+      .select("company_city, company_state_region, primary_specialty_slug, primary_service_name, primary_service_name_nl, services_offered")
       .in("company_status", ["listed", "prospected"]),
     supabase.from("categories").select("id, slug, name, name_nl, parent_id"),
   ])
@@ -89,9 +151,19 @@ export async function getProfessionalHubs(): Promise<ProHub[]> {
     if (parent?.slug && parent.name) parentBySvcSlug.set(c.slug, { slug: parent.slug, name: parent.name, nameNl: parent.name_nl })
   }
 
+  // Dienstnaam -> dienst. De MV draagt per bedrijf alleen de SLUG van de
+  // hoofddienst; de overige diensten staan er als namen in. Deze map
+  // vertaalt die namen terug, zodat een bedrijf in elke dienst meetelt
+  // die het aanbiedt.
+  const svcByName = new Map<string, { slug: string; name: string; nameNl: string | null }>()
+  for (const c of cats ?? []) {
+    if (!c.parent_id || !c.slug || !c.name) continue
+    svcByName.set(c.name, { slug: c.slug, name: c.name, nameNl: c.name_nl })
+  }
+
   const cityAgg = new Map<string, { name: string; count: number; names: Set<string> }>()
   const provinceAgg = new Map<string, { count: number; names: Set<string> }>()
-  const serviceAgg = new Map<string, { name: string; nameNl: string | null; count: number }>()
+  const serviceAgg = new Map<string, { name: string; nameNl: string | null; count: number; parent?: { slug: string; name: string; nameNl: string | null } }>()
   const comboAgg = new Map<string, { city: string; serviceSlug: string; name: string; nameNl: string | null; count: number; names: Set<string> }>()
   const provinceComboAgg = new Map<string, { region: string; serviceSlug: string; name: string; nameNl: string | null; count: number; names: Set<string> }>()
   type CatAgg = { slug: string; name: string; nameNl: string | null; count: number; names: Set<string>; region?: string; city?: string }
@@ -115,45 +187,83 @@ export async function getProfessionalHubs(): Promise<ProHub[]> {
       entry.names.add(city)
       provinceAgg.set(region, entry)
     }
-    const svc = row.primary_specialty_slug?.trim()
-    if (svc && row.primary_service_name) {
-      const entry = serviceAgg.get(svc) ?? { name: row.primary_service_name, nameNl: row.primary_service_name_nl, count: 0 }
+    // ELKE DIENST DIE HET BEDRIJF AANBIEDT, niet alleen de hoofddienst.
+    //
+    // De teller stond op de hoofddienst, de GRID op de pagina filtert op
+    // élke dienst (professional-hub-page.tsx). Dus beloofde /professionals/
+    // architect "Vind 72 architecten" boven een lijst van 76, en bij
+    // interieurarchitect liep het van 46 tegen 77 — een bezoeker die het
+    // getal narekent, vindt er meer dan er beloofd zijn.
+    //
+    // Nu telt de hub zoals de pagina zich vult. De hoofddienst zit altijd
+    // in services_offered, dus niemand raakt zijn eigen hub kwijt.
+    const svcSlugs = new Set<string>()
+    const svcMeta = new Map<string, { name: string; nameNl: string | null }>()
+    for (const name of row.services_offered ?? []) {
+      const svcEntry = svcByName.get(name)
+      if (!svcEntry) continue
+      svcSlugs.add(svcEntry.slug)
+      svcMeta.set(svcEntry.slug, { name: svcEntry.name, nameNl: svcEntry.nameNl })
+    }
+    // Vangnet voor een rij zonder bruikbare services_offered.
+    if (svcSlugs.size === 0 && row.primary_specialty_slug?.trim() && row.primary_service_name) {
+      svcSlugs.add(row.primary_specialty_slug.trim())
+      svcMeta.set(row.primary_specialty_slug.trim(), { name: row.primary_service_name, nameNl: row.primary_service_name_nl })
+    }
+    for (const svc of svcSlugs) {
+      const meta = svcMeta.get(svc)
+      if (!meta) continue
+      const entry = serviceAgg.get(svc) ?? { name: meta.name, nameNl: meta.nameNl, count: 0, parent: parentBySvcSlug.get(svc) }
       entry.count += 1
       serviceAgg.set(svc, entry)
       if (city && cSlug) {
         const key = `${cSlug}/${svc}`
-        const combo = comboAgg.get(key) ?? { city, serviceSlug: svc, name: row.primary_service_name, nameNl: row.primary_service_name_nl, count: 0, names: new Set<string>() }
+        const combo = comboAgg.get(key) ?? { city, serviceSlug: svc, name: meta.name, nameNl: meta.nameNl, count: 0, names: new Set<string>() }
         combo.count += 1
         combo.names.add(city)
         comboAgg.set(key, combo)
       }
       if (region && city) {
         const key = `${PROVINCES[region].slug}/${svc}`
-        const combo = provinceComboAgg.get(key) ?? { region, serviceSlug: svc, name: row.primary_service_name, nameNl: row.primary_service_name_nl, count: 0, names: new Set<string>() }
+        const combo = provinceComboAgg.get(key) ?? { region, serviceSlug: svc, name: meta.name, nameNl: meta.nameNl, count: 0, names: new Set<string>() }
         combo.count += 1
         combo.names.add(city)
         provinceComboAgg.set(key, combo)
       }
+    }
+
+    // De dienstgroepen APART, en per bedrijf maar één keer. Twee diensten
+    // uit dezelfde groep (Architect én Interieurarchitect vallen allebei
+    // onder Design & planning) zouden dat bedrijf anders dubbel tellen in
+    // de groepshub.
+    const parentSlugs = new Set<string>()
+    const parentMeta = new Map<string, { slug: string; name: string; nameNl: string | null }>()
+    for (const svc of svcSlugs) {
       const parent = parentBySvcSlug.get(svc)
-      if (parent) {
-        const base = categoryAgg.get(parent.slug) ?? { slug: parent.slug, name: parent.name, nameNl: parent.nameNl, count: 0, names: new Set<string>() }
-        base.count += 1
-        if (city) base.names.add(city)
-        categoryAgg.set(parent.slug, base)
-        if (city && cSlug) {
-          const key = `${cSlug}/${parent.slug}`
-          const cc = categoryCityAgg.get(key) ?? { slug: parent.slug, name: parent.name, nameNl: parent.nameNl, count: 0, names: new Set<string>(), city }
-          cc.count += 1
-          cc.names.add(city)
-          categoryCityAgg.set(key, cc)
-        }
-        if (region && city) {
-          const key = `${PROVINCES[region].slug}/${parent.slug}`
-          const cp = categoryProvinceAgg.get(key) ?? { slug: parent.slug, name: parent.name, nameNl: parent.nameNl, count: 0, names: new Set<string>(), region }
-          cp.count += 1
-          cp.names.add(city)
-          categoryProvinceAgg.set(key, cp)
-        }
+      if (!parent) continue
+      parentSlugs.add(parent.slug)
+      parentMeta.set(parent.slug, parent)
+    }
+    for (const parentSlug of parentSlugs) {
+      const parent = parentMeta.get(parentSlug)
+      if (!parent) continue
+      const base = categoryAgg.get(parent.slug) ?? { slug: parent.slug, name: parent.name, nameNl: parent.nameNl, count: 0, names: new Set<string>() }
+      base.count += 1
+      if (city) base.names.add(city)
+      categoryAgg.set(parent.slug, base)
+      if (city && cSlug) {
+        const key = `${cSlug}/${parent.slug}`
+        const cc = categoryCityAgg.get(key) ?? { slug: parent.slug, name: parent.name, nameNl: parent.nameNl, count: 0, names: new Set<string>(), city }
+        cc.count += 1
+        cc.names.add(city)
+        categoryCityAgg.set(key, cc)
+      }
+      if (region && city) {
+        const key = `${PROVINCES[region].slug}/${parent.slug}`
+        const cp = categoryProvinceAgg.get(key) ?? { slug: parent.slug, name: parent.name, nameNl: parent.nameNl, count: 0, names: new Set<string>(), region }
+        cp.count += 1
+        cp.names.add(city)
+        categoryProvinceAgg.set(key, cp)
       }
     }
   }
@@ -182,6 +292,12 @@ export async function getProfessionalHubs(): Promise<ProHub[]> {
         serviceSlug: slug,
         serviceName: v.name,
         serviceNameNl: v.nameNl ?? undefined,
+        // De GROEP waar deze dienst onder valt. Stond alleen op de
+        // groepshubs; het headermenu zet de diensten in kolommen per
+        // groep en moet die band dus van de dienst zelf kunnen lezen.
+        categorySlug: v.parent?.slug,
+        categoryName: v.parent?.name,
+        categoryNameNl: v.parent?.nameNl ?? undefined,
       })),
     ...Array.from(comboAgg.entries())
       .filter(([, v]) => v.count >= MIN_PRO_HUB_COMPANIES)

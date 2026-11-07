@@ -79,3 +79,38 @@ export function scopeNoun(scope: string, locale: string): string {
   if (entry) return locale === "nl" ? entry.nl : entry.en
   return scopeLabel(scope, locale)
 }
+
+/** Meervoudige ruimtenamen, voor koppen: "Keukens in Amsterdam".
+ *
+ * messages/*.json kent de ruimtes alleen in enkelvoud ("Keuken") —
+ * daar zijn het filterlabels. Een kop wil het meervoud, en dat is in
+ * het Nederlands niet af te leiden: keuken → keukens, maar
+ * thuiskantoor → thuiskantoren.
+ *
+ * Staat hier om dezelfde reden als SCOPE_NOUNS: de SERVER zet de h1 van
+ * een ruimtehub en de CLIENT bouwt diezelfde kop opnieuw zodra er een
+ * filter actief is. Twee lijsten is één kop die bij hydratatie
+ * verspringt.
+ *
+ * Ruimer dan SPACE_HUB_DEFS: 'hallway' en 'other' krijgen geen eigen
+ * hub, maar zijn wél met de hand te filteren en hebben dan een label
+ * nodig. */
+export const SPACE_NOUNS: Record<string, { nl: string; en: string }> = {
+  kitchen: { nl: "Keukens", en: "Kitchens" },
+  bathroom: { nl: "Badkamers", en: "Bathrooms" },
+  living: { nl: "Woonkamers", en: "Living rooms" },
+  bedroom: { nl: "Slaapkamers", en: "Bedrooms" },
+  exterior: { nl: "Exterieur", en: "Exteriors" },
+  terrace: { nl: "Terrassen", en: "Terraces" },
+  pool: { nl: "Zwembaden", en: "Swimming pools" },
+  "home-office": { nl: "Thuiskantoren", en: "Home offices" },
+  garden: { nl: "Tuinen", en: "Gardens" },
+  hallway: { nl: "Hallen", en: "Hallways" },
+  other: { nl: "Overige ruimtes", en: "Other rooms" },
+}
+
+export function spaceNoun(space: string, locale: string): string {
+  const entry = SPACE_NOUNS[space]
+  if (entry) return locale === "nl" ? entry.nl : entry.en
+  return space.charAt(0).toUpperCase() + space.slice(1)
+}

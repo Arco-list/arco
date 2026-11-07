@@ -15,11 +15,12 @@ export function hubToDef(hub: Hub): HubDef {
   return {
     slug: hub.slug,
     kind: hub.kind,
-    cityName: hub.kind === "city" || hub.kind === "type-city" || hub.kind === "scope-city" ? hub.name : undefined,
+    cityName: hub.kind === "city" || hub.kind === "type-city" || hub.kind === "scope-city" || hub.kind === "space-city" ? hub.name : undefined,
     scope: hub.scope,
     typeValue: hub.typeValue,
+    spaceValue: hub.spaceValue,
     cityNames: hub.kind === "province" ? hub.cityNames : undefined,
-    region: hub.kind === "province" ? hub.name : hub.kind === "type-province" || hub.kind === "scope-province" ? hub.region : undefined,
+    region: hub.kind === "province" ? hub.name : hub.kind === "type-province" || hub.kind === "scope-province" || hub.kind === "space-province" ? hub.region : undefined,
   }
 }
 
@@ -47,10 +48,10 @@ export async function HubPage({ hub, allHubs, initialProjects, locale }: {
   //   province:  Projecten / Nederland / Noord-Holland
   //   city:      Projecten / Nederland / Noord-Holland / Amsterdam
   //   type-city: Projecten / Nederland / Noord-Holland / Amsterdam / Appartementen
-  const cityHubForCombo = hub.kind === "type-city" || hub.kind === "scope-city"
+  const cityHubForCombo = hub.kind === "type-city" || hub.kind === "scope-city" || hub.kind === "space-city"
     ? allHubs.find((h) => h.kind === "city" && h.slug === citySlug(hub.name))
     : undefined
-  const regionName = hub.kind === "province" || hub.kind === "type-province" || hub.kind === "scope-province"
+  const regionName = hub.kind === "province" || hub.kind === "type-province" || hub.kind === "scope-province" || hub.kind === "space-province"
     ? hub.name
     : (hub.region ?? cityHubForCombo?.region)
   const provinceHub = hub.kind !== "province" && regionName
@@ -73,7 +74,7 @@ export async function HubPage({ hub, allHubs, initialProjects, locale }: {
     ...(provinceHub && provinceLabel
       ? [{ name: provinceLabel, item: `${baseUrl}/${locale}/projects/${provinceHub.slug}` }]
       : []),
-    ...((hub.kind === "type-city" || hub.kind === "scope-city") && cityHubForCombo
+    ...((hub.kind === "type-city" || hub.kind === "scope-city" || hub.kind === "space-city") && cityHubForCombo
       ? [{ name: cityLabel(hub.name, locale), item: `${baseUrl}/${locale}/projects/${cityHubForCombo.slug}` }]
       : []),
     { name: copy.crumb, item: `${baseUrl}/${locale}/projects/${hub.slug}` },
@@ -94,8 +95,9 @@ export async function HubPage({ hub, allHubs, initialProjects, locale }: {
     cities: allHubs.filter((h) => h.kind === "city"),
     scopes: allHubs.filter((h) => h.kind === "scope"),
     types: allHubs.filter((h) => h.kind === "type"),
-    combos: allHubs.filter((h) => h.kind === "type-city" || h.kind === "type-province" || h.kind === "scope-city" || h.kind === "scope-province"),
+    combos: allHubs.filter((h) => h.kind === "type-city" || h.kind === "type-province" || h.kind === "scope-city" || h.kind === "scope-province" || h.kind === "space-city" || h.kind === "space-province"),
     provinces: allHubs.filter((h) => h.kind === "province"),
+    spaces: allHubs.filter((h) => h.kind === "space"),
   }
   // Full hub directory — same exhaustive crawl surface as the base
   // discover page, so every hub links laterally to every other. The way

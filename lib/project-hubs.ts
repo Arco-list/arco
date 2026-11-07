@@ -1,8 +1,8 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { canonicalizeScope, type ProjectScope } from "@/lib/project-translations"
-import { PROVINCES, cityLabel } from "@/lib/provinces"
-import { typeLabel, scopeLabel, scopeNoun, SCOPE_NOUNS } from "@/lib/type-labels"
-import { projectHubTitle, projectHubDescription } from "@/lib/seo/copy"
+import { PROVINCES, provinceKey, cityLabel } from "@/lib/provinces"
+import { typeLabel, scopeLabel, scopeNoun, spaceNoun, SCOPE_NOUNS } from "@/lib/type-labels"
+import { projectHubTitle, projectHubDescription, spaceHubTitle, spaceHubDescription } from "@/lib/seo/copy"
 
 export { typeLabel }
 
@@ -25,7 +25,26 @@ export { PROVINCES }
 
 export const MIN_HUB_PROJECTS = 3
 
-export type HubKind = "city" | "scope" | "type" | "type-city" | "type-province" | "scope-city" | "scope-province" | "province"
+/**
+ * Ruimte-hubs op STADSNIVEAU liggen hoger dan de rest, en dat is geen
+ * willekeur.
+ *
+ * Drie is een vloer voor "niet leeg". Voor een ruimte x stad is dat te
+ * laag, want daar sta je in een commercieel zoekresultaat tegenover
+ * partijen met honderden producten op één pagina: "keuken Amsterdam"
+ * is van de keukenzaken. Op die drempel haalden 68 ruimte x stad-paren
+ * het, maar slechts 22 kwamen boven de vijf uit — de rest balanceerde
+ * precies op drie en had nooit iets te winnen.
+ *
+ * Op acht houdt vandaag alleen Amsterdam stand (keukens 34, badkamers
+ * 23), en dat is de bedoeling: de set groeit mee met de voorraad, zoals
+ * elke andere hub hier. Nationaal en per provincie blijft de gewone
+ * drempel gelden — daar is de zoekvraag breder en de concurrentie
+ * dunner.
+ */
+export const MIN_HUB_SPACE_CITY = 8
+
+export type HubKind = "city" | "scope" | "type" | "type-city" | "type-province" | "scope-city" | "scope-province" | "province" | "space" | "space-city" | "space-province"
 
 export type Hub = {
   kind: HubKind
@@ -44,6 +63,20 @@ export type Hub = {
   /** For city / type-province hubs: the province (address_region EN
    *  value) it belongs to. */
   region?: string
+  /** Every spelling of `region` that actually occurs in the data.
+   *
+   *  address_region is supposed to hold the English name, and mostly
+   *  does, but 4 published projects carry "Noord-Holland" /
+   *  "Noord-Brabant". A province hub that queries one spelling leaves
+   *  those out of its own page. Collected while aggregating rather than
+   *  derived, so a spelling nobody anticipated still lands somewhere. */
+  regionNames?: string[]
+  /** For space hubs: the spaces.slug ("kitchen") behind the hub. The
+   *  URL slug is the Dutch plural ("keukens"); this is the join key. */
+  spaceValue?: string
+  /** Ruimtehubs: de project-type categorieslugs die deze hub dragen,
+   *  aflopend. Zie topTypesOf() voor wanneer er iets in staat. */
+  topTypes?: string[]
 }
 
 
@@ -56,6 +89,31 @@ export type HubProjectCard = {
   imageUrl: string | null
   translations: Record<string, unknown> | null
 }
+
+/**
+ * De ruimtes die een hub verdienen.
+ *
+ * NIET elke rij uit `spaces` staat hier. 'other' is geen zoekvraag, en
+ * 'hallway' ("hallen", "entrees") is er een die niemand zo stelt — die
+ * twee zouden pagina's minten waar nooit iemand op landt. De rest staat
+ * er wel, inclusief het grote 'exterior', en wordt verder gewoon door
+ * de voorraaddrempel afgevangen.
+ *
+ * `space` is de spaces.slug (de join), `slug` het URL-deel. Dat laatste
+ * is Nederlands voor beide locales, net als /projects/renovatie en
+ * /projects/nieuwbouw: één hub, één adres.
+ */
+export const SPACE_HUB_DEFS: Array<{ space: string; slug: string }> = [
+  { space: "kitchen", slug: "keukens" },
+  { space: "bathroom", slug: "badkamers" },
+  { space: "living", slug: "woonkamers" },
+  { space: "bedroom", slug: "slaapkamers" },
+  { space: "exterior", slug: "exterieur" },
+  { space: "terrace", slug: "terrassen" },
+  { space: "pool", slug: "zwembaden" },
+  { space: "home-office", slug: "thuiskantoren" },
+  { space: "garden", slug: "tuinen" },
+]
 
 /** Localized "{Scope}projecten" nouns for combo H1s. */
 const SCOPE_HUB_DEFS: Array<{ slug: string; scope: ProjectScope }> = [
@@ -122,7 +180,12 @@ export function hubCopy(hub: Hub, locale: string): HubCopy {
   if (hub.kind === "city") {
     const name = cityLabel(hub.name, locale)
     return {
-      h1: nl ? `Projecten in ${name}` : `Projects in ${name}`,
+      // "Architectuurprojecten", niet "Projecten": dezelfde default als
+      // de discover-kop. De CLIENT bouwt deze kop opnieuw zodra er een
+      // filter staat — en op een stadshub staat er altijd een — dus
+      // twee verschillende woorden hier is één kop die bij hydratatie
+      // verspringt.
+      h1: nl ? `Architectuurprojecten in ${name}` : `Architecture projects in ${name}`,
       // "Gerealiseerde" vooraan, want de titel had bijna dezelfde vorm
       // als /projects erboven en de twee concurreerden om dezelfde
       // zoekvraag. Het woord draagt bovendien meteen de claim.
@@ -147,7 +210,7 @@ export function hubCopy(hub: Hub, locale: string): HubCopy {
     const prov = PROVINCES[hub.name]
     const label = prov ? (nl ? prov.nl : prov.en) : hub.name
     return {
-      h1: nl ? `Projecten in ${label}` : `Projects in ${label}`,
+      h1: nl ? `Architectuurprojecten in ${label}` : `Architecture projects in ${label}`,
       metaTitle: projectHubTitle(locale, { what: nl ? "architectuurprojecten" : "architecture projects", place: label }),
       description: projectHubDescription(locale, {
         count: hub.count,
@@ -178,6 +241,35 @@ export function hubCopy(hub: Hub, locale: string): HubCopy {
         ? `${noun} in ${where}, van de studio's die ze maakten.`
         : `${noun} in ${where}, by the studios that made them.`,
       crumb: hub.scope ? scopeLabel(hub.scope, locale) : title,
+    }
+  }
+  if (hub.kind === "space" || hub.kind === "space-city" || hub.kind === "space-province") {
+    const noun = hub.spaceValue ? spaceNoun(hub.spaceValue, locale) : hub.slug
+    const where =
+      hub.kind === "space-city"
+        ? cityLabel(hub.name, locale)
+        : hub.kind === "space-province"
+          ? (PROVINCES[hub.name] ? (nl ? PROVINCES[hub.name].nl : PROVINCES[hub.name].en) : hub.name)
+          : (nl ? "Nederland" : "the Netherlands")
+    // H1 schoon, <title> op de zoekvraag — dezelfde splitsing als de
+    // stad- en provinciehubs hierboven. "Keukens in Amsterdam" komt
+    // uit in een resultaat dat van de keukenzaken is; "Gerealiseerde
+    // keukens in Amsterdam" staat in de baan die Arco wél kan winnen,
+    // en dekt bovendien wat de pagina toont.
+    return {
+      h1: `${noun} in ${where}`,
+      metaTitle: spaceHubTitle(locale, { room: noun.toLowerCase(), place: where }),
+      description: spaceHubDescription(locale, {
+        count: hub.count,
+        room: noun.toLowerCase(),
+        place: where,
+        // Kleine letter, want de lijst staat midden in de zin.
+        topTypes: (hub.topTypes ?? []).map((t) => typeLabel(t, locale).toLowerCase()),
+      }),
+      intro: nl
+        ? `Gerealiseerde ${noun.toLowerCase()} in ${where}, van de architecten, ontwerpers en makers die ze maakten.`
+        : `Built ${noun.toLowerCase()} in ${where}, by the architects, designers and makers behind them.`,
+      crumb: noun,
     }
   }
   const label = typeLabel(hub.typeValue ?? hub.slug, locale)
@@ -237,15 +329,52 @@ export const CITY_DENYLIST = new Set([
   "noord-brabant", "north-brabant", "gelderland-provincie",
 ])
 
-type ProjectRowLite = { address_city: string | null; address_region: string | null; project_type: string | null; project_type_category_id: string | null }
+type ProjectRowLite = { id: string; address_city: string | null; address_region: string | null; project_type: string | null; project_type_category_id: string | null }
+
+/**
+ * Elke ruimte-rij van elk gepubliceerd project, in pagina's van duizend.
+ *
+ * PostgREST kapt een antwoord standaard op 1000 rijen af en zegt daar
+ * niets over — geen fout, geen vlag, gewoon een kortere lijst. Er staan
+ * er vandaag 1.716, dus één vraag zonder range() leverde 58% van de
+ * ruimtes op en daarmee te lage tellingen, en te lage tellingen laten
+ * een hub net onder zijn drempel blijven. Precies het soort fout dat
+ * niemand opmerkt, want er komt een plausibel getal uit.
+ *
+ * Geordend op de primaire sleutel, niet op project_id: bij offset-
+ * paginering met een niet-unieke sortering kan dezelfde rij twee keer
+ * langskomen en een andere helemaal niet.
+ *
+ * Het inner-join-filter in plaats van een .in() op alle project-ids:
+ * die lijst groeit met de voorraad mee en een URL heeft een lengte.
+ */
+async function fetchSpaceRows(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+): Promise<Array<Record<string, unknown>>> {
+  const PAGE = 1000
+  const out: Array<Record<string, unknown>> = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("project_features")
+      .select("project_id, spaces!inner(slug), projects!inner(status, slug), project_photos!project_photos_feature_id_fkey(id)")
+      .eq("projects.status", "published")
+      .not("projects.slug", "is", null)
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1)
+    if (error || !data || data.length === 0) break
+    out.push(...(data as unknown as Array<Record<string, unknown>>))
+    if (data.length < PAGE) break
+  }
+  return out
+}
 
 /** All qualifying hubs, computed from published projects. */
-export async function getHubs(): Promise<{ cities: Hub[]; scopes: Hub[]; types: Hub[]; combos: Hub[]; provinces: Hub[] }> {
+export async function getHubs(): Promise<{ cities: Hub[]; scopes: Hub[]; types: Hub[]; combos: Hub[]; provinces: Hub[]; spaces: Hub[] }> {
   const supabase = await createServerSupabaseClient()
-  const [{ data }, { data: cats }] = await Promise.all([
+  const [{ data }, { data: cats }, feats] = await Promise.all([
     supabase
       .from("projects")
-      .select("address_city, address_region, project_type, project_type_category_id")
+      .select("id, address_city, address_region, project_type, project_type_category_id")
       .eq("status", "published")
       .not("slug", "is", null),
     supabase
@@ -253,8 +382,32 @@ export async function getHubs(): Promise<{ cities: Hub[]; scopes: Hub[]; types: 
       .select("id, slug")
       .eq("category_type", "Project")
       .is("parent_id", null),
+    fetchSpaceRows(supabase),
   ])
   const rows = (data ?? []) as ProjectRowLite[]
+
+  // project_id → verzameling spaces.slug. Een project heeft per ruimte
+  // meerdere features (keuken + kookeiland); de set telt elk project
+  // één keer per ruimte.
+  const spacesByProject = new Map<string, Set<string>>()
+  for (const f of feats) {
+    const pid = f.project_id as string | null
+    const rel = f.spaces as { slug?: string } | Array<{ slug?: string }> | null
+    const slug = (Array.isArray(rel) ? rel[0]?.slug : rel?.slug) ?? null
+    if (!pid || !slug) continue
+    // Zonder foto telt de ruimte niet mee. Dit is geen extra strengheid
+    // maar gelijkschakeling: het ruimtefilter in de feed selecteert
+    // projecten met een FOTO in die ruimte, dus een teller die alleen
+    // naar de feature kijkt belooft meer dan de pagina toont — 181
+    // keukens in de description, 176 kaarten in de grid. En een keuken
+    // die je niet kunt zien is op een hub over keukens ook niets waard.
+    const photos = f.project_photos as Array<unknown> | null
+    if (!Array.isArray(photos) || photos.length === 0) continue
+    const set = spacesByProject.get(pid) ?? new Set<string>()
+    set.add(slug)
+    spacesByProject.set(pid, set)
+  }
+  const spaceDefBySpace = new Map(SPACE_HUB_DEFS.map((d) => [d.space, d]))
   // Type axis = the project-type CATEGORY taxonomy (what the Type filter
   // uses), keyed by category slug so hub slugs match filter URL tokens.
   const catSlugById = new Map<string, string>()
@@ -271,25 +424,41 @@ export async function getHubs(): Promise<{ cities: Hub[]; scopes: Hub[]; types: 
   const provinceComboAgg = new Map<string, { typeValue: string; region: string; count: number; names: Set<string> }>()
   const scopeCityAgg = new Map<string, { scope: ProjectScope; city: string; count: number; names: Set<string> }>()
   const scopeProvinceAgg = new Map<string, { scope: ProjectScope; region: string; count: number; names: Set<string> }>()
+  const spaceAgg = new Map<string, { space: string; count: number; types: Map<string, number> }>()
+  const spaceCityAgg = new Map<string, { space: string; city: string; count: number; names: Set<string>; types: Map<string, number> }>()
+  const spaceProvinceAgg = new Map<string, { space: string; region: string; count: number; names: Set<string>; types: Map<string, number> }>()
+  /** Canonieke provincie → elke schrijfwijze waarin hij echt voorkomt. */
+  const provinceSpellings = new Map<string, Set<string>>()
   const scopeSlugOf = new Map(SCOPE_HUB_DEFS.map((d) => [d.scope, d.slug]))
   for (const row of rows) {
     const city = row.address_city?.trim()
     const cSlug = city ? citySlug(city) : ""
     const cityOk = Boolean(cSlug && !CITY_DENYLIST.has(cSlug))
+    // address_region HOORT de Engelse naam te zijn en is dat meestal,
+    // maar niet altijd: "Noord-Holland" en "Noord-Brabant" staan er ook
+    // in. Een directe PROVINCES[...]-lookup liet die rijen uit elke
+    // provinciehub vallen; provinceKey() kent alle drie de spellingen.
+    const regionRaw = row.address_region?.trim() || null
+    const regionKey = provinceKey(regionRaw)
+    if (regionKey && regionRaw) {
+      const seen = provinceSpellings.get(regionKey) ?? new Set<string>()
+      seen.add(regionRaw)
+      provinceSpellings.set(regionKey, seen)
+    }
     if (city && cityOk) {
       const entry = cityAgg.get(cSlug) ?? { name: city, count: 0, names: new Set<string>(), regions: new Map<string, number>() }
       entry.count += 1
       entry.names.add(city)
-      if (row.address_region) entry.regions.set(row.address_region, (entry.regions.get(row.address_region) ?? 0) + 1)
+      if (regionKey) entry.regions.set(regionKey, (entry.regions.get(regionKey) ?? 0) + 1)
       cityAgg.set(cSlug, entry)
     }
     // Province counts include city-less rows (privacy-vague locations) —
     // the hub query matches on address_region, so they're real inventory.
-    if (row.address_region && PROVINCES[row.address_region]) {
-      const pEntry = provinceAgg.get(row.address_region) ?? { count: 0, names: new Set<string>() }
+    if (regionKey) {
+      const pEntry = provinceAgg.get(regionKey) ?? { count: 0, names: new Set<string>() }
       pEntry.count += 1
       if (city && cityOk) pEntry.names.add(city)
-      provinceAgg.set(row.address_region, pEntry)
+      provinceAgg.set(regionKey, pEntry)
     }
     const scope = canonicalizeScope(row.project_type)
     if (scope) {
@@ -301,13 +470,17 @@ export async function getHubs(): Promise<{ cities: Hub[]; scopes: Hub[]; types: 
         entry.count += 1
         entry.names.add(city)
         scopeCityAgg.set(key, entry)
-        if (row.address_region && PROVINCES[row.address_region]) {
-          const pKey = `${PROVINCES[row.address_region].slug}/${sSlug}`
-          const pEntry = scopeProvinceAgg.get(pKey) ?? { scope, region: row.address_region, count: 0, names: new Set<string>() }
-          pEntry.count += 1
-          pEntry.names.add(city)
-          scopeProvinceAgg.set(pKey, pEntry)
-        }
+      }
+      // Buiten de stad-tak: een provinciehub telt stadloze rijen mee,
+      // want zijn eigen pagina haalt ze op address_region alsnog op.
+      // Binnen die tak genest telde de hub minder dan hij toont, en dat
+      // getal staat in de meta-description.
+      if (sSlug && regionKey) {
+        const pKey = `${PROVINCES[regionKey].slug}/${sSlug}`
+        const pEntry = scopeProvinceAgg.get(pKey) ?? { scope, region: regionKey, count: 0, names: new Set<string>() }
+        pEntry.count += 1
+        if (city && cityOk) pEntry.names.add(city)
+        scopeProvinceAgg.set(pKey, pEntry)
       }
     }
     const typeValue = row.project_type_category_id ? catSlugById.get(row.project_type_category_id) : undefined
@@ -321,14 +494,71 @@ export async function getHubs(): Promise<{ cities: Hub[]; scopes: Hub[]; types: 
         entry.names.add(city)
         comboAgg.set(key, entry)
       }
-      if (row.address_region && PROVINCES[row.address_region] && city && cityOk) {
-        const key = `${PROVINCES[row.address_region].slug}/${typeValue}`
-        const entry = provinceComboAgg.get(key) ?? { typeValue, region: row.address_region, count: 0, names: new Set<string>() }
+      if (regionKey) {
+        const key = `${PROVINCES[regionKey].slug}/${typeValue}`
+        const entry = provinceComboAgg.get(key) ?? { typeValue, region: regionKey, count: 0, names: new Set<string>() }
         entry.count += 1
-        entry.names.add(city)
+        if (city && cityOk) entry.names.add(city)
         provinceComboAgg.set(key, entry)
       }
     }
+    // Ruimtes. Eén project telt mee in elke ruimte die het heeft — een
+    // villa met keuken en badkamer staat in beide hubs, net zoals hij
+    // in beide filters staat.
+    for (const spaceSlug of spacesByProject.get(row.id) ?? []) {
+      const def = spaceDefBySpace.get(spaceSlug)
+      if (!def) continue
+      // Waar zit deze ruimte in? Dat is de zin die de ruimtehub
+      // onderscheidt van een keukenzaak, dus hij wordt hier geteld —
+      // in dezelfde pass, zonder extra query.
+      const bump = (m: Map<string, number>) => { if (typeValue) m.set(typeValue, (m.get(typeValue) ?? 0) + 1) }
+      const nat = spaceAgg.get(def.space) ?? { space: def.space, count: 0, types: new Map<string, number>() }
+      nat.count += 1
+      bump(nat.types)
+      spaceAgg.set(def.space, nat)
+      if (city && cityOk) {
+        const key = `${cSlug}/${def.slug}`
+        const entry = spaceCityAgg.get(key) ?? { space: def.space, city, count: 0, names: new Set<string>(), types: new Map<string, number>() }
+        entry.count += 1
+        entry.names.add(city)
+        bump(entry.types)
+        spaceCityAgg.set(key, entry)
+      }
+      if (regionKey) {
+        const key = `${PROVINCES[regionKey].slug}/${def.slug}`
+        const entry = spaceProvinceAgg.get(key) ?? { space: def.space, region: regionKey, count: 0, names: new Set<string>(), types: new Map<string, number>() }
+        entry.count += 1
+        if (city && cityOk) entry.names.add(city)
+        bump(entry.types)
+        spaceProvinceAgg.set(key, entry)
+      }
+    }
+  }
+  const spellingsOf = (regionKey: string): string[] => Array.from(provinceSpellings.get(regionKey) ?? [regionKey])
+
+  /**
+   * De typen die een ruimtehub echt dragen, hoogstens drie.
+   *
+   * Twee drempels, allebei tegen een lijst die meer belooft dan hij
+   * waarmaakt. ABSOLUUT twee: één project is geen soort, en "in
+   * villa's en tuinhuizen" waar dat tuinhuis in enkelvoud bestaat
+   * leest als dekking die er niet is. RELATIEF een tiende: bij de
+   * zwembaden staat 84% in een villa en bungalows, boerderijen en
+   * uitbouwen hebben er elk één — die staart noemen maakt de zin
+   * langer en vager tegelijk.
+   *
+   * Onder de twee overgebleven typen geen lijst: "in villa's." is geen
+   * opsomming maar een losse mededeling, en de zin zonder lijst is nog
+   * altijd waar.
+   */
+  const topTypesOf = (types: Map<string, number>, total: number): string[] => {
+    const floor = Math.max(2, Math.ceil(total * 0.1))
+    const kept = Array.from(types.entries())
+      .filter(([, n]) => n >= floor)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([slug]) => slug)
+    return kept.length >= 2 ? kept : []
   }
 
   const cities: Hub[] = Array.from(cityAgg.entries())
@@ -352,6 +582,7 @@ export async function getHubs(): Promise<{ cities: Hub[]; scopes: Hub[]; types: 
       count: v.count,
       cityNames: Array.from(v.names),
       region: regionName,
+      regionNames: spellingsOf(regionName),
     }))
     .sort((a, b) => b.count - a.count)
 
@@ -396,6 +627,7 @@ export async function getHubs(): Promise<{ cities: Hub[]; scopes: Hub[]; types: 
         typeValue: v.typeValue,
         categoryId: catIdBySlug.get(v.typeValue),
         region: v.region,
+        regionNames: spellingsOf(v.region),
       })),
     ...Array.from(scopeCityAgg.entries())
       .filter(([, v]) => v.count >= MIN_HUB_PROJECTS)
@@ -417,20 +649,62 @@ export async function getHubs(): Promise<{ cities: Hub[]; scopes: Hub[]; types: 
         cityNames: Array.from(v.names),
         scope: v.scope,
         region: v.region,
+        regionNames: spellingsOf(v.region),
+      })),
+    // Ruimte x geo. De stadsvariant heeft zijn eigen, hogere drempel
+    // (zie MIN_HUB_SPACE_CITY); de provincievariant niet.
+    ...Array.from(spaceCityAgg.entries())
+      .filter(([, v]) => v.count >= MIN_HUB_SPACE_CITY)
+      .map(([slug, v]) => ({
+        kind: "space-city" as const,
+        slug,
+        name: v.city,
+        count: v.count,
+        cityNames: Array.from(v.names),
+        spaceValue: v.space,
+        topTypes: topTypesOf(v.types, v.count),
+      })),
+    ...Array.from(spaceProvinceAgg.entries())
+      .filter(([, v]) => v.count >= MIN_HUB_PROJECTS)
+      .map(([slug, v]) => ({
+        kind: "space-province" as const,
+        slug,
+        name: v.region,
+        count: v.count,
+        cityNames: Array.from(v.names),
+        spaceValue: v.space,
+        region: v.region,
+        regionNames: spellingsOf(v.region),
+        topTypes: topTypesOf(v.types, v.count),
       })),
   ].sort((a, b) => b.count - a.count)
 
-  return { cities, scopes, types, combos, provinces }
+  // Landelijke ruimte-hubs (/projects/keukens). Volgorde uit
+  // SPACE_HUB_DEFS, niet op aantal: die lijst is redactioneel gekozen
+  // en de kolom leest prettiger als keuken en badkamer bovenaan staan.
+  const spaces: Hub[] = SPACE_HUB_DEFS
+    .map((def) => ({
+      kind: "space" as const,
+      slug: def.slug,
+      name: def.slug,
+      count: spaceAgg.get(def.space)?.count ?? 0,
+      spaceValue: def.space,
+      topTypes: topTypesOf(spaceAgg.get(def.space)?.types ?? new Map(), spaceAgg.get(def.space)?.count ?? 0),
+    }))
+    .filter((h) => h.count >= MIN_HUB_PROJECTS)
+
+  return { cities, scopes, types, combos, provinces, spaces }
 }
 
 export async function resolveHub(slug: string): Promise<Hub | null> {
-  const { cities, scopes, types, combos, provinces } = await getHubs()
+  const { cities, scopes, types, combos, provinces, spaces } = await getHubs()
   return (
     cities.find((h) => h.slug === slug) ??
     scopes.find((h) => h.slug === slug) ??
     types.find((h) => h.slug === slug) ??
     combos.find((h) => h.slug === slug) ??
     provinces.find((h) => h.slug === slug) ??
+    spaces.find((h) => h.slug === slug) ??
     null
   )
 }
@@ -444,16 +718,47 @@ export async function getHubProjects(hub: Hub): Promise<HubProjectCard[]> {
     .eq("status", "published")
     .not("slug", "is", null)
     .order("published_at", { ascending: false, nullsFirst: false })
-  if ((hub.kind === "province" || hub.kind === "type-province" || hub.kind === "scope-province") && hub.region) {
+  if ((hub.kind === "province" || hub.kind === "type-province" || hub.kind === "scope-province" || hub.kind === "space-province") && hub.region) {
     // Province hubs match on the region column, NOT the member-city list:
     // projects with a region but no city (privacy-vague locations like
     // "'t Gooi") belong to the province hub too.
-    q = q.eq("address_region", hub.region)
-  } else if (hub.kind !== "scope" && hub.kind !== "type" && hub.cityNames?.length) {
+    //
+    // in() over elke schrijfwijze, niet eq() op één: anders mist de
+    // pagina van Noord-Holland de projecten die daar met de Nederlandse
+    // naam in staan — terwijl de teller ze wél meerekent.
+    q = q.in("address_region", hub.regionNames?.length ? hub.regionNames : [hub.region])
+  } else if (hub.kind !== "scope" && hub.kind !== "type" && hub.kind !== "space" && hub.cityNames?.length) {
     q = q.in("address_city", hub.cityNames)
   }
   if ((hub.kind === "type" || hub.kind === "type-city" || hub.kind === "type-province") && hub.categoryId) {
     q = q.eq("project_type_category_id", hub.categoryId)
+  }
+  if ((hub.kind === "space" || hub.kind === "space-city" || hub.kind === "space-province") && hub.spaceValue) {
+    // Welke projecten hebben deze ruimte? Eén extra vraag, want het
+    // staat in project_features en niet op het project zelf. Ook hier
+    // gepagineerd — zie fetchSpaceRows: de grootste ruimte zit nu op
+    // 220 rijen, maar de afkapgrens van duizend meldt zich niet.
+    const ids: string[] = []
+    const seen = new Set<string>()
+    const PAGE = 1000
+    for (let from = 0; ; from += PAGE) {
+      const { data: feats, error } = await supabase
+        .from("project_features")
+        .select("project_id, spaces!inner(slug), project_photos!project_photos_feature_id_fkey(id)")
+        .eq("spaces.slug", hub.spaceValue)
+        .order("id", { ascending: true })
+        .range(from, from + PAGE - 1)
+      if (error || !feats || feats.length === 0) break
+      for (const f of feats as unknown as Array<{ project_id: string | null; project_photos?: Array<unknown> | null }>) {
+        // Foto verplicht — zie de telling in getHubs: server en client
+        // moeten dezelfde verzameling projecten bedoelen.
+        if (!Array.isArray(f.project_photos) || f.project_photos.length === 0) continue
+        if (f.project_id && !seen.has(f.project_id)) { seen.add(f.project_id); ids.push(f.project_id) }
+      }
+      if (feats.length < PAGE) break
+    }
+    if (ids.length === 0) return []
+    q = q.in("id", ids)
   }
   const { data } = await q
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

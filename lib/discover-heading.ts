@@ -1,5 +1,5 @@
 import { PROVINCES, cityLabel } from "@/lib/provinces"
-import { typeLabel, scopeNoun } from "@/lib/type-labels"
+import { typeLabel, scopeNoun, spaceNoun } from "@/lib/type-labels"
 
 /** "A", "A & B", "A, B & C" — the joining grammar shared by the discover
  * H1 and the results-count line so both always read identically. */
@@ -22,12 +22,18 @@ export interface DiscoverHeadingOpts {
    *  wél "nieuwbouw" zeiden. De scope zat in de filterstand en in de
    *  kruimelpad-leaf — alleen deze functie vroeg er nooit om. */
   scopes: string[]
+  /** Geselecteerde spaces.slug ("kitchen"), nul of één.
+   *
+   *  Derde as die hier ontbrak, na type en scope. Een ruimtehub
+   *  gecombineerd met een provincie kopte daardoor "Projecten in
+   *  Noord-Holland" terwijl de pagina Keukens in Noord-Holland heet. */
+  spaces: string[]
   /** Raw address_city values. */
   locations: string[]
   /** Raw address_region keys (English, as stored). */
   regions: string[]
   locale: string
-  /** Fallback type part, e.g. "Projecten". */
+  /** Fallback type part, e.g. "Architectuurprojecten". */
   defaultTypeLabel: string
   /** Fallback location part, e.g. "Nederland". */
   defaultLocationLabel: string
@@ -45,8 +51,28 @@ export function discoverHeading(opts: DiscoverHeadingOpts): string {
   // exact de kop die de server voor die hub zou zetten, zodat de titel
   // niet verspringt zodra de client hem overneemt.
   const scopeLabels = opts.scopes.map((v) => scopeNoun(v, locale))
-  const types = [...buildingTypeLabels, ...opts.typeLabels, ...scopeLabels].filter(Boolean)
-  const typePart = types.length === 0 || types.length > 2 ? opts.defaultTypeLabel : joinAmp(types)
+  const spaceLabels = opts.spaces.map((v) => spaceNoun(v, locale))
+
+  // ── Ruimte is het ONDERWERP, de rest is de CONTAINER ──────────────
+  //
+  // Een ruimte zit altijd ergens in, en dat is een andere relatie dan
+  // die tussen een bouwtype en een scope. "Woonkamers & villa's in
+  // Nederland" zet de twee naast elkaar alsof je ook losse villa's
+  // krijgt; "Woonkamers in villa's in Nederland" zegt wat de pagina
+  // toont. Vandaar twee keer "in" en geen ampersand.
+  //
+  // De container gaat naar kleine letter: hij staat midden in de zin.
+  const containers = [...buildingTypeLabels, ...opts.typeLabels, ...scopeLabels].filter(Boolean)
+  const typePart = (() => {
+    if (spaceLabels.length > 0) {
+      const subject = joinAmp(spaceLabels)
+      // Drie containers of meer noemen maakt de kop een opsomming; dan
+      // blijft de ruimte alleen staan, wat nog altijd waar is.
+      if (containers.length === 0 || containers.length > 2) return subject
+      return `${subject} in ${joinAmp(containers.map((c) => c.toLocaleLowerCase(locale)))}`
+    }
+    return containers.length === 0 || containers.length > 2 ? opts.defaultTypeLabel : joinAmp(containers)
+  })()
 
   // Regions render as a single label ("Noord-Holland") ahead of any
   // individually selected cities — never expanded into member cities.

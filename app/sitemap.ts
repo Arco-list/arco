@@ -102,8 +102,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // inventory gate exist, so every listed URL is a real, stocked page.
   let hubEntries: MetadataRoute.Sitemap = []
   try {
-    const { cities, scopes, types, combos, provinces } = await getHubs()
-    hubEntries = [...cities, ...scopes, ...types, ...combos, ...provinces].map((hub) => ({
+    const { cities, scopes, types, combos, provinces, spaces } = await getHubs()
+    hubEntries = [...cities, ...scopes, ...types, ...combos, ...provinces, ...spaces].map((hub) => ({
       ...localizedUrls(baseUrl, `/projects/${hub.slug}`),
       lastModified: new Date(),
       changeFrequency: "weekly" as const,

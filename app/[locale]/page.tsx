@@ -567,7 +567,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   const { locale } = await params
   const t = await getTranslations("home")
   // Inventory-gated hub links for the "Populaire zoekopdrachten" block.
-  let popularHubs: PopularHubs = { cities: [], scopes: [], types: [], combos: [], provinces: [] }
+  let popularHubs: PopularHubs = { cities: [], scopes: [], types: [], combos: [], provinces: [], spaces: [] }
   try {
     popularHubs = await getHubs()
   } catch { /* block simply doesn't render */ }

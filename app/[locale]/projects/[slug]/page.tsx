@@ -244,7 +244,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
         getHubProjects(hub),
         getHubs(),
       ])
-      const allHubs = [...allHubsSet.cities, ...allHubsSet.scopes, ...allHubsSet.types, ...allHubsSet.combos, ...allHubsSet.provinces]
+      const allHubs = [...allHubsSet.cities, ...allHubsSet.scopes, ...allHubsSet.types, ...allHubsSet.combos, ...allHubsSet.provinces, ...allHubsSet.spaces]
       // Server-side pre-filter: the feed is built FROM the hub's own id
       // set, so the crawled HTML contains exactly the hub's projects
       // (first page of them, seeded-shuffled like discover). Previously

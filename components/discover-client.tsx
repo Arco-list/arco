@@ -10,7 +10,7 @@ import type { DiscoverProject } from "@/lib/projects/queries"
 import { discoverHeading } from "@/lib/discover-heading"
 import { pluralizeLabel } from "@/lib/pluralize-label"
 import { PROVINCES, cityLabel } from "@/lib/provinces"
-import { scopeLabel } from "@/lib/type-labels"
+import { scopeLabel, spaceNoun } from "@/lib/type-labels"
 
 interface DiscoverClientProps {
   initialProjects: DiscoverProject[]
@@ -35,7 +35,7 @@ export function DiscoverClient({ initialProjects, initialSort = DEFAULT_PROJECT_
   const {
     selectedLocations, setSelectedLocations,
     selectedRegions, setSelectedRegions,
-    selectedTypes, selectedBuildingTypes, selectedScopes, taxonomyLabelMap,
+    selectedTypes, selectedBuildingTypes, selectedScopes, selectedSpace, taxonomyLabelMap,
     regionCityMap, taxonomy,
   } = useFilters()
 
@@ -129,6 +129,7 @@ export function DiscoverClient({ initialProjects, initialSort = DEFAULT_PROJECT_
   // leaf for query-URL states). Named up to two, omitted beyond that.
   const typesResolvedForLeaf = selectedTypes.every((id) => taxonomyLabelMap.has(id))
   const leafLabels = [
+    ...(selectedSpace ? [spaceNoun(selectedSpace, locale)] : []),
     ...(typesResolvedForLeaf
       ? selectedTypes.map((id) => pluralizeLabel(taxonomyLabelMap.get(id) ?? id, 2, locale)).filter(Boolean)
       : []),
@@ -142,7 +143,7 @@ export function DiscoverClient({ initialProjects, initialSort = DEFAULT_PROJECT_
   // and non-geo hubs (scope) fall back to their server-provided H1.
   const hasTitleFilters =
     selectedTypes.length + selectedBuildingTypes.length + selectedScopes.length
-    + selectedLocations.length + selectedRegions.length > 0
+    + selectedLocations.length + selectedRegions.length + (selectedSpace ? 1 : 0) > 0
   // Until the taxonomy loads, selected category ids may still be raw URL
   // tokens — hold the server/fallback title rather than render them.
   const typesResolved = typesResolvedForLeaf
@@ -153,6 +154,7 @@ export function DiscoverClient({ initialProjects, initialSort = DEFAULT_PROJECT_
           .filter(Boolean),
         buildingTypes: selectedBuildingTypes,
         scopes: selectedScopes,
+        spaces: selectedSpace ? [selectedSpace] : [],
         locations: selectedLocations,
         // A province refined by a selected city inside it stays out of
         // the title — "Villa's in 's-Hertogenbosch", not "... in
@@ -161,7 +163,7 @@ export function DiscoverClient({ initialProjects, initialSort = DEFAULT_PROJECT_
           (r) => !(regionCityMap[r] ?? []).some((m) => selectedLocations.includes(m)),
         ),
         locale,
-        defaultTypeLabel: t("title"),
+        defaultTypeLabel: t("heading_default_type"),
         defaultLocationLabel: t("heading_default_location"),
       })
     : null

@@ -51,7 +51,7 @@ export default async function NestedHubRoute({ params }: PageProps) {
     getHubProjects(hub),
     getHubs(),
   ])
-  const allHubs = [...allHubsSet.cities, ...allHubsSet.scopes, ...allHubsSet.types, ...allHubsSet.combos, ...allHubsSet.provinces]
+  const allHubs = [...allHubsSet.cities, ...allHubsSet.scopes, ...allHubsSet.types, ...allHubsSet.combos, ...allHubsSet.provinces, ...allHubsSet.spaces]
   // Server-side pre-filter: the feed is built FROM the hub's own id set
   // (see the [slug] route for why intersecting with the global feed page
   // broke under the seeded shuffle).

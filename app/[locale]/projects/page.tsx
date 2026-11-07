@@ -77,11 +77,11 @@ export default async function ProjectsPage({
   // Hub definitions let the FilterProvider swap the URL to a hub path
   // (/projects/amsterdam) when the active filter exactly matches one.
   let hubDefs: ReturnType<typeof hubToDef>[] = []
-  let popularHubs: PopularHubs = { cities: [], scopes: [], types: [], combos: [], provinces: [] }
+  let popularHubs: PopularHubs = { cities: [], scopes: [], types: [], combos: [], provinces: [], spaces: [] }
   try {
-    const { cities, scopes, types, combos, provinces } = await getHubs()
-    hubDefs = [...cities, ...scopes, ...types, ...combos, ...provinces].map(hubToDef)
-    popularHubs = { cities, scopes, types, combos, provinces }
+    const { cities, scopes, types, combos, provinces, spaces } = await getHubs()
+    hubDefs = [...cities, ...scopes, ...types, ...combos, ...provinces, ...spaces].map(hubToDef)
+    popularHubs = { cities, scopes, types, combos, provinces, spaces }
   } catch { /* provider works fine without hub mapping */ }
   try {
     projects = await fetchDiscoverProjects(locale)

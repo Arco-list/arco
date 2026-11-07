@@ -8,6 +8,7 @@ export interface PopularHubs {
   types: Hub[]
   combos: Hub[]
   provinces: Hub[]
+  spaces: Hub[]
 }
 
 /** Number of links a column shows before the "Show all" toggle. */
@@ -24,6 +25,8 @@ export function PopularSearches({ hubs, locale }: { hubs: PopularHubs; locale: s
   if (hubs.cities.length === 0 && hubs.scopes.length === 0) return null
   const scopeCombos = hubs.combos.filter((h) => h.kind === "scope-city" || h.kind === "scope-province")
   const typeCombos = hubs.combos.filter((h) => h.kind === "type-city" || h.kind === "type-province")
+  const spaceCombos = hubs.combos.filter((h) => h.kind === "space-city" || h.kind === "space-province")
+  const spaces = hubs.spaces ?? []
   return (
     <section className="py-16 max-md:py-10 bg-white">
       <div className="wrap">
@@ -79,6 +82,31 @@ export function PopularSearches({ hubs, locale }: { hubs: PopularHubs; locale: s
               </p>
               <ShowAllList cap={COLUMN_CAP} locale={locale}>
                 {[...hubs.types, ...typeCombos].map((hub) => (
+                  <p key={hub.slug} style={{ marginBottom: 8 }}>
+                    <Link href={`/projects/${hub.slug}`} className="view-all-link">
+                      {hubCopy(hub, locale).h1}
+                    </Link>
+                  </p>
+                ))}
+              </ShowAllList>
+            </div>
+          )}
+          {(spaces.length > 0 || spaceCombos.length > 0) && (
+            <div>
+              <p className="arco-eyebrow" style={{ color: "#a1a1a0", marginBottom: 10 }}>
+                {nl ? "Ruimtes" : "Rooms"}
+              </p>
+              <ShowAllList cap={COLUMN_CAP} locale={locale}>
+                {spaces.map((hub) => (
+                  <p key={hub.slug} style={{ marginBottom: 8 }}>
+                    <Link href={`/projects/${hub.slug}`} className="view-all-link">
+                      {/* Land eraf, net als bij de scope-kolom: de
+                          kolom is landelijk van zichzelf. */}
+                      {hubCopy(hub, locale).h1.replace(/ in (Nederland|the Netherlands)$/, "")}
+                    </Link>
+                  </p>
+                ))}
+                {spaceCombos.map((hub) => (
                   <p key={hub.slug} style={{ marginBottom: 8 }}>
                     <Link href={`/projects/${hub.slug}`} className="view-all-link">
                       {hubCopy(hub, locale).h1}

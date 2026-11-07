@@ -225,6 +225,50 @@ export function projectHubDescription(
     : `Explore ${facts.count} built ${facts.what} in ${facts.place}, photographed room by room. Find everyone who worked on them, from architect to contractor. Connect with them directly.`
 }
 
+// ─── Ruimte hub — /projects/{ruimte} ─────────────────────────────────
+// 68 pagina's, afgesplitst van de project hub omdat de belofte daar
+// niet klopt op een ruimtepagina.
+//
+// Twee verschillen, allebei met reden:
+//
+// 1. De TYPENLIJST is hier wél gevuld. Op de project hub is hij een
+//    leeg slot; hier is hij het hele argument. "Keukens in Amsterdam"
+//    is een resultaat van de keukenzaken, en de enige zin die Arco
+//    daarin onderscheidt is waar die keukens in zitten — in
+//    appartementen, stadswoningen en villa's. Dat is geen zin die een
+//    keukenzaak kan schrijven.
+//
+// 2. "Vind iedereen die eraan werkte, van architect tot aannemer" is
+//    weg. Dat is de belofte van een heel project; aan één keuken werkte
+//    vaak één partij, en dan belooft de zin een lijst die er niet is.
+//    Vermelding en contact zitten nu in één claim.
+//
+// De lijst valt weg zodra hij niet gedragen wordt — zie topTypes. Dan
+// staat de zin van de project hub er alsnog, want zonder lijst is die
+// nog altijd waar.
+
+export function spaceHubTitle(locale: string, parts: { room: string; place: string }): string {
+  return isNl(locale)
+    ? `Gerealiseerde ${parts.room} in ${parts.place}`
+    : `Built ${parts.room} in ${parts.place}`
+}
+
+export function spaceHubDescription(
+  locale: string,
+  facts: { count: number; room: string; place: string; topTypes?: string[] },
+): string {
+  const nl = isNl(locale)
+  const types = facts.topTypes ?? []
+  if (types.length > 0) {
+    return nl
+      ? `Ontdek ${facts.count} gerealiseerde ${facts.room} in ${facts.place}: in ${andList(locale, types)}. Vind de makers en benader ze rechtstreeks.`
+      : `Explore ${facts.count} built ${facts.room} in ${facts.place}: in ${andList(locale, types)}. Find the makers and connect with them directly.`
+  }
+  return nl
+    ? `Ontdek ${facts.count} gerealiseerde ${facts.room} in ${facts.place}, per ruimte gefotografeerd. Vind de makers en benader ze rechtstreeks.`
+    : `Explore ${facts.count} built ${facts.room} in ${facts.place}, photographed room by room. Find the makers and connect with them directly.`
+}
+
 // ─── Project detail — /projects/{project} ───────────────────────────
 // Converteert op 2,00% met een kale naam, het hoogst van alle
 // detailpagina's: het plafond ligt dus hoger dan het eruitziet. De

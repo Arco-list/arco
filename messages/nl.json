@@ -116,6 +116,7 @@
     "load_more": "Meer laden",
     "heading_in": "{types} in {locations}",
     "heading_default_location": "Nederland",
+    "heading_default_type": "Architectuurprojecten",
     "filters": {
       "all": "Alles",
       "all_filters": "Alle filters",

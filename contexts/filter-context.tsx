@@ -270,7 +270,7 @@ const regionToSlug = (en: string) => PROVINCES[en]?.slug ?? en
  *  and back so hub pages ARE the discover page, pre-filtered. */
 export interface HubDef {
   slug: string
-  kind: "city" | "scope" | "type" | "type-city" | "type-province" | "scope-city" | "scope-province" | "province"
+  kind: "city" | "scope" | "type" | "type-city" | "type-province" | "scope-city" | "scope-province" | "province" | "space" | "space-city" | "space-province"
   cityName?: string
   scope?: string
   /** project-type category slug == filter URL token ("villa", "apartment"). */
@@ -280,6 +280,8 @@ export interface HubDef {
   cityNames?: string[]
   /** province hubs: the address_region EN canonical name. */
   region?: string
+  /** space hubs: de spaces.slug ("kitchen") == de ?space=-token. */
+  spaceValue?: string
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
@@ -306,8 +308,8 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
       keyword: initialSearchParams.get("search") ?? "",
       // Hub pages mount with their filter already applied so the first
       // client render matches the server-filtered grid (no flash).
-      ...((activeHub?.kind === "city" || activeHub?.kind === "type-city" || activeHub?.kind === "scope-city") && activeHub.cityName ? { selectedLocations: [activeHub.cityName] } : {}),
-      ...((activeHub?.kind === "province" || activeHub?.kind === "type-province" || activeHub?.kind === "scope-province") && activeHub.region ? { selectedRegions: [activeHub.region] } : {}),
+      ...((activeHub?.kind === "city" || activeHub?.kind === "type-city" || activeHub?.kind === "scope-city" || activeHub?.kind === "space-city") && activeHub.cityName ? { selectedLocations: [activeHub.cityName] } : {}),
+      ...((activeHub?.kind === "province" || activeHub?.kind === "type-province" || activeHub?.kind === "scope-province" || activeHub?.kind === "space-province") && activeHub.region ? { selectedRegions: [activeHub.region] } : {}),
       ...((activeHub?.kind === "scope" || activeHub?.kind === "scope-city" || activeHub?.kind === "scope-province") && activeHub.scope ? { selectedScopes: [activeHub.scope] } : {}),
       // Het type ontbrak hier als enige as. Gevolg: een type-hub stond
       // met zijn eigen filter UIT in de zijbalk, en de kop die de client
@@ -320,6 +322,9 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
       // vals zolang de slug nog niet in de taxonomie zit — dus geen
       // tussentitel die verspringt.
       ...((activeHub?.kind === "type" || activeHub?.kind === "type-city" || activeHub?.kind === "type-province") && activeHub.typeValue ? { selectedTypes: [activeHub.typeValue] } : {}),
+      // Ruimte is een enkelvoudig filter (?space=kitchen), geen lijst —
+      // vandaar de string en niet de array van de assen hierboven.
+      ...((activeHub?.kind === "space" || activeHub?.kind === "space-city" || activeHub?.kind === "space-province") && activeHub.spaceValue ? { selectedSpace: activeHub.spaceValue } : {}),
     }),
   )
   const {
@@ -539,7 +544,7 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
     if (!areStringArraysEqual(selectedStyles, resolvedStyles)) setSelectedStyles(resolvedStyles)
 
     let locationValues = parseCommaSeparatedParam(searchParams.get("location"))
-    if ((hubLive?.kind === "city" || hubLive?.kind === "type-city" || hubLive?.kind === "scope-city") && hubLive.cityName && !locationValues.includes(hubLive.cityName)) {
+    if ((hubLive?.kind === "city" || hubLive?.kind === "type-city" || hubLive?.kind === "scope-city" || hubLive?.kind === "space-city") && hubLive.cityName && !locationValues.includes(hubLive.cityName)) {
       // The hub path carries this filter — treat it as an implicit URL param
       // so the empty query string doesn't clear it while on the hub page.
       locationValues = [hubLive.cityName, ...locationValues]
@@ -549,12 +554,20 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
 
     let regionValues = parseCommaSeparatedParam(searchParams.get("region"))
       .map((slug) => REGION_BY_SLUG.get(slug) ?? slug)
-    if ((hubLive?.kind === "province" || hubLive?.kind === "type-province" || hubLive?.kind === "scope-province") && hubLive.region && !regionValues.includes(hubLive.region)) {
+    if ((hubLive?.kind === "province" || hubLive?.kind === "type-province" || hubLive?.kind === "scope-province" || hubLive?.kind === "space-province") && hubLive.region && !regionValues.includes(hubLive.region)) {
       regionValues = [hubLive.region, ...regionValues]
     }
     if (!areStringArraysEqual(selectedRegions, regionValues)) setSelectedRegions(regionValues)
 
-    const spaceValue = searchParams.get("space") ?? ""
+    // Het hubpad draagt de ruimte als impliciete parameter, net als de
+    // assen hierboven. Zonder deze regel wist deze effect-pass de ruimte
+    // die de reducer net geseed had — de query string is op een hubpad
+    // immers leeg — en stond /projects/noord-holland/keukens met álle
+    // projecten in de grid en de Ruimte-pil uit.
+    let spaceValue = searchParams.get("space") ?? ""
+    if ((hubLive?.kind === "space" || hubLive?.kind === "space-city" || hubLive?.kind === "space-province") && hubLive.spaceValue && !spaceValue) {
+      spaceValue = hubLive.spaceValue
+    }
     if (selectedSpace !== spaceValue) setSelectedSpace(spaceValue)
 
     const buildingTypeValues = parseCommaSeparatedParam(searchParams.get("buildingType"))
@@ -656,16 +669,20 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
     const basePath = pathHub
       ? livePath.slice(0, livePath.length - pathHub.slug.length - 1)
       : livePath
+    // `spaces` is 0 of 1 — ruimte is een enkelvoudig filter. Het stond
+    // hier als harde eis op leeg, waardoor een ruimtehub nooit zijn
+    // eigen pad kon matchen: zodra de ruimte geseed werd viel de stand
+    // terug op /projects?space=kitchen en verloor de pagina zijn URL.
     const onlyFilter = (
-      locations: number, scopes: number, types: number, regions = 0,
+      locations: number, scopes: number, types: number, regions = 0, spaces = 0,
     ) =>
       selectedLocations.length === locations &&
       selectedScopes.length === scopes &&
       selectedTypes.length === types &&
       selectedRegions.length === regions &&
+      (selectedSpace === "" ? 0 : 1) === spaces &&
       selectedBuildingTypes.length === 0 &&
       selectedStyles.length === 0 &&
-      selectedSpace === "" &&
       selectedBuildingFeatures.length === 0 &&
       selectedSizes.length === 0 &&
       selectedBudgets.length === 0 &&
@@ -695,6 +712,16 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
         categoryTokens[0]?.toLowerCase() === h.typeValue.toLowerCase(),
       ) ??
       hubs.find((h) =>
+        h.kind === "space-city" && h.cityName && h.spaceValue && onlyFilter(1, 0, 0, 0, 1) &&
+        selectedLocations[0]?.toLowerCase() === h.cityName.toLowerCase() &&
+        selectedSpace === h.spaceValue,
+      ) ??
+      hubs.find((h) =>
+        h.kind === "space-province" && h.region && h.spaceValue && onlyFilter(0, 0, 0, 1, 1) &&
+        selectedRegions[0] === h.region &&
+        selectedSpace === h.spaceValue,
+      ) ??
+      hubs.find((h) =>
         h.kind === "city" && h.cityName && onlyFilter(1, 0, 0) &&
         selectedLocations[0]?.toLowerCase() === h.cityName.toLowerCase(),
       ) ??
@@ -709,6 +736,10 @@ function FilterProviderInner({ children, hubs = [], hubSlug }: { children: React
       hubs.find((h) =>
         h.kind === "province" && h.region && onlyFilter(0, 0, 0, 1) &&
         selectedRegions[0] === h.region,
+      ) ??
+      hubs.find((h) =>
+        h.kind === "space" && h.spaceValue && onlyFilter(0, 0, 0, 0, 1) &&
+        selectedSpace === h.spaceValue,
       ) ?? null
 
     const nextQuery = matchedHub ? "" : params.toString()
