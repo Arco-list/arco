@@ -17,6 +17,7 @@ import { useLoginModal } from "@/contexts/login-modal-context";
 // CompanySwitcher functionality is now integrated into the dropdown menu
 import { getUserCompaniesAction, switchCompanyAction } from "@/app/dashboard/company/actions";
 import { HeaderLanguageSwitcher } from "@/components/header-language-switcher";
+import { MegaMenuPanel, MegaMenuMobileSections, useNavMenus, type MegaKey } from "@/components/header-mega-menu";
 
 export interface NavLink {
   href: string;
@@ -26,6 +27,10 @@ export interface NavLink {
    *  dropdowns. Hidden when 0 / undefined. Used by the admin nav for
    *  the Sales "Outbound due" count. */
   badge?: number;
+  /** Zet hiermee een uitklapmenu achter deze link (Projecten,
+   *  Professionals). De link zelf blijft werken — hij is de "alles"
+   *  ingang van zijn eigen menu. */
+  mega?: MegaKey;
 }
 
 export interface NavGroup {
@@ -217,8 +222,8 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
   const { openLoginModal } = useLoginModal();
 
   const defaultNavLinks: NavItem[] = [
-    { href: "/projects", label: t("projects") },
-    { href: "/professionals", label: t("professionals") },
+    { href: "/projects", label: t("projects"), mega: "projects" },
+    { href: "/professionals", label: t("professionals"), mega: "professionals" },
   ];
   let resolvedNavLinks = navLinks ?? defaultNavLinks;
 
@@ -376,6 +381,15 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
   }
 
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  // De menu-inhoud wordt pas opgehaald zodra iemand hem voor het eerst
+  // wil zien. Een bezoeker die nooit uitklapt betaalt er niets voor.
+  const [megaWanted, setMegaWanted] = useState(false);
+  // Mobiel klapt per hoofdingang open, en begint dicht. Alles tegelijk
+  // uitgevouwen is negenendertig links waar je doorheen moet voordat je
+  // bij Inloggen bent.
+  const [openMobileMega, setOpenMobileMega] = useState<string | null>(null);
+  const navLocale = useLocale();
+  const { menus: navMenus, failed: navMenusFailed } = useNavMenus(navLocale, megaWanted);
   useEffect(() => {
     if (!openGroup) return;
     const onClick = (e: MouseEvent) => {
@@ -493,7 +507,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                 className={`flex flex-col gap-1 p-1 md:hidden transition-opacity hover:opacity-70 ${
                   transparent && !isScrolled ? "text-white" : "text-black"
                 }`}
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                onClick={() => { setMegaWanted(true); setOpenMobileMega(null); setIsMobileMenuOpen(!isMobileMenuOpen) }}
                 aria-label="Navigation"
               >
                 <span className={`block w-[18px] h-[1.5px] ${transparent && !isScrolled ? "bg-white" : "bg-black"}`} />
@@ -503,7 +517,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
 
               {/* Mobile nav dropdown */}
               {isMobileMenuOpen && (
-                <div className="absolute left-0 top-full z-50 w-56 border border-border bg-white shadow-lg mt-2 md:hidden" ref={menuRef}>
+                <div className="absolute left-0 top-full z-50 w-full max-w-[22rem] max-h-[75vh] overflow-y-auto overscroll-contain border border-border bg-white shadow-lg mt-2 md:hidden" ref={menuRef}>
                   <div className="py-2">
                     {resolvedNavLinks.map((item) => {
                       if (isNavGroup(item)) {
@@ -541,7 +555,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                         )
                       }
                       const linkPath = item.href.split("?")[0]
-                      return (
+                      const link = (
                         <Link
                           key={item.href}
                           href={item.href}
@@ -550,6 +564,49 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                         >
                           {item.label}
                         </Link>
+                      )
+                      if (!item.mega) return link
+                      // Op een telefoon is er geen breedte voor vier
+                      // kolommen naast elkaar, dus gaan ze onder elkaar
+                      // — maar pas na een tik.
+                      //
+                      // De rij is een KNOP, geen link: op touch is één
+                      // raakdoel dat zowel navigeert als uitklapt een
+                      // gok. De weg naar het overzicht staat onderin
+                      // als "Alle projecten →", net als op desktop.
+                      const megaOpen = openMobileMega === item.href
+                      const menu = navMenus && !navMenusFailed ? navMenus[item.mega] : null
+                      // Nog niet geladen of stuk: gewoon de link, zoals
+                      // de header was voordat dit menu bestond.
+                      if (!menu) return link
+                      return (
+                        <div key={item.href}>
+                          <button
+                            type="button"
+                            aria-expanded={megaOpen}
+                            onClick={() => setOpenMobileMega(megaOpen ? null : item.href)}
+                            className={`flex w-full items-center justify-between px-5 py-2.5 text-sm font-normal transition-colors ${
+                              pathname === linkPath ? "!font-medium text-primary" : "text-[#1c1c1a] hover:text-primary"
+                            }`}
+                          >
+                            <span>{item.label}</span>
+                            <svg width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true" className={`shrink-0 transition-transform ${megaOpen ? "rotate-180" : ""}`}>
+                              <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                            </svg>
+                          </button>
+                          {megaOpen && (
+                            <div className="pb-2">
+                              <MegaMenuMobileSections menu={menu} onNavigate={() => setIsMobileMenuOpen(false)} />
+                              <Link
+                                href={menu.allHref}
+                                className="block px-5 pt-3 pb-1 text-sm font-medium text-primary"
+                                onClick={() => setIsMobileMenuOpen(false)}
+                              >
+                                {menu.allLabel} →
+                              </Link>
+                            </div>
+                          )}
+                        </div>
                       )
                     })}
                     {(!isLoggedIn || companies.length === 0) && (
@@ -620,7 +677,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                           onClick={() => setOpenGroup(isOpen ? null : item.label)}
                           className={`header-rule flex items-center h-8 gap-1 text-sm font-normal whitespace-nowrap transition-colors ${
                             isActive || isOpen
-                              ? "text-primary"
+                              ? (transparent && !isScrolled ? "text-white" : "text-primary")
                               : transparent && !isScrolled ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
                           }`}
                         >
@@ -671,6 +728,59 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                   }
                   const linkPath = item.href.split("?")[0]
                   const isActive = pathname === linkPath
+                  if (item.mega && !navMenusFailed) {
+                    const megaOpen = openGroup === item.href
+                    // De link blijft een link — hij gaat naar het
+                    // overzicht. Het menu hangt eronder en opent op
+                    // hover; op touch fungeert de tik als navigatie,
+                    // want daar is het overzicht de snellere weg.
+                    return (
+                      <div
+                        key={item.href}
+                        data-nav-group
+                        className="relative"
+                        onMouseEnter={() => {
+                          if (window.matchMedia?.("(hover: hover) and (pointer: fine)").matches) {
+                            setMegaWanted(true)
+                            setOpenGroup(item.href)
+                          }
+                        }}
+                        onMouseLeave={() => setOpenGroup((cur) => (cur === item.href ? null : cur))}
+                      >
+                        <Link
+                          href={item.href}
+                          aria-expanded={megaOpen}
+                          onFocus={() => { setMegaWanted(true); setOpenGroup(item.href) }}
+                          onClick={() => setOpenGroup(null)}
+                          className={`header-rule inline-flex items-center h-8 gap-1 text-sm font-normal whitespace-nowrap transition-colors ${
+                            // Open of actief boven een foto: wit. Het
+                            // primaire groen is voor de witte header;
+                            // op een donkere hero las het als een fout.
+                            isActive || megaOpen
+                              ? (transparent && !isScrolled ? "text-white" : "text-primary")
+                              : transparent && !isScrolled ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
+                          }`}
+                        >
+                          {item.label}
+                          <svg width="8" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true" className={`transition-transform ${megaOpen ? "rotate-180" : ""}`}>
+                            <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                          </svg>
+                        </Link>
+                        {megaOpen && (
+                          // pt-[17px] laat het paneel op de onderrand van
+                          // de header landen én overbrugt de ruimte
+                          // ertussen — als padding op een kind telt de
+                          // muis die oversteekt niet als mouseleave.
+                          <div className="absolute left-0 top-full z-50 pt-[17px]">
+                            <MegaMenuPanel
+                              menu={navMenus ? navMenus[item.mega] : null}
+                              onNavigate={() => setOpenGroup(null)}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )
+                  }
                   return (
                     <Link
                       key={item.href}
@@ -951,9 +1061,9 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                                   { href: "/admin/users", label: t("admin_users"), icon: adminIcons.users },
                                   { href: "/admin/companies", label: t("admin_companies"), icon: adminIcons.companies },
                                   { href: "/admin/projects", label: t("admin_projects"), icon: adminIcons.projects },
+                                  { href: "/admin/brands", label: t("admin_brands"), icon: adminIcons.brands },
                                 ]},
                                 { key: "catalog", label: t("admin_catalog"), items: [
-                                  { href: "/admin/brands", label: t("admin_brands"), icon: adminIcons.brands },
                                   { href: "/admin/products", label: t("admin_products"), icon: adminIcons.products },
                                 ]},
                                 { key: "growth", label: t("admin_growth"), items: [
