@@ -36,6 +36,23 @@ export function provinceKey(value: string | null | undefined): string | null {
 
 /** City exonyms. address_city is stored as the Dutch endonym; this maps the
  * few cities whose English name differs. Unknown cities pass through as-is. */
+/** Elke schrijfwijze waarmee deze provincie in address_region kán staan.
+ *
+ *  De kolom hoort de Engelse canonieke naam te dragen, maar er staan
+ *  Nederlandse namen tussen: "Noord-Holland" naast "North Holland",
+ *  "Noord-Brabant" naast "North Brabant". De hubteller rekent via
+ *  provinceKey() álle vormen mee; een query die alleen de sleutel zoekt
+ *  vindt er minder, en dan belooft de description meer dan de grid
+ *  toont — 66 keukens in de meta, 64 kaarten in beeld.
+ *
+ *  De "(provincie)"-vormen blijven eruit: dat zijn weergavelabels om
+ *  stad en provincie uit elkaar te houden, geen opgeslagen waarden. */
+export function regionSpellings(key: string): string[] {
+  const meta = PROVINCES[key]
+  if (!meta) return [key]
+  return Array.from(new Set([key, meta.en, meta.nl].filter((v) => !v.includes("("))))
+}
+
 export const CITY_EXONYMS: Record<string, { nl: string; en: string }> = {
   "Den Haag": { nl: "Den Haag", en: "The Hague" },
 }

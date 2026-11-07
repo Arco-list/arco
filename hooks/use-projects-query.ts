@@ -7,6 +7,7 @@ import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import type { Tables } from "@/lib/supabase/types"
 import { PROJECT_TYPE_FILTERS, isAllowedProjectSubType, isAllowedProjectType } from "@/lib/project-type-filter-map"
 import { applyProjectSort, DEFAULT_PROJECT_SORT, type ProjectSort } from "@/lib/projects/sort"
+import { regionSpellings } from "@/lib/provinces"
 import { orderFeaturedFeed } from "@/lib/projects/featured-shuffle"
 
 import { useFilters } from "@/contexts/filter-context"
@@ -36,12 +37,26 @@ const escapeIlikePattern = (value: string) =>
     .replace(/[%_]/g, "\\$&")
     .replace(/'/g, "''")
 
+/**
+ * Geeft null terug als GEEN van de geselecteerde typen op te lossen is.
+ *
+ * Stond hier `return query` — de ongefilterde vraag. Een typefilter dat
+ * nog niet vertaald is (de waarden zijn slugs tot de taxonomie binnen
+ * is) verdween daarmee stilletjes, en de pagina toonde alles alsof dat
+ * het antwoord was. Hetzelfde patroon stond aan de professionals-kant
+ * en liet /professionals/lighting-designer "135 professionals" voeren
+ * waar er zes horen te staan.
+ *
+ * Een filter dat niet uit te drukken is hoort DICHT te slaan. De
+ * aanroeper slaat de fetch dan over; de hydratatie lost de tokens
+ * alsnog op en draait hem opnieuw.
+ */
 const applyTypeFilters = (query: any, selectedTypes: string[], categoriesById: Map<string, any>) => {
   // Resolve category UUIDs to slugs for matching against primary_category_slug
   const slugs = selectedTypes
     .map((id) => categoriesById.get(id)?.slug)
     .filter(Boolean) as string[]
-  if (slugs.length === 0) return query
+  if (slugs.length === 0) return selectedTypes.length > 0 ? null : query
   return query.in("primary_category_slug", slugs)
 }
 
@@ -355,7 +370,11 @@ export function useProjectsQuery({
       }
 
       if (filters.types.length > 0) {
-        query = applyTypeFilters(query, filters.types, categoriesById)
+        const typed = applyTypeFilters(query, filters.types, categoriesById)
+        // null = het typefilter staat aan maar is nog niet op te lossen.
+        // Niet ongefilterd wegvragen; de volgende pass doet het wel.
+        if (typed === null) return null
+        query = typed
       }
 
       if (filters.styles.length > 0) {
@@ -374,7 +393,7 @@ export function useProjectsQuery({
             ? [`address_city.in.(${filters.locations.map(quote).join(",")})`]
             : []),
           ...(filters.regions.length > 0
-            ? [`address_region.in.(${filters.regions.map(quote).join(",")})`]
+            ? [`address_region.in.(${filters.regions.flatMap(regionSpellings).map(quote).join(",")})`]
             : []),
         ]
         query = query.or(terms.join(","))
@@ -763,6 +782,15 @@ export function useProjectsQuery({
   useEffect(() => {
     let cancelled = false
     const load = async () => {
+      // Staat er een typefilter dat nog niet naar een categorie te
+      // vertalen is? Dan is de taxonomie nog onderweg. Wachten, niet
+      // vragen: de vorige uitslag blijft staan en de volgende pass —
+      // zodra de tokens opgelost zijn — haalt het goede antwoord.
+      // Zonder dit kiest applyTypeFilters tussen alles tonen en niets
+      // tonen, en allebei is een leugen.
+      if (filters.types.length > 0 && filters.types.every((id) => !categoriesById.get(id)?.slug)) {
+        return
+      }
       // Check if we have any active filters
       const hasFilters =
         typeFilterValues.length > 0 ||
@@ -892,6 +920,9 @@ export function useProjectsQuery({
     fetchTypePhotoOverrides,
     fetchSpacePhotoOverrides,
     imageCategorySearchOrder,
+    // De wacht-op-de-taxonomie-poort hierboven leest deze twee.
+    filters,
+    categoriesById,
     typeFilterValues.length,
     selectedStyles.length,
     selectedLocations,

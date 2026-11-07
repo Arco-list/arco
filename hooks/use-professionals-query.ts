@@ -203,12 +203,27 @@ export function useProfessionalsQuery(
         const validCategories = selectedCategories.filter(isUuid)
         const validServices = selectedServices.filter(isUuid)
 
-        // Log validation for debugging
-        if (selectedCategories.length !== validCategories.length) {
-          console.warn('Non-UUID categories filtered out:', selectedCategories.filter(c => !isUuid(c)))
-        }
-        if (selectedServices.length !== validServices.length) {
-          console.warn('Non-UUID services filtered out:', selectedServices.filter(s => !isUuid(s)))
+        // ── NIET ONGEFILTERD WEGVRAGEN ────────────────────────────────
+        //
+        // Een filterwaarde is een slug tot de taxonomie geladen is en
+        // hem naar een id heeft vertaald. Niet-UUID's werden hier
+        // weggegooid, en een leeg service_filters betekent voor de RPC
+        // "geen filter" — dus stond er op /professionals/lighting-
+        // designer "135 professionals" boven een pagina die er zes
+        // hoort te tonen. Een filter die niet uit te drukken is moet
+        // DICHTslaan, niet open: liever even de vorige uitslag laten
+        // staan dan de hele database tonen alsof dat het antwoord is.
+        //
+        // De hydratatie lost de tokens alsnog op en draait deze fetch
+        // dan opnieuw, dus dit is uitstel en geen afstel.
+        const unresolvedFilters =
+          (selectedCategories.length > 0 && validCategories.length === 0) ||
+          (selectedServices.length > 0 && validServices.length === 0)
+        if (unresolvedFilters) {
+          if (replace) setIsLoading(false)
+          else setIsLoadingMore(false)
+          if (abortControllerRef.current === controller) abortControllerRef.current = null
+          return
         }
 
         const filterParams = {

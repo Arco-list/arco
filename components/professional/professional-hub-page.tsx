@@ -40,15 +40,28 @@ export async function ProfessionalHubPage({ hub, allHubs, locale }: {
 
   let professionals: Awaited<ReturnType<typeof fetchDiscoverProfessionals>>["professionals"] = []
   // Category hubs match on the GROUP's child service names.
+  //
+  // Op KIND gaan, niet op de aanwezigheid van categorySlug. Diensthubs
+  // dragen die sinds kort ook (het headermenu zet ze per groep in
+  // kolommen), en daardoor liep deze tak ineens mee op een diensthub —
+  // waar hij niets te zoeken heeft.
+  const isCategoryHub =
+    hub.kind === "category" || hub.kind === "category-city" || hub.kind === "category-province"
   let categoryServiceNames: string[] = []
-  if (hub.categorySlug) {
+  if (isCategoryHub && hub.categorySlug) {
     try {
       const { createServerSupabaseClient } = await import("@/lib/supabase/server")
       const supabase = await createServerSupabaseClient()
       const { data: parent } = await supabase.from("categories").select("id").eq("slug", hub.categorySlug).maybeSingle()
       if (parent?.id) {
-        const { data: children } = await supabase.from("categories").select("name").eq("parent_id", parent.id)
-        categoryServiceNames = (children ?? []).map((c) => c.name).filter((n): n is string => Boolean(n))
+        // Naam ÉN name_nl. De kaarten dragen hun specialismen in de taal
+        // van de pagina (zie mapRpcRowToProfessionalCard), dus een lijst
+        // met alleen Engelse namen matcht op /nl niets behalve de
+        // woorden die toevallig in beide talen gelijk zijn — "Architect".
+        const { data: children } = await supabase.from("categories").select("name, name_nl").eq("parent_id", parent.id)
+        categoryServiceNames = (children ?? [])
+          .flatMap((c) => [c.name, c.name_nl])
+          .filter((n): n is string => Boolean(n))
       }
     } catch { /* pre-filter falls back to city-only */ }
   }
@@ -68,7 +81,7 @@ export async function ProfessionalHubPage({ hub, allHubs, locale }: {
       if ((hub.kind === "service" || hub.kind === "service-city" || hub.kind === "service-province") && hub.serviceName) {
         if (!names.includes(hub.serviceName) && !(hub.serviceNameNl && names.includes(hub.serviceNameNl))) return false
       }
-      if (hub.categorySlug && categoryServiceNames.length > 0) {
+      if (isCategoryHub && categoryServiceNames.length > 0) {
         if (!names.some((n: string) => categoryServiceNames.includes(n))) return false
       }
       return true
