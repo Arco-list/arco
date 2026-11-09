@@ -1,3 +1,4 @@
+import type { LocationRecord } from "@/lib/locations/types"
 /**
  * Professional card data for display in listings and galleries.
  * Note: This type uses the company as the primary identifier since professionals
@@ -59,6 +60,15 @@ export type ProfessionalProjectSummary = {
   projectType: string | null
 }
 
+/** Een merk dat het bedrijf voert (company_brands, migratie 297). */
+export type ProfessionalBrand = {
+  id: string
+  slug: string
+  name: string
+  logoUrl: string | null
+  isOfficialDealer: boolean
+}
+
 export type ProfessionalDetail = {
   id: string
   slug: string
@@ -107,4 +117,8 @@ export type ProfessionalDetail = {
   gallery: ProfessionalGalleryImage[]
   socialLinks: ProfessionalSocialLink[]
   projects: ProfessionalProjectSummary[]
+  /** Merken die het bedrijf voert, op volgorde. */
+  brands: ProfessionalBrand[]
+  /** Showrooms, winkels en andere vestigingen (locations). */
+  locations: LocationRecord[]
 }

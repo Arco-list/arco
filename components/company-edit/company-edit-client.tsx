@@ -39,6 +39,9 @@ import { useAuth } from "@/contexts/auth-context"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { CompanyEditSubNav } from "@/components/company-edit/company-edit-sub-nav"
+import { CompanyBrandsSection, type BrandOption, type CompanyBrandLink } from "@/components/company-edit/company-brands-section"
+import { CompanyLocationsSection } from "@/components/company-edit/company-locations-section"
+import type { LocationRecord } from "@/lib/locations/types"
 import { CompanyEditTour, type TourStep } from "@/components/company-edit/company-edit-tour"
 import { markTourSeen } from "@/lib/tours/actions"
 import {
@@ -140,6 +143,11 @@ export interface CompanyEditClientProps {
   /** Account-level tour key + seen flag (ui_tour_seen), loaded server-side. */
   tourKey?: string
   tourSeen?: boolean
+  /** Merken die het bedrijf voert, en de kieslijst (migratie 297). */
+  brands?: CompanyBrandLink[]
+  brandOptions?: BrandOption[]
+  /** Showrooms, winkels en andere vestigingen. */
+  locations?: LocationRecord[]
 }
 
 // ── Constants ──
@@ -183,7 +191,7 @@ const TOUR_STEPS: TourStep[] = [
 
 // ── Component ──
 
-export function CompanyEditClient({ company, socialLinks, services, serviceCategories, professionalId, projects, heroPhotoUrl: initialHeroUrl, heroPhotoProjectId: initialHeroProjectId, isSetupMode = false, pendingProjects = [], canPublishProjects = false, collaborationsCount = 0, showImportedBanner = false, importedProjectId = null, adminCompanyId, tourKey, tourSeen }: CompanyEditClientProps) {
+export function CompanyEditClient({ company, socialLinks, services, serviceCategories, professionalId, projects, heroPhotoUrl: initialHeroUrl, heroPhotoProjectId: initialHeroProjectId, isSetupMode = false, pendingProjects = [], canPublishProjects = false, collaborationsCount = 0, showImportedBanner = false, importedProjectId = null, adminCompanyId, tourKey, tourSeen, brands = [], brandOptions = [], locations = [] }: CompanyEditClientProps) {
   const router = useRouter()
   const { user } = useAuth()
   const isOwner = user?.id === company.owner_id
@@ -1952,6 +1960,16 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
           )}
         </div>
       </section>
+
+      {/* ════════════════════ BRANDS + LOCATIONS ════════════════════ */}
+      {/* Alleen voor admins zolang de merkenlaag niet publiek is;
+          adminCompanyId is gezet zodra een admin de pagina bekijkt. */}
+      {!isPhotographer && Boolean(adminCompanyId) && (
+        <>
+          <CompanyBrandsSection companyId={company.id} brands={brands} options={brandOptions} />
+          <CompanyLocationsSection companyId={company.id} locations={locations} />
+        </>
+      )}
 
       {/* ════════════════════ CONTACT SECTION ════════════════════ */}
       <section id="contact" className="contact-section" style={{ marginBottom: 60 }}>

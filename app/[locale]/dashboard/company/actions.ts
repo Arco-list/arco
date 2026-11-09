@@ -1,5 +1,6 @@
 "use server"
 
+import { locationToRow, type LocationInput } from "@/lib/locations/types"
 import { revalidatePath } from "next/cache"
 import { cookies } from "next/headers"
 import { z } from "zod"
@@ -1881,5 +1882,125 @@ export async function updateCoverPhotoAction(input: {
   revalidatePath("/dashboard", "layout")
   revalidatePath("/professionals", "layout")
   revalidatePath("/projects", "layout")
+  return { success: true }
+}
+
+// ── Merken en vestigingen (migratie 297) ──────────────────────────────────
+// company_brands: de merken die het bedrijf voert (op de merkpagina de
+// verkooppunten). locations: showrooms, winkels, kantoren, werkplaatsen.
+// De RLS-policies laten eigenaar, team en admin schrijven; de context
+// hierboven geeft admins de service-role.
+
+const brandIdSchema = z.object({ brandId: z.string().uuid() })
+
+export async function addCompanyBrandAction(input: { brandId: string }, companyId?: string): Promise<ActionResult> {
+  const { supabase, user, company, error } = await getCompanyContext(companyId)
+  if (error) return { success: false, error }
+  const parsed = brandIdSchema.safeParse(input)
+  if (!parsed.success) return { success: false, error: "Invalid brand" }
+
+  const { count } = await supabase.from("company_brands").select("brand_id", { count: "exact", head: true }).eq("company_id", company!.id)
+  const { error: dbError } = await supabase
+    .from("company_brands")
+    .upsert({ company_id: company!.id, brand_id: parsed.data.brandId, position: count ?? 0, created_by: user?.id ?? null }, { onConflict: "company_id,brand_id" })
+  if (dbError) {
+    logger.db("insert", "company_brands", "Failed to add brand", { companyId: company!.id, brandId: parsed.data.brandId }, dbError)
+    return { success: false, error: "Could not add the brand." }
+  }
+  revalidatePath("/dashboard/company")
+  return { success: true }
+}
+
+export async function removeCompanyBrandAction(input: { brandId: string }, companyId?: string): Promise<ActionResult> {
+  const { supabase, company, error } = await getCompanyContext(companyId)
+  if (error) return { success: false, error }
+  const parsed = brandIdSchema.safeParse(input)
+  if (!parsed.success) return { success: false, error: "Invalid brand" }
+
+  const { error: dbError } = await supabase.from("company_brands").delete().eq("company_id", company!.id).eq("brand_id", parsed.data.brandId)
+  if (dbError) {
+    logger.db("delete", "company_brands", "Failed to remove brand", { companyId: company!.id, brandId: parsed.data.brandId }, dbError)
+    return { success: false, error: "Could not remove the brand." }
+  }
+  revalidatePath("/dashboard/company")
+  return { success: true }
+}
+
+export async function setCompanyBrandDealerAction(input: { brandId: string; isOfficialDealer: boolean }, companyId?: string): Promise<ActionResult> {
+  const { supabase, company, error } = await getCompanyContext(companyId)
+  if (error) return { success: false, error }
+  const parsed = brandIdSchema.extend({ isOfficialDealer: z.boolean() }).safeParse(input)
+  if (!parsed.success) return { success: false, error: "Invalid input" }
+
+  const { error: dbError } = await supabase
+    .from("company_brands")
+    .update({ is_official_dealer: parsed.data.isOfficialDealer })
+    .eq("company_id", company!.id)
+    .eq("brand_id", parsed.data.brandId)
+  if (dbError) {
+    logger.db("update", "company_brands", "Failed to update dealer flag", { companyId: company!.id, brandId: parsed.data.brandId }, dbError)
+    return { success: false, error: "Could not update the brand." }
+  }
+  revalidatePath("/dashboard/company")
+  return { success: true }
+}
+
+const locationInputSchema = z.object({
+  id: z.string().uuid().nullable().optional(),
+  kind: z.enum(["showroom", "store", "office", "workshop"]),
+  name: z.string().max(120).nullable(),
+  address: z.string().max(300).nullable(),
+  streetAddress: z.string().max(200).nullable(),
+  postalCode: z.string().max(20).nullable(),
+  city: z.string().max(120).nullable(),
+  stateRegion: z.string().max(120).nullable(),
+  country: z.string().max(120).nullable(),
+  googlePlaceId: z.string().max(200).nullable(),
+  latitude: z.number().nullable(),
+  longitude: z.number().nullable(),
+  phone: z.string().max(40).nullable(),
+  email: z.string().max(200).nullable(),
+  website: z.string().max(300).nullable(),
+  openingHours: z.string().max(600).nullable(),
+})
+
+export async function saveCompanyLocationAction(input: LocationInput, companyId?: string): Promise<ActionResult> {
+  const { supabase, company, error } = await getCompanyContext(companyId)
+  if (error) return { success: false, error }
+  const parsed = locationInputSchema.safeParse(input)
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid location" }
+  if (!parsed.data.address) return { success: false, error: "An address is required." }
+
+  const row = { ...locationToRow(parsed.data), updated_at: new Date().toISOString() }
+  if (parsed.data.id) {
+    const { error: dbError } = await supabase.from("locations").update(row).eq("id", parsed.data.id).eq("company_id", company!.id)
+    if (dbError) {
+      logger.db("update", "locations", "Failed to update location", { companyId: company!.id, id: parsed.data.id }, dbError)
+      return { success: false, error: "Could not save the location." }
+    }
+  } else {
+    const { count } = await supabase.from("locations").select("id", { count: "exact", head: true }).eq("company_id", company!.id)
+    const { error: dbError } = await supabase.from("locations").insert({ ...row, company_id: company!.id, position: count ?? 0 })
+    if (dbError) {
+      logger.db("insert", "locations", "Failed to add location", { companyId: company!.id }, dbError)
+      return { success: false, error: "Could not save the location." }
+    }
+  }
+  revalidatePath("/dashboard/company")
+  return { success: true }
+}
+
+export async function deleteCompanyLocationAction(input: { id: string }, companyId?: string): Promise<ActionResult> {
+  const { supabase, company, error } = await getCompanyContext(companyId)
+  if (error) return { success: false, error }
+  const parsed = z.object({ id: z.string().uuid() }).safeParse(input)
+  if (!parsed.success) return { success: false, error: "Invalid location" }
+
+  const { error: dbError } = await supabase.from("locations").delete().eq("id", parsed.data.id).eq("company_id", company!.id)
+  if (dbError) {
+    logger.db("delete", "locations", "Failed to delete location", { companyId: company!.id, id: parsed.data.id }, dbError)
+    return { success: false, error: "Could not remove the location." }
+  }
+  revalidatePath("/dashboard/company")
   return { success: true }
 }

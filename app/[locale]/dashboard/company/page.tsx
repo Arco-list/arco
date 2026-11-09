@@ -2,6 +2,8 @@ import { redirect } from "next/navigation"
 import { getTranslations } from "next-intl/server"
 
 import { CompanyEditClient } from "@/components/company-edit/company-edit-client"
+import type { BrandOption, CompanyBrandLink } from "@/components/company-edit/company-brands-section"
+import { locationFromRow } from "@/lib/locations/types"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { getActiveCompanyId } from "@/lib/active-company"
 import { isAdminUser } from "@/lib/auth-utils"
@@ -168,7 +170,6 @@ export default async function CompanySettingsPage({
   // that is not a reason to keep it.
   const setupResetAt = (company as { setup_reset_at?: string | null }).setup_reset_at ?? null
   const tourKey = `company-edit${setupResetAt ? `:${setupResetAt}` : ""}`
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: tourSeenRow } = await (supabase as any)
     .from("ui_tour_seen")
     .select("tour_key")
@@ -392,6 +393,25 @@ export default async function CompanySettingsPage({
   }
 
   // Build pending projects for setup mode
+  // Merken en vestigingen (migratie 297). Service-role voor de merkenlijst:
+  // brands is admin-only in RLS zolang de productlaag niet publiek is.
+  const sr297 = createServiceRoleSupabaseClient()
+  const [{ data: companyBrandRows }, { data: brandOptionRows }, { data: locationRows }] = await Promise.all([
+    sr297
+      .from("company_brands")
+      .select("brand_id, is_official_dealer, position, brands(id, slug, name, logo_url, status)")
+      .eq("company_id", company.id)
+      .order("position")
+      .order("created_at"),
+    sr297.from("brands").select("id, slug, name, logo_url").neq("status", "deactivated").order("name"),
+    sr297.from("locations").select("*").eq("company_id", company.id).order("position").order("created_at"),
+  ])
+  const companyBrands: CompanyBrandLink[] = ((companyBrandRows ?? []) as any[])
+    .filter((r) => r.brands && r.brands.status !== "deactivated")
+    .map((r) => ({ id: r.brands.id, slug: r.brands.slug, name: r.brands.name, logoUrl: r.brands.logo_url ?? null, isOfficialDealer: r.is_official_dealer === true }))
+  const brandOptions: BrandOption[] = ((brandOptionRows ?? []) as any[]).map((b) => ({ id: b.id, slug: b.slug, name: b.name, logoUrl: b.logo_url ?? null }))
+  const companyLocations = ((locationRows ?? []) as Record<string, unknown>[]).map(locationFromRow)
+
   const pendingProjects = (pendingProjectLinks ?? [])
     .filter((link: any) => link.projects?.status === "published" || link.projects?.status === "completed")
     .map((link: any) => ({
@@ -418,6 +438,9 @@ export default async function CompanySettingsPage({
       showImportedBanner={imported === "1"}
       importedProjectId={importedProjectId ?? null}
       adminCompanyId={isAdmin ? company.id : undefined}
+      brands={companyBrands}
+      brandOptions={brandOptions}
+      locations={companyLocations}
       tourKey={tourKey}
       tourSeen={tourSeen}
     />

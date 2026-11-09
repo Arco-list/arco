@@ -10,6 +10,8 @@ import { ProfessionalSpecs } from "@/components/professional/professional-specs"
 import { PhotographerSpecs } from "@/components/professional/photographer-specs"
 import { ProfessionalProjects } from "@/components/professional/professional-projects"
 import { ProfessionalContact } from "@/components/professional/professional-contact"
+import { ProfessionalBrands } from "@/components/professional/professional-brands"
+import { ProfessionalLocations } from "@/components/professional/professional-locations"
 import { fetchProfessionalDetail, fetchProfessionalMetadata } from "@/lib/professionals/queries"
 import { TrackProfessionalView } from "@/components/track-view"
 import { CompanyStructuredData } from "@/components/company-structured-data"
@@ -243,6 +245,17 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
     }
   }
 
+  // Merken en vestigingen zijn admin-only zolang de merkenlaag niet
+  // publiek is: de secties renderen alleen voor een admin-kijker.
+  let viewerIsAdmin = false
+  {
+    const { data: { user: viewer } } = await supabase.auth.getUser()
+    if (viewer) {
+      const { data: viewerProfile } = await supabase.from("profiles").select("admin_role, user_types").eq("id", viewer.id).maybeSingle()
+      viewerIsAdmin = Boolean(viewerProfile && isAdminUser(viewerProfile.user_types, viewerProfile.admin_role))
+    }
+  }
+
   if (!professional) {
     // Hub fallback — see generateMetadata.
     const hub = await resolveProfessionalHub(slug)
@@ -341,6 +354,13 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
           projects={professional.projects}
           heading={isPhotographer ? t("photographed_projects") : undefined}
         />
+      )}
+
+      {viewerIsAdmin && (
+        <>
+          <ProfessionalBrands brands={professional.brands} />
+          <ProfessionalLocations locations={professional.locations} />
+        </>
       )}
 
       <ProfessionalContact

@@ -1,8 +1,10 @@
+import { spaceLabelSingular } from "@/lib/type-labels"
+import { locationFromRow, type LocationRecord } from "@/lib/locations/types"
 import "server-only"
 
 import type { PostgrestError } from "@supabase/supabase-js"
 
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
 import {
   getProjectTranslation,
@@ -15,6 +17,7 @@ import {
 import type {
   ProfessionalCard,
   ProfessionalDetail,
+  ProfessionalBrand,
   ProfessionalGalleryImage,
   ProfessionalProjectSummary,
   ProfessionalSocialLink,
@@ -699,8 +702,10 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
     }
 
     const projectSummariesResult = await supabase
-      .from("mv_project_summary")
-      .select("id, title, translations, slug, location, primary_photo_url, likes_count, project_year, status, style_preferences, project_type, building_type, primary_category, primary_category_slug")
+      // De zoekdocumenten in plaats van de view erachter: zelfde kolommen,
+      // plus kind en primary_space_slug voor deelprojecten (migratie 301).
+      .from("project_search_documents")
+      .select("id, title, translations, slug, location, primary_photo_url, likes_count, project_year, status, style_preferences, project_type, building_type, primary_category, primary_category_slug, kind, primary_space_slug")
       .in("id", uniqueProjectIds)
 
     if (projectSummariesResult.error) {
@@ -806,6 +811,10 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
         const rawProjectType = row.project_type as string | null
 
         const resolvedType = (() => {
+          // Een deelproject is zijn ruimte (Tuin), niet zijn gebouwtype.
+          if ((row as any).kind === "partial") {
+            return spaceLabelSingular((row as any).primary_space_slug ?? null, locale)
+          }
           if (primaryCategory) {
             return translateCategoryName(primaryCategorySlug ?? primaryCategory, locale) ?? primaryCategory
           }
@@ -935,6 +944,36 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
     translateProfessionalService(rawPrimaryServiceName, detailLocale) ||
     rawPrimaryServiceName
 
+
+  // Merken en vestigingen (migratie 297). Service-role: brands is
+  // admin-only in RLS zolang de productlaag niet publiek is, en de
+  // bedrijfspagina toont alleen naam en logo.
+  let brands: ProfessionalBrand[] = []
+  let locations: LocationRecord[] = []
+  try {
+    const sr = createServiceRoleSupabaseClient() as any
+    const [brandLinks, locationRows] = await Promise.all([
+      sr
+        .from("company_brands")
+        .select("brand_id, is_official_dealer, position, brands(id, slug, name, logo_url, status)")
+        .eq("company_id", companyId)
+        .order("position")
+        .order("created_at"),
+      sr.from("locations").select("*").eq("company_id", companyId).order("position").order("created_at"),
+    ])
+    brands = ((brandLinks.data ?? []) as any[])
+      .filter((r) => r.brands && r.brands.status !== "deactivated")
+      .map((r) => ({
+        id: r.brands.id as string,
+        slug: r.brands.slug as string,
+        name: r.brands.name as string,
+        logoUrl: (r.brands.logo_url as string | null) ?? null,
+        isOfficialDealer: r.is_official_dealer === true,
+      }))
+    locations = ((locationRows.data ?? []) as Record<string, unknown>[]).map(locationFromRow)
+  } catch (error) {
+    logger.warn("Failed to load brands/locations for professional detail", { companyId, error: String(error) })
+  }
   return {
     id: company.id,
     slug: company.slug || company.id,
@@ -994,5 +1033,7 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
     gallery,
     socialLinks,
     projects,
+    brands,
+    locations,
   }
 }
