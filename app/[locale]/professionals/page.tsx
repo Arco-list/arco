@@ -11,7 +11,7 @@ import { logger } from "@/lib/logger"
 import { TrackPageView } from "@/components/track-view"
 import { getSiteUrl } from "@/lib/utils"
 import { locales, defaultLocale } from "@/i18n/config"
-import { getProfessionalHubs } from "@/lib/professional-hubs"
+import { getProfessionalHubs, servicePluralBySlug } from "@/lib/professional-hubs"
 import { proHubToDef } from "@/components/professional/professional-hub-page"
 import { ProfessionalsDiscoverOutro } from "@/components/professionals-discover-outro"
 import { ProfessionalPopularSearches } from "@/components/professional-popular-searches"
@@ -103,8 +103,11 @@ export default async function ProfessionalsPage({ params }: { params: Promise<{ 
   // services with a real bench behind them (10+ professionals) earn a
   // card; the hub aggregation already carries per-service counts, the
   // categories lookup adds the uuid the filter context selects on.
-  const MIN_SERVICE_CARD_COUNT = 10
-  let serviceCards: { id: string; slug: string; name: string; nameNl: string | null }[] = []
+  // Elke dienst die zijn eigen hub haalt (de voorraaddrempel van de
+  // hubs) krijgt een kaart; de kaarten zijn de ingang, dus zo volledig
+  // als het aanbod.
+  const MIN_SERVICE_CARD_COUNT = 1
+  let serviceCards: { id: string; slug: string; name: string; nameNl: string | null; label: string }[] = []
   try {
     const qualifying = hubs
       .filter((h) => h.kind === "service" && h.serviceSlug && h.count >= MIN_SERVICE_CARD_COUNT)
@@ -117,7 +120,12 @@ export default async function ProfessionalsPage({ params }: { params: Promise<{ 
         .in("slug", qualifying.map((h) => h.serviceSlug as string))
       const order = new Map(qualifying.map((h, i) => [h.serviceSlug as string, i]))
       serviceCards = (cats ?? [])
-        .map((c) => ({ id: c.id, slug: c.slug ?? "", name: c.name, nameNl: (c as { name_nl?: string | null }).name_nl ?? null }))
+        .map((c) => {
+          const nameNl = (c as { name_nl?: string | null }).name_nl ?? null
+          // Hetzelfde woord als in het headermenu en op home: Architecten,
+          // Keukenmakers — niet de categorienaam in het enkelvoud.
+          return { id: c.id, slug: c.slug ?? "", name: c.name, nameNl, label: servicePluralBySlug(c.slug ?? "", locale, locale === "nl" ? nameNl ?? c.name : c.name) }
+        })
         .sort((a, b) => (order.get(a.slug) ?? 99) - (order.get(b.slug) ?? 99))
     }
   } catch { /* the row simply doesn't render */ }

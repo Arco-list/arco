@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 import { Link } from "@/i18n/navigation"
 import { ChevronRight } from "lucide-react"
 import { useLocale, useTranslations } from "next-intl"
+import { QuickRow } from "@/components/quick-row"
 
 import { ProfessionalCard as ProfessionalCardComponent } from "@/components/professional-card"
 import { MapPreviewCard, ProfessionalsMap } from "@/components/professionals-map"
@@ -37,7 +38,7 @@ export function ProfessionalsGrid({
   /** Service quick-filter cards (the brand-row pattern from product
    *  discover): disc with the service mark, name below. The page passes
    *  only services with enough professionals to be worth a card. */
-  serviceCards?: { id: string; slug: string; name: string; nameNl: string | null }[]
+  serviceCards?: { id: string; slug: string; name: string; nameNl: string | null; label: string }[]
 }) {
   const [showMap, setShowMap] = useState(false)
   const t = useTranslations("professionals")
@@ -216,6 +217,9 @@ export function ProfessionalsGrid({
         : joinAmp(titleLocations)
   const pageTitle = typesResolved ? `${typePart} in ${locationPart}` : t("browse")
 
+  // Zonder keuze en zonder hub is dit de ingang, geen lijst: een eigen
+  // kop met één zin eronder; de dienstentegels staan er al.
+  const isBrowseHome = !hubMode && selectedCategories.length === 0 && selectedServices.length === 0 && selectedCities.length === 0 && selectedRegions.length === 0 && !keyword
   // The H1 above describes the filter state; the count line stays minimal.
   const headingText = displayCount === 1 ? "professional" : "professionals"
 
@@ -297,9 +301,13 @@ export function ProfessionalsGrid({
               </>
             )}
           </nav>
-          {hubMode
-            ? <h1 className="arco-section-title">{pageTitle}</h1>
-            : <h2 className="arco-section-title">{pageTitle}</h2>}
+          {hubMode ? (
+            <h1 className="arco-section-title">{pageTitle}</h1>
+          ) : isBrowseHome ? (
+            <h1 className="arco-section-title">{t("discover_title")}</h1>
+          ) : (
+            <h2 className="arco-section-title">{pageTitle}</h2>
+          )}
         </div>
       </div>
 
@@ -308,8 +316,8 @@ export function ProfessionalsGrid({
           that service; the row hides once any service/category filter
           narrows the view (mirroring the brand row). */}
       {serviceCards.length > 0 && selectedServices.length === 0 && selectedCategories.length === 0 && (
-        <div className="wrap" style={{ paddingTop: 24, paddingBottom: 8 }}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 32, alignItems: "flex-start" }}>
+        <div className="wrap" style={{ paddingTop: 0, paddingBottom: 40 }}>
+          <QuickRow>
             {serviceCards.map((svc) => {
               const ServiceIcon = resolveProfessionalServiceIcon(svc.slug)
               return (
@@ -317,20 +325,16 @@ export function ProfessionalsGrid({
                   key={svc.id}
                   type="button"
                   onClick={() => setSelectedServices([...selectedServices, svc.id])}
-                  className="credit-card service-quick-card"
-                  // Flex column so a label wider than the 100px disc
-                  // ("Interieurarchitect") overflows symmetrically and
-                  // stays centered under the circle.
-                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, width: 100, display: "flex", flexDirection: "column", alignItems: "center" }}
+                  className="credit-card service-quick-card quick-tile"
                 >
                   <div className="credit-icon">
                     <ServiceIcon className="credit-icon-service" strokeWidth={1} />
                   </div>
-                  <h3 className="arco-label" style={{ whiteSpace: "nowrap", textAlign: "center" }}>{nl ? svc.nameNl ?? svc.name : svc.name}</h3>
+                  <h3 className="quick-tile-label">{svc.label}</h3>
                 </button>
               )
             })}
-          </div>
+          </QuickRow>
         </div>
       )}
 

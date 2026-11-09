@@ -6,9 +6,10 @@ import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { FilterProvider } from "@/contexts/filter-context"
 import { FilterErrorBoundary } from "@/components/filter-error-boundary"
-import { DiscoverClient } from "@/components/discover-client"
+import { DiscoverClient, type SpaceCard } from "@/components/discover-client"
 import { fetchDiscoverProjects } from "@/lib/projects/queries"
-import { getHubs } from "@/lib/project-hubs"
+import { getHubs, SPACE_HUB_DEFS } from "@/lib/project-hubs"
+import { spaceNoun } from "@/lib/type-labels"
 import { PopularSearches, type PopularHubs } from "@/components/popular-searches"
 import { hubToDef } from "@/components/project/hub-page"
 import { ProjectsDiscoverOutro } from "@/components/projects-discover-outro"
@@ -92,6 +93,45 @@ export default async function ProjectsPage({
       error as Error,
     )
   }
+  // De ruimtes als cirkels op de ingang: de ruimtehubs (fotogated) in
+  // redactionele volgorde, met het beeld van de ruimte — het door admin
+  // gezette beeld, anders de eerste projectfoto in die ruimte.
+  let spaceCards: SpaceCard[] = []
+  try {
+    const supabase = await createServerSupabaseClient()
+    const { data: spaceRows } = await supabase.from("spaces").select("id, slug, image_url").eq("is_active", true)
+    const bySlug = new Map(((spaceRows ?? []) as Array<{ id: string; slug: string; image_url: string | null }>).map((s) => [s.slug, s]))
+    const order = new Map(SPACE_HUB_DEFS.map((d, i) => [d.space, i]))
+    const hubs = popularHubs.spaces.slice().sort((a, b) => (order.get(a.spaceValue ?? "") ?? 99) - (order.get(b.spaceValue ?? "") ?? 99))
+    const fallback = new Map<string, string>()
+    await Promise.all(
+      hubs
+        .map((h) => bySlug.get(h.spaceValue ?? ""))
+        .filter((s): s is { id: string; slug: string; image_url: string | null } => Boolean(s) && !s!.image_url)
+        .map(async (s) => {
+          const { data } = await supabase
+            .from("project_features")
+            .select("project_photos!project_photos_feature_id_fkey(url, is_primary, order_index)")
+            .eq("space_id", s.id)
+            .limit(8)
+          const photos = ((data ?? []) as any[])
+            .flatMap((f) => (f.project_photos ?? []) as Array<{ url: string | null; is_primary: boolean; order_index: number | null }>)
+            .filter((p) => p.url)
+            .sort((a, b) => Number(b.is_primary) - Number(a.is_primary) || (a.order_index ?? 0) - (b.order_index ?? 0))
+          if (photos[0]?.url) fallback.set(s.id, photos[0].url)
+        }),
+    )
+    spaceCards = hubs.map((h) => {
+      const row = bySlug.get(h.spaceValue ?? "")
+      return {
+        slug: h.slug,
+        label: spaceNoun(h.spaceValue ?? h.slug, locale),
+        href: `/projects/${h.slug}`,
+        imageUrl: row?.image_url ?? (row ? fallback.get(row.id) ?? null : null),
+      }
+    })
+  } catch { /* zonder cirkels is de pagina nog steeds de pagina */ }
+
   // Live count for the outro platform block.
   let publishedProjectCount = 0
   try {
@@ -112,6 +152,7 @@ export default async function ProjectsPage({
         <FilterProvider hubs={hubDefs}>
           <DiscoverClient
             initialProjects={projects}
+            spaceCards={spaceCards}
             hubFooter={
               <>
                 <PopularSearches hubs={popularHubs} locale={locale} />

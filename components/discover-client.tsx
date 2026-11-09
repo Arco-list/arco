@@ -2,6 +2,8 @@
 
 import { useState } from "react"
 import { useLocale, useTranslations } from "next-intl"
+import { QuickRow } from "@/components/quick-row"
+import { Link } from "@/i18n/navigation"
 import { useFilters } from "@/contexts/filter-context"
 import { FilterBar, type SortOption, DEFAULT_PROJECT_SORT } from "@/components/filter-bar"
 import { BreadcrumbSelect, type BreadcrumbSelectItem } from "@/components/project/breadcrumb-select"
@@ -11,6 +13,8 @@ import { discoverHeading } from "@/lib/discover-heading"
 import { pluralizeLabel } from "@/lib/pluralize-label"
 import { PROVINCES, cityLabel } from "@/lib/provinces"
 import { scopeLabel, spaceNoun } from "@/lib/type-labels"
+
+export type SpaceCard = { slug: string; label: string; href: string; imageUrl: string | null }
 
 interface DiscoverClientProps {
   initialProjects: DiscoverProject[]
@@ -25,9 +29,12 @@ interface DiscoverClientProps {
   /** Server-rendered extras below the grid on hub pages (sibling-hub
    *  links, all-projects link). */
   hubFooter?: React.ReactNode
+  /** De ruimtes als cirkels op de ingang (zonder keuze, geen hub):
+   *  de ruimtehubs met een beeld. Zie app/[locale]/projects/page.tsx. */
+  spaceCards?: SpaceCard[]
 }
 
-export function DiscoverClient({ initialProjects, initialSort = DEFAULT_PROJECT_SORT, hubHeader, hubFooter }: DiscoverClientProps) {
+export function DiscoverClient({ initialProjects, initialSort = DEFAULT_PROJECT_SORT, hubHeader, hubFooter, spaceCards = [] }: DiscoverClientProps) {
   const [sortBy, setSortBy] = useState<SortOption>(initialSort)
   const t = useTranslations("projects")
   const locale = useLocale()
@@ -144,6 +151,10 @@ export function DiscoverClient({ initialProjects, initialSort = DEFAULT_PROJECT_
   const hasTitleFilters =
     selectedTypes.length + selectedBuildingTypes.length + selectedScopes.length
     + selectedLocations.length + selectedRegions.length + (selectedSpace ? 1 : 0) > 0
+  // Zonder keuze en zonder hub is dit de ingang, geen lijst: een eigen
+  // kop met één zin eronder en de ruimtes als cirkels. Zodra er een
+  // filter staat neemt de filtergestuurde kop het over.
+  const isBrowseHome = !hubHeader && !hasTitleFilters
   // Until the taxonomy loads, selected category ids may still be raw URL
   // tokens — hold the server/fallback title rather than render them.
   const typesResolved = typesResolvedForLeaf
@@ -234,12 +245,39 @@ export function DiscoverClient({ initialProjects, initialSort = DEFAULT_PROJECT_
               search-targeted H1 as the no-divergence fallback */}
           {hubHeader ? (
             <h1 className="arco-section-title">{dynamicTitle ?? hubHeader.title}</h1>
+          ) : isBrowseHome ? (
+            <h1 className="arco-section-title">{t("discover_title")}</h1>
           ) : (
             <h2 className="arco-section-title">{dynamicTitle ?? t("browse")}</h2>
           )}
 
         </div>
       </div>
+
+      {/* Ruimtes als cirkels — de visuele ingang, zoals de diensten op
+          /professionals en de hoofdgroepen op /products. Elke cirkel is
+          de ruimtehub zelf. */}
+      {isBrowseHome && spaceCards.length > 0 && (
+        <div className="wrap" style={{ paddingTop: 0, paddingBottom: 40 }}>
+          <QuickRow>
+            {spaceCards.map((s) => (
+              <Link
+                key={s.slug}
+                href={s.href}
+                className="credit-card service-quick-card quick-tile"
+              >
+                <div className="credit-icon" style={{ overflow: "hidden" }}>
+                  {s.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={s.imageUrl} alt={s.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : null}
+                </div>
+                <h3 className="quick-tile-label">{s.label}</h3>
+              </Link>
+            ))}
+          </QuickRow>
+        </div>
+      )}
 
       {/* Results */}
       <main>
