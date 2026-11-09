@@ -56,49 +56,56 @@ export type ProHub = {
  * (Meubels) — twee categorieën die anders dezelfde naam zouden voeren.
  */
 const SERVICE_PLURALS: Record<string, { nl: string; en: string }> = {
+  // Hoe het bedrijf heet, in het meervoud, met het woord dat de branche
+  // zelf gebruikt: -makers waar iets gemaakt wordt, -studio's waar
+  // ontwerp en showroom het bedrijf zijn, -winkels voor handel, het
+  // ambachtswoord waar dat bestaat, -installateurs voor installaties.
+  // Geen dingwoorden (Keukens, Vloeren): die zijn de ruimtes van de
+  // projecten; geen "-specialisten": dat zegt niets. Eén lijst voor het
+  // headermenu, de kaarten op home en de hubtitels.
   // Ontwerp & Planning
   architect: { nl: "Architecten", en: "Architects" },
   "interior-designer": { nl: "Interieurarchitecten", en: "Interior designers" },
-  "garden-designer": { nl: "Tuinontwerpers", en: "Garden designers" },
+  "garden-designer": { nl: "Tuinarchitecten", en: "Garden designers" },
   "lighting-designer": { nl: "Lichtontwerpers", en: "Lighting designers" },
   photographer: { nl: "Fotografen", en: "Photographers" },
   "structural-engineer": { nl: "Constructeurs", en: "Structural engineers" },
+  // Bouw
+  builder: { nl: "Aannemers", en: "Builders" },
+  roofing: { nl: "Dakdekkers", en: "Roofers" },
+  kitchens: { nl: "Keukenmakers", en: "Kitchen makers" },
+  bathrooms: { nl: "Badkamerstudio's", en: "Bathroom studios" },
+  "swimming-pools": { nl: "Zwembadbouwers", en: "Pool builders" },
+  wellness: { nl: "Saunamakers", en: "Sauna makers" },
+  "tiles-stones": { nl: "Tegelzetters & steenhouwers", en: "Tilers & stonemasons" },
+  "windows-doors": { nl: "Kozijnmakers", en: "Window & door makers" },
+  "stairs-elevator": { nl: "Trappenmakers", en: "Stair makers" },
   // Afwerking
   "interior-stylist": { nl: "Interieurstylisten", en: "Interior stylists" },
   "cabinet-maker": { nl: "Meubelmakers", en: "Cabinet makers" },
   painter: { nl: "Schilders", en: "Painters" },
   upholstery: { nl: "Stoffeerders", en: "Upholsterers" },
-  furniture: { nl: "Meubelspecialisten", en: "Furniture specialists" },
-  lighting: { nl: "Verlichtingsspecialisten", en: "Lighting specialists" },
-  flooring: { nl: "Vloerenspecialisten", en: "Flooring specialists" },
-  fireplace: { nl: "Haardenspecialisten", en: "Fireplace specialists" },
-  art: { nl: "Kunstspecialisten", en: "Art specialists" },
-  // Bouw
-  builder: { nl: "Aannemers", en: "Builders" },
-  roofing: { nl: "Dakdekkers", en: "Roofers" },
-  kitchens: { nl: "Keukenspecialisten", en: "Kitchen specialists" },
-  bathrooms: { nl: "Badkamerspecialisten", en: "Bathroom specialists" },
-  "swimming-pools": { nl: "Zwembadbouwers", en: "Swimming pool builders" },
-  wellness: { nl: "Wellnessspecialisten", en: "Wellness specialists" },
-  "tiles-stones": { nl: "Tegel- en natuursteenspecialisten", en: "Tile & stone specialists" },
-  "windows-doors": { nl: "Ramen- en deurenspecialisten", en: "Window & door specialists" },
-  "stairs-elevator": { nl: "Trappen- en liftenbouwers", en: "Stair & elevator specialists" },
+  furniture: { nl: "Meubelwinkels", en: "Furniture stores" },
+  lighting: { nl: "Verlichtingswinkels", en: "Lighting stores" },
+  flooring: { nl: "Vloerenleggers", en: "Flooring installers" },
+  fireplace: { nl: "Haardenwinkels", en: "Fireplace stores" },
+  art: { nl: "Galeries", en: "Galleries" },
   // Buiten & Tuin
   gardener: { nl: "Hoveniers", en: "Gardeners" },
-  "shed-builder": { nl: "Schuurbouwers", en: "Shed builders" },
-  "outdoor-furniture": { nl: "Tuinmeubelspecialisten", en: "Outdoor furniture specialists" },
-  "outdoor-lighting": { nl: "Buitenverlichtingsspecialisten", en: "Outdoor lighting specialists" },
-  "fencing-gates": { nl: "Hekwerkspecialisten", en: "Fencing & gate specialists" },
+  "shed-builder": { nl: "Tuinhuismakers", en: "Garden house makers" },
+  "outdoor-furniture": { nl: "Tuinmeubelwinkels", en: "Outdoor furniture stores" },
+  "outdoor-lighting": { nl: "Buitenverlichtingswinkels", en: "Outdoor lighting stores" },
+  "fencing-gates": { nl: "Hekwerkmakers", en: "Fence & gate makers" },
   // Installaties
   "electrical-systems": { nl: "Elektriciens", en: "Electricians" },
-  "heating-ventilation": { nl: "Verwarmingsspecialisten", en: "Heating & ventilation specialists" },
-  "security-systems": { nl: "Beveiligingsspecialisten", en: "Security specialists" },
-  "smart-homes": { nl: "Smart home-installateurs", en: "Smart home installers" },
+  "heating-ventilation": { nl: "Installateurs", en: "HVAC installers" },
+  "security-systems": { nl: "Beveiligingsinstallateurs", en: "Security installers" },
+  "smart-homes": { nl: "Domotica-installateurs", en: "Smart home installers" },
   "solar-installer": { nl: "Zonnepaneelinstallateurs", en: "Solar installers" },
 }
 
-/** Meervoud bij een dienstSLUG — dezelfde lijst, zonder een hub nodig
- *  te hebben. Het headermenu bouwt zijn kolommen uit de taxonomie. */
+/** De naam bij een dienstSLUG — dezelfde lijst, zonder een hub nodig te
+ *  hebben. Het headermenu en de kaarten op home bouwen uit de taxonomie. */
 export function servicePluralBySlug(slug: string, locale: string, fallback?: string | null): string {
   const known = SERVICE_PLURALS[slug]
   if (known) return locale === "nl" ? known.nl : known.en
@@ -132,8 +139,13 @@ type MvRow = {
   services_offered: string[] | null
 }
 
-export async function getProfessionalHubs(): Promise<ProHub[]> {
-  const supabase = await createServerSupabaseClient()
+/** `client`: see getHubs — the nav menu passes a service-role client so
+ *  it can build inside unstable_cache. The rows are public (listed and
+ *  showcased companies). */
+export async function getProfessionalHubs(
+  client?: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+): Promise<ProHub[]> {
+  const supabase = client ?? (await createServerSupabaseClient())
   const [{ data }, { data: cats }] = await Promise.all([
     supabase
       .from("mv_professional_summary")

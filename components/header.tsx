@@ -284,6 +284,13 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
   const hasProfessionalRole = userTypes?.includes("professional") ?? false;
   const hasAdminRole = userTypes?.includes("admin") ?? false;
 
+  // Producten — alleen voor admins zolang de productlaag niet publiek is
+  // (dezelfde poort als de pagina's: lib/products-gate.ts). Zelfde
+  // uitklapmenu als Projecten en Professionals; de rijen zijn soorten.
+  if (hasAdminRole && !navLinks && !resolvedNavLinks.some((l) => !isNavGroup(l) && l.href === "/products")) {
+    resolvedNavLinks.push({ href: "/products", label: t("products"), mega: "products" });
+  }
+
   // Admin badge counts. The admin layout bakes them into navLinks
   // server-side, which makes them correct on load but frozen after it:
   // archiving an email mutates the DB, and the layout is a server
@@ -384,6 +391,27 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
   const [openMobileMega, setOpenMobileMega] = useState<string | null>(null);
   const navLocale = useLocale();
   const { menus: navMenus, failed: navMenusFailed } = useNavMenus(navLocale, megaWanted);
+  // Het menu alvast ophalen zodra de pagina rust: één kleine, gecachete
+  // vraag per sessie, en de eerste hover toont dan inhoud in plaats van
+  // een skelet. Alleen op apparaten met een muis — op touch is er geen
+  // hover en komt de vraag bij het openen van het menu, zoals nu.
+  useEffect(() => {
+    if (!window.matchMedia?.("(hover: hover) and (pointer: fine)").matches) return;
+    const start = () => setMegaWanted(true);
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
+    if (w.requestIdleCallback) {
+      const id = w.requestIdleCallback(start, { timeout: 2000 });
+      return () => w.cancelIdleCallback?.(id);
+    }
+    const t = setTimeout(start, 1200);
+    return () => clearTimeout(t);
+  }, []);
+  // Het brede menu hangt aan de header, niet aan zijn item — zo kan het
+  // de hele breedte nemen. Welk menu open is volgt uit openGroup; sluiten
+  // gebeurt als de muis de header verlaat of een ander item raakt.
+  const megaItems = resolvedNavLinks.filter((l): l is NavLink & { mega: MegaKey } => !isNavGroup(l) && Boolean(l.mega));
+  const openMega = megaItems.find((m) => m.href === openGroup) ?? null;
+  const closeMega = () => setOpenGroup((cur) => (cur && megaItems.some((m) => m.href === cur) ? null : cur));
   useEffect(() => {
     if (!openGroup) return;
     const onClick = (e: MouseEvent) => {
@@ -490,7 +518,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
 
   return (
     <>
-      <header className={headerClasses}>
+      <header className={headerClasses} onMouseLeave={closeMega}>
         {/* UPDATED: Use .wrap class */}
         <div className="wrap">
           <div className="relative flex items-center justify-between">
@@ -564,10 +592,11 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                       // kolommen naast elkaar, dus gaan ze onder elkaar
                       // — maar pas na een tik.
                       //
-                      // De rij is een KNOP, geen link: op touch is één
-                      // raakdoel dat zowel navigeert als uitklapt een
-                      // gok. De weg naar het overzicht staat onderin
-                      // als "Alle projecten →", net als op desktop.
+                      // Twee raakdoelen in één rij: het label is een LINK
+                      // naar het overzicht (Producten = Alle producten,
+                      // zoals op desktop), de pijl ernaast klapt de
+                      // kolommen uit. Eén knop die allebei moest doen
+                      // was een gok; nu doet elk doel één ding.
                       const megaOpen = openMobileMega === item.href
                       const menu = navMenus && !navMenusFailed ? navMenus[item.mega] : null
                       // Nog niet geladen of stuk: gewoon de link, zoals
@@ -575,19 +604,28 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                       if (!menu) return link
                       return (
                         <div key={item.href}>
-                          <button
-                            type="button"
-                            aria-expanded={megaOpen}
-                            onClick={() => setOpenMobileMega(megaOpen ? null : item.href)}
-                            className={`flex w-full items-center justify-between px-5 py-2.5 text-sm font-normal transition-colors ${
-                              pathname === linkPath ? "!font-medium text-primary" : "text-[#1c1c1a] hover:text-primary"
-                            }`}
-                          >
-                            <span>{item.label}</span>
-                            <svg width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true" className={`shrink-0 transition-transform ${megaOpen ? "rotate-180" : ""}`}>
-                              <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                            </svg>
-                          </button>
+                          <div className="flex w-full items-center justify-between pr-2">
+                            <Link
+                              href={item.href}
+                              onClick={() => setIsMobileMenuOpen(false)}
+                              className={`flex min-h-[44px] flex-1 items-center px-5 text-sm font-normal transition-colors ${
+                                pathname === linkPath ? "!font-medium text-primary" : "text-[#1c1c1a] hover:text-primary"
+                              }`}
+                            >
+                              {item.label}
+                            </Link>
+                            <button
+                              type="button"
+                              aria-expanded={megaOpen}
+                              aria-label={megaOpen ? `${item.label}: inklappen` : `${item.label}: uitklappen`}
+                              onClick={() => setOpenMobileMega(megaOpen ? null : item.href)}
+                              className="flex h-11 w-11 shrink-0 items-center justify-center text-[#1c1c1a] hover:text-primary transition-colors"
+                            >
+                              <svg width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true" className={`shrink-0 transition-transform ${megaOpen ? "rotate-180" : ""}`}>
+                                <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                              </svg>
+                            </button>
+                          </div>
                           {megaOpen && (
                             <div className="pb-2">
                               <MegaMenuMobileSections menu={menu} onNavigate={() => setIsMobileMenuOpen(false)} />
@@ -725,28 +763,28 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                   if (item.mega && !navMenusFailed) {
                     const megaOpen = openGroup === item.href
                     // De link blijft een link — hij gaat naar het
-                    // overzicht. Het menu hangt eronder en opent op
-                    // hover; op touch fungeert de tik als navigatie,
-                    // want daar is het overzicht de snellere weg.
+                    // overzicht. Het menu hangt onder de header (zie
+                    // onderaan de header) en opent op hover; op touch
+                    // fungeert de tik als navigatie, want daar is het
+                    // overzicht de snellere weg.
                     return (
                       <div
                         key={item.href}
                         data-nav-group
-                        className="relative"
                         onMouseEnter={() => {
                           if (window.matchMedia?.("(hover: hover) and (pointer: fine)").matches) {
                             setMegaWanted(true)
                             setOpenGroup(item.href)
                           }
                         }}
-                        onMouseLeave={() => setOpenGroup((cur) => (cur === item.href ? null : cur))}
                       >
                         <Link
                           href={item.href}
                           aria-expanded={megaOpen}
+                          data-open={megaOpen ? "true" : undefined}
                           onFocus={() => { setMegaWanted(true); setOpenGroup(item.href) }}
                           onClick={() => setOpenGroup(null)}
-                          className={`header-rule inline-flex items-center h-8 gap-1 text-sm font-normal whitespace-nowrap transition-colors ${
+                          className={`header-rule inline-flex items-center h-8 text-sm font-normal whitespace-nowrap transition-colors ${
                             // Open of actief boven een foto: wit. Het
                             // primaire groen is voor de witte header;
                             // op een donkere hero las het als een fout.
@@ -756,22 +794,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                           }`}
                         >
                           {item.label}
-                          <svg width="8" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true" className={`transition-transform ${megaOpen ? "rotate-180" : ""}`}>
-                            <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                          </svg>
                         </Link>
-                        {megaOpen && (
-                          // pt-[17px] laat het paneel op de onderrand van
-                          // de header landen én overbrugt de ruimte
-                          // ertussen — als padding op een kind telt de
-                          // muis die oversteekt niet als mouseleave.
-                          <div className="absolute left-0 top-full z-50 pt-[17px]">
-                            <MegaMenuPanel
-                              menu={navMenus ? navMenus[item.mega] : null}
-                              onNavigate={() => setOpenGroup(null)}
-                            />
-                          </div>
-                        )}
                       </div>
                     )
                   }
@@ -779,6 +802,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                     <Link
                       key={item.href}
                       href={item.href}
+                      onMouseEnter={closeMega}
                       // .header-rule draws the hover rule on the header's
                       // bottom border, matching the sub-nav tab indicator.
                       className={`header-rule inline-flex items-center h-8 text-sm font-normal whitespace-nowrap transition-colors ${
@@ -795,7 +819,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
             </div>
 
             {/* Right: List with us / Create your company + Language + Search + Menu */}
-            <div className="relative flex items-center justify-end gap-3">
+            <div className="relative flex items-center justify-end gap-3" onMouseEnter={closeMega}>
               {/* List with us — desktop only. Shown to logged-out visitors
                   and to signed-in users without a company. Always routes to
                   /businesses/architects; the CTA on that page owns opening
@@ -1173,6 +1197,20 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
             </div>
           </div>
         </div>
+        {/* Het brede menu: hangt aan de header zelf en neemt de hele
+            breedte, zoals bij JamesEdition. data-nav-group houdt een klik
+            erin buiten de klik-erbuiten-sluit-regel. Sluit als de muis de
+            header verlaat (onMouseLeave op <header>) of een ander item in
+            de balk raakt. */}
+        {openMega && !navMenusFailed && (
+          // top-full rekent vanaf de padding box van de header; de 1px
+          // onderrand ligt daarbuiten. Op 100% lag het paneel over die
+          // rand heen — en over de hover-lijn van de link, die precies op
+          // die rand getekend wordt. Eén pixel lager laat allebei staan.
+          <div data-nav-group className="absolute left-0 right-0 top-[calc(100%+1px)] z-50 hidden md:block">
+            <MegaMenuPanel menu={navMenus ? navMenus[openMega.mega] : null} onNavigate={() => setOpenGroup(null)} />
+          </div>
+        )}
       </header>
 
       {/* Search Overlay - full screen modal */}

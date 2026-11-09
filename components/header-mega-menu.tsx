@@ -5,7 +5,7 @@ import { Link } from "@/i18n/navigation"
 
 import type { NavMenu, NavMenus } from "@/lib/nav-menu"
 
-export type MegaKey = "projects" | "professionals"
+export type MegaKey = "projects" | "professionals" | "products"
 
 /**
  * Het uitklapmenu achter Projecten en Professionals in de header.
@@ -64,67 +64,81 @@ export function useNavMenus(locale: string, enabled: boolean): { menus: NavMenus
   return { menus, failed }
 }
 
-/** Het brede paneel onder de headerregel (desktop). */
+/** Acht rijen per kolom — COLUMN_CAP in nav-menu.ts. Een kolom met minder
+ *  rijen wordt aangevuld met onzichtbare, zodat elk paneel even hoog is:
+ *  Professionals heeft er hooguit vier per kolom, Projecten acht. */
+const ROWS = 8
+
+/**
+ * Het brede paneel onder de header (desktop): de hele breedte, de kolommen
+ * uitgelijnd op .wrap zodat ze onder het logo en de links beginnen.
+ *
+ * De verticale ruimte staat op een eigen div ín .wrap: .wrap zet zijn
+ * padding zelf (ongelaagd) en wint daarmee van elke padding-utility op
+ * hetzelfde element — py-7 op .wrap deed niets. Rijafstand als in de
+ * footer: 14px, regelhoogte 1.5, 8px ertussen. Tot de vraag binnen is een
+ * skelet van dezelfde hoogte, zodat het niet onder de muis vandaan springt.
+ */
 export function MegaMenuPanel({ menu, onNavigate }: { menu: NavMenu | null; onNavigate: () => void }) {
-  // Tot de vraag binnen is: een paneel van dezelfde orde van grootte,
-  // zodat het niet onder de muis vandaan springt zodra het vult.
-  if (!menu || menu.columns.length === 0) {
-    return (
-      <div className="border border-border bg-white shadow-lg px-8 py-7" style={{ minWidth: 560, minHeight: 220 }} aria-busy="true">
-        <div className="grid gap-8" style={{ gridTemplateColumns: "repeat(3, minmax(150px, 1fr))" }}>
-          {[0, 1, 2].map((c) => (
-            <div key={c}>
-              <div className="h-[11px] w-20 bg-[#f0efed] mb-4" />
-              {[0, 1, 2, 3, 4].map((r) => (
-                <div key={r} className="h-[11px] w-28 bg-[#f6f5f3] mb-3" />
+  const columns = menu?.columns ?? []
+  const loading = columns.length === 0
+  const row = "text-[14px] leading-[1.5] font-normal whitespace-nowrap"
+  return (
+    <div className="bg-white border-b border-border shadow-lg" aria-busy={loading || undefined}>
+      <div className="wrap">
+        <div className="py-7">
+          {loading ? (
+            <div className="grid gap-8" style={{ gridTemplateColumns: "repeat(4, minmax(150px, max-content))" }}>
+              {[0, 1, 2, 3].map((c) => (
+                <div key={c}>
+                  <div className="h-[11px] w-20 bg-[#f0efed] mb-3" />
+                  <div className="flex flex-col gap-2">
+                    {Array.from({ length: ROWS }, (_, r) => (
+                      <div key={r} className="flex h-[21px] items-center">
+                        <div className="h-[11px] w-28 bg-[#f6f5f3]" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
-          ))}
-        </div>
-      </div>
-    )
-  }
-  return (
-    <div className="border border-border bg-white shadow-lg px-8 py-7">
-      <div
-        className="grid gap-8"
-        style={{ gridTemplateColumns: `repeat(${menu.columns.length}, minmax(150px, max-content))` }}
-      >
-        {menu.columns.map((col) => (
-          <div key={col.label}>
-            <p className="text-[11px] font-medium uppercase tracking-wider text-[#a1a1a0] mb-3">
-              {col.href ? (
-                <Link href={col.href} className="hover:text-primary transition-colors" onClick={onNavigate}>
-                  {col.label}
-                </Link>
-              ) : (
-                col.label
-              )}
-            </p>
-            <ul className="space-y-[7px]">
-              {col.links.map((link) => (
-                <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    className="text-sm font-normal text-[#1c1c1a] hover:text-primary transition-colors whitespace-nowrap"
-                    onClick={onNavigate}
-                  >
-                    {link.label}
-                  </Link>
-                </li>
+          ) : (
+            <div className="grid gap-8" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(150px, max-content))` }}>
+              {columns.map((col) => (
+                <div key={col.label}>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-[#a1a1a0] mb-3">
+                    {col.href ? (
+                      <Link href={col.href} className="hover:text-primary transition-colors" onClick={onNavigate}>
+                        {col.label}
+                      </Link>
+                    ) : (
+                      col.label
+                    )}
+                  </p>
+                  <ul className="flex flex-col gap-2">
+                    {col.links.map((link) => (
+                      <li key={link.href} className={row}>
+                        <Link href={link.href} className="text-[#1c1c1a] hover:text-primary transition-colors" onClick={onNavigate}>
+                          {link.label}
+                        </Link>
+                      </li>
+                    ))}
+                    {Array.from({ length: Math.max(0, ROWS - col.links.length) }, (_, i) => (
+                      <li key={`pad-${i}`} aria-hidden="true" className={`${row} invisible`}>·</li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
-          </div>
-        ))}
-      </div>
-      <div className="mt-6 pt-4 border-t border-border">
-        <Link
-          href={menu.allHref}
-          className="text-sm font-medium text-primary hover:underline"
-          onClick={onNavigate}
-        >
-          {menu.allLabel} →
-        </Link>
+            </div>
+          )}
+          {menu && !loading && (
+            <div className="mt-6 pt-4 border-t border-border">
+              <Link href={menu.allHref} className="text-sm font-medium text-primary hover:underline" onClick={onNavigate}>
+                {menu.allLabel} →
+              </Link>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

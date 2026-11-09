@@ -561,6 +561,13 @@ p a:hover {
   opacity: 1;
 }
 
+/* The mega menu hangs under the header, outside its trigger's group, so
+   the group's :hover no longer reaches it. The open state carries the
+   rule instead — it stays while the pointer is down in the panel. */
+.header-rule[data-open="true"]::after {
+  opacity: 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .header-rule::after { transition: none; }
 }
@@ -2743,6 +2750,99 @@ footer .footer-heading {
 }
 .service-quick-card:hover .credit-icon-service {
   color: var(--primary);
+}
+
+/* ── Quick rows ────────────────────────────────────────────────────────
+   The disc-and-label rows on the three discovers: services on
+   /professionals, rooms on /projects, product groups on /products. A
+   carousel (components/quick-row.tsx): the script divides the row's
+   width into as many equal tiles as fit (150px minimum, 112px on
+   mobile) and sets --quick-tile-w, so the row runs edge to edge and
+   never shows half a tile; arrows step one tile, touch swipes with
+   snap. Before the script runs the tiles sit at the minimum width. */
+.quick-row-wrap {
+  position: relative;
+}
+.quick-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+.quick-row::-webkit-scrollbar {
+  display: none;
+}
+.quick-tile {
+  flex: 0 0 var(--quick-tile-w, 150px);
+  width: var(--quick-tile-w, 150px);
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.quick-tile .credit-icon {
+  margin-bottom: 12px;
+}
+.quick-tile-label {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--arco-black);
+  text-align: center;
+  white-space: normal;
+  max-width: 150px;
+}
+.quick-tile:hover .quick-tile-label {
+  color: var(--primary);
+}
+.quick-row-arrow {
+  position: absolute;
+  top: 50px;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid var(--arco-rule);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--arco-black);
+  cursor: pointer;
+  z-index: 2;
+  transition: color 0.15s ease, box-shadow 0.15s ease;
+}
+.quick-row-arrow:hover {
+  color: var(--primary);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+/* Half over the edge of the content, in the page gutter (.wrap keeps
+   60px there on desktop), the way card carousels usually place them. */
+.quick-row-arrow--left { left: -18px; }
+.quick-row-arrow--right { right: -18px; }
+@media (max-width: 768px) {
+  .quick-tile {
+    flex-basis: var(--quick-tile-w, 112px);
+    width: var(--quick-tile-w, 112px);
+  }
+  .quick-tile .credit-icon {
+    width: 80px;
+    height: 80px;
+  }
+  .quick-tile-label {
+    max-width: 112px;
+  }
+  .quick-row-arrow {
+    display: none;
+  }
 }
 
 

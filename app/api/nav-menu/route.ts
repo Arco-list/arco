@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     // Lege menu's in plaats van een 500: de header valt dan terug op
     // twee gewone links, wat hij vóór dit menu ook was.
     return NextResponse.json(
-      { projects: { columns: [], allHref: "/projects", allLabel: "" }, professionals: { columns: [], allHref: "/professionals", allLabel: "" } },
+      { projects: { columns: [], allHref: "/projects", allLabel: "" }, professionals: { columns: [], allHref: "/professionals", allLabel: "" }, products: { columns: [], allHref: "/products", allLabel: "" } },
       { status: 200 },
     )
   }

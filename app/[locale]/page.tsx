@@ -25,6 +25,7 @@ import { localeAlternates } from "@/lib/seo-utils"
 import { homeTitle, homeDescription } from "@/lib/seo/copy"
 import { countPublishedProjects } from "@/lib/seo/facts"
 import { getHubs } from "@/lib/project-hubs"
+import { servicePluralBySlug } from "@/lib/professional-hubs"
 import { orderFeaturedFeed } from "@/lib/projects/featured-shuffle"
 
 export const revalidate = 300
@@ -383,7 +384,8 @@ async function loadLandingData(locale: string) {
       // For child services, link with the service filter
       return {
         id: category.id,
-        title: getLocalizedName(category as any, locale),
+        // Dezelfde naam als in het headermenu en de hubtitels.
+        title: servicePluralBySlug(category.slug, locale, getLocalizedName(category as any, locale)),
         href: `/professionals?services=${encodeURIComponent(category.id)}`,
         imageUrl: image ?? null,
       } as BrowseCard

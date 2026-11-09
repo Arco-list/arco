@@ -1,9 +1,13 @@
 import "server-only"
 
+import { unstable_cache } from "next/cache"
+
 import { getHubs, SPACE_HUB_DEFS } from "@/lib/project-hubs"
 import { getProfessionalHubs, servicePluralBySlug } from "@/lib/professional-hubs"
 import { PROVINCES, cityLabel } from "@/lib/provinces"
 import { typeLabel, scopeLabel, spaceNoun } from "@/lib/type-labels"
+import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
+import { categoryLabel, categoryTree, getCatalogCategories, getCatalogSeries } from "@/lib/products/catalog"
 
 /**
  * De twee uitklapmenu's in de header, gebouwd uit dezelfde
@@ -18,18 +22,34 @@ import { typeLabel, scopeLabel, spaceNoun } from "@/lib/type-labels"
  * Gecachet, want de header hangt onder 42 verschillende pagina's en
  * geen daarvan hoort hiervoor een databasevraag te betalen. Vijf
  * minuten, dezelfde horizon als de revalidate van /projects en
- * /professionals, zodat de drie niet uit elkaar kunnen lopen.
+ * /professionals, zodat de drie niet uit elkaar kunnen lopen. De cache
+ * is de gedeelde datacache van Next (unstable_cache), niet alleen het
+ * geheugen van één proces: op Vercel bouwt anders elke nieuwe instantie
+ * het menu opnieuw, en dat is precies de hover waarop je wacht.
  */
 
 export type NavMenuLink = { href: string; label: string }
 export type NavMenuColumn = { label: string; href?: string; links: NavMenuLink[] }
 export type NavMenu = { columns: NavMenuColumn[]; allHref: string; allLabel: string }
-export type NavMenus = { projects: NavMenu; professionals: NavMenu }
+export type NavMenus = { projects: NavMenu; professionals: NavMenu; products: NavMenu }
 
-/** Hoeveel links een kolom hoogstens toont. Daarboven leest het als een
- *  lijst in plaats van als een keuze, en de volledige lijst staat al in
- *  Populaire zoekopdrachten onder aan de pagina. */
-const COLUMN_CAP = 10
+/** Hoeveel links een kolom hoogstens toont: acht rijen onder de titel,
+ *  in elke kolom van beide menu's, zodat de panelen even hoog zijn.
+ *  Daarboven leest het als een lijst in plaats van als een keuze, en de
+ *  volledige lijst staat al in Populaire zoekopdrachten onder aan de
+ *  pagina. */
+const COLUMN_CAP = 8
+
+/**
+ * Een kolom. Past de hele lijst, dan draagt hij zijn gewone naam; is hij
+ * afgekapt, dan zegt de titel dat ("Populaire locaties") — de lezer
+ * hoort te weten dat er meer is dan hij ziet. Wie afkapt moet dus op
+ * populariteit gesorteerd aanleveren.
+ */
+function column(label: string, popularLabel: string, all: NavMenuLink[], href?: string): NavMenuColumn {
+  const truncated = all.length > COLUMN_CAP
+  return { label: truncated ? popularLabel : label, href, links: all.slice(0, COLUMN_CAP) }
+}
 
 /** Vaste volgorde van de dienstgroepen — redactioneel, niet op aantal.
  *  Ontwerp eerst omdat dat de ingang is; installaties achteraan. */
@@ -37,19 +57,29 @@ const PRO_GROUP_ORDER = ["design-planning", "construction", "finishing", "outdoo
 
 async function buildNavMenus(locale: string): Promise<NavMenus> {
   const nl = locale === "nl"
-  const [projectHubs, proHubs] = await Promise.all([getHubs(), getProfessionalHubs()])
+  // Service-role, niet de cookie-client: binnen unstable_cache mag
+  // cookies() niet, en de hubs tellen alleen publieke rijen.
+  const supabase = createServiceRoleSupabaseClient()
+  const [projectHubs, proHubs, categories, catalogSeries] = await Promise.all([
+    getHubs(supabase),
+    getProfessionalHubs(supabase),
+    getCatalogCategories(),
+    getCatalogSeries(),
+  ])
 
   // ── Projecten: vier assen ─────────────────────────────────────────
+  // Ruimtes in redactionele volgorde zolang ze allemaal passen; moet er
+  // afgekapt worden, dan op aantal, want dan heet de kolom "Populaire".
   const spaceOrder = new Map(SPACE_HUB_DEFS.map((d, i) => [d.space, i]))
-  const spaces = projectHubs.spaces
-    .slice()
-    .sort((a, b) => (spaceOrder.get(a.spaceValue ?? "") ?? 99) - (spaceOrder.get(b.spaceValue ?? "") ?? 99))
-    .map((h) => ({ href: `/projects/${h.slug}`, label: spaceNoun(h.spaceValue ?? h.slug, locale) }))
+  const spaceLink = (h: { slug: string; spaceValue?: string | null }) => ({ href: `/projects/${h.slug}`, label: spaceNoun(h.spaceValue ?? h.slug, locale) })
+  const spaces = (projectHubs.spaces.length > COLUMN_CAP
+    ? projectHubs.spaces.slice().sort((a, b) => b.count - a.count)
+    : projectHubs.spaces.slice().sort((a, b) => (spaceOrder.get(a.spaceValue ?? "") ?? 99) - (spaceOrder.get(b.spaceValue ?? "") ?? 99))
+  ).map(spaceLink)
 
   const types = projectHubs.types
     .slice()
     .sort((a, b) => b.count - a.count)
-    .slice(0, COLUMN_CAP)
     .map((h) => ({ href: `/projects/${h.slug}`, label: typeLabel(h.typeValue ?? h.slug, locale) }))
 
   const scopes = projectHubs.scopes.map((h) => ({
@@ -86,7 +116,7 @@ async function buildNavMenus(locale: string): Promise<NavMenus> {
   //
   // Steden liggen één klik verder, op de provinciepagina, waar het
   // kruimelpad een "Kies plaats" draagt die álle plaatsen kent.
-  const places = provinces.slice(0, COLUMN_CAP)
+  const places = provinces
 
   // ── Professionals: de vijf dienstgroepen ──────────────────────────
   // Een groep rendert alleen als er een dienst in zit die zijn eigen hub
@@ -94,38 +124,69 @@ async function buildNavMenus(locale: string): Promise<NavMenus> {
   // één; een kolom met niets erin is geen navigatie. Ze verschijnen
   // vanzelf zodra er drie bedrijven in een dienst staan.
   const serviceHubs = proHubs.filter((h) => h.kind === "service")
-  const categoryHubs = new Map(proHubs.filter((h) => h.kind === "category").map((h) => [h.categorySlug ?? h.slug, h]))
-  const byGroup = new Map<string, { label: string; links: NavMenuLink[] }>()
+  const byGroup = new Map<string, { label: string; links: Array<NavMenuLink & { count: number }> }>()
   for (const hub of serviceHubs) {
     const groupSlug = hub.categorySlug
     if (!groupSlug) continue
+    // Fotografen staan niet in dit menu: zij zijn het andere publiek
+    // (audience 'pro', /businesses/photography), niet wie een
+    // huiseigenaar hier zoekt.
+    if ((hub.serviceSlug ?? hub.slug) === "photographer") continue
     const label = (nl ? hub.categoryNameNl : hub.categoryName) ?? hub.categoryName ?? groupSlug
     const entry = byGroup.get(groupSlug) ?? { label, links: [] }
     entry.links.push({
       href: `/professionals/${hub.slug}`,
+      // Dezelfde naam als op de kaarten op home en in de hubtitels.
       label: servicePluralBySlug(hub.serviceSlug ?? hub.slug, locale, nl ? hub.serviceNameNl : hub.serviceName),
       // count blijft buiten het label: een getal in de hoofdnavigatie
       // veroudert zodra de voorraad beweegt en de pagina zegt het zelf.
+      // Hij sorteert wel, zodra een groep moet afkappen.
+      count: hub.count,
     })
     byGroup.set(groupSlug, entry)
   }
   const proColumns: NavMenuColumn[] = PRO_GROUP_ORDER.filter((slug) => byGroup.has(slug)).map((slug) => {
     const group = byGroup.get(slug)!
-    const catHub = categoryHubs.get(slug)
-    return {
-      label: group.label,
-      href: catHub ? `/professionals/${catHub.slug}` : undefined,
-      links: group.links.sort((a, b) => a.label.localeCompare(b.label)).slice(0, COLUMN_CAP),
-    }
+    // Compleet: alfabetisch. Afgekapt: de populairste, want dan heet
+    // de kolom "Populair in …".
+    const ordered = group.links.length > COLUMN_CAP
+      ? group.links.slice().sort((a, b) => b.count - a.count)
+      : group.links.slice().sort((a, b) => a.label.localeCompare(b.label))
+    const links = ordered.map(({ href, label }) => ({ href, label }))
+    const popular = nl ? `Populair in ${group.label.toLowerCase()}` : `Popular in ${group.label.toLowerCase()}`
+    // De groepskop is geen link: de groep is een indeling van het menu,
+    // geen pagina die iemand zoekt. De diensten eronder zijn de ingangen.
+    return column(group.label, popular, links)
   })
+
+  // ── Producten: de zes hoofdgroepen, met de soorten eronder ──────────
+  // Rijen zijn soorten, geen merken of series: een serienaam zegt niets
+  // zonder merk, en één merk zou een kolom vullen. Alleen soorten waar
+  // een serie in staat; een lege groep rendert niet. De groepskop linkt
+  // wél — de groepspagina (alle verlichting) is een ingang die mensen
+  // zoeken, anders dan een dienstgroep.
+  const tree = categoryTree(categories)
+  const seriesIn = (id: string) => {
+    const ids = tree.subtreeIds(id)
+    return catalogSeries.filter((s) => s.categoryId && ids.has(s.categoryId)).length
+  }
+  const productColumns: NavMenuColumn[] = tree.roots
+    .map((group) => {
+      const kinds = tree.children(group.id).map((k) => ({ k, n: seriesIn(k.id) })).filter((x) => x.n > 0)
+      const ordered = kinds.length > COLUMN_CAP ? kinds.slice().sort((a, b) => b.n - a.n) : kinds
+      const links = ordered.map(({ k }) => ({ href: `/products/${k.slug}`, label: categoryLabel(k, locale) }))
+      const label = categoryLabel(group, locale)
+      return column(label, nl ? `Populair in ${label.toLowerCase()}` : `Popular in ${label.toLowerCase()}`, links, `/products/${group.slug}`)
+    })
+    .filter((c) => c.links.length > 0)
 
   return {
     projects: {
       columns: [
-        { label: nl ? "Ruimtes" : "Rooms", links: spaces },
-        { label: nl ? "Woningtype" : "Home type", links: types },
-        { label: nl ? "Projectscope" : "Project scope", links: scopes },
-        { label: nl ? "Locatie" : "Location", links: places },
+        column(nl ? "Ruimtes" : "Rooms", nl ? "Populaire ruimtes" : "Popular rooms", spaces),
+        column(nl ? "Woningtype" : "Home type", nl ? "Populaire woningtypen" : "Popular home types", types),
+        column(nl ? "Projectscope" : "Project scope", nl ? "Populaire projectscopes" : "Popular project scopes", scopes),
+        column(nl ? "Locatie" : "Location", nl ? "Populaire locaties" : "Popular locations", places),
       ].filter((c) => c.links.length > 0),
       allHref: "/projects",
       allLabel: nl ? "Alle projecten" : "All projects",
@@ -135,23 +196,30 @@ async function buildNavMenus(locale: string): Promise<NavMenus> {
       allHref: "/professionals",
       allLabel: nl ? "Alle professionals" : "All professionals",
     },
+    products: {
+      columns: productColumns,
+      allHref: "/products",
+      allLabel: nl ? "Alle producten" : "All products",
+    },
   }
 }
 
 /**
- * Procesgeheugen, geen unstable_cache: getHubs() praat via de
- * cookie-gebonden Supabase-client, en een dynamische API als cookies()
- * mag binnen unstable_cache niet. Dit is de cache die wél kan zonder
- * die twee functies te verbouwen — en de echte winst zit toch in de
- * Cache-Control op de route erboven, die het antwoord bij de CDN legt.
+ * Twee lagen. De gedeelde datacache van Next (unstable_cache, vijf
+ * minuten, per locale) zodat een verse serverless-instantie het menu
+ * kant-en-klaar krijgt in plaats van het zelf op te bouwen; daarvóór
+ * een procesgeheugen voor de hete weg binnen één instantie. Daarboven
+ * legt de Cache-Control van de route het antwoord nog bij de CDN.
  */
 const TTL_MS = 5 * 60 * 1000
 const memo = new Map<string, { at: number; value: Promise<NavMenus> }>()
 
+const cachedNavMenus = unstable_cache(buildNavMenus, ["nav-menus"], { revalidate: 300, tags: ["nav-menus"] })
+
 export function getNavMenus(locale: string): Promise<NavMenus> {
   const hit = memo.get(locale)
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value
-  const value = buildNavMenus(locale).catch((err) => {
+  const value = cachedNavMenus(locale).catch((err) => {
     // Een mislukte vraag mag niet blijven plakken: anders serveert de
     // header vijf minuten lang dezelfde fout.
     memo.delete(locale)
