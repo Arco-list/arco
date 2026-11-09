@@ -5,7 +5,7 @@ import type { Session } from "@supabase/supabase-js";
 import { Toaster } from "sonner";
 
 import { ScrollToTop } from "@/components/scroll-to-top";
-import { AuthProvider } from "@/contexts/auth-context";
+import { AuthProvider, useAuth } from "@/contexts/auth-context";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { SavedProjectsProvider } from "@/contexts/saved-projects-context";
 import { SavedProfessionalsProvider } from "@/contexts/saved-professionals-context";
@@ -25,7 +25,10 @@ export interface RootProvidersProps {
 // users. Idempotent — the server endpoint skips when the column is
 // already set, so this is cheap and self-healing if a profile was
 // created before the column existed.
-function FirstTouchStamper({ session }: { session: Session | null }) {
+function FirstTouchStamper() {
+  // De sessie komt uit de AuthProvider (clientkant), niet meer van de
+  // server: zo blijft dit werken nu de layout geen sessie meer meegeeft.
+  const { session } = useAuth()
   useFirstTouchStamp({ enabled: !!session?.user })
   return null
 }
@@ -40,7 +43,7 @@ export const RootProviders = ({ children, initialSession }: RootProvidersProps) 
               <SavedProjectsProvider>
                 <SavedProfessionalsProvider>
                   <ScrollToTop />
-                  <FirstTouchStamper session={initialSession} />
+                  <FirstTouchStamper />
                   {children}
                   <LoginModal />
                   <CreateCompanyModal />

@@ -1,5 +1,6 @@
 "use client"
 
+import { useAuth } from "@/contexts/auth-context"
 import { useState, useEffect, useRef, useCallback } from "react"
 import Image from "next/image"
 import Link from "next/link"
@@ -21,7 +22,11 @@ interface HeroSectionProps {
   isSuperAdmin?: boolean
 }
 
-export function HeroSection({ projects, isSuperAdmin = false }: HeroSectionProps) {
+export function HeroSection({ projects, isSuperAdmin: isSuperAdminProp = false }: HeroSectionProps) {
+  // Superadmin uit de auth-context (clientkant): de homepage rendert
+  // statisch en kent de kijker niet meer op de server.
+  const { profile } = useAuth()
+  const isSuperAdmin = isSuperAdminProp || (profile as { admin_role?: string | null } | null)?.admin_role === "super_admin"
   const [showEditor, setShowEditor] = useState(false)
   const t = useTranslations("home")
   const [currentIndex, setCurrentIndex] = useState(0)

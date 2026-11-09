@@ -1,3 +1,6 @@
+// Persoonlijke pagina's: altijd per bezoek renderen, nooit prerenderen.
+export const dynamic = "force-dynamic"
+
 import { ReactNode } from "react"
 import { redirect } from "next/navigation"
 

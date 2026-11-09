@@ -1,9 +1,7 @@
 import type React from "react"
 import Script from "next/script"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { RootProviders } from "@/components/root-providers"
 import { CookieConsent } from "@/components/cookie-consent"
-import { buildSession } from "@/lib/auth-utils"
 import { NextIntlClientProvider } from "next-intl"
 import { getMessages, setRequestLocale } from "next-intl/server"
 import { routing } from "@/i18n/routing"
@@ -23,20 +21,17 @@ export default async function LocaleLayout({
   setRequestLocale(locale)
   const messages = await getMessages({ locale })
 
-  const supabase = await createServerSupabaseClient()
-  const [{ data: sessionData }, { data: userData }] = await Promise.all([
-    supabase.auth.getSession(),
-    supabase.auth.getUser(),
-  ])
-
-  const session = buildSession(sessionData.session, userData.user)
-
+  // Geen sessie op de server: cookies() zou elke route dynamisch maken
+  // en getUser() kostte een rondje naar Supabase Auth per bezoek. De
+  // AuthProvider haalt de sessie aan de clientkant op (useEffect), zodat
+  // de publieke pagina's uit de cache kunnen komen. Pagina's die de
+  // kijker nodig hebben (dashboard, admin) lezen hem zelf.
   const mapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
   return (
     <>
       <NextIntlClientProvider locale={locale} messages={messages}>
-        <RootProviders initialSession={session}>
+        <RootProviders initialSession={null}>
           {children}
           <CookieConsent />
         </RootProviders>

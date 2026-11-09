@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 import { useAuth } from "@/contexts/auth-context";
 import { useLoginModal } from "@/contexts/login-modal-context";
@@ -16,16 +16,17 @@ export const useRequireAuth = (): RequireAuthResult => {
   const { user } = useAuth();
   const { openLoginModal } = useLoginModal();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
-  const redirectTarget = useMemo(() => {
-    const search = searchParams?.toString() ?? "";
-    return `${pathname}${search ? `?${search}` : ""}`;
-  }, [pathname, searchParams]);
-
+  // De terugkeer-URL wordt pas bij het klikken gelezen, uit window. De
+  // zoekparameter-hook van Next hier zou, via de providers in de layout,
+  // elke pagina tot client-side rendering dwingen en statisch renderen
+  // onmogelijk maken. Bij een klik is window er altijd.
   const redirectToLogin = useCallback(() => {
-    openLoginModal(redirectTarget);
-  }, [openLoginModal, redirectTarget]);
+    const target = typeof window === "undefined"
+      ? pathname
+      : `${window.location.pathname}${window.location.search}`;
+    openLoginModal(target);
+  }, [openLoginModal, pathname]);
 
   const ensureAuth = useCallback(() => {
     if (user) {

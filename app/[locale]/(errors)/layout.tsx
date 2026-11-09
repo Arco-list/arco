@@ -1,3 +1,6 @@
+// Foutpagina's renderen per bezoek: ze lezen de fout uit de URL.
+export const dynamic = "force-dynamic"
+
 import type React from "react"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"

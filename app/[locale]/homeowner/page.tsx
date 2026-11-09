@@ -1,5 +1,8 @@
 "use client"
 
+// Persoonlijke pagina: altijd per bezoek renderen, nooit prerenderen.
+export const dynamic = "force-dynamic"
+
 import { Suspense, useEffect, useMemo, useRef, useState, useCallback, type ChangeEvent, type FormEvent } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"

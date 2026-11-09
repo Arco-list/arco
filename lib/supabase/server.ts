@@ -53,6 +53,20 @@ export const createRouteHandlerSupabaseClient = async () => {
   return createSupabaseClientWithCookies();
 };
 
+/**
+ * Anonieme client ZONDER cookies, voor publieke data in pagina's die
+ * statisch (ISR) moeten kunnen renderen. cookies() maakt een route
+ * dynamisch; deze client leest als anonieme bezoeker (RLS) en laat de
+ * pagina in de cache. Niet gebruiken waar de kijker ertoe doet.
+ */
+export const createPublicSupabaseClient = () => {
+  const url = getRequiredEnvVar("NEXT_PUBLIC_SUPABASE_URL");
+  const anonKey = getRequiredEnvVar("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  return createClient<Database>(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+};
+
 export const createServiceRoleSupabaseClient = () => {
   const url = getRequiredEnvVar("NEXT_PUBLIC_SUPABASE_URL");
   const serviceRoleKey = getRequiredEnvVar("SUPABASE_SERVICE_ROLE_KEY");

@@ -1,0 +1,44 @@
+# Opwarmen na een productiedeploy.
+#
+# Een nieuwe deploy begint koud: de Vercel-functies moeten starten en alle
+# caches (hubs, headermenu, productcatalogus) zijn leeg. Zonder dit betaalt
+# de eerste echte bezoeker daarvoor, met laadtijden van tien seconden of
+# meer. Vercel meldt elke deploy aan GitHub als deployment; zodra de
+# productiedeploy op "success" staat, vraagt deze workflow de belangrijkste
+# pagina's één keer op via het eigen domein, in beide talen, en nog een
+# tweede keer zodat ook de ISR-cache gevuld is.
+name: Warm up production
+
+on:
+  deployment_status:
+
+jobs:
+  warmup:
+    if: github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Wait for the alias to point at the new deployment
+        run: sleep 20
+      - name: Request the main pages twice
+        env:
+          SITE: https://www.arcolist.com
+        run: |
+          set -u
+          paths=(
+            /nl /en
+            /nl/projects /en/projects
+            /nl/professionals /en/professionals
+            "/api/nav-menu?locale=nl" "/api/nav-menu?locale=en"
+            /nl/projects/keukens /nl/projects/badkamers /nl/projects/woonkamers /nl/projects/slaapkamers
+            /nl/projects/zwembaden /nl/projects/wellness /nl/projects/tuinen /nl/projects/tuinhuizen
+            /nl/projects/amsterdam /nl/professionals/architect /nl/professionals/interior-designer
+          )
+          for pass in 1 2; do
+            echo "== pass $pass"
+            for p in "${paths[@]}"; do
+              code=$(curl -s -o /dev/null --max-time 60 -w '%{http_code} %{time_starttransfer}s' \
+                -H 'User-Agent: arco-warmup/1.0 (post-deploy cache warming)' "$SITE$p" || echo "000")
+              echo "$code  $p"
+            done
+          done

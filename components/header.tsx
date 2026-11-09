@@ -6,7 +6,7 @@ import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-service
 import { PersonIcon } from "@/lib/icons/custom-service-icons"
 import { sanitizeImageUrl, IMAGE_SIZES } from "@/lib/image-security";
 import { Link } from "@/i18n/navigation";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useTranslations, useLocale } from "next-intl";
 import { fetchAdminNavCounts } from "@/lib/admin/nav-counts";
@@ -216,8 +216,12 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
   const t = useTranslations("nav");
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const searchParamQuery = searchParams.get("search") ?? "";
+  // Geen useSearchParams: die hook dwingt elke pagina met deze header
+  // tot client-side rendering (of een Suspense-grens), terwijl de
+  // publieke pagina's juist statisch uit de cache moeten komen. De paar
+  // plekken die de query nodig hebben lezen hem uit window, na de
+  // eerste render.
+  const currentTab = () => (typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("tab"));
   const { profile, user } = useAuth();
   const { openLoginModal } = useLoginModal();
 
@@ -230,7 +234,10 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState(searchParamQuery);
+  const [searchQuery, setSearchQuery] = useState("");
+  useEffect(() => {
+    try { setSearchQuery(new URLSearchParams(window.location.search).get("search") ?? "") } catch { /* geen window */ }
+  }, [pathname]);
   const [isSigningOut, startSignOutTransition] = useTransition();
   const [isScrolled, setIsScrolled] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -472,10 +479,6 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  useEffect(() => {
-    setSearchQuery(searchParamQuery);
-  }, [searchParamQuery]);
 
   // Scroll detection - triggers at 0px
   useEffect(() => {
@@ -1027,15 +1030,15 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                       {isLoggedIn && (
                         <>
                           <div className="px-4 py-2">
-                            <Link href="/homeowner?tab=messages" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/homeowner" && searchParams.get("tab") === "messages" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                            <Link href="/homeowner?tab=messages" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/homeowner" && currentTab() === "messages" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
                               {t("messages")}
                             </Link>
-                            <Link href="/homeowner?tab=saved-projects" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/homeowner" && (!searchParams.get("tab") || searchParams.get("tab") === "saved-projects") ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                            <Link href="/homeowner?tab=saved-projects" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/homeowner" && (!currentTab() || currentTab() === "saved-projects") ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>
                               {t("saved_projects")}
                             </Link>
-                            <Link href="/homeowner?tab=saved-professionals" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/homeowner" && searchParams.get("tab") === "saved-professionals" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                            <Link href="/homeowner?tab=saved-professionals" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/homeowner" && currentTab() === "saved-professionals" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" /></svg>
                               {t("saved_professionals")}
                             </Link>
@@ -1155,7 +1158,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                               )
                             })()}
                             {hasAdminRole && <div className="border-t border-border my-2 -mx-1" />}
-                            <Link href="/homeowner?tab=account" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/homeowner" && searchParams.get("tab") === "account" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
+                            <Link href="/homeowner?tab=account" className={`flex items-center gap-2.5 px-1 py-1.5 text-sm font-normal transition-colors truncate ${pathname === "/homeowner" && currentTab() === "account" ? "text-primary" : "text-[#1c1c1a] hover:text-primary"}`} onClick={() => setIsAccountMenuOpen(false)}>
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" /></svg>
                               {t("account")}
                             </Link>

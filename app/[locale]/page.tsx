@@ -2,7 +2,8 @@
 // Updated to use .wrap class for consistent horizontal margins
 
 import type { Metadata } from "next"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { createPublicSupabaseClient } from "@/lib/supabase/server"
+import { setRequestLocale } from "next-intl/server"
 import { logger } from "@/lib/logger"
 import type { Database, Tables } from "@/lib/supabase/types"
 import { Header } from "@/components/header"
@@ -25,7 +26,7 @@ import { localeAlternates } from "@/lib/seo-utils"
 import { homeTitle, homeDescription } from "@/lib/seo/copy"
 import { countPublishedProjects } from "@/lib/seo/facts"
 import { getHubs } from "@/lib/project-hubs"
-import { servicePluralBySlug } from "@/lib/professional-hubs"
+import { proNamePluralOf } from "@/lib/professional-hubs"
 import { orderFeaturedFeed } from "@/lib/projects/featured-shuffle"
 
 export const revalidate = 300
@@ -74,7 +75,9 @@ const FALLBACK_HERO_PROJECTS: HeroProject[] = [
 ]
 
 async function loadLandingData(locale: string) {
-  const supabase = await createServerSupabaseClient()
+  // Publieke data zonder cookies: zo kan de homepage statisch (ISR,
+  // revalidate 300) uit de cache komen in plaats van per bezoek renderen.
+  const supabase = createPublicSupabaseClient()
 
   const [
     heroCoversResult,
@@ -108,7 +111,7 @@ async function loadLandingData(locale: string) {
     // Homepage carousel: child project types flagged for homepage (exclude groups)
     supabase
       .from("categories")
-      .select("id,name,name_nl,slug,parent_id,sort_order,image_url")
+      .select("id,name,name_nl,slug,parent_id,sort_order,image_url,pro_name_plural,pro_name_plural_nl")
       .eq("is_active", true)
       .eq("in_home_carrousel", true)
       .eq("category_type", "Project")
@@ -119,7 +122,7 @@ async function loadLandingData(locale: string) {
     // Homepage carousel: child professional services flagged for homepage (exclude groups)
     supabase
       .from("categories")
-      .select("id,name,name_nl,slug,parent_id,sort_order,image_url")
+      .select("id,name,name_nl,slug,parent_id,sort_order,image_url,pro_name_plural,pro_name_plural_nl")
       .eq("is_active", true)
       .eq("in_home_carrousel", true)
       .eq("category_type", "Professional")
@@ -385,7 +388,7 @@ async function loadLandingData(locale: string) {
       return {
         id: category.id,
         // Dezelfde naam als in het headermenu en de hubtitels.
-        title: servicePluralBySlug(category.slug, locale, getLocalizedName(category as any, locale)),
+        title: proNamePluralOf(category as any, locale),
         href: `/professionals?services=${encodeURIComponent(category.id)}`,
         imageUrl: image ?? null,
       } as BrowseCard
@@ -567,6 +570,8 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 
 export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
+  // next-intl: nodig om de pagina statisch te kunnen renderen.
+  setRequestLocale(locale)
   const t = await getTranslations("home")
   // Inventory-gated hub links for the "Populaire zoekopdrachten" block.
   let popularHubs: PopularHubs = { cities: [], scopes: [], types: [], combos: [], provinces: [], spaces: [] }
@@ -582,20 +587,9 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
     featuredCompanies,
   } = await loadLandingData(locale)
 
-  // Check if current user is super admin (for hero editor)
-  let isSuperAdmin = false
-  try {
-    const supabaseAuth = await createServerSupabaseClient()
-    const { data: { session } } = await supabaseAuth.auth.getSession()
-    if (session?.user) {
-      const { data: profile } = await supabaseAuth
-        .from("profiles")
-        .select("admin_role")
-        .eq("id", session.user.id)
-        .maybeSingle()
-      isSuperAdmin = profile?.admin_role === "super_admin"
-    }
-  } catch {}
+  // De hero-editor voor superadmins beslist de HeroSection zelf aan de
+  // clientkant (useAuth); een sessie lezen op de server zou de pagina
+  // dynamisch maken.
 
   // Site-wide WebSite + Organization schema so Google displays "Arco"
   // as the site name in search results next to the favicon instead of
@@ -637,7 +631,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       <main className="pt-0">
 
         {/* 1. Hero — full bleed, editorial headline */}
-        <HeroSection projects={heroProjects} isSuperAdmin={isSuperAdmin} />
+        <HeroSection projects={heroProjects} />
 
         {/* 2. Browse Section - Projects, Spaces, Professionals */}
         <BrowseSection 
