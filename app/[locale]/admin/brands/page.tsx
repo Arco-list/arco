@@ -6,6 +6,9 @@ import { BrandsClient } from "./brands-client"
 export const metadata: Metadata = { title: "Brands" }
 
 export const dynamic = "force-dynamic"
+// Add brand runs as three server actions (brand, series, one per series
+// page); the longest scrapes one page and reads it with Claude.
+export const maxDuration = 120
 
 /**
  * Eén rij per merk, in de vorm van de Companies-tabel.

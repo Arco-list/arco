@@ -56,38 +56,38 @@ export type Database = {
         }
         Relationships: []
       }
-      brand_retailers: {
+      brand_categories: {
         Row: {
           brand_id: string
+          category_id: string
           created_at: string
-          is_official_dealer: boolean
-          retailer_id: string
+          position: number
         }
         Insert: {
           brand_id: string
+          category_id: string
           created_at?: string
-          is_official_dealer?: boolean
-          retailer_id: string
+          position?: number
         }
         Update: {
           brand_id?: string
+          category_id?: string
           created_at?: string
-          is_official_dealer?: boolean
-          retailer_id?: string
+          position?: number
         }
         Relationships: [
           {
-            foreignKeyName: "brand_retailers_brand_id_fkey"
+            foreignKeyName: "brand_categories_brand_id_fkey"
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brands"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "brand_retailers_retailer_id_fkey"
-            columns: ["retailer_id"]
+            foreignKeyName: "brand_categories_category_id_fkey"
+            columns: ["category_id"]
             isOneToOne: false
-            referencedRelation: "retailers"
+            referencedRelation: "product_categories"
             referencedColumns: ["id"]
           },
         ]
@@ -167,6 +167,7 @@ export type Database = {
           name: string
           name_nl: string | null
           parent_id: string | null
+          publish_scope: string
           slug: string
           sort_order: number | null
           updated_at: string | null
@@ -188,6 +189,7 @@ export type Database = {
           name: string
           name_nl?: string | null
           parent_id?: string | null
+          publish_scope?: string
           slug: string
           sort_order?: number | null
           updated_at?: string | null
@@ -209,6 +211,7 @@ export type Database = {
           name?: string
           name_nl?: string | null
           parent_id?: string | null
+          publish_scope?: string
           slug?: string
           sort_order?: number | null
           updated_at?: string | null
@@ -616,6 +619,76 @@ export type Database = {
             columns: ["primary_service_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_brands: {
+        Row: {
+          brand_id: string
+          company_id: string
+          created_at: string
+          created_by: string | null
+          is_official_dealer: boolean
+          position: number
+        }
+        Insert: {
+          brand_id: string
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          is_official_dealer?: boolean
+          position?: number
+        }
+        Update: {
+          brand_id?: string
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          is_official_dealer?: boolean
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_brands_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_brands_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_brands_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "company_metrics"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "company_brands_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id_full"]
+          },
+          {
+            foreignKeyName: "company_brands_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "company_brands_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
             referencedColumns: ["id"]
           },
         ]
@@ -1529,6 +1602,121 @@ export type Database = {
         }
         Relationships: []
       }
+      locations: {
+        Row: {
+          address: string | null
+          brand_id: string | null
+          city: string | null
+          company_id: string | null
+          country: string | null
+          created_at: string
+          email: string | null
+          google_place_id: string | null
+          id: string
+          kind: string
+          latitude: number | null
+          longitude: number | null
+          name: string | null
+          opening_hours: string | null
+          phone: string | null
+          position: number
+          postal_code: string | null
+          state_region: string | null
+          street_address: string | null
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          brand_id?: string | null
+          city?: string | null
+          company_id?: string | null
+          country?: string | null
+          created_at?: string
+          email?: string | null
+          google_place_id?: string | null
+          id?: string
+          kind?: string
+          latitude?: number | null
+          longitude?: number | null
+          name?: string | null
+          opening_hours?: string | null
+          phone?: string | null
+          position?: number
+          postal_code?: string | null
+          state_region?: string | null
+          street_address?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          brand_id?: string | null
+          city?: string | null
+          company_id?: string | null
+          country?: string | null
+          created_at?: string
+          email?: string | null
+          google_place_id?: string | null
+          id?: string
+          kind?: string
+          latitude?: number | null
+          longitude?: number | null
+          name?: string | null
+          opening_hours?: string | null
+          phone?: string | null
+          position?: number
+          postal_code?: string | null
+          state_region?: string | null
+          street_address?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "locations_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "locations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "locations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "company_metrics"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "locations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id_full"]
+          },
+          {
+            foreignKeyName: "locations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "locations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "mv_professional_summary"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           application_id: string | null
@@ -1993,6 +2181,7 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          name_nl: string | null
           order_index: number
           parent_id: string | null
           slug: string
@@ -2001,6 +2190,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          name_nl?: string | null
           order_index?: number
           parent_id?: string | null
           slug: string
@@ -2009,6 +2199,7 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          name_nl?: string | null
           order_index?: number
           parent_id?: string | null
           slug?: string
@@ -2023,14 +2214,50 @@ export type Database = {
           },
         ]
       }
+      product_category_spaces: {
+        Row: {
+          created_at: string
+          product_category_id: string
+          space_id: string
+        }
+        Insert: {
+          created_at?: string
+          product_category_id: string
+          space_id: string
+        }
+        Update: {
+          created_at?: string
+          product_category_id?: string
+          space_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_category_spaces_product_category_id_fkey"
+            columns: ["product_category_id"]
+            isOneToOne: false
+            referencedRelation: "product_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_category_spaces_space_id_fkey"
+            columns: ["space_id"]
+            isOneToOne: false
+            referencedRelation: "spaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_families: {
         Row: {
           brand_id: string
+          category_id: string | null
           created_at: string
           description: string | null
           designer: string | null
+          enriched_at: string | null
           hero_image_url: string | null
           id: string
+          is_featured: boolean
           launch_year: number | null
           name: string
           slug: string
@@ -2039,11 +2266,14 @@ export type Database = {
         }
         Insert: {
           brand_id: string
+          category_id?: string | null
           created_at?: string
           description?: string | null
           designer?: string | null
+          enriched_at?: string | null
           hero_image_url?: string | null
           id?: string
+          is_featured?: boolean
           launch_year?: number | null
           name: string
           slug: string
@@ -2052,11 +2282,14 @@ export type Database = {
         }
         Update: {
           brand_id?: string
+          category_id?: string | null
           created_at?: string
           description?: string | null
           designer?: string | null
+          enriched_at?: string | null
           hero_image_url?: string | null
           id?: string
+          is_featured?: boolean
           launch_year?: number | null
           name?: string
           slug?: string
@@ -2069,6 +2302,54 @@ export type Database = {
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_families_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "product_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_family_photos: {
+        Row: {
+          alt_text: string | null
+          created_at: string
+          family_id: string
+          id: string
+          is_primary: boolean
+          order_index: number
+          source_url: string | null
+          url: string
+        }
+        Insert: {
+          alt_text?: string | null
+          created_at?: string
+          family_id: string
+          id?: string
+          is_primary?: boolean
+          order_index?: number
+          source_url?: string | null
+          url: string
+        }
+        Update: {
+          alt_text?: string | null
+          created_at?: string
+          family_id?: string
+          id?: string
+          is_primary?: boolean
+          order_index?: number
+          source_url?: string | null
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_family_photos_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "product_families"
             referencedColumns: ["id"]
           },
         ]
@@ -3010,13 +3291,16 @@ export type Database = {
           features: string[] | null
           id: string
           is_featured: boolean | null
+          kind: string
           latitude: number | null
           likes_count: number | null
           location: string | null
           longitude: number | null
+          parent_project_id: string | null
           pinterest_pin_id: string | null
           pinterest_sync_error: string | null
           pinterest_synced_at: string | null
+          primary_space_id: string | null
           project_type: string | null
           project_type_category_id: string | null
           project_year: number | null
@@ -3058,13 +3342,16 @@ export type Database = {
           features?: string[] | null
           id?: string
           is_featured?: boolean | null
+          kind?: string
           latitude?: number | null
           likes_count?: number | null
           location?: string | null
           longitude?: number | null
+          parent_project_id?: string | null
           pinterest_pin_id?: string | null
           pinterest_sync_error?: string | null
           pinterest_synced_at?: string | null
+          primary_space_id?: string | null
           project_type?: string | null
           project_type_category_id?: string | null
           project_year?: number | null
@@ -3106,13 +3393,16 @@ export type Database = {
           features?: string[] | null
           id?: string
           is_featured?: boolean | null
+          kind?: string
           latitude?: number | null
           likes_count?: number | null
           location?: string | null
           longitude?: number | null
+          parent_project_id?: string | null
           pinterest_pin_id?: string | null
           pinterest_sync_error?: string | null
           pinterest_synced_at?: string | null
+          primary_space_id?: string | null
           project_type?: string | null
           project_type_category_id?: string | null
           project_year?: number | null
@@ -3146,6 +3436,34 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_parent_project_id_fkey"
+            columns: ["parent_project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_parent_project_id_fkey"
+            columns: ["parent_project_id"]
+            isOneToOne: false
+            referencedRelation: "project_search_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_parent_project_id_fkey"
+            columns: ["parent_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_primary_space_id_fkey"
+            columns: ["primary_space_id"]
+            isOneToOne: false
+            referencedRelation: "spaces"
             referencedColumns: ["id"]
           },
           {
@@ -3406,57 +3724,6 @@ export type Database = {
           },
         ]
       }
-      retailers: {
-        Row: {
-          address: string | null
-          city: string | null
-          country: string | null
-          created_at: string
-          email: string | null
-          id: string
-          is_featured: boolean
-          latitude: number | null
-          longitude: number | null
-          name: string
-          phone: string | null
-          slug: string
-          updated_at: string
-          website: string | null
-        }
-        Insert: {
-          address?: string | null
-          city?: string | null
-          country?: string | null
-          created_at?: string
-          email?: string | null
-          id?: string
-          is_featured?: boolean
-          latitude?: number | null
-          longitude?: number | null
-          name: string
-          phone?: string | null
-          slug: string
-          updated_at?: string
-          website?: string | null
-        }
-        Update: {
-          address?: string | null
-          city?: string | null
-          country?: string | null
-          created_at?: string
-          email?: string | null
-          id?: string
-          is_featured?: boolean
-          latitude?: number | null
-          longitude?: number | null
-          name?: string
-          phone?: string | null
-          slug?: string
-          updated_at?: string
-          website?: string | null
-        }
-        Relationships: []
-      }
       saved_companies: {
         Row: {
           company_id: string
@@ -3702,6 +3969,39 @@ export type Database = {
           url_count?: number
         }
         Relationships: []
+      }
+      service_spaces: {
+        Row: {
+          created_at: string
+          service_id: string
+          space_id: string
+        }
+        Insert: {
+          created_at?: string
+          service_id: string
+          space_id: string
+        }
+        Update: {
+          created_at?: string
+          service_id?: string
+          space_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_spaces_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_spaces_space_id_fkey"
+            columns: ["space_id"]
+            isOneToOne: false
+            referencedRelation: "spaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       spaces: {
         Row: {
@@ -3970,8 +4270,10 @@ export type Database = {
           features: string[] | null
           id: string | null
           is_featured: boolean | null
+          kind: string | null
           likes_count: number | null
           location: string | null
+          parent_project_id: string | null
           photo_count: number | null
           primary_category: string | null
           primary_category_color: string | null
@@ -3979,6 +4281,8 @@ export type Database = {
           primary_category_slug: string | null
           primary_photo_alt: string | null
           primary_photo_url: string | null
+          primary_space_id: string | null
+          primary_space_slug: string | null
           project_type: string | null
           project_year: number | null
           scope_rotation: number | null
@@ -3991,7 +4295,36 @@ export type Database = {
           updated_at: string | null
           views_count: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "projects_parent_project_id_fkey"
+            columns: ["parent_project_id"]
+            isOneToOne: false
+            referencedRelation: "mv_project_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_parent_project_id_fkey"
+            columns: ["parent_project_id"]
+            isOneToOne: false
+            referencedRelation: "project_search_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_parent_project_id_fkey"
+            columns: ["parent_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_primary_space_id_fkey"
+            columns: ["primary_space_id"]
+            isOneToOne: false
+            referencedRelation: "spaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {

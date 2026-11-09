@@ -3,7 +3,7 @@
 import { Fragment, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { MoreHorizontal } from "lucide-react"
+import { AlertTriangle, Check, MoreHorizontal, X } from "lucide-react"
 import { toast } from "sonner"
 import { format } from "date-fns"
 
@@ -16,50 +16,25 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { deleteBrand, scrapeBrand, updateBrandStatus } from "./actions"
+import { addBrandFromSite, deleteBrand, discoverBrandSeries, fetchSeriesFromBrandPage, updateBrandStatus } from "./actions"
 import type { AdminBrandRow } from "./page"
+import { ALL_STATUSES, STATUS_DESC, STATUS_DOT, STATUS_LABEL, type BrandStatus } from "./status"
 
 /**
  * Merken in admin — dezelfde werkbank als Companies: sticky balk met
  * zoeken, statusfilter en de primaire actie; statusfunnel als
  * klikbare kaarten; de tabel eronder.
  *
- * De funnel is korter dan die van bedrijven. Een merk kent geen
- * claim-trechter met Verified en Owned (nog niet), dus: Added →
- * Showcased → Listed, met Unlisted geparkeerd onder Listed en
- * Deactivated als afrit onder Added. Dezelfde kleuren als bij
- * bedrijven, zodat één blik op beide pagina's hetzelfde zegt.
+ * De funnel is korter dan die van bedrijven: Added → Showcased →
+ * Listed, met Unlisted en Deactivated geparkeerd. Labels, kleuren
+ * en uitleg staan in ./status, gedeeld met de merkpagina.
  */
 
-type BrandStatus = "unclaimed" | "prospected" | "unlisted" | "listed" | "deactivated"
-const ALL_STATUSES: BrandStatus[] = ["unclaimed", "prospected", "unlisted", "listed", "deactivated"]
-
-// Zelfde vocabulaire als /admin/companies: 'unclaimed' heet daar
-// "Added" (gecatalogiseerd, nog niets mee gedaan) en 'prospected'
-// "Showcased". De enumwaarden blijven; alleen de labels lopen gelijk.
-const STATUS_LABEL: Record<BrandStatus, string> = {
-  unclaimed: "Added",
-  prospected: "Showcased",
-  unlisted: "Unlisted",
-  listed: "Listed",
-  deactivated: "Deactivated",
-}
-const STATUS_DOT: Record<BrandStatus, string> = {
-  unclaimed: "#dc2626",
-  prospected: "#f59e0b",
-  unlisted: "#a1a1a0",
-  listed: "#7c3aed",
-  deactivated: "#dc2626",
-}
-const STATUS_DESC: Record<BrandStatus, string> = {
-  unclaimed: "Catalogued — scraped or added by hand. Not visible, no outreach yet.",
-  prospected: "Showcase page live, used in outreach, waiting to be claimed.",
-  unlisted: "Claimed by the brand, hidden from public directories.",
-  listed: "Claimed and live, fully discoverable.",
-  deactivated: "Removed by admin — hidden.",
-}
-
 type TaggedFilter = "all" | "tagged" | "untagged"
+
+type StepStatus = "pending" | "active" | "done" | "error"
+type AddPhase = "input" | "processing" | "done" | "error"
+const ADD_STEPS = ["Brand from the homepage", "Series on the page", "Photos from each series page"] as const
 
 export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[] }) {
   const router = useRouter()
@@ -114,22 +89,73 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
   const CARD_WIDTH = 132
 
   // ── Add brand (scrape) ───────────────────────────────────────────────
+  // ── Add brand: drie stappen, elk een eigen server action, zodat de
+  //    popup kan laten zien waar hij is — zoals de projectupload. ────────
   const [showAdd, setShowAdd] = useState(false)
   const [scrapeUrl, setScrapeUrl] = useState("")
-  const [isScraping, setIsScraping] = useState(false)
+  const [addPhase, setAddPhase] = useState<AddPhase>("input")
+  const [addSteps, setAddSteps] = useState<StepStatus[]>(["pending", "pending", "pending"])
+  const [addNotes, setAddNotes] = useState<string[]>(["", "", ""])
+  const [addError, setAddError] = useState<string | null>(null)
+  const [addBrand, setAddBrand] = useState<{ id: string; name: string } | null>(null)
+  const [photoProgress, setPhotoProgress] = useState({ done: 0, total: 0, current: "" })
+  const isScraping = addPhase === "processing"
+
+  const openAdd = () => {
+    setAddPhase("input"); setAddSteps(["pending", "pending", "pending"]); setAddNotes(["", "", ""])
+    setAddError(null); setAddBrand(null); setPhotoProgress({ done: 0, total: 0, current: "" })
+    setShowAdd(true)
+  }
+  const closeAdd = () => { if (!isScraping) { setShowAdd(false); setScrapeUrl("") } }
+  const setStep = (i: number, status: StepStatus, note?: string) => {
+    setAddSteps((prev) => prev.map((s, j) => (j === i ? status : s)))
+    if (note !== undefined) setAddNotes((prev) => prev.map((n, j) => (j === i ? note : n)))
+  }
+
   const handleScrape = async () => {
     const url = scrapeUrl.trim()
     if (!url) return
-    setIsScraping(true)
-    try {
-      const result = await scrapeBrand(url)
-      if ("error" in result) { toast.error(result.error); return }
-      toast.success(result.created ? `Added ${result.name}` : `${result.name} already exists`)
-      setScrapeUrl(""); setShowAdd(false)
-      router.refresh()
-    } finally {
-      setIsScraping(false)
+    setAddPhase("processing")
+    setAddSteps(["active", "pending", "pending"]); setAddNotes(["", "", ""]); setAddError(null)
+
+    // 1. Het merk, van de homepage.
+    const brand = await addBrandFromSite(url)
+    if ("error" in brand) { setStep(0, "error"); setAddError(brand.error); setAddPhase("error"); return }
+    setAddBrand({ id: brand.brandId, name: brand.name })
+    setStep(0, "done", brand.created ? `${brand.name} — added from the homepage` : `${brand.name} — already in the list`)
+
+    // 2. De series van de geplakte pagina.
+    setStep(1, "active")
+    const series = await discoverBrandSeries(brand.brandId, url)
+    if ("error" in series) { setStep(1, "error"); setAddError(series.error); setAddPhase("error"); return }
+    setStep(1, "done", `${series.seriesFound} found · ${series.seriesAdded} new`)
+
+    // 3. Elke seriepagina: foto's, designer, jaar, omschrijving — drie
+    //    tegelijk, elk een eigen call, zodat de teller echt loopt.
+    const queue = series.pending
+    if (queue.length === 0) {
+      setStep(2, "done", "Nothing left to read")
+    } else {
+      setStep(2, "active")
+      setPhotoProgress({ done: 0, total: queue.length, current: queue[0].name })
+      let next = 0, done = 0, photos = 0, failed = 0
+      const worker = async () => {
+        while (next < queue.length) {
+          const item = queue[next++]
+          setPhotoProgress((p) => ({ ...p, current: item.name }))
+          const r = await fetchSeriesFromBrandPage(item.id)
+          if ("error" in r) failed++
+          else photos += r.photos
+          done++
+          setPhotoProgress((p) => ({ ...p, done }))
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(3, queue.length) }, worker))
+      setStep(2, "done", `${photos} photos from ${done - failed} series${failed > 0 ? ` · ${failed} could not be read` : ""}`)
     }
+
+    setAddPhase("done")
+    router.refresh()
   }
 
   // ── Status / delete dialogs ──────────────────────────────────────────
@@ -245,7 +271,7 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <button type="button" className="btn-primary shrink-0" style={{ height: 36, fontSize: 13, padding: "0 16px" }} onClick={() => setShowAdd(true)}>
+            <button type="button" className="btn-primary shrink-0" style={{ height: 36, fontSize: 13, padding: "0 16px" }} onClick={() => openAdd()}>
               Add brand
             </button>
           </>
@@ -403,7 +429,7 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-44">
-                        <DropdownMenuItem asChild><Link href={`/admin/brands/${b.id}`}>Open brand</Link></DropdownMenuItem>
+                        <DropdownMenuItem asChild><Link href={`/admin/brands/${b.id}`}>Edit brand</Link></DropdownMenuItem>
                         <DropdownMenuItem onClick={() => openStatus(b)}>Update status</DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => setDeleteTarget(b)} className="text-red-600">Delete brand</DropdownMenuItem>
@@ -419,32 +445,116 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
 
       {/* ── Add brand ───────────────────────────────────────────────── */}
       {showAdd && (
-        <div className="popup-overlay" onClick={() => !isScraping && setShowAdd(false)}>
-          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
+        <div className="popup-overlay" onClick={closeAdd}>
+          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
             <div className="popup-header">
-              <h3 className="arco-section-title">Add brand</h3>
-              <button type="button" className="popup-close" onClick={() => !isScraping && setShowAdd(false)} aria-label="Close">✕</button>
+              <h3 className="arco-section-title">
+                {addPhase === "input" ? "Add brand" : addPhase === "processing" ? "Reading the site…" : addPhase === "done" ? "Brand added" : "That did not work"}
+              </h3>
+              {!isScraping && (
+                <button type="button" className="popup-close" onClick={closeAdd} aria-label="Close">✕</button>
+              )}
             </div>
-            <p className="arco-body-text" style={{ marginBottom: 16 }}>
-              Paste the brand&rsquo;s homepage. Name, description and country are extracted; series come next.
-            </p>
-            <input
-              type="url"
-              autoFocus
-              placeholder="https://www.klafs.com"
-              value={scrapeUrl}
-              onChange={(e) => setScrapeUrl(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") void handleScrape() }}
-              className="input-base input-default"
-              style={{ width: "100%", marginBottom: 20 }}
-              disabled={isScraping}
-            />
-            <div className="popup-actions">
-              <button type="button" className="btn-tertiary" style={{ flex: 1 }} onClick={() => setShowAdd(false)} disabled={isScraping}>Cancel</button>
-              <button type="button" className="btn-secondary" style={{ flex: 1 }} onClick={() => void handleScrape()} disabled={isScraping || !scrapeUrl.trim()}>
-                {isScraping ? "Scraping…" : "Add brand"}
-              </button>
-            </div>
+
+            {addPhase === "input" && (
+              <>
+                <p className="arco-body-text" style={{ marginBottom: 16 }}>
+                  Paste the brand&rsquo;s products or collections overview — or its homepage. The brand comes from the homepage; the series from the page you paste, and their photos from each series&rsquo; own page.
+                </p>
+                <input
+                  type="url"
+                  autoFocus
+                  placeholder="https://www.occhio.com/products"
+                  value={scrapeUrl}
+                  onChange={(e) => setScrapeUrl(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") void handleScrape() }}
+                  className="input-base input-default"
+                  style={{ width: "100%", marginBottom: 20 }}
+                />
+                <div className="popup-actions">
+                  <button type="button" className="btn-tertiary" style={{ flex: 1 }} onClick={closeAdd}>Cancel</button>
+                  <button type="button" className="btn-secondary" style={{ flex: 1 }} onClick={() => void handleScrape()} disabled={!scrapeUrl.trim()}>
+                    Add brand
+                  </button>
+                </div>
+              </>
+            )}
+
+            {addPhase !== "input" && (
+              <>
+                <div className="scrape-url-pill" style={{ marginBottom: 20 }}>
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M6.5 9.5l3-3" /><path d="M9 10.5l1.5-1.5a2.83 2.83 0 0 0-4-4L5 6.5" /><path d="M7 5.5L5.5 7a2.83 2.83 0 0 0 4 4L11 9.5" />
+                  </svg>
+                  <span className="scrape-url-text">{scrapeUrl.replace(/^https?:\/\//i, "")}</span>
+                </div>
+
+                <div className="scrape-steps">
+                  {ADD_STEPS.map((label, i) => {
+                    const status = addSteps[i]
+                    const note = i === 2 && status === "active"
+                      ? `${photoProgress.done} / ${photoProgress.total}${photoProgress.current ? ` · ${photoProgress.current}` : ""}`
+                      : addNotes[i]
+                    return (
+                      <div key={label} className="scrape-step">
+                        <StepIcon status={status} />
+                        <span className={`scrape-step-label scrape-step-label--${status}`}>
+                          {label}
+                          {note && <span style={{ color: "#a1a1a0", fontWeight: 300 }}> — {note}</span>}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {isScraping && (
+                  <div className="scrape-progress-track" style={{ marginTop: 20 }}>
+                    {/* Echte voortgang: stap 1 en 2 elk een derde, stap 3
+                        de teller over de seriepagina's. */}
+                    <div
+                      className="scrape-progress-bar"
+                      style={{
+                        width: `${Math.max(3, Math.round(
+                          addSteps[2] === "active"
+                            ? 66 + (photoProgress.total ? (photoProgress.done / photoProgress.total) * 34 : 0)
+                            : addSteps[1] === "active" ? 40 : addSteps[0] === "done" ? 33 : 8,
+                        ))}%`,
+                        transition: "width .4s ease",
+                      }}
+                    />
+                  </div>
+                )}
+
+                {addPhase === "error" && addError && (
+                  <div className="arco-alert arco-alert--danger" style={{ marginTop: 20 }}>
+                    <AlertTriangle className="arco-alert-icon" />
+                    <span>{addError}</span>
+                  </div>
+                )}
+
+                {addPhase === "done" && (
+                  <div className="popup-actions" style={{ marginTop: 20 }}>
+                    <button type="button" className="btn-tertiary" style={{ flex: 1 }} onClick={closeAdd}>Close</button>
+                    {addBrand && (
+                      <button type="button" className="btn-secondary" style={{ flex: 1 }} onClick={() => router.push(`/admin/brands/${addBrand.id}`)}>
+                        Open {addBrand.name}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {addPhase === "error" && (
+                  <div className="popup-actions" style={{ marginTop: 20 }}>
+                    <button type="button" className="btn-tertiary" style={{ flex: 1 }} onClick={() => setAddPhase("input")}>Try again</button>
+                    {addBrand && (
+                      <button type="button" className="btn-secondary" style={{ flex: 1 }} onClick={() => router.push(`/admin/brands/${addBrand.id}`)}>
+                        Open {addBrand.name}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}
@@ -500,4 +610,23 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
       )}
     </>
   )
+}
+
+function StepIcon({ status }: { status: StepStatus }) {
+  if (status === "done") {
+    return (
+      <span className="scrape-step-icon scrape-step-icon--done">
+        <Check size={10} color="white" strokeWidth={2.5} />
+      </span>
+    )
+  }
+  if (status === "error") {
+    return (
+      <span className="scrape-step-icon scrape-step-icon--error">
+        <X size={10} color="white" strokeWidth={2.5} />
+      </span>
+    )
+  }
+  if (status === "active") return <span className="scrape-step-icon scrape-step-icon--active" />
+  return <span className="scrape-step-icon scrape-step-icon--pending" />
 }
