@@ -1443,6 +1443,15 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
     if (body_nl) initialTranslations.nl.seo_body = body_nl
   }
 
+  // Wat dit bedrijf publiceert bepaalt de scope. Een keukenbouwer krijgt
+  // geen "Interieur ontworpen" (geen optie voor hem) maar een deelproject
+  // met de ruimte als scope; bij één toegestane ruimte staat die meteen,
+  // anders kiest de fototagging de ruimte met de meeste foto's.
+  const { getCompanyPublishOptions } = await import("@/lib/projects/publish-options")
+  const publishClient = (await import("@/lib/supabase/server")).createServiceRoleSupabaseClient()
+  const publish = resolvedCompanyId ? await getCompanyPublishOptions(publishClient, resolvedCompanyId) : null
+  const isPartialImport = publish?.defaultKind === "partial"
+
   const projectData = {
     title,
     description,
@@ -1456,7 +1465,9 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
     address_formatted: addressFormatted,
     latitude,
     longitude,
-    project_type: scope,
+    project_type: isPartialImport ? null : scope,
+    kind: isPartialImport ? ("partial" as const) : ("project" as const),
+    primary_space_id: isPartialImport && publish && publish.spaces.length === 1 ? publish.spaces[0].id : null,
     project_type_category_id: buildingTypeCategoryId,
     style_preferences: styleOptionId ? [styleOptionId] : null,
     status: "draft" as const,
@@ -2034,6 +2045,35 @@ Return ONLY this JSON:
   console.log(`[autoTag] alt text written for ${altWritten}/${classifications.length} photos`)
   console.log(`[autoTag] photosBySpace built: ${photosBySpace.size} slug(s), ${Array.from(photosBySpace.values()).reduce((n, v) => n + v.length, 0)} photo(s) linked. Drops: noPhotoMatch=${droppedNoPhotoMatch}, noSlugMatch=${droppedNoSlugMatch}. Classifications received: ${classifications.length}`)
 
+  // Deelproject (projects.kind = 'partial'): de primaire ruimte is de
+  // toegestane ruimte met de meeste foto's. De scope-detectie verderop
+  // slaat een deelproject over; die kent geen Nieuwbouw of Renovatie.
+  let projectKind: string = "project"
+  {
+    const srPartial = createServiceRoleSupabaseClient()
+    const { data: projRow } = await srPartial.from("projects").select("kind, primary_space_id").eq("id", projectId).maybeSingle()
+    projectKind = (projRow as { kind?: string | null } | null)?.kind ?? "project"
+    if (projectKind === "partial" && !(projRow as { primary_space_id?: string | null } | null)?.primary_space_id) {
+      const { data: ownerLink } = await srPartial
+        .from("project_professionals")
+        .select("company_id")
+        .eq("project_id", projectId)
+        .eq("is_project_owner", true)
+        .not("company_id", "is", null)
+        .limit(1)
+        .maybeSingle()
+      const ownerCompanyId = (ownerLink as { company_id?: string | null } | null)?.company_id ?? null
+      if (ownerCompanyId) {
+        const { getCompanyPublishOptions, pickPrimarySpace } = await import("@/lib/projects/publish-options")
+        const options = await getCompanyPublishOptions(srPartial, ownerCompanyId)
+        const counts = new Map<string, number>(Array.from(photosBySpace.entries()).map(([slug, ids]) => [slug, ids.length]))
+        const pick = pickPrimarySpace(options, counts)
+        if (pick) await srPartial.from("projects").update({ primary_space_id: pick.id }).eq("id", projectId)
+        console.log(`[autoTag] partial project: primary space ${pick?.slug ?? "none"}`)
+      }
+    }
+  }
+
   // Fetch existing project_features so we can reuse them instead of creating duplicates
   const { data: existingFeatures } = await serviceSupabase
     .from("project_features")
@@ -2155,7 +2195,7 @@ Return ONLY this JSON:
     }
   }
 
-  if (detectedScope) {
+  if (detectedScope && projectKind !== "partial") {
     const scopeToSlug: Record<string, string> = {
       "new-build": "new-build",
       "new_build": "new-build",

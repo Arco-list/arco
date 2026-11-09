@@ -11,6 +11,7 @@ import type { Database } from "@/lib/supabase/types"
 import { PROJECT_STATUS_DOT_CLASS, type ProjectStatus } from "@/lib/project-status-config"
 import { CONTRIBUTOR_STATUS_DOT_CLASS, type ContributorStatus } from "@/lib/contributor-status-config"
 import { getProjectTranslation, translateCategoryName } from "@/lib/project-translations"
+import { spaceLabelSingular } from "@/lib/type-labels"
 
 export default async function CompanySettingsPage({
   params,
@@ -198,7 +199,7 @@ export default async function CompanySettingsPage({
       .maybeSingle(),
     supabase
       .from("project_professionals")
-      .select("id, project_id, is_project_owner, status, cover_photo_id, projects!inner(id, slug, title, location, status, rejection_reason, project_type, address_city, translations, project_type_category:categories!projects_project_type_category_id_fkey(name), project_photos(id, url, is_primary, order_index))")
+      .select("id, project_id, is_project_owner, status, cover_photo_id, projects!inner(id, slug, title, location, status, rejection_reason, project_type, address_city, translations, project_type_category:categories!projects_project_type_category_id_fkey(name), kind, primary_space:spaces!projects_primary_space_id_fkey(slug), project_photos(id, url, is_primary, order_index))")
       .eq("company_id", company.id)
       // Credits that ended, hidden here for the same reason /dashboard/
       // listings hides them: a company that took itself off a project
@@ -312,7 +313,12 @@ export default async function CompanySettingsPage({
         })
       const rawTypeLabel = p.project_type_category?.name ??
         (p.project_type && !/^[0-9a-f]{8}-/.test(p.project_type) ? p.project_type : "")
-      const projectTypeLabel = rawTypeLabel ? (translateCategoryName(rawTypeLabel, locale) ?? rawTypeLabel) : ""
+      // Een deelproject is zijn ruimte (Keuken), niet zijn gebouwtype.
+      const isPartial = (p as { kind?: string | null }).kind === "partial"
+      const primarySpaceSlug = ((p as { primary_space?: { slug: string | null } | null }).primary_space?.slug) ?? null
+      const projectTypeLabel = isPartial
+        ? (spaceLabelSingular(primarySpaceSlug, locale) ?? "")
+        : rawTypeLabel ? (translateCategoryName(rawTypeLabel, locale) ?? rawTypeLabel) : ""
       const locationLabel = p.address_city || p.location || null
       const localizedTitle = getProjectTranslation(
         { title: p.title, translations: (p as any).translations as Record<string, any> | null },

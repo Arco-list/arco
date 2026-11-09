@@ -1,5 +1,6 @@
 "use client"
 
+import { spaceLabelSingular } from "@/lib/type-labels"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import Link from "next/link"
@@ -441,6 +442,8 @@ export default function DashboardListingsPage() {
             rejection_reason,
             client_id,
             project_type_category:categories!projects_project_type_category_id_fkey(name, slug),
+            kind,
+            primary_space:spaces!projects_primary_space_id_fkey(slug),
             project_photos(id, url, is_primary, order_index),
             project_professionals(id, status, is_project_owner, company_id, invited_email, companies(audience))
           )
@@ -486,6 +489,8 @@ export default function DashboardListingsPage() {
         contributor_cover_photo_id: pp.cover_photo_id as string | null,
       })) as (ProjectRow & {
         project_type_category: { name: string | null; slug: string | null } | null
+        kind?: string | null
+        primary_space?: { slug: string | null } | null
         invited_service_category_ids?: string[] | null
         contributor_cover_photo_id: string | null
         credit_rows: CreditRow[]
@@ -635,11 +640,13 @@ export default function DashboardListingsPage() {
         const rawCategorySlug = project.project_type_category?.slug ?? null
         const rawCategoryName = project.project_type_category?.name ?? null
         const legacyText = project.project_type && !isUuid(project.project_type) ? project.project_type : ""
-        const projectTypeLabel =
-          translateCategoryName(rawCategorySlug ?? rawCategoryName, locale) ??
-          rawCategoryName ??
-          translateCategoryName(legacyText, locale) ??
-          legacyText
+        // Een deelproject is zijn ruimte (Keuken), niet zijn gebouwtype.
+        const projectTypeLabel = project.kind === "partial"
+          ? (spaceLabelSingular(project.primary_space?.slug ?? null, locale) ?? "")
+          : (translateCategoryName(rawCategorySlug ?? rawCategoryName, locale) ??
+            rawCategoryName ??
+            translateCategoryName(legacyText, locale) ??
+            legacyText)
 
         const locationLabel = project.address_city || null
         // Credits only mean something on the company's own projects.
