@@ -369,6 +369,13 @@ export function useProjectsQuery({
         }
       }
 
+      // Deelprojecten (een keuken, een zwembad) horen bij een ruimte, niet
+      // in de hoofdgrid tussen de villa's: alleen zichtbaar zodra een
+      // ruimtefilter actief is. Zie migratie 297 (projects.kind).
+      if (!selectedSpace) {
+        query = query.neq("kind", "partial")
+      }
+
       if (filters.types.length > 0) {
         const typed = applyTypeFilters(query, filters.types, categoriesById)
         // null = het typefilter staat aan maar is nog niet op te lossen.

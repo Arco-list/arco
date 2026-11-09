@@ -94,10 +94,15 @@ export const fetchDiscoverProjects = async (
      *  with the first feed page — under the seeded shuffle that made a
      *  hub's SSR grid a random-sized subset that changed every reload. */
     projectIds?: string[]
+    /** Deelprojecten (projects.kind = 'partial') meenemen. Alleen de
+     *  ruimtehubs doen dat; de hoofdgrid en de andere hubs tonen
+     *  architectuurprojecten. */
+    includePartial?: boolean
   },
 ): Promise<DiscoverProject[]> => {
   const supabase = await createServerSupabaseClient()
   const restrictIds = options?.projectIds
+  const includePartial = options?.includePartial === true
 
   // ── 1. Base project rows ──────────────────────────────────────────────────
   let baseRows: Tables<"project_search_documents">[] | null = null
@@ -111,6 +116,7 @@ export const fetchDiscoverProjects = async (
       .from("project_search_documents")
       .select("id, is_featured, project_type")
       .eq("status", "published")
+    if (!includePartial) idQuery = idQuery.neq("kind", "partial")
     if (restrictIds) idQuery = idQuery.in("id", restrictIds)
     const { data: idRows, error: idError } = await idQuery.limit(1000)
     if (idError) {
@@ -142,6 +148,7 @@ export const fetchDiscoverProjects = async (
       .from("project_search_documents")
       .select("*")
       .eq("status", "published")
+    if (!includePartial) baseQuery = baseQuery.neq("kind", "partial")
     if (restrictIds) baseQuery = baseQuery.in("id", restrictIds)
     baseQuery = applyProjectSort(baseQuery, sort)
     const { data, error: baseError } = await baseQuery.limit(INITIAL_PAGE_SIZE)

@@ -117,11 +117,10 @@ export const MAX_TITLE_LENGTH = 120
 export const MIN_DESCRIPTION_LENGTH = 50
 
 export const FALLBACK_CATEGORY_OPTIONS: ProjectDetailsDropdownOption[] = [
+  // Alleen nog de gebouwgroep. De oude deelproject-groepen (Kitchen &
+  // Living, Bed & Bath, Outdoor, Other) dupliceerden de ruimtes en zijn
+  // met migratie 297 uit de taxonomie; deelprojecten lopen via ruimtes.
   { value: "house", label: "House", sortOrder: 1 },
-  { value: "kitchen-living", label: "Kitchen & Living", sortOrder: 2 },
-  { value: "bed-bath", label: "Bed & Bath", sortOrder: 3 },
-  { value: "outdoor", label: "Outdoor", sortOrder: 4 },
-  { value: "other", label: "Other", sortOrder: 5 },
 ]
 
 export const FALLBACK_PROJECT_STYLE_OPTIONS: ProjectDetailsDropdownOption[] = [
@@ -152,42 +151,11 @@ export const FALLBACK_PROJECT_TYPES: Record<string, ProjectDetailsDropdownOption
     { value: "farm", label: "Farm", sortOrder: 6 },
     { value: "extension", label: "Extension", sortOrder: 7 },
   ],
-  "kitchen-living": [
-    { value: "kitchen", label: "Kitchen", sortOrder: 1 },
-    { value: "living", label: "Living", sortOrder: 2 },
-    { value: "sunroom", label: "Sunroom", sortOrder: 4 },
-  ],
-  "bed-bath": [
-    { value: "bathroom", label: "Bathroom", sortOrder: 1 },
-    { value: "bedroom", label: "Bedroom", sortOrder: 2 },
-    { value: "indoor-pool", label: "Indoor pool", sortOrder: 3 },
-    { value: "jacuzzi", label: "Jacuzzi", sortOrder: 4 },
-    { value: "sauna", label: "Sauna", sortOrder: 5 },
-    { value: "steam-room", label: "Steam room", sortOrder: 6 },
-  ],
-  outdoor: [
-    { value: "garden", label: "Garden", sortOrder: 1 },
-    { value: "outdoor-pool", label: "Outdoor pool", sortOrder: 2 },
-    { value: "garden-house", label: "Garden house", sortOrder: 3 },
-    { value: "outdoor-kitchen", label: "Outdoor kitchen", sortOrder: 4 },
-    { value: "garage", label: "Garage", sortOrder: 5 },
-    { value: "porch", label: "Porch", sortOrder: 6 },
-  ],
-  other: [
-    { value: "hall", label: "Hall", sortOrder: 1 },
-    { value: "home-office", label: "Home office", sortOrder: 2 },
-    { value: "bar", label: "Bar", sortOrder: 3 },
-    { value: "cinema", label: "Cinema", sortOrder: 4 },
-    { value: "gym", label: "Gym", sortOrder: 5 },
-    { value: "game-room", label: "Game room", sortOrder: 6 },
-    { value: "kids-room", label: "Kids room", sortOrder: 7 },
-    { value: "wine-cellar", label: "Wine cellar", sortOrder: 8 },
-  ],
 }
 
 // Canonical building-type vocabulary. Matches PROJECT_BUILDING_TYPES in
 // lib/project-translations.ts — keep them in sync. Slugs match what the
-// projects.building_type column stores ("villa", "garden-house", etc.).
+// projects.building_type column stores ("villa", "chalet", etc.).
 //
 // Labels here are English fallbacks; render sites should use
 // translateBuildingType() / translateBuildingTypeInput() to localise.
@@ -196,12 +164,10 @@ export const FALLBACK_BUILDING_TYPE_OPTIONS: ProjectDetailsDropdownOption[] = [
   { value: "house", label: "House", sortOrder: 2 },
   { value: "apartment", label: "Apartment", sortOrder: 3 },
   { value: "townhouse", label: "Townhouse", sortOrder: 4 },
-  { value: "penthouse", label: "Penthouse", sortOrder: 5 },
-  { value: "bungalow", label: "Bungalow", sortOrder: 6 },
-  { value: "chalet", label: "Chalet", sortOrder: 7 },
-  { value: "farm", label: "Farm", sortOrder: 8 },
-  { value: "garden-house", label: "Garden house", sortOrder: 9 },
-  { value: "other", label: "Other", sortOrder: 10 },
+  { value: "bungalow", label: "Bungalow", sortOrder: 5 },
+  { value: "chalet", label: "Chalet", sortOrder: 6 },
+  { value: "farm", label: "Farm", sortOrder: 7 },
+  { value: "other", label: "Other", sortOrder: 8 },
 ]
 
 export const FALLBACK_SIZE_OPTIONS: ProjectDetailsDropdownOption[] = [

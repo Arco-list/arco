@@ -16,11 +16,14 @@ interface SpecificationsBarProps {
   type: string | null
   /** Canonical scope slug — translated to the current locale on render. */
   scope: ProjectScope | null
+  /** Deelproject: de ruimte (Tuin, Keuken) staat in het scopevak; wint
+   *  van `scope`. */
+  scopeLabel?: string | null
   style: string | null
   photographer?: PhotographerCredit | null
 }
 
-export async function SpecificationsBar({ location, year, type, scope, style, photographer }: SpecificationsBarProps) {
+export async function SpecificationsBar({ location, year, type, scope, scopeLabel, style, photographer }: SpecificationsBarProps) {
   const t = await getTranslations("project_detail")
   const locale = await getLocale()
 
@@ -39,7 +42,7 @@ export async function SpecificationsBar({ location, year, type, scope, style, ph
     { label: t("location"), value: location },
     { label: t("year"), value: year },
     { label: t("type"), value: type },
-    { label: t("scope"), value: translateScope(scope, locale) },
+    { label: t("scope"), value: scopeLabel ?? translateScope(scope, locale) },
     { label: t("style"), value: style },
     { label: t("photographer"), value: photographerNode },
   ].filter(spec => spec.value)

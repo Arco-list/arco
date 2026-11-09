@@ -119,12 +119,39 @@ const SPACE_OPTIONS: SpaceOption[] = [
     ),
   },
   {
+    key: "garden-house",
+    labelKey: "garden-house",
+    icon: (
+      // Een klein huis met zadeldak: tuinhuis, buitenverblijf, poolhouse.
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2 8l6-5 6 5" />
+        <path d="M3.5 7.5V14h9V7.5" />
+        <path d="M6.5 14v-4h3v4" />
+      </svg>
+    ),
+  },
+  {
     key: "pool",
     labelKey: "pool",
     icon: (
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
         <path d="M1 10c1.5-1.8 3-1.8 4.5 0s3 1.8 4.5 0 3-1.8 4.5 0" />
         <path d="M1 7c1.5-1.8 3-1.8 4.5 0s3 1.8 4.5 0 3-1.8 4.5 0" opacity=".35" />
+      </svg>
+    ),
+  },
+  {
+    key: "wellness",
+    labelKey: "wellness",
+    icon: (
+      // Stoom boven een bank: sauna, stoomcabine, home spa.
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+        <path d="M5 2c-1 1.2-1 2.3 0 3.5" />
+        <path d="M8 2c-1 1.2-1 2.3 0 3.5" />
+        <path d="M11 2c-1 1.2-1 2.3 0 3.5" />
+        <path d="M2 10h12" />
+        <path d="M3 10v4M13 10v4" />
+        <path d="M4 10V8h8v2" opacity=".5" />
       </svg>
     ),
   },

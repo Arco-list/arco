@@ -12,6 +12,7 @@ import { AdminFeatureStar } from "@/components/admin-feature-star"
 
 import { useFilters } from "@/contexts/filter-context"
 import { cityLabel } from "@/lib/provinces"
+import { spaceLabelSingular } from "@/lib/type-labels"
 import { useSavedProjects } from "@/contexts/saved-projects-context"
 import { useProjectsQuery } from "@/hooks/use-projects-query"
 import type { DiscoverProject } from "@/lib/projects/queries"
@@ -269,7 +270,14 @@ function ProjectCard({
   // fall back to projects.building_type which stores the same slug set
   // ("villa", "house", "apartment", …).
   const rawCategory = project.primary_category_slug ?? project.primary_category
-  const projectTypeLabel = rawCategory
+  // Een deelproject (kind = 'partial') "is" zijn ruimte — Keuken, Tuin —
+  // waar een architectuurproject zijn gebouwtype is. Het type van een
+  // deelproject is context en komt niet op de kaart.
+  const isPartial = (project as { kind?: string | null }).kind === "partial"
+  const primarySpaceSlug = (project as { primary_space_slug?: string | null }).primary_space_slug ?? null
+  const projectTypeLabel = isPartial
+    ? spaceLabelSingular(primarySpaceSlug, locale)
+    : rawCategory
     ? (translateCategoryName(rawCategory, locale)
         ?? taxonomyLabelMap.get(rawCategory)
         ?? rawCategory)

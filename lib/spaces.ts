@@ -12,7 +12,9 @@ export const SPACE_SLUGS = [
   "home-office",
   "hallway",
   "garden",
+  "garden-house",
   "pool",
+  "wellness",
   "terrace",
   "other",
 ] as const
@@ -34,7 +36,9 @@ export const SPACES: Space[] = [
   { slug: "home-office", name: "Home Office", iconKey: "office" },
   { slug: "hallway",     name: "Hallway",     iconKey: "hallway" },
   { slug: "garden",      name: "Garden",      iconKey: "garden" },
+  { slug: "garden-house", name: "Garden house", iconKey: "garden_house" },
   { slug: "pool",        name: "Pool",        iconKey: "pool" },
+  { slug: "wellness",    name: "Wellness",    iconKey: "wellness" },
   { slug: "terrace",     name: "Terrace",     iconKey: "terrace" },
   { slug: "other",       name: "Other",       iconKey: "other" },
 ]

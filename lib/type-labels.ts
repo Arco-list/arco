@@ -3,14 +3,12 @@
 export const TYPE_LABELS: Record<string, { nl: string; en: string }> = {
   villa: { nl: "Villa's", en: "Villas" },
   apartment: { nl: "Appartementen", en: "Apartments" },
-  penthouse: { nl: "Penthouses", en: "Penthouses" },
   house: { nl: "Woonhuizen", en: "Houses" },
   bungalow: { nl: "Bungalows", en: "Bungalows" },
   townhouse: { nl: "Stadswoningen", en: "Townhouses" },
   chalet: { nl: "Chalets", en: "Chalets" },
   farm: { nl: "Boerderijen", en: "Farmhouses" },
   extension: { nl: "Uitbouwen", en: "Extensions" },
-  "garden-house": { nl: "Tuinhuizen", en: "Garden houses" },
 }
 
 export function typeLabel(typeValue: string, locale: string): string {
@@ -26,14 +24,12 @@ export function typeLabel(typeValue: string, locale: string): string {
 export const TYPE_LABELS_SINGULAR: Record<string, { nl: string; en: string }> = {
   villa: { nl: "villa", en: "villa" },
   apartment: { nl: "appartement", en: "apartment" },
-  penthouse: { nl: "penthouse", en: "penthouse" },
   house: { nl: "woonhuis", en: "house" },
   bungalow: { nl: "bungalow", en: "bungalow" },
   townhouse: { nl: "stadswoning", en: "townhouse" },
   chalet: { nl: "chalet", en: "chalet" },
   farm: { nl: "boerderij", en: "farmhouse" },
   extension: { nl: "uitbouw", en: "extension" },
-  "garden-house": { nl: "tuinhuis", en: "garden house" },
 }
 
 /** Null bij een onbekend bouwtype: liever geen bouwtype in de titel dan
@@ -103,10 +99,37 @@ export const SPACE_NOUNS: Record<string, { nl: string; en: string }> = {
   exterior: { nl: "Exterieur", en: "Exteriors" },
   terrace: { nl: "Terrassen", en: "Terraces" },
   pool: { nl: "Zwembaden", en: "Swimming pools" },
+  wellness: { nl: "Wellness", en: "Wellness" },
   "home-office": { nl: "Thuiskantoren", en: "Home offices" },
   garden: { nl: "Tuinen", en: "Gardens" },
+  "garden-house": { nl: "Tuinhuizen", en: "Garden houses" },
   hallway: { nl: "Hallen", en: "Hallways" },
   other: { nl: "Overige ruimtes", en: "Other rooms" },
+}
+
+/** Enkelvoud, voor een kaart of specificatiebalk: een deelproject "is"
+ *  een keuken, zoals een architectuurproject een villa is. */
+export const SPACE_LABELS_SINGULAR: Record<string, { nl: string; en: string }> = {
+  kitchen: { nl: "Keuken", en: "Kitchen" },
+  bathroom: { nl: "Badkamer", en: "Bathroom" },
+  living: { nl: "Woonkamer", en: "Living room" },
+  bedroom: { nl: "Slaapkamer", en: "Bedroom" },
+  exterior: { nl: "Exterieur", en: "Exterior" },
+  terrace: { nl: "Terras", en: "Terrace" },
+  pool: { nl: "Zwembad", en: "Pool" },
+  wellness: { nl: "Wellness", en: "Wellness" },
+  "home-office": { nl: "Thuiskantoor", en: "Home office" },
+  garden: { nl: "Tuin", en: "Garden" },
+  "garden-house": { nl: "Tuinhuis", en: "Garden house" },
+  hallway: { nl: "Gang", en: "Hallway" },
+  other: { nl: "Overig", en: "Other" },
+}
+
+export function spaceLabelSingular(space: string | null | undefined, locale: string): string | null {
+  if (!space) return null
+  const entry = SPACE_LABELS_SINGULAR[space]
+  if (entry) return locale === "nl" ? entry.nl : entry.en
+  return space.charAt(0).toUpperCase() + space.slice(1)
 }
 
 export function spaceNoun(space: string, locale: string): string {

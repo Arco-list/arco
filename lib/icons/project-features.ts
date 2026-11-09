@@ -19,6 +19,7 @@ import {
   Sofa,
   TreePine,
   UtensilsCrossed,
+  Warehouse,
   Waves,
 } from "lucide-react"
 
@@ -37,6 +38,7 @@ const FEATURE_ICON_MAP: Record<string, LucideIcon> = {
   fireplace: Flame,
   garage: Car,
   garden: TreePine,
+  garden_house: Warehouse,
   hallway: DoorOpen,
   indoor_pool: Waves,
   kitchen: UtensilsCrossed,

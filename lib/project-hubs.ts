@@ -111,8 +111,10 @@ export const SPACE_HUB_DEFS: Array<{ space: string; slug: string }> = [
   { space: "exterior", slug: "exterieur" },
   { space: "terrace", slug: "terrassen" },
   { space: "pool", slug: "zwembaden" },
+  { space: "wellness", slug: "wellness" },
   { space: "home-office", slug: "thuiskantoren" },
   { space: "garden", slug: "tuinen" },
+  { space: "garden-house", slug: "tuinhuizen" },
 ]
 
 /** Localized "{Scope}projecten" nouns for combo H1s. */
@@ -368,9 +370,16 @@ async function fetchSpaceRows(
   return out
 }
 
-/** All qualifying hubs, computed from published projects. */
-export async function getHubs(): Promise<{ cities: Hub[]; scopes: Hub[]; types: Hub[]; combos: Hub[]; provinces: Hub[]; spaces: Hub[] }> {
-  const supabase = await createServerSupabaseClient()
+/** All qualifying hubs, computed from published projects.
+ *
+ *  `client` is for callers that must stay free of cookies() — the nav
+ *  menu builds inside unstable_cache and passes a service-role client.
+ *  Everything counted here is public (published projects), so the
+ *  cookie-bound client adds nothing but the cookie dependency. */
+export async function getHubs(
+  client?: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+): Promise<{ cities: Hub[]; scopes: Hub[]; types: Hub[]; combos: Hub[]; provinces: Hub[]; spaces: Hub[] }> {
+  const supabase = client ?? (await createServerSupabaseClient())
   const [{ data }, { data: cats }, feats] = await Promise.all([
     supabase
       .from("projects")

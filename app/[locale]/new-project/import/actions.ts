@@ -803,7 +803,7 @@ Fields:
 - project_year (number | null): The year the PROJECT was completed / delivered (4-digit integer) — not the original construction year of the building. Return null if not found.
 - scope (string | null): The project scope. MUST be one of: "New Build", "Renovation", "Interior Design". Return null if unclear.
 - location (string | null): City and/or country, e.g. "Amsterdam, Netherlands". Return null if not found.
-- building_type (string | null): The project type. MUST be one of: "villa", "apartment", "townhouse", "bungalow", "chalet", "farm", "extension", "garden-house", "garden-design". Use "farm" for farmhouses and farm conversions. Return null if none of these fit.
+- building_type (string | null): The project type. MUST be one of: "villa", "apartment", "townhouse", "bungalow", "chalet", "farm", "extension". Use "farm" for farmhouses and farm conversions. Return null if none of these fit.
 - style (string | null): The design style. MUST be one of: "modern", "minimalist", "contemporary", "scandinavian", "industrial", "mid-century-modern", "traditional", "transitional", "eclectic", "farmhouse", "coastal", "mediterranean", "bohemian", "rustic", "urban-modern". Return null if unclear.`,
     messages: [
       {
@@ -851,7 +851,7 @@ Fields:
   const currentYear = new Date().getFullYear()
   const year = parseInt(parsed.project_year ?? parsed.building_year, 10)
 
-  const validBuildingTypes = ["villa", "apartment", "townhouse", "bungalow", "chalet", "farm", "extension", "garden-house", "garden-design"]
+  const validBuildingTypes = ["villa", "apartment", "townhouse", "bungalow", "chalet", "farm", "extension"]
   const validStyles = ["modern", "minimalist", "contemporary", "scandinavian", "industrial", "mid-century-modern", "traditional", "transitional", "eclectic", "farmhouse", "coastal", "mediterranean", "bohemian", "rustic", "urban-modern"]
 
   // Canonicalise scope to a known slug, then write back the English display
@@ -1909,7 +1909,7 @@ Rules: outdoor photo with building visible = always "exterior". Tag every photo.
 
 For each photo also write "alt": a concise Dutch image description (8-15 words) naming the room/space and the most distinctive visible materials or features, e.g. "Badkamer met travertijnen wastafel en eikenhouten kastenwand". Factual, no marketing language, never start with "Foto van" or "Afbeelding van".
 
-Also determine: style (modern/contemporary/traditional/minimalist/industrial/scandinavian/mediterranean/rustic/mid-century-modern/bohemian/coastal/farmhouse/transitional/urban-modern/eclectic), scope (new-build/renovated/interior-designed), building_type (villa/apartment/townhouse/bungalow/chalet/farm/extension/garden-house). Always pick one for each.
+Also determine: style (modern/contemporary/traditional/minimalist/industrial/scandinavian/mediterranean/rustic/mid-century-modern/bohemian/coastal/farmhouse/transitional/urban-modern/eclectic), scope (new-build/renovated/interior-designed), building_type (villa/apartment/townhouse/bungalow/chalet/farm/extension). Always pick one for each.
 
 For building_type, classify by ARCHITECTURE not current use — a restaurant inside a converted villa is "villa"; a café in a row of townhouses is "townhouse"; a hotel in a former mansion is "villa". Always pick the CLOSEST match from the list — a detached family house is "villa", a penthouse or loft is "apartment"; there is no "other".
 
@@ -2202,7 +2202,7 @@ Return ONLY this JSON:
     // scrape extraction enforces. "house"/"penthouse"/"other" were legacy
     // values outside the taxonomy that rendered as untranslatable "Anders"
     // in the Type field.
-    const validTypes = ["villa", "apartment", "townhouse", "bungalow", "chalet", "farm", "extension", "garden-house", "garden-design"]
+    const validTypes = ["villa", "apartment", "townhouse", "bungalow", "chalet", "farm", "extension"]
     if (validTypes.includes(detectedBuildingType)) {
       // Update projects.building_type if empty
       await serviceSupabase

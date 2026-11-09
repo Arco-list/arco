@@ -114,7 +114,8 @@ export function translateScopeInput(
 
 // ─── Building type vocabulary ──────────────────────────────────────────────
 // Stored on projects.building_type as kebab-case slugs ("villa", "house",
-// "garden-house"). Unlike scope, the DB already holds canonical slugs so
+// "chalet"). Een tuinhuis is sinds migratie 299 een ruimte, geen gebouwtype:
+// het is een secundair object in de tuin van een villa. Unlike scope, the DB already holds canonical slugs so
 // canonicalize() just normalises casing and accepts a few common variants.
 //
 // PROJECT_BUILDING_TYPES is the source of truth for filter UI (replaces
@@ -127,11 +128,9 @@ export const PROJECT_BUILDING_TYPES = [
   "house",
   "apartment",
   "townhouse",
-  "penthouse",
   "bungalow",
   "chalet",
   "farm",
-  "garden-house",
   "other",
 ] as const
 export type ProjectBuildingType = typeof PROJECT_BUILDING_TYPES[number]
@@ -141,11 +140,9 @@ const BUILDING_TYPE_LABELS: Record<ProjectBuildingType, Record<ScopeLocale, stri
   house: { en: "House", nl: "Huis" },
   apartment: { en: "Apartment", nl: "Appartement" },
   townhouse: { en: "Townhouse", nl: "Stadswoning" },
-  penthouse: { en: "Penthouse", nl: "Penthouse" },
   bungalow: { en: "Bungalow", nl: "Bungalow" },
   chalet: { en: "Chalet", nl: "Chalet" },
   farm: { en: "Farm", nl: "Boerderij" },
-  "garden-house": { en: "Garden house", nl: "Tuinhuis" },
   other: { en: "Other", nl: "Anders" },
 }
 
@@ -162,7 +159,7 @@ export function translateBuildingType(
 
 /**
  * Map any input to a canonical building-type slug. Accepts:
- *   - the slug itself ("villa", "garden-house")
+ *   - the slug itself ("villa", "chalet")
  *   - underscored variants ("garden_house")
  *   - title-case display strings ("Villa", "Garden House")
  *   - case/whitespace variants
@@ -207,19 +204,16 @@ const CATEGORY_NAME_LABELS: Record<string, Record<ScopeLocale, string>> = {
   house: { en: "House", nl: "Huis" },
   apartment: { en: "Apartment", nl: "Appartement" },
   townhouse: { en: "Townhouse", nl: "Stadswoning" },
-  penthouse: { en: "Penthouse", nl: "Penthouse" },
   bungalow: { en: "Bungalow", nl: "Bungalow" },
   chalet: { en: "Chalet", nl: "Chalet" },
   farm: { en: "Farm", nl: "Boerderij" },
-  "garden-house": { en: "Garden house", nl: "Tuinhuis" },
-  "garden-design": { en: "Garden design", nl: "Tuinontwerp" },
   extension: { en: "Extension", nl: "Uitbouw" },
   other: { en: "Other", nl: "Anders" },
 }
 
 /**
  * Translate a category used as a project type. Accepts either the slug
- * ("villa", "garden-house") or the English display name ("Villa",
+ * ("villa", "chalet") or the English display name ("Villa",
  * "Garden house") so callers can pass whatever they have in hand without
  * normalising first. Returns null when the input isn't a known category —
  * the caller can then fall back to the raw value.

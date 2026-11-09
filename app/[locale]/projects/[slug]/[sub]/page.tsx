@@ -57,6 +57,7 @@ export default async function NestedHubRoute({ params }: PageProps) {
   // broke under the seeded shuffle).
   const initialProjects = await fetchDiscoverProjects(locale, undefined, {
     projectIds: hubProjects.map((p) => p.id).filter((id): id is string => Boolean(id)),
+    includePartial: String(hub.kind).startsWith("space"),
   })
   // Plain async function call — sidesteps a TS2786 false positive on
   // async-component JSX (same pattern as the [slug] route).

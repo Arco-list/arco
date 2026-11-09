@@ -63,7 +63,7 @@ function generateSlug(name: string): string {
 }
 
 export async function updateCategoryAction(
-  input: { categoryId: string; name: string; slug?: string; parentId?: string | null }
+  input: { categoryId: string; name: string; nameNl?: string | null; slug?: string; parentId?: string | null }
 ): Promise<ActionResult> {
   const parseResult = categoryIdSchema.safeParse(input.categoryId)
   if (!parseResult.success) {
@@ -102,6 +102,16 @@ export async function updateCategoryAction(
 
   if (input.parentId !== undefined) {
     updateData.parent_id = input.parentId
+  }
+
+  // Nederlandse naam: leeg = geen eigen vertaling (de site valt dan terug
+  // op de Engelse naam).
+  if (input.nameNl !== undefined) {
+    const nl = (input.nameNl ?? "").trim()
+    if (nl.length > 100) {
+      return createErrorResponse('VALIDATION', 'Dutch name must be at most 100 characters', {}, 'admin-categories-update')
+    }
+    updateData.name_nl = nl.length ? nl : null
   }
 
   const { error: updateError } = await serviceSupabase
@@ -451,6 +461,32 @@ export async function toggleHomeCarrouselAction(
   })
 }
 
+/** Ruimte actief of niet: een inactieve ruimte verdwijnt uit filters en
+ *  de fototour, bestaande foto's houden hun ruimte. */
+export async function toggleSpaceStatusAction(
+  input: { spaceId: string; enabled: boolean }
+): Promise<ActionResult> {
+  const parsed = z.object({ spaceId: z.string().uuid(), enabled: z.boolean() }).safeParse(input)
+  if (!parsed.success) {
+    return createErrorResponse('VALIDATION', 'Invalid input', { input }, 'admin-spaces-status')
+  }
+  const { error } = await assertAdmin()
+  if (error) {
+    return createErrorResponse('AUTH', error.message, { userId: null }, 'admin-spaces-status')
+  }
+  const serviceSupabase = createServiceRoleSupabaseClient()
+  const { error: updateError } = await serviceSupabase
+    .from("spaces")
+    .update({ is_active: parsed.data.enabled })
+    .eq("id", parsed.data.spaceId)
+  if (updateError) {
+    return createErrorResponse('DATABASE', updateError.message, { spaceId: parsed.data.spaceId }, 'admin-spaces-status')
+  }
+  revalidatePath("/admin/categories")
+  revalidatePath("/projects")
+  return createSuccessResponse({ spaceId: parsed.data.spaceId, isActive: parsed.data.enabled })
+}
+
 export async function toggleSpaceHomeCarrouselAction(
   input: { spaceId: string; enabled: boolean }
 ): Promise<ActionResult> {
@@ -579,54 +615,81 @@ export async function createCategoryAction(
   })
 }
 
-export async function toggleCanPublishProjectsAction(
-  input: { categoryId: string; enabled: boolean }
+const publishScopeSchema = z.object({
+  categoryId: categoryIdSchema,
+  scope: z.enum(["none", "project", "partial"]),
+})
+
+/** Wat een dienst publiceert: niets, projecten of deelprojecten
+ *  (lib/publish-scope.ts). can_publish_projects volgt via trigger. */
+export async function setPublishScopeAction(
+  input: { categoryId: string; scope: "none" | "project" | "partial" }
 ): Promise<ActionResult> {
-  const parseResult = categoryIdSchema.safeParse(input.categoryId)
-  if (!parseResult.success) {
-    return createErrorResponse(
-      'VALIDATION',
-      'Invalid category ID',
-      { categoryId: input.categoryId },
-      'admin-categories-can-publish'
-    )
+  const parsed = publishScopeSchema.safeParse(input)
+  if (!parsed.success) {
+    return createErrorResponse('VALIDATION', 'Invalid input', { input }, 'admin-categories-publish-scope')
   }
 
   const { error } = await assertAdmin()
   if (error) {
-    return createErrorResponse(
-      'AUTH',
-      error.message,
-      { userId: null },
-      'admin-categories-can-publish'
-    )
+    return createErrorResponse('AUTH', error.message, { userId: null }, 'admin-categories-publish-scope')
   }
 
   const serviceSupabase = createServiceRoleSupabaseClient()
-
   const { error: updateError } = await serviceSupabase
     .from("categories")
-    .update({
-      can_publish_projects: input.enabled,
-      updated_at: new Date().toISOString()
-    })
-    .eq("id", parseResult.data)
+    .update({ publish_scope: parsed.data.scope, updated_at: new Date().toISOString() })
+    .eq("id", parsed.data.categoryId)
 
   if (updateError) {
-    return createErrorResponse(
-      'DATABASE',
-      updateError.message,
-      { categoryId: parseResult.data, enabled: input.enabled },
-      'admin-categories-can-publish'
-    )
+    return createErrorResponse('DATABASE', updateError.message, { ...parsed.data }, 'admin-categories-publish-scope')
   }
 
   revalidatePath("/admin/categories")
+  return createSuccessResponse({ ...parsed.data })
+}
 
-  return createSuccessResponse({
-    categoryId: parseResult.data,
-    canPublishProjects: input.enabled
-  })
+const linkSchema = z.object({
+  a: z.string().uuid(),
+  b: z.string().uuid(),
+  enabled: z.boolean(),
+})
+
+/** Eén koppelrij aan of uit in een jointabel met twee uuid-kolommen. */
+async function toggleLink(
+  table: "service_spaces" | "product_category_spaces",
+  columns: readonly [string, string],
+  input: { a: string; b: string; enabled: boolean },
+  tag: string,
+): Promise<ActionResult> {
+  const parsed = linkSchema.safeParse(input)
+  if (!parsed.success) {
+    return createErrorResponse('VALIDATION', 'Invalid input', { input }, tag)
+  }
+  const { error } = await assertAdmin()
+  if (error) {
+    return createErrorResponse('AUTH', error.message, { userId: null }, tag)
+  }
+  const serviceSupabase = createServiceRoleSupabaseClient() as any
+  const row = { [columns[0]]: parsed.data.a, [columns[1]]: parsed.data.b }
+  const { error: dbError } = parsed.data.enabled
+    ? await serviceSupabase.from(table).upsert(row, { onConflict: columns.join(",") })
+    : await serviceSupabase.from(table).delete().match(row)
+  if (dbError) {
+    return createErrorResponse('DATABASE', dbError.message, { table, ...row }, tag)
+  }
+  revalidatePath("/admin/categories")
+  return createSuccessResponse({ table, ...row, enabled: parsed.data.enabled })
+}
+
+/** Dienst ↔ ruimte: waar het werk van een dienst zichtbaar wordt. */
+export async function toggleServiceSpaceAction(input: { serviceId: string; spaceId: string; enabled: boolean }): Promise<ActionResult> {
+  return toggleLink("service_spaces", ["service_id", "space_id"], { a: input.serviceId, b: input.spaceId, enabled: input.enabled }, 'admin-categories-service-space')
+}
+
+/** Productgroep ↔ ruimte: waar een productgroep thuishoort. */
+export async function toggleProductCategorySpaceAction(input: { productCategoryId: string; spaceId: string; enabled: boolean }): Promise<ActionResult> {
+  return toggleLink("product_category_spaces", ["product_category_id", "space_id"], { a: input.productCategoryId, b: input.spaceId, enabled: input.enabled }, 'admin-categories-product-space')
 }
 
 export async function uploadCategoryImageAction(

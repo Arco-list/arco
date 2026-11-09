@@ -3,34 +3,17 @@
 import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { AdminTabs, useAdminTab } from "@/components/admin/admin-tabs"
-import { format } from "date-fns"
-import {
-  type ColumnDef,
-  type ColumnFiltersState,
-  type SortingState,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table"
-import {
-  ArrowDown,
-  ArrowUp,
-  ArrowUpDown,
-  MoreHorizontal,
-  Plus,
-} from "lucide-react"
+import { MoreHorizontal, Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import {
   createCategoryAction,
   deleteCategoryAction,
-  toggleCanPublishProjectsAction,
+  setPublishScopeAction,
   toggleCategoryStatusAction,
   toggleHomeCarrouselAction,
   toggleSpaceHomeCarrouselAction,
+  toggleSpaceStatusAction,
   updateCategoryAction,
   uploadCategoryImageAction,
 } from "@/app/admin/categories/actions"
@@ -67,10 +50,17 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { ConnectionsTab } from "@/components/admin-categories-connections"
+import { ProfessionalsTab } from "@/components/admin-categories-professionals"
+import { ProjectsTab } from "@/components/admin-categories-projects"
+import { useLocale } from "next-intl"
+import { publishScopeLabel, type PublishScope } from "@/lib/publish-scope"
 
 export type AdminCategoryRow = {
   id: string
   name: string
+  /** Nederlandse naam (categories.name_nl); null = valt terug op name. */
+  nameNl: string | null
   slug: string
   description: string | null
   parentId: string | null
@@ -82,11 +72,11 @@ export type AdminCategoryRow = {
   categoryHierarchy: number | null
   inHomeCarrousel: boolean
   imageUrl: string | null
-  canPublishProjects: boolean
+  publishScope: PublishScope
   count: number
 }
 
-type TabKey = "project" | "professional" | "spaces" | "products"
+type TabKey = "project" | "professional" | "spaces" | "products" | "links"
 type CreateMode = "type" | "service" | "group"
 
 export type AdminSpaceRow = {
@@ -114,14 +104,23 @@ interface Props {
   categories: AdminCategoryRow[]
   spaces?: AdminSpaceRow[]
   productCategories?: AdminProductCategoryRow[]
+  /** Dienst ↔ ruimte en productgroep ↔ ruimte (migratie 297). */
+  serviceSpaces?: Array<{ serviceId: string; spaceId: string }>
+  productCategorySpaces?: Array<{ productCategoryId: string; spaceId: string }>
+  /** Deelprojecten per ruimte-id (projects.kind = 'partial'). */
+  partialCountBySpace?: Record<string, number>
 }
 
-export function AdminCategoriesDataTable({ categories, spaces = [], productCategories = [] }: Props) {
+export function AdminCategoriesDataTable({ categories, spaces = [], productCategories = [], serviceSpaces = [], productCategorySpaces = [], partialCountBySpace = {} }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  // De paginakop, tabs en knoppen volgen de taalkeuze in de header
+  // (EN/NL), zoals het merkdashboard. De inhoud van de Professionals-tab
+  // doet dat ook; de andere tabs zijn nog Engels.
+  const nl = useLocale() === "nl"
   // Tab lives in the URL (?tab=…) via the sticky bar; per-tab view state
   // resets on change (the old handleTabChange behaviour), skipping mount.
-  const activeTab = useAdminTab(["project", "professional", "spaces", "products"] as const)
+  const activeTab = useAdminTab(["project", "professional", "spaces", "products", "links"] as const)
 
   // Split categories by type, pre-sorted: parents first, then children grouped under each parent
   const buildSortedItems = (type: string) => {
@@ -156,6 +155,12 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
   }
 
   const projectItems = useMemo(() => buildSortedItems("Project").filter((c) => c.isActive), [categories])
+  // De gebouwtypes voor de Projecten-tab: alle types, ook inactieve, zonder
+  // de (lege) groepsrijen — de tab groepeert zelf in Projecten/Deelprojecten.
+  const projectTypeRows = useMemo(
+    () => categories.filter((c) => c.categoryType === "Project" && c.categoryHierarchy !== 1),
+    [categories],
+  )
   const professionalItems = useMemo(() => buildSortedItems("Professional"), [categories])
 
   const professionalGroups = useMemo(
@@ -175,19 +180,15 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
   )
 
   const currentItems = activeTab === "project" ? projectItems : professionalItems
-  const currentGroups = activeTab === "project" ? projectGroups : professionalGroups
   const activeCount = currentItems.filter((c) => c.isActive).length
 
-  // Table state
-  const [sorting, setSorting] = useState<SortingState>([])
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 50 })
+  // Zoekterm — de tabs filteren er zelf op
   const [searchTerm, setSearchTerm] = useState("")
-  const [groupFilter, setGroupFilter] = useState("all")
 
   // Dialogs
   const [editCategory, setEditCategory] = useState<AdminCategoryRow | null>(null)
   const [editName, setEditName] = useState("")
+  const [editNameNl, setEditNameNl] = useState("")
   const [editSlug, setEditSlug] = useState("")
   const [editParentId, setEditParentId] = useState<string | null>(null)
   const [editImageUrl, setEditImageUrl] = useState<string | null>(null)
@@ -204,10 +205,6 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
   useEffect(() => {
     if (firstTabRender.current) { firstTabRender.current = false; return }
     setSearchTerm("")
-    setGroupFilter("all")
-    setSorting([])
-    setColumnFilters([])
-    setPagination({ pageIndex: 0, pageSize: 50 })
   }, [activeTab])
 
   // Action handlers
@@ -239,13 +236,37 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
     })
   }
 
-  const handleToggleCanPublish = (category: AdminCategoryRow, enabled: boolean) => {
+  const handleToggleSpaceHomepage = (space: AdminSpaceRow, enabled: boolean) => {
     startTransition(async () => {
-      const result = await toggleCanPublishProjectsAction({ categoryId: category.id, enabled })
+      const result = await toggleSpaceHomeCarrouselAction({ spaceId: space.id, enabled })
       if (!result.success) {
         toast.error("Failed to update", { description: result.error.message })
       } else {
-        toast.success(enabled ? "Project publishing enabled" : "Project publishing disabled")
+        toast.success(enabled ? "Added to homepage" : "Removed from homepage")
+        router.refresh()
+      }
+    })
+  }
+
+  const handleToggleSpaceStatus = (space: AdminSpaceRow, isActive: boolean) => {
+    startTransition(async () => {
+      const result = await toggleSpaceStatusAction({ spaceId: space.id, enabled: isActive })
+      if (!result.success) {
+        toast.error("Failed to update", { description: result.error.message })
+      } else {
+        toast.success(`${space.name}: ${isActive ? "active" : "inactive"}`)
+        router.refresh()
+      }
+    })
+  }
+
+  const handleSetPublishScope = (category: AdminCategoryRow, scope: PublishScope) => {
+    startTransition(async () => {
+      const result = await setPublishScopeAction({ categoryId: category.id, scope })
+      if (!result.success) {
+        toast.error("Failed to update", { description: result.error.message })
+      } else {
+        toast.success(`${category.name}: ${publishScopeLabel(scope, nl ? "nl" : "en").toLowerCase()}`)
         router.refresh()
       }
     })
@@ -257,6 +278,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
       const result = await updateCategoryAction({
         categoryId: editCategory.id,
         name: editName.trim(),
+        nameNl: editNameNl.trim() || null,
         slug: editSlug.trim() || undefined,
         parentId: editParentId,
       })
@@ -436,249 +458,19 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
     })
   }
 
-  // Column definitions
-  const columns: ColumnDef<AdminCategoryRow>[] = useMemo(
-    () => [
-      {
-        id: "name",
-        header: activeTab === "project" ? "Type" : "Service",
-        accessorFn: (row) => row.name,
-        filterFn: (row, _columnId, filterValue) => {
-          if (!filterValue) return true
-          const q = (filterValue as string).toLowerCase()
-          return (
-            row.original.name.toLowerCase().includes(q) ||
-            row.original.slug.toLowerCase().includes(q)
-          )
-        },
-        cell: ({ row }) => {
-          const { name, slug, categoryHierarchy, parentId } = row.original
-          const isParent = categoryHierarchy === 1
-          const isChild = !!parentId
-          return (
-            <div className={`flex flex-col gap-0.5 ${isChild ? "pl-4" : ""}`}>
-              <span
-                className={`text-sm ${isParent ? "font-semibold" : "font-medium"} text-[#1c1c1a]`}
-              >
-                {name}
-              </span>
-              <span className="text-[11px] text-[#a1a1a0]">{slug}</span>
-            </div>
-          )
-        },
-      },
-      {
-        id: "group",
-        header: "Group",
-        accessorFn: (row) => row.parentName ?? "",
-        filterFn: (row, _columnId, filterValue) => {
-          if (!filterValue) return true
-          // Show the parent row itself and its children
-          return (
-            row.original.parentId === filterValue || row.original.id === filterValue
-          )
-        },
-        cell: ({ row }) => {
-          if (row.original.categoryHierarchy === 1) {
-            return (
-              <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-sm bg-[#f5f5f4] text-[#6b6b68]">
-                Group
-              </span>
-            )
-          }
-          return row.original.parentName ? (
-            <span className="text-xs text-[#6b6b68]">{row.original.parentName}</span>
-          ) : (
-            <span className="text-xs text-[#a1a1a0]">&mdash;</span>
-          )
-        },
-      },
-      {
-        accessorKey: "isActive",
-        header: "Status",
-        cell: ({ row }) => (
-          <Switch
-            checked={row.original.isActive}
-            onCheckedChange={(checked) => handleToggleStatus(row.original, checked)}
-          />
-        ),
-        enableSorting: false,
-      },
-      {
-        id: "homepage",
-        header: "Homepage",
-        cell: ({ row }) => {
-          // Only show toggle for child categories (not groups)
-          if (row.original.categoryHierarchy === 1) return null
-          return (
-            <Switch
-              checked={row.original.inHomeCarrousel}
-              onCheckedChange={(checked) => handleToggleHomeCarrousel(row.original, checked)}
-            />
-          )
-        },
-        enableSorting: false,
-      },
-      {
-        id: "image",
-        header: "Image",
-        cell: ({ row }) => {
-          const category = row.original
-          const url = category.imageUrl
-          return (
-            <label className="cursor-pointer inline-flex items-center gap-2 group" title={url ? "Click to change image" : "Click to upload image"}>
-              {url ? (
-                <img src={url} alt="" className="w-10 h-7 object-cover rounded-[2px] group-hover:opacity-70 transition-opacity" />
-              ) : (
-                <div className="w-10 h-7 rounded-[2px] bg-[#f5f5f4] group-hover:bg-[#e5e5e4] transition-colors flex items-center justify-center">
-                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#a1a1a0" strokeWidth="1.5"><path d="M8 3v10M3 8h10" strokeLinecap="round" /></svg>
-                </div>
-              )}
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                hidden
-                onChange={(e) => {
-                  if (!e.target.files?.[0]) return
-                  const file = e.target.files[0]
-                  if (file.size > 10 * 1024 * 1024) {
-                    toast.error("Image must be under 10MB")
-                    return
-                  }
-                  setCropTargetId(category.id)
-                  setCropTargetType("category")
-                  const reader = new FileReader()
-                  reader.onload = () => {
-                    setCropImageSrc(reader.result as string)
-                    setCropOffset({ x: 0, y: 0 })
-                    setCropScale(1)
-                  }
-                  reader.readAsDataURL(file)
-                  e.target.value = ""
-                }}
-              />
-            </label>
-          )
-        },
-        enableSorting: false,
-      },
-      {
-        id: "count",
-        header: activeTab === "project" ? "Projects" : "Companies",
-        cell: ({ row }) => {
-          const count = row.original.count
-          return <span className="text-xs text-[#6b6b68]">{count}</span>
-        },
-        enableSorting: true,
-        sortingFn: (rowA, rowB) => rowA.original.count - rowB.original.count,
-      },
-      {
-        id: "canPublish",
-        header: "Can publish",
-        cell: ({ row }) => {
-          // Only show for Professional Services child categories
-          if (row.original.categoryType !== "Professional") return null
-          if (row.original.categoryHierarchy === 1) return null
-          return (
-            <Switch
-              checked={row.original.canPublishProjects}
-              onCheckedChange={(checked) => handleToggleCanPublish(row.original, checked)}
-            />
-          )
-        },
-        enableSorting: false,
-      },
-      {
-        accessorKey: "updatedAt",
-        header: "Updated",
-        sortingFn: (a, b) => {
-          const at = a.original.updatedAt ? new Date(a.original.updatedAt).getTime() : 0
-          const bt = b.original.updatedAt ? new Date(b.original.updatedAt).getTime() : 0
-          return at - bt
-        },
-        cell: ({ row }) => {
-          const d = row.original.updatedAt
-          if (!d) return <span className="text-xs text-[#a1a1a0]">&mdash;</span>
-          try {
-            return (
-              <span className="text-xs text-[#6b6b68] whitespace-nowrap">
-                {format(new Date(d), "PP")}
-              </span>
-            )
-          } catch {
-            return <span className="text-xs text-[#a1a1a0]">&mdash;</span>
-          }
-        },
-      },
-      {
-        id: "actions",
-        header: "",
-        cell: ({ row }) => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex h-7 w-7 items-center justify-center rounded-[3px] text-[#a1a1a0] hover:bg-[#f5f5f4] hover:text-[#1c1c1a] transition-colors">
-                <MoreHorizontal className="h-4 w-4" />
-                <span className="sr-only">Actions</span>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem
-                onClick={() => {
-                  setEditCategory(row.original)
-                  setEditName(row.original.name)
-                  setEditSlug(row.original.slug)
-                  setEditParentId(row.original.parentId)
-                  setEditImageUrl(row.original.imageUrl)
-                }}
-              >
-                Edit
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-red-600 focus:text-red-600"
-                onClick={() => setDeleteTarget(row.original)}
-              >
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ),
-        enableSorting: false,
-        enableHiding: false,
-      },
-    ],
-    [activeTab]
-  )
-
-  const columnVisibility = useMemo(() => ({
-    canPublish: activeTab === "professional",
-  }), [activeTab])
-
-  const table = useReactTable({
-    data: currentItems,
-    columns,
-    state: { sorting, columnFilters, pagination, columnVisibility },
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    onPaginationChange: setPagination,
-  })
-
   return (
     // min-w-0 + max-w-full + overflow-hidden matches the wrapper on
     // /admin/projects and /admin/users so no wide descendant expands
     // the page beyond the viewport on mobile.
     <>
       <AdminTabs
-        title="Categories"
+        title={nl ? "Categorieën" : "Categories"}
         tabs={[
-          { key: "project", label: "Project Types" },
-          { key: "professional", label: "Professional Services" },
-          { key: "spaces", label: "Spaces" },
-          { key: "products", label: "Product Categories" },
+          { key: "project", label: nl ? "Projecten" : "Projects" },
+          { key: "professional", label: "Professionals" },
+          { key: "spaces", label: nl ? "Ruimtes" : "Spaces" },
+          { key: "products", label: nl ? "Productcategorieën" : "Product Categories" },
+          { key: "links", label: nl ? "Samenhang" : "Connections" },
         ]}
         active={activeTab}
         actions={activeTab === "project" || activeTab === "professional" ? (
@@ -686,49 +478,31 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
           <div className="relative shrink-0" style={{ width: 220 }}>
           <input
             type="text"
-            placeholder={activeTab === "project" ? "Search types\u2026" : "Search services\u2026"}
+            placeholder={activeTab === "project" ? (nl ? "Zoek types\u2026" : "Search types\u2026") : nl ? "Zoek diensten\u2026" : "Search services\u2026"}
             className="w-full h-9 pl-8 pr-3 text-xs border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors placeholder:text-[#a1a1a0]"
             value={searchTerm}
             onChange={(e) => {
               const value = e.target.value
               setSearchTerm(value)
-              table.getColumn("name")?.setFilterValue(value || undefined)
             }}
           />
             <svg className="absolute left-2.5 top-2.5 text-[#a1a1a0]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
           </div>
-          <Select
-            value={groupFilter}
-            onValueChange={(value) => {
-              setGroupFilter(value)
-              table.getColumn("group")?.setFilterValue(value === "all" ? undefined : value)
-            }}
-          >
-            <SelectTrigger className="w-[160px] h-9 text-xs shrink-0 border-[#e5e5e4] rounded-[3px]">
-              <SelectValue placeholder="All groups" />
-            </SelectTrigger>
-            <SelectContent className="z-[120]">
-              <SelectItem value="all">All groups</SelectItem>
-              {currentGroups.map((g) => (
-                <SelectItem key={g.id} value={g.id}>
-                  {g.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <button
-            className="btn-tertiary shrink-0"
-            style={{ fontSize: 13, padding: "6px 16px", borderRadius: 3 }}
-            onClick={() => {
-              setCreateMode("group")
-              setCreateName("")
-              setCreateParentId(null)
-            }}
-          >
-            Add group
-          </button>
+          {activeTab === "professional" && (
+            <button
+              className="btn-tertiary shrink-0"
+              style={{ fontSize: 13, padding: "6px 16px", borderRadius: 3 }}
+              onClick={() => {
+                setCreateMode("group")
+                setCreateName("")
+                setCreateParentId(null)
+              }}
+            >
+              {nl && activeTab === "professional" ? "Groep toevoegen" : "Add group"}
+            </button>
+          )}
           <button
             className="btn-primary shrink-0"
             style={{ fontSize: 13, padding: "6px 16px", borderRadius: 3 }}
@@ -738,7 +512,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
               setCreateParentId(null)
             }}
           >
-            {activeTab === "project" ? "Add type" : "Add service"}
+            {activeTab === "project" ? (nl ? "Type toevoegen" : "Add type") : nl ? "Dienst toevoegen" : "Add service"}
           </button>
           </>
         ) : undefined}
@@ -748,11 +522,13 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
 
     <div className="flex flex-col gap-6 min-w-0 max-w-full overflow-hidden">
       {/* Page meta — count in the discover style */}
-      <div className="discover-results-meta" style={{ marginBottom: 0 }}>
-        <p className="discover-results-count">
-          <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{currentItems.length}</strong> total &middot; {activeCount} active
-        </p>
-      </div>
+      {activeTab !== "links" && (
+        <div className="discover-results-meta" style={{ marginBottom: 0 }}>
+          <p className="discover-results-count">
+            <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{currentItems.length}</strong> {nl ? "totaal" : "total"} &middot; {activeCount} {nl ? "actief" : "active"}
+          </p>
+        </div>
+      )}
 
 
       {/* Spaces tab — matches Types/Services table styling */}
@@ -785,7 +561,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
                       </div>
                     </td>
                     <td>
-                      <Switch checked={space.isActive} onCheckedChange={() => { /* TODO: hook up toggle */ }} />
+                      <Switch checked={space.isActive} onCheckedChange={(checked) => handleToggleSpaceStatus(space, checked)} />
                     </td>
                     <td>
                       <Switch
@@ -878,109 +654,72 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
         </div>
       )}
 
-      {/* Filters */}
+      {/* Projects tab — building types and partial-project spaces as two collapsible groups */}
+      {activeTab === "project" && (
+        <ProjectsTab
+          types={projectTypeRows}
+          spaces={spaces}
+          services={professionalItems}
+          serviceSpaces={serviceSpaces}
+          partialCounts={partialCountBySpace}
+          search={searchTerm}
+          pending={isPending}
+          onEdit={(row) => {
+            setEditCategory(row)
+            setEditName(row.name)
+            setEditNameNl(row.nameNl ?? "")
+            setEditSlug(row.slug)
+            setEditParentId(row.parentId)
+            setEditImageUrl(row.imageUrl)
+          }}
+          onDelete={(row) => setDeleteTarget(row)}
+          onToggleStatus={handleToggleStatus}
+          onToggleHomepage={handleToggleHomeCarrousel}
+          onToggleSpaceStatus={handleToggleSpaceStatus}
+          onToggleSpaceHomepage={handleToggleSpaceHomepage}
+          onOpenSpaces={() => router.push("?tab=spaces")}
+        />
+      )}
+
+      {/* Professionals tab — groups as collapsible rows, companies-table styling */}
+      {activeTab === "professional" && (
+        <ProfessionalsTab
+          items={professionalItems}
+          spaces={spaces}
+          serviceSpaces={serviceSpaces}
+          search={searchTerm}
+          pending={isPending}
+          onEdit={(row) => {
+            setEditCategory(row)
+            setEditName(row.name)
+            setEditNameNl(row.nameNl ?? "")
+            setEditSlug(row.slug)
+            setEditParentId(row.parentId)
+            setEditImageUrl(row.imageUrl)
+          }}
+          onDelete={(row) => setDeleteTarget(row)}
+          onToggleStatus={handleToggleStatus}
+          onToggleHomepage={handleToggleHomeCarrousel}
+          onSetPublishScope={handleSetPublishScope}
+        />
+      )}
+
       {/* Product Categories tab */}
       {activeTab === "products" && (
         <ProductCategoriesTab productCategories={productCategories} />
       )}
 
-      {activeTab !== "spaces" && activeTab !== "products" && <>
+      {/* Connections tab — service ↔ space, product group ↔ space */}
+      {activeTab === "links" && (
+        <ConnectionsTab
+          services={professionalItems}
+          spaces={spaces}
+          productCategories={productCategories}
+          serviceSpaces={serviceSpaces}
+          productCategorySpaces={productCategorySpaces}
+        />
+      )}
 
-      {/* Table */}
-      <div key={activeTab} className="arco-table-wrap max-w-full min-w-0">
-        <table className="arco-table">
-          <thead>
-            <tr>
-              {table.getHeaderGroups().map((headerGroup) =>
-                headerGroup.headers.map((header) => {
-                  const canSort = header.column.getCanSort()
-                  const sorted = header.column.getIsSorted()
-                  return (
-                    <th
-                      key={header.id}
-                      colSpan={header.colSpan}
-                    >
-                      {header.isPlaceholder ? null : canSort ? (
-                        <button
-                          className="arco-table-sort"
-                          onClick={header.column.getToggleSortingHandler()}
-                        >
-                          {flexRender(header.column.columnDef.header, header.getContext())}
-                          {sorted === "asc" ? (
-                            <ArrowUp className="h-3 w-3" />
-                          ) : sorted === "desc" ? (
-                            <ArrowDown className="h-3 w-3" />
-                          ) : (
-                            <ArrowUpDown className="h-3 w-3 opacity-40" />
-                          )}
-                        </button>
-                      ) : (
-                        flexRender(header.column.columnDef.header, header.getContext())
-                      )}
-                    </th>
-                  )
-                })
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => {
-                const isGroupRow = row.original.categoryHierarchy === 1
-                return (
-                  <tr
-                    key={row.id}
-                    className={isGroupRow ? "bg-[#FAFAF9]" : undefined}
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id}>
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
-                  </tr>
-                )
-              })
-            ) : (
-              <tr>
-                <td colSpan={columns.length} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
-                  No categories found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Pagination */}
-      <div className="flex items-center justify-between text-xs text-[#a1a1a0]">
-        <span>
-          {table.getFilteredRowModel().rows.length}{" "}
-          {table.getFilteredRowModel().rows.length === 1 ? "result" : "results"}
-        </span>
-        <div className="flex items-center gap-3">
-          <span>
-            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              className="h-7 w-7 flex items-center justify-center border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#f5f5f4] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-            >
-              &lsaquo;
-            </button>
-            <button
-              className="h-7 w-7 flex items-center justify-center border border-[#e5e5e4] rounded-[3px] text-[#6b6b68] hover:bg-[#f5f5f4] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-            >
-              &rsaquo;
-            </button>
-          </div>
-        </div>
-      </div>
-
-      </>}
 
       {/* Edit Name Dialog */}
       <Dialog
@@ -997,14 +736,25 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div>
-              <label className="text-xs font-medium text-[#6b6b68] block mb-1">Name</label>
-              <input
-                className="w-full px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                placeholder="Category name"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-[#6b6b68] block mb-1">Name (EN)</label>
+                <input
+                  className="w-full px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Category name"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[#6b6b68] block mb-1">Name (NL)</label>
+                <input
+                  className="w-full px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors"
+                  value={editNameNl}
+                  onChange={(e) => setEditNameNl(e.target.value)}
+                  placeholder={editName || "Nederlandse naam"}
+                />
+              </div>
             </div>
             <div>
               <label className="text-xs font-medium text-[#6b6b68] block mb-1">Slug</label>

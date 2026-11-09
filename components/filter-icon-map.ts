@@ -4,7 +4,6 @@ import {
   ChefHat,
   Bath,
   TreePine,
-  Sparkles,
   HomeIcon as House,
   Building,
   Building2,
@@ -35,10 +34,6 @@ const BuildingOutline = Building
 
 const CATEGORY_ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
   house: Home,
-  "kitchen-living": ChefHat,
-  "bed-bath": Bath,
-  outdoor: TreePine,
-  other: Sparkles,
   residential: House,
   commercial: Building,
   renovation: BuildingOutline,

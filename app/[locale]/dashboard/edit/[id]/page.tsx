@@ -1,5 +1,6 @@
 "use client"
 
+import { spaceLabelSingular } from "@/lib/type-labels"
 import type React from "react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
@@ -543,6 +544,9 @@ export default function ListingEditorPage() {
   const isAdminReview = searchParams.get("review") === "1"
   const focusSection = searchParams.get("focus")
   const [isAdmin, setIsAdmin] = useState(false)
+  // Admin-zijn van de kijker, los van ?review: schakelt admin-only delen
+  // van de editor (merken) aan bij elk bezoek, niet alleen in review.
+  const [viewerIsAdmin, setViewerIsAdmin] = useState(false)
   const [isApproving, setIsApproving] = useState(false)
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [rejectionReason, setRejectionReason] = useState("")
@@ -589,6 +593,13 @@ export default function ListingEditorPage() {
   const [showCoverPicker, setShowCoverPicker] = useState(false)
   const [editingSpecBar, setEditingSpecBar] = useState<string | null>(null)
   const [specScope, setSpecScope] = useState("")
+  // Deelproject of project. Geen aparte vraag: het scopevak beslist. Een
+  // scope (renovatie) maakt het een project, een ruimte (keuken) een
+  // deelproject. Welke opties het vak biedt volgt uit de publiceerstand
+  // van de diensten van het bedrijf dat eigenaar is (migratie 297/301).
+  const [projectKind, setProjectKind] = useState<"project" | "partial">("project")
+  const [primarySpaceId, setPrimarySpaceId] = useState<string | null>(null)
+  const [publishOptions, setPublishOptions] = useState<{ scopes: boolean; spaces: Array<{ id: string; slug: string }> }>({ scopes: true, spaces: [] })
 
   // City lookup state (specs bar location)
   const [cityQuery, setCityQuery] = useState("")
@@ -999,7 +1010,7 @@ export default function ListingEditorPage() {
       const { data: project, error } = await supabase
         .from("projects")
         .select(
-          "id, client_id, title, description, translations, project_type, project_type_category_id, building_type, project_year, style_preferences, address_formatted, address_city, address_region, latitude, longitude, share_exact_location, updated_at, status, slug, rejection_reason",
+          "id, client_id, title, description, translations, project_type, project_type_category_id, building_type, project_year, style_preferences, address_formatted, address_city, address_region, latitude, longitude, share_exact_location, updated_at, status, slug, rejection_reason, kind, primary_space_id",
         )
         .eq("id", projectId)
         .maybeSingle()
@@ -1022,7 +1033,9 @@ export default function ListingEditorPage() {
         .eq("id", userId)
         .maybeSingle()
 
-      let hasAccess = isAdminUser(userProfile?.user_types) || project.client_id === userId
+      const viewerAdmin = isAdminUser(userProfile?.user_types)
+      if (!cancelled) setViewerIsAdmin(viewerAdmin)
+      let hasAccess = viewerAdmin || project.client_id === userId
       if (!hasAccess) {
         // Check if the user's company owns this project. Company links come
         // from three sources: the legacy professionals row, companies they
@@ -1100,6 +1113,8 @@ export default function ListingEditorPage() {
         }
         setDetailsForm(hydratedState)
         setSpecScope(project.project_type ?? "")
+        setProjectKind(((project as { kind?: string | null }).kind === "partial") ? "partial" : "project")
+        setPrimarySpaceId(((project as { primary_space_id?: string | null }).primary_space_id) ?? null)
         setLocationData({
           address: project.address_formatted ?? "",
           shareExactLocation: project.share_exact_location ?? false,
@@ -4138,6 +4153,61 @@ export default function ListingEditorPage() {
     void saveFieldDirect({ [field]: value || null })
   }
 
+  // Scope of ruimte: één vak, twee reeksen. Een scope schrijft project_type
+  // en maakt het een project; een ruimte schrijft primary_space_id en
+  // maakt het een deelproject. De andere kolom gaat leeg.
+  const saveScopeChoice = (choice: { scope: string } | { spaceId: string }) => {
+    setEditingSpecBar(null)
+    if ("scope" in choice) {
+      setSpecScope(choice.scope)
+      setPrimarySpaceId(null)
+      setProjectKind("project")
+      void saveFieldDirect({ project_type: choice.scope, primary_space_id: null, kind: "project" })
+    } else {
+      setSpecScope("")
+      setPrimarySpaceId(choice.spaceId)
+      setProjectKind("partial")
+      void saveFieldDirect({ project_type: null, primary_space_id: choice.spaceId, kind: "partial" })
+    }
+  }
+
+  useEffect(() => {
+    if (!projectId || !hasProjectAccess) return
+    let cancelled = false
+    const load = async () => {
+      const { data: owner } = await supabase
+        .from("project_professionals")
+        .select("company_id, companies(primary_service_id, services_offered)")
+        .eq("project_id", projectId)
+        .eq("is_project_owner", true)
+        .not("company_id", "is", null)
+        .limit(1)
+        .maybeSingle()
+      const company = (owner as any)?.companies as { primary_service_id: string | null; services_offered: string[] | null } | null
+      const serviceIds = Array.from(new Set([company?.primary_service_id, ...(company?.services_offered ?? [])].filter(Boolean))) as string[]
+      if (serviceIds.length === 0) { if (!cancelled) setPublishOptions({ scopes: true, spaces: [] }); return }
+      const [{ data: services }, { data: links }] = await Promise.all([
+        supabase.from("categories").select("id, publish_scope").in("id", serviceIds),
+        supabase.from("service_spaces").select("service_id, space_id, spaces(id, slug, sort_order, is_active)").in("service_id", serviceIds),
+      ])
+      const scopes = (services ?? []).map((s: any) => s.publish_scope as string)
+      const hasProject = scopes.includes("project")
+      const hasPartial = scopes.includes("partial")
+      const spaces = hasPartial
+        ? Array.from(new Map(((links ?? []) as any[])
+            .map((l) => l.spaces).filter((s) => s && s.is_active !== false)
+            .map((s) => [s.id as string, { id: s.id as string, slug: s.slug as string, sort: Number(s.sort_order ?? 0) }])).values())
+            .sort((a, b) => a.sort - b.sort)
+            .map(({ id, slug }) => ({ id, slug }))
+        : []
+      // Geen enkele publicerende dienst (bijv. admin bewerkt een project
+      // zonder eigenaar): de scopes blijven beschikbaar.
+      if (!cancelled) setPublishOptions({ scopes: hasProject || !hasPartial, spaces })
+    }
+    void load()
+    return () => { cancelled = true }
+  }, [projectId, hasProjectAccess, supabase])
+
   // City search for specs bar location
   const searchCity = useCallback((query: string) => {
     setCityQuery(query)
@@ -5907,7 +5977,7 @@ export default function ListingEditorPage() {
           {/* Project Type */}
           <div
             className={`spec-item-edit${editingSpecBar === "type" ? " editing" : ""}`}
-            data-submit-highlight={highlightMissingFields && !(detailsForm.category || detailsForm.projectType) ? "true" : undefined}
+            data-submit-highlight={highlightMissingFields && projectKind !== "partial" && !(detailsForm.category || detailsForm.projectType) ? "true" : undefined}
             style={{ position: "relative" }}
             onClick={() => editingSpecBar !== "type" && setEditingSpecBar("type")}
           >
@@ -5979,7 +6049,7 @@ export default function ListingEditorPage() {
           {/* Scope */}
           <div
             className={`spec-item-edit${editingSpecBar === "scope" ? " editing" : ""}`}
-            data-submit-highlight={highlightMissingFields && !specScope ? "true" : undefined}
+            data-submit-highlight={highlightMissingFields && !specScope && !primarySpaceId ? "true" : undefined}
             style={{ position: "relative" }}
             onClick={() => editingSpecBar !== "scope" && setEditingSpecBar("scope")}
           >
@@ -5988,23 +6058,45 @@ export default function ListingEditorPage() {
               <span className="ec-txt">{t("edit_badge")}</span>
             </span>
             <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{tSpecs("scope_label")}</span>
-            <div className="arco-card-title" style={{ color: specScope ? undefined : "#b0b0ae" }}>
-              {translateScopeInput(specScope, locale) || tSpecs("select_scope")}
+            <div className="arco-card-title" style={{ color: specScope || primarySpaceId ? undefined : "#b0b0ae" }}>
+              {primarySpaceId
+                ? (spaceLabelSingular(publishOptions.spaces.find((s) => s.id === primarySpaceId)?.slug ?? null, locale) ?? "…")
+                : (translateScopeInput(specScope, locale) || tSpecs("select_scope"))}
             </div>
             {editingSpecBar === "scope" && (
               <>
                 <div style={{ position: "fixed", inset: 0, zIndex: 10 }} onClick={e => { e.stopPropagation(); setEditingSpecBar(null) }} />
                 <div className="dd-panel">
-                  {SCOPE_OPTIONS.map(opt => (
-                    <div
-                      key={opt.slug}
-                      className={`dd-row${opt.value === specScope ? " sel" : ""}`}
-                      onClick={e => { e.stopPropagation(); setSpecScope(opt.value); saveSpecBarField("project_type", opt.value) }}
-                    >
-                      <span>{translateScopeInput(opt.slug, locale) ?? opt.value}</span>
-                      {opt.value === specScope && <span className="dd-check">✓</span>}
-                    </div>
-                  ))}
+                  {publishOptions.scopes && (
+                    <>
+                      {publishOptions.spaces.length > 0 && <div className="dd-group-label">{tSpecs("scope_group_work")}</div>}
+                      {SCOPE_OPTIONS.map(opt => (
+                        <div
+                          key={opt.slug}
+                          className={`dd-row${opt.value === specScope ? " sel" : ""}`}
+                          onClick={e => { e.stopPropagation(); saveScopeChoice({ scope: opt.value }) }}
+                        >
+                          <span>{translateScopeInput(opt.slug, locale) ?? opt.value}</span>
+                          {opt.value === specScope && <span className="dd-check">✓</span>}
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  {publishOptions.spaces.length > 0 && (
+                    <>
+                      {publishOptions.scopes && <div className="dd-group-label">{tSpecs("scope_group_space")}</div>}
+                      {publishOptions.spaces.map(sp => (
+                        <div
+                          key={sp.id}
+                          className={`dd-row${sp.id === primarySpaceId ? " sel" : ""}`}
+                          onClick={e => { e.stopPropagation(); saveScopeChoice({ spaceId: sp.id }) }}
+                        >
+                          <span>{spaceLabelSingular(sp.slug, locale)}</span>
+                          {sp.id === primarySpaceId && <span className="dd-check">✓</span>}
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
               </>
             )}
@@ -7379,7 +7471,7 @@ export default function ListingEditorPage() {
             sectie en eigen acties (brand-actions.ts), los van de credits
             hierboven: de eigenaar krijgt hem later door de guard te
             verruimen, niet door hier iets te verbouwen. */}
-        {isAdmin && projectId && <ProjectBrandsEditor projectId={projectId} />}
+        {(isAdmin || viewerIsAdmin) && projectId && <ProjectBrandsEditor projectId={projectId} />}
 
       </div>
 
@@ -7627,7 +7719,7 @@ export default function ListingEditorPage() {
         const desc = descriptionPlainText?.trim()
         const location = detailsForm.city?.trim() || detailsForm.region?.trim()
         const type = detailsForm.category || detailsForm.projectType
-        const scope = specScope
+        const scope = specScope || primarySpaceId
         const style = detailsForm.projectStyle
         const photoCount = uploadedPhotos.length
         const taggedPhotoIds = new Set<string>()
@@ -7641,7 +7733,7 @@ export default function ListingEditorPage() {
           { label: tSubmit("req_project_name"), ok: Boolean(title) },
           { label: tSubmit("req_description"), ok: Boolean(desc) },
           { label: tSubmit("req_location"), ok: Boolean(location) },
-          { label: tSubmit("req_type"), ok: Boolean(type) },
+          { label: tSubmit("req_type"), ok: projectKind === "partial" || Boolean(type) },
           { label: tSubmit("req_scope"), ok: Boolean(scope) },
           { label: tSubmit("req_style"), ok: Boolean(style) },
           { label: tSubmit("req_min_photos"), ok: photoCount >= 5 },

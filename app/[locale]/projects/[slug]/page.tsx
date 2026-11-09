@@ -20,7 +20,7 @@ import { isEntitledNow } from "@/lib/subscriptions/get-company-subscription"
 import { isProjectRow } from "@/lib/supabase/type-guards"
 import { getSiteUrl } from "@/lib/utils"
 import { projectDetailTitle, projectDetailDescription } from "@/lib/seo/copy"
-import { typeLabelSingular } from "@/lib/type-labels"
+import { spaceLabelSingular, typeLabelSingular } from "@/lib/type-labels"
 import { SPACES, SPACE_SLUGS } from "@/lib/spaces"
 import { locales, defaultLocale } from "@/i18n/config"
 import { resolveHub, getHubProjects, getHubs, hubCopy, CITY_DENYLIST } from "@/lib/project-hubs"
@@ -253,6 +253,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       // subset that changed size on every reload.
       const initialProjects = await fetchDiscoverProjects(hubLocale, undefined, {
         projectIds: hubProjects.map((p) => p.id).filter((id): id is string => Boolean(id)),
+        includePartial: String(hub.kind).startsWith("space"),
       })
       // Called as a plain async function (valid for server components) —
       // sidesteps a TS2786 false positive on async-component JSX.
@@ -859,6 +860,15 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   // canonicalizeScope accepts either the display string currently in DB or
   // the canonical slug, so this works without a data migration.
   const resolvedScope = canonicalizeScope(project.project_type)
+  // Deelproject: de primaire ruimte (Tuin, Keuken) staat in het scopevak;
+  // het type is context en verschijnt alleen als het is ingevuld.
+  const isPartial = (project as { kind?: string | null }).kind === "partial"
+  const primarySpaceId = (project as { primary_space_id?: string | null }).primary_space_id ?? null
+  let partialScopeLabel: string | null = null
+  if (isPartial && primarySpaceId) {
+    const { data: primarySpace } = await supabase.from("spaces").select("slug").eq("id", primarySpaceId).maybeSingle()
+    partialScopeLabel = spaceLabelSingular(primarySpace?.slug ?? null, locale)
+  }
   const rawStyle = Array.isArray(project.style_preferences) ? project.style_preferences[0] : null
   const resolvedStyle = rawStyle && isUuid(rawStyle)
     ? nameMap.get(rawStyle) ?? null
@@ -945,7 +955,8 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
             location={project.address_city || project.address_region}
             year={project.project_year}
             type={resolvedType}
-            scope={resolvedScope}
+            scope={isPartial ? null : resolvedScope}
+            scopeLabel={partialScopeLabel}
             style={resolvedStyle}
             photographer={photographerCredit}
           />
