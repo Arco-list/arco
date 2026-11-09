@@ -2789,6 +2789,15 @@ footer .footer-heading {
 .quick-tile .credit-icon {
   margin-bottom: 12px;
 }
+/* Uitsnede op de schijf (ruimtes op /projects): het object op een witte
+   of transparante achtergrond, vermenigvuldigd met de schijfkleur zodat
+   wit wegvalt — zoals de categoriecirkels van Archiproducts. */
+.credit-cutout {
+  width: 74%;
+  height: 74%;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+}
 .quick-tile-label {
   font-family: var(--font-sans);
   font-size: 13px;

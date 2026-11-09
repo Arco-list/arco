@@ -14,6 +14,8 @@ import {
   toggleHomeCarrouselAction,
   toggleSpaceHomeCarrouselAction,
   toggleSpaceStatusAction,
+  uploadSpaceCutoutAction,
+  clearSpaceCutoutAction,
   updateCategoryAction,
   uploadCategoryImageAction,
 } from "@/app/admin/categories/actions"
@@ -61,6 +63,12 @@ export type AdminCategoryRow = {
   name: string
   /** Nederlandse naam (categories.name_nl); null = valt terug op name. */
   nameNl: string | null
+  /** Beroepsnaam, alleen voor diensten: Pool builder / Zwembadbouwer en
+   *  het meervoud voor koppen en menu's. */
+  proName: string | null
+  proNameNl: string | null
+  proNamePlural: string | null
+  proNamePluralNl: string | null
   slug: string
   description: string | null
   parentId: string | null
@@ -88,6 +96,8 @@ export type AdminSpaceRow = {
   isActive: boolean
   photoCount: number
   imageUrl: string | null
+  /** Uitsnede voor de cirkel op /projects (spaces.cutout_url). */
+  cutoutUrl: string | null
   inHomeCarrousel: boolean
 }
 
@@ -189,6 +199,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
   const [editCategory, setEditCategory] = useState<AdminCategoryRow | null>(null)
   const [editName, setEditName] = useState("")
   const [editNameNl, setEditNameNl] = useState("")
+  const [editPro, setEditPro] = useState({ en: "", nl: "", enPlural: "", nlPlural: "" })
   const [editSlug, setEditSlug] = useState("")
   const [editParentId, setEditParentId] = useState<string | null>(null)
   const [editImageUrl, setEditImageUrl] = useState<string | null>(null)
@@ -281,6 +292,9 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
         nameNl: editNameNl.trim() || null,
         slug: editSlug.trim() || undefined,
         parentId: editParentId,
+        ...(editCategory.categoryType === "Professional" && editCategory.categoryHierarchy !== 1
+          ? { proName: editPro.en.trim() || null, proNameNl: editPro.nl.trim() || null, proNamePlural: editPro.enPlural.trim() || null, proNamePluralNl: editPro.nlPlural.trim() || null }
+          : {}),
       })
       if (!result.success) {
         toast.error("Failed to update category", { description: result.error.message })
@@ -541,6 +555,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
                 <th>Status</th>
                 <th>Homepage</th>
                 <th>Image</th>
+                <th>Cut-out</th>
                 <th>Photos</th>
                 <th>Order</th>
                 <th></th>
@@ -549,7 +564,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
             <tbody>
               {spaces.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>No spaces found.</td>
+                  <td colSpan={8} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>No spaces found.</td>
                 </tr>
               ) : (
                 spaces.sort((a, b) => a.sortOrder - b.sortOrder).map((space) => (
@@ -610,6 +625,35 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
                       </label>
                     </td>
                     <td>
+                      {/* Uitsnede: object op witte of transparante achtergrond,
+                          zonder bijsnijden geüpload; de cirkel op /projects
+                          legt hem met multiply op de beige schijf. */}
+                      <label className="cursor-pointer inline-flex items-center gap-2 group" title={space.cutoutUrl ? "Click to replace the cut-out" : "Click to upload a cut-out (PNG with transparency or a product photo on white)"}>
+                        <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "#f5f5f4" }}>
+                          {space.cutoutUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={space.cutoutUrl} alt="" className="group-hover:opacity-70 transition-opacity" style={{ width: "74%", height: "74%", objectFit: "contain", mixBlendMode: "multiply" }} />
+                          ) : (
+                            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#a1a1a0" strokeWidth="1.5"><path d="M8 3v10M3 8h10" strokeLinecap="round" /></svg>
+                          )}
+                        </div>
+                        <input type="file" accept="image/png,image/webp,image/jpeg" hidden onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          e.target.value = ""
+                          if (!file) return
+                          if (file.size > 5 * 1024 * 1024) { toast.error("Cut-out must be under 5MB"); return }
+                          const fd = new FormData()
+                          fd.append("file", file)
+                          fd.append("spaceId", space.id)
+                          startTransition(async () => {
+                            const result = await uploadSpaceCutoutAction(fd)
+                            if (!result.success) toast.error("Upload failed", { description: result.error.message })
+                            else { toast.success("Cut-out saved"); router.refresh() }
+                          })
+                        }} />
+                      </label>
+                    </td>
+                    <td>
                       <span className="text-xs text-[#6b6b68]">{space.photoCount}</span>
                     </td>
                     <td>
@@ -643,6 +687,17 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
                               }} />
                             </label>
                           </DropdownMenuItem>
+                          {space.cutoutUrl && (
+                            <DropdownMenuItem
+                              onClick={() => startTransition(async () => {
+                                const result = await clearSpaceCutoutAction({ spaceId: space.id })
+                                if (!result.success) toast.error("Failed to remove", { description: result.error.message })
+                                else { toast.success("Cut-out removed"); router.refresh() }
+                              })}
+                            >
+                              Remove cut-out
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </td>
@@ -668,6 +723,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
             setEditCategory(row)
             setEditName(row.name)
             setEditNameNl(row.nameNl ?? "")
+            setEditPro({ en: row.proName ?? "", nl: row.proNameNl ?? "", enPlural: row.proNamePlural ?? "", nlPlural: row.proNamePluralNl ?? "" })
             setEditSlug(row.slug)
             setEditParentId(row.parentId)
             setEditImageUrl(row.imageUrl)
@@ -693,6 +749,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
             setEditCategory(row)
             setEditName(row.name)
             setEditNameNl(row.nameNl ?? "")
+            setEditPro({ en: row.proName ?? "", nl: row.proNameNl ?? "", enPlural: row.proNamePlural ?? "", nlPlural: row.proNamePluralNl ?? "" })
             setEditSlug(row.slug)
             setEditParentId(row.parentId)
             setEditImageUrl(row.imageUrl)
@@ -756,6 +813,27 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
                 />
               </div>
             </div>
+            {editCategory?.categoryType === "Professional" && editCategory.categoryHierarchy !== 1 && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-[#6b6b68] block mb-1">Professional (EN)</label>
+                  <input className="w-full px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors" value={editPro.en} onChange={(e) => setEditPro((p) => ({ ...p, en: e.target.value }))} placeholder="Pool builder" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-[#6b6b68] block mb-1">Professional (NL)</label>
+                  <input className="w-full px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors" value={editPro.nl} onChange={(e) => setEditPro((p) => ({ ...p, nl: e.target.value }))} placeholder="Zwembadbouwer" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-[#6b6b68] block mb-1">Plural (EN)</label>
+                  <input className="w-full px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors" value={editPro.enPlural} onChange={(e) => setEditPro((p) => ({ ...p, enPlural: e.target.value }))} placeholder="Pool builders" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-[#6b6b68] block mb-1">Plural (NL)</label>
+                  <input className="w-full px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors" value={editPro.nlPlural} onChange={(e) => setEditPro((p) => ({ ...p, nlPlural: e.target.value }))} placeholder="Zwembadbouwers" />
+                </div>
+                <p className="col-span-2 text-[11px] text-[#a1a1a0] -mt-1">The plural is the heading above the professionals discover, the home cards and the header menu. The category name stays in filters and on company pages.</p>
+              </div>
+            )}
             <div>
               <label className="text-xs font-medium text-[#6b6b68] block mb-1">Slug</label>
               <input

@@ -167,6 +167,10 @@ export type Database = {
           name: string
           name_nl: string | null
           parent_id: string | null
+          pro_name: string | null
+          pro_name_nl: string | null
+          pro_name_plural: string | null
+          pro_name_plural_nl: string | null
           publish_scope: string
           slug: string
           sort_order: number | null
@@ -189,6 +193,10 @@ export type Database = {
           name: string
           name_nl?: string | null
           parent_id?: string | null
+          pro_name?: string | null
+          pro_name_nl?: string | null
+          pro_name_plural?: string | null
+          pro_name_plural_nl?: string | null
           publish_scope?: string
           slug: string
           sort_order?: number | null
@@ -211,6 +219,10 @@ export type Database = {
           name?: string
           name_nl?: string | null
           parent_id?: string | null
+          pro_name?: string | null
+          pro_name_nl?: string | null
+          pro_name_plural?: string | null
+          pro_name_plural_nl?: string | null
           publish_scope?: string
           slug?: string
           sort_order?: number | null
@@ -4006,6 +4018,7 @@ export type Database = {
       spaces: {
         Row: {
           created_at: string
+          cutout_url: string | null
           icon_key: string | null
           id: string
           image_url: string | null
@@ -4017,6 +4030,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          cutout_url?: string | null
           icon_key?: string | null
           id?: string
           image_url?: string | null
@@ -4028,6 +4042,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          cutout_url?: string | null
           icon_key?: string | null
           id?: string
           image_url?: string | null

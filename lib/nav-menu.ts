@@ -3,7 +3,7 @@ import "server-only"
 import { unstable_cache } from "next/cache"
 
 import { getHubs, SPACE_HUB_DEFS } from "@/lib/project-hubs"
-import { getProfessionalHubs, servicePluralBySlug } from "@/lib/professional-hubs"
+import { getProfessionalHubs, servicePlural } from "@/lib/professional-hubs"
 import { PROVINCES, cityLabel } from "@/lib/provinces"
 import { typeLabel, scopeLabel, spaceNoun } from "@/lib/type-labels"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
@@ -68,14 +68,14 @@ async function buildNavMenus(locale: string): Promise<NavMenus> {
   ])
 
   // ── Projecten: vier assen ─────────────────────────────────────────
-  // Ruimtes in redactionele volgorde zolang ze allemaal passen; moet er
-  // afgekapt worden, dan op aantal, want dan heet de kolom "Populaire".
+  // Ruimtes: de redactionele selectie in vaste volgorde (SPACE_HUB_DEFS
+  // featured) — dezelfde acht als de cirkels op de discover.
   const spaceOrder = new Map(SPACE_HUB_DEFS.map((d, i) => [d.space, i]))
   const spaceLink = (h: { slug: string; spaceValue?: string | null }) => ({ href: `/projects/${h.slug}`, label: spaceNoun(h.spaceValue ?? h.slug, locale) })
-  const spaces = (projectHubs.spaces.length > COLUMN_CAP
-    ? projectHubs.spaces.slice().sort((a, b) => b.count - a.count)
-    : projectHubs.spaces.slice().sort((a, b) => (spaceOrder.get(a.spaceValue ?? "") ?? 99) - (spaceOrder.get(b.spaceValue ?? "") ?? 99))
-  ).map(spaceLink)
+  const spaces = projectHubs.spaces
+    .filter((h) => h.featured)
+    .sort((a, b) => (spaceOrder.get(a.spaceValue ?? "") ?? 99) - (spaceOrder.get(b.spaceValue ?? "") ?? 99))
+    .map(spaceLink)
 
   const types = projectHubs.types
     .slice()
@@ -137,7 +137,7 @@ async function buildNavMenus(locale: string): Promise<NavMenus> {
     entry.links.push({
       href: `/professionals/${hub.slug}`,
       // Dezelfde naam als op de kaarten op home en in de hubtitels.
-      label: servicePluralBySlug(hub.serviceSlug ?? hub.slug, locale, nl ? hub.serviceNameNl : hub.serviceName),
+      label: servicePlural(hub, locale),
       // count blijft buiten het label: een getal in de hoofdnavigatie
       // veroudert zodra de voorraad beweegt en de pagina zegt het zelf.
       // Hij sorteert wel, zodra een groep moet afkappen.

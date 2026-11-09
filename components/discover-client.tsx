@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useLocale, useTranslations } from "next-intl"
 import { QuickRow } from "@/components/quick-row"
+import { resolveFeatureIcon } from "@/lib/icons/project-features"
 import { Link } from "@/i18n/navigation"
 import { useFilters } from "@/contexts/filter-context"
 import { FilterBar, type SortOption, DEFAULT_PROJECT_SORT } from "@/components/filter-bar"
@@ -14,7 +15,13 @@ import { pluralizeLabel } from "@/lib/pluralize-label"
 import { PROVINCES, cityLabel } from "@/lib/provinces"
 import { scopeLabel, spaceNoun } from "@/lib/type-labels"
 
-export type SpaceCard = { slug: string; label: string; href: string; imageUrl: string | null }
+/** Een ruimte als cirkel: de uitsnede (object op de beige schijf) als die er is, anders het pictogram van de ruimte. */
+function SpaceIcon({ iconKey }: { iconKey: string }) {
+  const Icon = resolveFeatureIcon(iconKey)
+  return <Icon className="credit-icon-service" strokeWidth={1} />
+}
+
+export type SpaceCard = { slug: string; label: string; href: string; cutoutUrl: string | null; iconKey: string | null }
 
 interface DiscoverClientProps {
   initialProjects: DiscoverProject[]
@@ -266,11 +273,13 @@ export function DiscoverClient({ initialProjects, initialSort = DEFAULT_PROJECT_
                 href={s.href}
                 className="credit-card service-quick-card quick-tile"
               >
-                <div className="credit-icon" style={{ overflow: "hidden" }}>
-                  {s.imageUrl ? (
+                <div className="credit-icon">
+                  {s.cutoutUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={s.imageUrl} alt={s.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  ) : null}
+                    <img src={s.cutoutUrl} alt="" className="credit-cutout" />
+                  ) : (
+                    <SpaceIcon iconKey={s.iconKey ?? s.slug} />
+                  )}
                 </div>
                 <h3 className="quick-tile-label">{s.label}</h3>
               </Link>

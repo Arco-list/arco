@@ -40,6 +40,7 @@ export default async function CategoriesPage() {
     isActive: row.is_active ?? true,
     photoCount: 0, // will be populated after counts are fetched
     imageUrl: row.image_url ?? null,
+    cutoutUrl: row.cutout_url ?? null,
     inHomeCarrousel: row.in_home_carrousel ?? false,
   }))
 
@@ -130,6 +131,10 @@ export default async function CategoriesPage() {
     id: row.id,
     name: row.name,
     nameNl: row.name_nl ?? null,
+    proName: row.pro_name ?? null,
+    proNameNl: row.pro_name_nl ?? null,
+    proNamePlural: row.pro_name_plural ?? null,
+    proNamePluralNl: row.pro_name_plural_nl ?? null,
     slug: row.slug,
     description: row.description ?? null,
     parentId: row.parent_id ?? null,

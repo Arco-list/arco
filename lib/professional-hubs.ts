@@ -1,4 +1,6 @@
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { createPublicSupabaseClient } from "@/lib/supabase/server"
+import type { SupabaseClient } from "@supabase/supabase-js"
+import type { Database } from "@/lib/supabase/types"
 import { proHubTitle, proHubDescription } from "@/lib/seo/copy"
 import { PROVINCES, cityLabel, provinceKey } from "@/lib/provinces"
 
@@ -30,6 +32,10 @@ export type ProHub = {
   serviceSlug?: string
   serviceName?: string
   serviceNameNl?: string
+  /** Beroepsnaam in het meervoud uit de taxonomie (categories.pro_name_plural):
+   *  Zwembadbouwers. Ontbreekt hij, dan valt servicePlural terug op de code. */
+  proNamePlural?: string
+  proNamePluralNl?: string
   /** category / category-city / category-province: the parent service
    *  GROUP (e.g. design-planning) == categories filter URL token. */
   categorySlug?: string
@@ -61,8 +67,9 @@ const SERVICE_PLURALS: Record<string, { nl: string; en: string }> = {
   // ontwerp en showroom het bedrijf zijn, -winkels voor handel, het
   // ambachtswoord waar dat bestaat, -installateurs voor installaties.
   // Geen dingwoorden (Keukens, Vloeren): die zijn de ruimtes van de
-  // projecten; geen "-specialisten": dat zegt niets. Eén lijst voor het
-  // headermenu, de kaarten op home en de hubtitels.
+  // projecten; geen "-specialisten": dat zegt niets. Sinds migratie 302
+  // staan deze namen in de taxonomie (categories.pro_name_plural) en is
+  // deze lijst de terugval; houd hem gelijk aan wat de admin invult.
   // Ontwerp & Planning
   architect: { nl: "Architecten", en: "Architects" },
   "interior-designer": { nl: "Interieurarchitecten", en: "Interior designers" },
@@ -73,10 +80,10 @@ const SERVICE_PLURALS: Record<string, { nl: string; en: string }> = {
   // Bouw
   builder: { nl: "Aannemers", en: "Builders" },
   roofing: { nl: "Dakdekkers", en: "Roofers" },
-  kitchens: { nl: "Keukenmakers", en: "Kitchen makers" },
+  kitchens: { nl: "Keukenstudio's", en: "Kitchen studios" },
   bathrooms: { nl: "Badkamerstudio's", en: "Bathroom studios" },
   "swimming-pools": { nl: "Zwembadbouwers", en: "Pool builders" },
-  wellness: { nl: "Saunamakers", en: "Sauna makers" },
+  wellness: { nl: "Wellnessstudio's", en: "Wellness studios" },
   "tiles-stones": { nl: "Tegelzetters & steenhouwers", en: "Tilers & stonemasons" },
   "windows-doors": { nl: "Kozijnmakers", en: "Window & door makers" },
   "stairs-elevator": { nl: "Trappenmakers", en: "Stair makers" },
@@ -87,15 +94,15 @@ const SERVICE_PLURALS: Record<string, { nl: string; en: string }> = {
   upholstery: { nl: "Stoffeerders", en: "Upholsterers" },
   furniture: { nl: "Meubelwinkels", en: "Furniture stores" },
   lighting: { nl: "Verlichtingswinkels", en: "Lighting stores" },
-  flooring: { nl: "Vloerenleggers", en: "Flooring installers" },
+  flooring: { nl: "Vloerenwinkels", en: "Flooring stores" },
   fireplace: { nl: "Haardenwinkels", en: "Fireplace stores" },
   art: { nl: "Galeries", en: "Galleries" },
   // Buiten & Tuin
   gardener: { nl: "Hoveniers", en: "Gardeners" },
-  "shed-builder": { nl: "Tuinhuismakers", en: "Garden house makers" },
+  "shed-builder": { nl: "Tuinhuisbouwers", en: "Garden house builders" },
   "outdoor-furniture": { nl: "Tuinmeubelwinkels", en: "Outdoor furniture stores" },
   "outdoor-lighting": { nl: "Buitenverlichtingswinkels", en: "Outdoor lighting stores" },
-  "fencing-gates": { nl: "Hekwerkmakers", en: "Fence & gate makers" },
+  "fencing-gates": { nl: "Hekwerkinstallateurs", en: "Fence & gate installers" },
   // Installaties
   "electrical-systems": { nl: "Elektriciens", en: "Electricians" },
   "heating-ventilation": { nl: "Installateurs", en: "HVAC installers" },
@@ -115,8 +122,22 @@ export function servicePluralBySlug(slug: string, locale: string, fallback?: str
 }
 
 export function servicePlural(hub: ProHub, locale: string): string {
+  const fromDb = locale === "nl" ? hub.proNamePluralNl ?? hub.proNamePlural : hub.proNamePlural
+  if (fromDb) return fromDb
   const fallback = (locale === "nl" ? hub.serviceNameNl : hub.serviceName) ?? hub.serviceName ?? hub.slug
   return servicePluralBySlug(hub.serviceSlug ?? hub.slug, locale, fallback)
+}
+
+/** Beroepsnaam (meervoud) voor een categorierij uit de database, met de
+ *  code als terugval: Zwembadbouwers voor swimming-pools. */
+export function proNamePluralOf(
+  row: { slug?: string | null; name?: string | null; name_nl?: string | null; pro_name_plural?: string | null; pro_name_plural_nl?: string | null },
+  locale: string,
+): string {
+  const fromDb = locale === "nl" ? row.pro_name_plural_nl ?? row.pro_name_plural : row.pro_name_plural
+  if (fromDb) return fromDb
+  const fallback = (locale === "nl" ? row.name_nl : null) ?? row.name ?? row.slug ?? ""
+  return servicePluralBySlug(row.slug ?? "", locale, fallback)
 }
 
 export function proCitySlug(name: string): string {
@@ -143,15 +164,15 @@ type MvRow = {
  *  it can build inside unstable_cache. The rows are public (listed and
  *  showcased companies). */
 export async function getProfessionalHubs(
-  client?: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  client?: SupabaseClient<Database>,
 ): Promise<ProHub[]> {
-  const supabase = client ?? (await createServerSupabaseClient())
+  const supabase = client ?? createPublicSupabaseClient()
   const [{ data }, { data: cats }] = await Promise.all([
     supabase
       .from("mv_professional_summary")
       .select("company_city, company_state_region, primary_specialty_slug, primary_service_name, primary_service_name_nl, services_offered")
       .in("company_status", ["listed", "prospected"]),
-    supabase.from("categories").select("id, slug, name, name_nl, parent_id"),
+    supabase.from("categories").select("id, slug, name, name_nl, parent_id, pro_name_plural, pro_name_plural_nl"),
   ])
   const rows = (data ?? []) as MvRow[]
   // service slug -> parent category (service GROUP, e.g. design-planning)
@@ -374,6 +395,17 @@ export async function getProfessionalHubs(
       })),
   ].sort((a, b) => b.count - a.count)
 
+  // Beroepsnamen uit de taxonomie op elke diensthub, zodat kop, menu en
+  // kaarten hetzelfde woord gebruiken als de admin heeft ingevuld.
+  const proBySlug = new Map<string, { en: string | null; nl: string | null }>()
+  for (const c of (cats ?? []) as Array<{ slug: string | null; pro_name_plural?: string | null; pro_name_plural_nl?: string | null }>) {
+    if (c.slug) proBySlug.set(c.slug, { en: c.pro_name_plural ?? null, nl: c.pro_name_plural_nl ?? null })
+  }
+  for (const hub of hubs) {
+    const pro = hub.serviceSlug ? proBySlug.get(hub.serviceSlug) : undefined
+    if (pro?.en) hub.proNamePlural = pro.en
+    if (pro?.nl) hub.proNamePluralNl = pro.nl
+  }
   return hubs
 }
 

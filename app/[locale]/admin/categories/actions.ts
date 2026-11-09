@@ -63,7 +63,18 @@ function generateSlug(name: string): string {
 }
 
 export async function updateCategoryAction(
-  input: { categoryId: string; name: string; nameNl?: string | null; slug?: string; parentId?: string | null }
+  input: {
+    categoryId: string
+    name: string
+    nameNl?: string | null
+    slug?: string
+    parentId?: string | null
+    /** Beroepsnamen (alleen diensten): enkelvoud en meervoud, EN en NL. */
+    proName?: string | null
+    proNameNl?: string | null
+    proNamePlural?: string | null
+    proNamePluralNl?: string | null
+  }
 ): Promise<ActionResult> {
   const parseResult = categoryIdSchema.safeParse(input.categoryId)
   if (!parseResult.success) {
@@ -112,6 +123,18 @@ export async function updateCategoryAction(
       return createErrorResponse('VALIDATION', 'Dutch name must be at most 100 characters', {}, 'admin-categories-update')
     }
     updateData.name_nl = nl.length ? nl : null
+  }
+  const proFields: Array<[keyof typeof input, string]> = [
+    ["proName", "pro_name"], ["proNameNl", "pro_name_nl"], ["proNamePlural", "pro_name_plural"], ["proNamePluralNl", "pro_name_plural_nl"],
+  ]
+  for (const [key, column] of proFields) {
+    const raw = input[key]
+    if (raw === undefined) continue
+    const value = String(raw ?? "").trim()
+    if (value.length > 100) {
+      return createErrorResponse('VALIDATION', 'Professional name must be at most 100 characters', {}, 'admin-categories-update')
+    }
+    updateData[column] = value.length ? value : null
   }
 
   const { error: updateError } = await serviceSupabase
@@ -731,6 +754,55 @@ export async function uploadCategoryImageAction(
 
   revalidatePath("/admin/categories")
   return { ...createSuccessResponse({ imageUrl }), imageUrl }
+}
+
+/** Uitsnede voor de cirkel op /projects: ongewijzigd opgeslagen (PNG met
+ *  transparantie of een productfoto op wit), geen bijsnijden. */
+export async function uploadSpaceCutoutAction(
+  formData: FormData
+): Promise<ActionResult & { cutoutUrl?: string }> {
+  const { error } = await assertAdmin()
+  if (error) return createErrorResponse('AUTH', error.message, {}, 'admin-spaces-cutout')
+
+  const file = formData.get("file") as File | null
+  const spaceId = formData.get("spaceId") as string | null
+  if (!file || !spaceId || !categoryIdSchema.safeParse(spaceId).success) {
+    return createErrorResponse('VALIDATION', 'Missing file or space', {}, 'admin-spaces-cutout')
+  }
+  const type = file.type || "image/png"
+  const ext = type === "image/webp" ? "webp" : type === "image/jpeg" ? "jpg" : "png"
+  const path = `spaces/${spaceId}-cutout-${Date.now()}.${ext}`
+
+  const serviceSupabase = createServiceRoleSupabaseClient()
+  const buffer = Buffer.from(await file.arrayBuffer())
+  const { error: uploadError } = await serviceSupabase.storage
+    .from("company-assets")
+    .upload(path, buffer, { contentType: type, upsert: true })
+  if (uploadError) {
+    return createErrorResponse('DATABASE', `Upload failed: ${uploadError.message}`, {}, 'admin-spaces-cutout')
+  }
+  const { data: urlData } = serviceSupabase.storage.from("company-assets").getPublicUrl(path)
+  const cutoutUrl = urlData.publicUrl
+  const { error: updateError } = await serviceSupabase.from("spaces").update({ cutout_url: cutoutUrl }).eq("id", spaceId)
+  if (updateError) {
+    return createErrorResponse('DATABASE', updateError.message, { spaceId }, 'admin-spaces-cutout')
+  }
+  revalidatePath("/admin/categories")
+  revalidatePath("/projects")
+  return { ...createSuccessResponse({ cutoutUrl }), cutoutUrl }
+}
+
+export async function clearSpaceCutoutAction(input: { spaceId: string }): Promise<ActionResult> {
+  const parsed = categoryIdSchema.safeParse(input.spaceId)
+  if (!parsed.success) return createErrorResponse('VALIDATION', 'Invalid space id', {}, 'admin-spaces-cutout')
+  const { error } = await assertAdmin()
+  if (error) return createErrorResponse('AUTH', error.message, {}, 'admin-spaces-cutout')
+  const serviceSupabase = createServiceRoleSupabaseClient()
+  const { error: updateError } = await serviceSupabase.from("spaces").update({ cutout_url: null }).eq("id", parsed.data)
+  if (updateError) return createErrorResponse('DATABASE', updateError.message, { spaceId: parsed.data }, 'admin-spaces-cutout')
+  revalidatePath("/admin/categories")
+  revalidatePath("/projects")
+  return createSuccessResponse({ spaceId: parsed.data })
 }
 
 export async function updateSpaceImageAction(

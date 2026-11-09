@@ -74,6 +74,7 @@ export function ProfessionalsTab({ items, spaces, serviceSpaces, search, pending
   const nl = locale === "nl"
   const c = nl ? COPY.nl : COPY.en
   const label = (row: AdminCategoryRow) => (nl && row.nameNl ? row.nameNl : row.name)
+  const proLabel = (row: AdminCategoryRow) => (nl ? row.proNameNl ?? row.proName : row.proName) ?? null
   // Ruimtenamen per dienst, voor de kolom Publiceert bij deelprojecten.
   const spaceSlugById = useMemo(() => new Map(spaces.map((s) => [s.id, s.slug])), [spaces])
   const spacesByService = useMemo(() => {
@@ -109,7 +110,7 @@ export function ProfessionalsTab({ items, spaces, serviceSpaces, search, pending
   }, [items])
 
   const q = search.trim().toLowerCase()
-  const matches = (s: AdminCategoryRow) => !q || s.name.toLowerCase().includes(q) || (s.nameNl ?? "").toLowerCase().includes(q) || s.slug.toLowerCase().includes(q)
+  const matches = (s: AdminCategoryRow) => !q || s.name.toLowerCase().includes(q) || (s.nameNl ?? "").toLowerCase().includes(q) || (s.proName ?? "").toLowerCase().includes(q) || (s.proNameNl ?? "").toLowerCase().includes(q) || (s.proNamePlural ?? "").toLowerCase().includes(q) || (s.proNamePluralNl ?? "").toLowerCase().includes(q) || s.slug.toLowerCase().includes(q)
 
   // Zoeken: de groepen met een treffer staan open, zonder treffer blijven
   // ze weg. Zonder zoekterm bepaalt de admin zelf wat open staat.
@@ -148,7 +149,9 @@ export function ProfessionalsTab({ items, spaces, serviceSpaces, search, pending
             </div>
             <div className="flex flex-col min-w-0">
               <span className="arco-table-primary" title={label(s)}>{label(s)}</span>
-              <span className="arco-table-secondary">{nl && s.nameNl ? `${s.name} · ${s.slug}` : s.slug}</span>
+              {/* Beroepsnaam in de taal van de header; de andere taal zie je
+                  door te wisselen, de slug in het bewerkvenster. */}
+              {proLabel(s) && <span className="arco-table-secondary">{proLabel(s)}</span>}
             </div>
           </div>
         </td>

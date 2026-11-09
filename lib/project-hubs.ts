@@ -1,4 +1,6 @@
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { createPublicSupabaseClient } from "@/lib/supabase/server"
+import type { SupabaseClient } from "@supabase/supabase-js"
+import type { Database } from "@/lib/supabase/types"
 import { canonicalizeScope, type ProjectScope } from "@/lib/project-translations"
 import { PROVINCES, provinceKey, cityLabel } from "@/lib/provinces"
 import { typeLabel, scopeLabel, scopeNoun, spaceNoun, SCOPE_NOUNS } from "@/lib/type-labels"
@@ -74,6 +76,8 @@ export type Hub = {
   /** For space hubs: the spaces.slug ("kitchen") behind the hub. The
    *  URL slug is the Dutch plural ("keukens"); this is the join key. */
   spaceValue?: string
+  /** Ruimtehub in de redactionele selectie (SPACE_HUB_DEFS.featured). */
+  featured?: boolean
   /** Ruimtehubs: de project-type categorieslugs die deze hub dragen,
    *  aflopend. Zie topTypesOf() voor wanneer er iets in staat. */
   topTypes?: string[]
@@ -103,18 +107,24 @@ export type HubProjectCard = {
  * is Nederlands voor beide locales, net als /projects/renovatie en
  * /projects/nieuwbouw: één hub, één adres.
  */
-export const SPACE_HUB_DEFS: Array<{ space: string; slug: string }> = [
-  { space: "kitchen", slug: "keukens" },
-  { space: "bathroom", slug: "badkamers" },
-  { space: "living", slug: "woonkamers" },
-  { space: "bedroom", slug: "slaapkamers" },
+/** De ruimtehubs. `featured` is de redactionele selectie en volgorde
+ *  voor het headermenu en de cirkels op de discover: wat je op Arco komt
+ *  bekijken en wat deelprojecten kunnen dragen. Die hubs bestaan altijd,
+ *  ook zonder foto's (Wellness en Tuinhuizen bij de start); de overige
+ *  hubs bestaan als ze genoeg projecten hebben en zijn er voor zoeken
+ *  en filteren. */
+export const SPACE_HUB_DEFS: Array<{ space: string; slug: string; featured?: boolean }> = [
+  { space: "kitchen", slug: "keukens", featured: true },
+  { space: "bathroom", slug: "badkamers", featured: true },
+  { space: "living", slug: "woonkamers", featured: true },
+  { space: "bedroom", slug: "slaapkamers", featured: true },
+  { space: "pool", slug: "zwembaden", featured: true },
+  { space: "wellness", slug: "wellness", featured: true },
+  { space: "garden", slug: "tuinen", featured: true },
+  { space: "garden-house", slug: "tuinhuizen", featured: true },
   { space: "exterior", slug: "exterieur" },
   { space: "terrace", slug: "terrassen" },
-  { space: "pool", slug: "zwembaden" },
-  { space: "wellness", slug: "wellness" },
   { space: "home-office", slug: "thuiskantoren" },
-  { space: "garden", slug: "tuinen" },
-  { space: "garden-house", slug: "tuinhuizen" },
 ]
 
 /** Localized "{Scope}projecten" nouns for combo H1s. */
@@ -351,7 +361,7 @@ type ProjectRowLite = { id: string; address_city: string | null; address_region:
  * die lijst groeit met de voorraad mee en een URL heeft een lengte.
  */
 async function fetchSpaceRows(
-  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  supabase: SupabaseClient<Database>,
 ): Promise<Array<Record<string, unknown>>> {
   const PAGE = 1000
   const out: Array<Record<string, unknown>> = []
@@ -377,9 +387,9 @@ async function fetchSpaceRows(
  *  Everything counted here is public (published projects), so the
  *  cookie-bound client adds nothing but the cookie dependency. */
 export async function getHubs(
-  client?: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  client?: SupabaseClient<Database>,
 ): Promise<{ cities: Hub[]; scopes: Hub[]; types: Hub[]; combos: Hub[]; provinces: Hub[]; spaces: Hub[] }> {
-  const supabase = client ?? (await createServerSupabaseClient())
+  const supabase = client ?? createPublicSupabaseClient()
   const [{ data }, { data: cats }, feats] = await Promise.all([
     supabase
       .from("projects")
@@ -689,8 +699,7 @@ export async function getHubs(
   ].sort((a, b) => b.count - a.count)
 
   // Landelijke ruimte-hubs (/projects/keukens). Volgorde uit
-  // SPACE_HUB_DEFS, niet op aantal: die lijst is redactioneel gekozen
-  // en de kolom leest prettiger als keuken en badkamer bovenaan staan.
+  // SPACE_HUB_DEFS, niet op aantal: die lijst is redactioneel gekozen.
   const spaces: Hub[] = SPACE_HUB_DEFS
     .map((def) => ({
       kind: "space" as const,
@@ -698,9 +707,11 @@ export async function getHubs(
       name: def.slug,
       count: spaceAgg.get(def.space)?.count ?? 0,
       spaceValue: def.space,
+      featured: def.featured === true,
       topTypes: topTypesOf(spaceAgg.get(def.space)?.types ?? new Map(), spaceAgg.get(def.space)?.count ?? 0),
     }))
-    .filter((h) => h.count >= MIN_HUB_PROJECTS)
+    // De redactionele hubs bestaan altijd; de rest pas met genoeg projecten.
+    .filter((h) => h.featured || h.count >= MIN_HUB_PROJECTS)
 
   return { cities, scopes, types, combos, provinces, spaces }
 }
@@ -720,7 +731,7 @@ export async function resolveHub(slug: string): Promise<Hub | null> {
 
 /** Projects for a hub, with primary photos, ready for the card grid. */
 export async function getHubProjects(hub: Hub): Promise<HubProjectCard[]> {
-  const supabase = await createServerSupabaseClient()
+  const supabase = createPublicSupabaseClient()
   let q = supabase
     .from("projects")
     .select("id, slug, title, translations, address_city, project_type")

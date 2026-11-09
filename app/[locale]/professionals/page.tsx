@@ -11,7 +11,7 @@ import { logger } from "@/lib/logger"
 import { TrackPageView } from "@/components/track-view"
 import { getSiteUrl } from "@/lib/utils"
 import { locales, defaultLocale } from "@/i18n/config"
-import { getProfessionalHubs, servicePluralBySlug } from "@/lib/professional-hubs"
+import { getProfessionalHubs, proNamePluralOf } from "@/lib/professional-hubs"
 import { proHubToDef } from "@/components/professional/professional-hub-page"
 import { ProfessionalsDiscoverOutro } from "@/components/professionals-discover-outro"
 import { ProfessionalPopularSearches } from "@/components/professional-popular-searches"
@@ -116,7 +116,7 @@ export default async function ProfessionalsPage({ params }: { params: Promise<{ 
       const supabase = await createServerSupabaseClient()
       const { data: cats } = await supabase
         .from("categories")
-        .select("id, slug, name, name_nl")
+        .select("id, slug, name, name_nl, pro_name_plural, pro_name_plural_nl")
         .in("slug", qualifying.map((h) => h.serviceSlug as string))
       const order = new Map(qualifying.map((h, i) => [h.serviceSlug as string, i]))
       serviceCards = (cats ?? [])
@@ -124,7 +124,7 @@ export default async function ProfessionalsPage({ params }: { params: Promise<{ 
           const nameNl = (c as { name_nl?: string | null }).name_nl ?? null
           // Hetzelfde woord als in het headermenu en op home: Architecten,
           // Keukenmakers — niet de categorienaam in het enkelvoud.
-          return { id: c.id, slug: c.slug ?? "", name: c.name, nameNl, label: servicePluralBySlug(c.slug ?? "", locale, locale === "nl" ? nameNl ?? c.name : c.name) }
+          return { id: c.id, slug: c.slug ?? "", name: c.name, nameNl, label: proNamePluralOf(c, locale) }
         })
         .sort((a, b) => (order.get(a.slug) ?? 99) - (order.get(b.slug) ?? 99))
     }

@@ -104,6 +104,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
           },
         },
         openGraph: { title: copy.metaTitle, description: copy.description, url: hubCanonical, type: "website" },
+        // Een redactionele ruimtehub zonder projecten bestaat wel (menu,
+        // cirkels) maar hoeft nog niet in de index.
+        ...(hub.count === 0 ? { robots: { index: false, follow: true } } : {}),
       }
     }
     const t = await getTranslations("project_detail")
