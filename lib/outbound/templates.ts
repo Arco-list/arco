@@ -337,7 +337,10 @@ export function situationsFor(
 
 /** Filled in per recipient when a saved body is used verbatim. */
 export function fillPlaceholders(text: string, values: { voornaam: string; bedrijf: string }): string {
-  return text
-    .replace(/\{\{\s*voornaam\s*\}\}/gi, values.voornaam)
+  // Geen voornaam: "Hoi {{voornaam}}," wordt "Hoi,", niet "Hoi ,".
+  const named = values.voornaam
+    ? text.replace(/\{\{\s*voornaam\s*\}\}/gi, values.voornaam)
+    : text.replace(/[ \t]*\{\{\s*voornaam\s*\}\}/gi, "")
+  return named
     .replace(/\{\{\s*bedrijf\s*\}\}/gi, values.bedrijf)
 }

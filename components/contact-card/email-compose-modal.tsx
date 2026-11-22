@@ -25,6 +25,9 @@ import {
   type ContactThreadItem,
 } from "@/app/admin/inbox/actions"
 
+/** Algemene mailboxen: het deel vóór de @ is dan geen voornaam. */
+const GENERIC_LOCAL_PARTS = /^(info|hallo|hello|contact|welkom|mail|office|verkoop|sales|showroom|service|algemeen|administratie|post|team|studio|projects?|offerte)$/i
+
 /**
  * The Outbound popup on the contact card. One popup, one motion.
  *
@@ -220,7 +223,16 @@ export function EmailComposeModal({
   })
 
   const hasThread = Boolean(latestInboundId)
-  const firstName = (contactLabel?.trim().split(/\s+/)[0]) || email.split("@")[0]
+  // Zonder naam valt het label terug op het adres zelf. Een algemeen
+  // adres (info@, hallo@) is geen voornaam: dan "Hoi," in plaats van
+  // "Hoi info@asto.nl,".
+  const firstName = (() => {
+    const label = contactLabel?.trim() ?? ""
+    const word = label && !label.includes("@") && label !== "Contact" ? label.split(/\s+/)[0] : ""
+    if (word) return word
+    const local = email.split("@")[0] ?? ""
+    return GENERIC_LOCAL_PARTS.test(local) ? "" : local
+  })()
   const hasEdited = body.trim().length > 0 && body.trim() !== aiDraft.trim()
 
   /**

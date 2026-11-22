@@ -1,5 +1,6 @@
 "use client";
 
+import { BrandLogo } from "@/components/brand/brand-logo"
 import { useCallback, useEffect, useRef, useState, useTransition, type FormEvent, type Dispatch, type SetStateAction, type RefObject } from "react";
 import Image from "next/image";
 import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services";
@@ -170,7 +171,7 @@ function SearchOverlay({ searchQuery, setSearchQuery, inputRef, onSearch, onClos
                 {results.professionals.map((p) => (
                   <Link key={p.id} href={`/professionals/${p.slug}`} className="flex items-center gap-3 py-2.5 hover:bg-[#fafaf9] -mx-3 px-3 transition-colors" onClick={onClose}>
                     {p.logo ? (
-                      <Image src={sanitizeImageUrl(p.logo, IMAGE_SIZES.thumbnail)} alt={p.name} width={40} height={40} className="rounded-full object-cover shrink-0" style={{ width: 40, height: 40 }} />
+                      <BrandLogo logoUrl={sanitizeImageUrl(p.logo, IMAGE_SIZES.thumbnail)} name={p.name} size={40} />
                     ) : (
                       (() => {
                         // Service mark instead of an initial: it says what
@@ -216,6 +217,16 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
   const t = useTranslations("nav");
   const router = useRouter();
   const pathname = usePathname();
+  // Waar je bent, per sectie: /nl/professionals/amsterdam hoort bij
+  // Professionals, een projectpagina bij Projecten, /brands bij Producten.
+  // usePathname geeft het pad mét taal; die halen we eraf.
+  const sectionPath = (pathname ?? "").replace(/^\/(nl|en)(?=\/|$)/, "") || "/";
+  const isSection = (href: string) => {
+    const base = href.split("?")[0];
+    if (base === "/") return sectionPath === "/";
+    const extra = base === "/products" ? ["/brands"] : [];
+    return [base, ...extra].some((b) => sectionPath === b || sectionPath.startsWith(`${b}/`));
+  };
   // Geen useSearchParams: die hook dwingt elke pagina met deze header
   // tot client-side rendering (of een Suspense-grens), terwijl de
   // publieke pagina's juist statisch uit de cache moeten komen. De paar
@@ -579,12 +590,12 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                           </div>
                         )
                       }
-                      const linkPath = item.href.split("?")[0]
+                      const linkActive = isSection(item.href)
                       const link = (
                         <Link
                           key={item.href}
                           href={item.href}
-                          className={`block px-5 py-2 text-sm font-normal transition-colors ${pathname === linkPath ? "!font-medium text-primary" : "text-[#1c1c1a] hover:text-primary"}`}
+                          className={`block px-5 py-2 text-sm font-normal transition-colors ${linkActive ? "!font-medium text-primary" : "text-[#1c1c1a] hover:text-primary"}`}
                           onClick={() => setIsMobileMenuOpen(false)}
                         >
                           {item.label}
@@ -612,7 +623,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                               href={item.href}
                               onClick={() => setIsMobileMenuOpen(false)}
                               className={`flex min-h-[44px] flex-1 items-center px-5 text-sm font-normal transition-colors ${
-                                pathname === linkPath ? "!font-medium text-primary" : "text-[#1c1c1a] hover:text-primary"
+                                linkActive ? "!font-medium text-primary" : "text-[#1c1c1a] hover:text-primary"
                               }`}
                             >
                               {item.label}
@@ -761,8 +772,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                       </div>
                     )
                   }
-                  const linkPath = item.href.split("?")[0]
-                  const isActive = pathname === linkPath
+                  const isActive = isSection(item.href)
                   if (item.mega && !navMenusFailed) {
                     const megaOpen = openGroup === item.href
                     // De link blijft een link — hij gaat naar het
@@ -785,6 +795,8 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                           href={item.href}
                           aria-expanded={megaOpen}
                           data-open={megaOpen ? "true" : undefined}
+                          data-active={isActive ? "true" : undefined}
+                          aria-current={isActive ? "page" : undefined}
                           onFocus={() => { setMegaWanted(true); setOpenGroup(item.href) }}
                           onClick={() => setOpenGroup(null)}
                           className={`header-rule inline-flex items-center h-8 text-sm font-normal whitespace-nowrap transition-colors ${
@@ -805,6 +817,8 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                     <Link
                       key={item.href}
                       href={item.href}
+                      data-active={isActive ? "true" : undefined}
+                      aria-current={isActive ? "page" : undefined}
                       onMouseEnter={closeMega}
                       // .header-rule draws the hover rule on the header's
                       // bottom border, matching the sub-nav tab indicator.
@@ -912,7 +926,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                               onClick={(e) => { e.stopPropagation(); if (companies.length > 1) setShowCompanySwitcher(!showCompanySwitcher) }}
                             >
                               {activeCompany.logo_url ? (
-                                <img src={activeCompany.logo_url} alt="" className="w-5 h-5 rounded-full object-cover" />
+                                <BrandLogo logoUrl={activeCompany.logo_url} name={activeCompany.name} size={20} />
                               ) : (() => {
                                 // Geen logo → de hand-getekende dienstmark,
                                 // zoals overal op het platform; letter alleen
@@ -961,7 +975,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                                     }}
                                   >
                                     {c.logo_url ? (
-                                      <img src={c.logo_url} alt="" className="w-4 h-4 rounded-full object-cover" />
+                                      <BrandLogo logoUrl={c.logo_url} name={c.name} size={16} />
                                     ) : (() => {
                                       const Icon = resolveProfessionalServiceIcon(c.serviceSlug ?? null, null)
                                       return (

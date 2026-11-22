@@ -736,6 +736,8 @@ type Props = {
   /** Apollo connection badge (Inbox pattern) — key presence + newest
    *  apollo_sync_runs row. Clicking the badge opens the import popup. */
   apolloSyncStatus?: { connected: boolean; lastSyncAt: string | null; hadError: boolean } | null
+  /** Diensten voor het servicefilter en de vaste service bij de import. */
+  serviceOptions?: Array<{ id: string; name: string; slug: string | null; parentId: string | null; sortOrder: number | null }>
 }
 
 export function ProspectsClient({
@@ -746,6 +748,7 @@ export function ProspectsClient({
   currentApolloListId = null,
   apolloProspectsCount = 0,
   apolloSyncStatus = null,
+  serviceOptions = [],
 }: Props) {
   const [companies, setCompanies] = useState(initialCompanies)
   const [totalCompanies, setTotalCompanies] = useState(initialTotalCompanies)
@@ -756,6 +759,9 @@ export function ProspectsClient({
   // cannot ride along in statusFilter.
   const [subscribedOnly, setSubscribedOnly] = useState(false)
   const [channelFilter, setChannelFilter] = useState<string[]>([])
+  const [serviceFilter, setServiceFilter] = useState<string[]>([])
+  // Vaste service voor de Apollo-import (leeg = geen).
+  const [syncServiceSlug, setSyncServiceSlug] = useState("")
   const [sequenceFilter, setSequenceFilter] = useState<SequenceFilterValue[]>([])
   // Toggle for the Call list button: when true, the table only renders
   // today's ranked call queue (max 10, tier order).
@@ -856,6 +862,7 @@ export function ProspectsClient({
         subscribedOnly,
         channels: channelFilter,
         sequences: sequenceFilter,
+        services: serviceFilter,
         search,
         callListOnly,
         offset: off,
@@ -877,7 +884,7 @@ export function ProspectsClient({
       setOffset(off)
       setHasMore(result.totalCompanies > off + result.companies.length)
     })
-  }, [statusFilter, subscribedOnly, channelFilter, sequenceFilter, search, callListOnly, sortBy, sortDir])
+  }, [statusFilter, subscribedOnly, channelFilter, sequenceFilter, serviceFilter, search, callListOnly, sortBy, sortDir])
 
   // Resend email backfill — pulls open/click events the webhook may have
   // missed. Cheap (throttled to once/hour server-side); refresh the table
@@ -895,22 +902,25 @@ export function ProspectsClient({
     statuses?: ProspectStatus[]
     channels?: string[]
     sequences?: SequenceFilterValue[]
+    services?: string[]
     callListOnly?: boolean
   }) => {
     if (opts.statuses !== undefined) setStatusFilter(opts.statuses)
     if (opts.channels !== undefined) setChannelFilter(opts.channels)
     if (opts.sequences !== undefined) setSequenceFilter(opts.sequences)
+    if (opts.services !== undefined) setServiceFilter(opts.services)
     if (opts.callListOnly !== undefined) setCallListOnly(opts.callListOnly)
     const s = opts.statuses ?? statusFilter
     const src = opts.channels ?? channelFilter
     const seq = opts.sequences ?? sequenceFilter
+    const svc = opts.services ?? serviceFilter
     const due = opts.callListOnly ?? callListOnly
     startTransition(async () => {
       const result = await fetchSalesCompanies({
         // subscribedOnly rides along. It was in this callback's deps but
         // never in its request, so picking any other filter silently
         // dropped the subscription filter the reader had set.
-        statuses: s, channels: src, sequences: seq, search, subscribedOnly,
+        statuses: s, channels: src, sequences: seq, services: svc, search, subscribedOnly,
         callListOnly: due,
         offset: 0, limit: 50, sortBy, sortDir,
       })
@@ -924,7 +934,7 @@ export function ProspectsClient({
       // hidden selected row would still be picked up by bulk actions.
       setSelectedRowIds(new Set())
     })
-  }, [statusFilter, subscribedOnly, channelFilter, sequenceFilter, search, callListOnly, sortBy, sortDir])
+  }, [statusFilter, subscribedOnly, channelFilter, sequenceFilter, serviceFilter, search, callListOnly, sortBy, sortDir])
 
   useEffect(() => {
     const wantCalls = barTab === "calls"
@@ -994,7 +1004,7 @@ export function ProspectsClient({
     setSortDir(nextDir)
     startTransition(async () => {
       const result = await fetchSalesCompanies({
-        statuses: statusFilter, subscribedOnly, channels: channelFilter, sequences: sequenceFilter, search,
+        statuses: statusFilter, subscribedOnly, channels: channelFilter, sequences: sequenceFilter, services: serviceFilter, search,
         offset: 0, limit: 50, sortBy: field, sortDir: nextDir,
       })
       setCompanies(result.companies)
@@ -1004,7 +1014,7 @@ export function ProspectsClient({
       setOffset(0)
       setHasMore(result.totalCompanies > result.companies.length)
     })
-  }, [sortBy, sortDir, statusFilter, channelFilter, sequenceFilter, search])
+  }, [sortBy, sortDir, statusFilter, channelFilter, sequenceFilter, serviceFilter, search])
 
   // Shared Contact Card mount. URL-driven so the panel is deep-linkable
   // and survives navigation. Every contact click (row, contact inline,
@@ -1034,7 +1044,7 @@ export function ProspectsClient({
         const res: Response = await fetch("/api/apollo-sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "sync_list", list_id: syncListId.trim(), start_page: startPage }),
+          body: JSON.stringify({ action: "sync_list", list_id: syncListId.trim(), start_page: startPage, service_slug: syncServiceSlug || undefined }),
         })
         const data = await res.json()
         if (!res.ok) {
@@ -1311,6 +1321,74 @@ export function ProspectsClient({
                   {o.label}
                 </DropdownMenuCheckboxItem>
               ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Multi-select servicefilter, zoals op /companies: hoofddienst
+              of een aangeboden dienst. Leeg = alle diensten. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={`w-[140px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 shrink-0 ${
+                  serviceFilter.length > 0 ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
+                }`}
+              >
+                <span className="flex items-center gap-1.5 truncate">
+                  {serviceFilter.length === 0 ? (
+                    <span className="text-[#6b6b68]">All categories</span>
+                  ) : serviceFilter.length === 1 ? (
+                    <span className="truncate">{serviceOptions.find((s) => s.id === serviceFilter[0])?.name ?? "1 category"}</span>
+                  ) : (
+                    <span>{serviceFilter.length} categories</span>
+                  )}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[240px] max-h-[420px] overflow-y-auto z-[120]">
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.preventDefault()
+                  if (serviceFilter.length > 0) handleFilterChange({ services: [] })
+                }}
+                className="text-xs"
+              >
+                Clear selection
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {serviceOptions.filter((s) => !s.parentId).sort((a, b) => (a.sortOrder ?? 99) - (b.sortOrder ?? 99)).map((group) => {
+                const children = serviceOptions.filter((s) => s.parentId === group.id).sort((a, b) => (a.sortOrder ?? 99) - (b.sortOrder ?? 99) || a.name.localeCompare(b.name))
+                if (children.length === 0) return null
+                const ids = children.map((c) => c.id)
+                const selected = ids.filter((id) => serviceFilter.includes(id)).length
+                const groupChecked: boolean | "indeterminate" = selected === 0 ? false : selected === ids.length ? true : "indeterminate"
+                return (
+                  <div key={group.id} className="py-0.5">
+                    <DropdownMenuCheckboxItem
+                      checked={groupChecked}
+                      onCheckedChange={(next) => handleFilterChange({ services: next === true ? Array.from(new Set([...serviceFilter, ...ids])) : serviceFilter.filter((id) => !ids.includes(id)) })}
+                      onSelect={(e) => e.preventDefault()}
+                      className="text-xs font-medium"
+                    >
+                      {group.name}
+                    </DropdownMenuCheckboxItem>
+                    {children.map((s) => (
+                      <DropdownMenuCheckboxItem
+                        key={s.id}
+                        checked={serviceFilter.includes(s.id)}
+                        onCheckedChange={() => handleFilterChange({ services: serviceFilter.includes(s.id) ? serviceFilter.filter((id) => id !== s.id) : [...serviceFilter, s.id] })}
+                        onSelect={(e) => e.preventDefault()}
+                        className="text-xs pl-8"
+                      >
+                        {s.name}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </div>
+                )
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
           </>
@@ -1888,6 +1966,20 @@ export function ProspectsClient({
               </div>
             )}
 
+            <label className="text-xs font-medium text-[#6b6b68] block mb-1" style={{ marginTop: 12 }}>Category (optional)</label>
+            <select
+              value={syncServiceSlug}
+              onChange={(e) => setSyncServiceSlug(e.target.value)}
+              className="w-full h-9 px-3 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors bg-white"
+            >
+              <option value="">No fixed category</option>
+              {serviceOptions.filter((s) => s.parentId && s.slug).sort((a, b) => a.name.localeCompare(b.name)).map((s) => (
+                <option key={s.id} value={s.slug ?? ""}>{s.name}</option>
+              ))}
+            </select>
+            <p style={{ margin: "4px 0 0", fontSize: 11, color: "#a1a1a0", lineHeight: 1.5 }}>
+              New companies from this list get this category as their main category. Companies that already have one are left alone.
+            </p>
             <p style={{ margin: "10px 0 12px", fontSize: 11, color: "#6b6b68" }}>
               {apolloProspectsCount} contact{apolloProspectsCount === 1 ? "" : "s"} imported so far.
             </p>

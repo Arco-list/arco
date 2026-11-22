@@ -1067,9 +1067,18 @@ export async function sendReply(
     const { sendGmailReply } = await import("@/lib/gmail/send")
     // Reply from the mailbox that received the message — thread ids are
     // per-mailbox, so hello@ replying to a thread synced from niek@ 404s.
+    // Mail also arrives on subdomain aliases (niek@mail.arcolist.com,
+    // niek@hello.arcolist.com) that are delivered into the niek@ mailbox.
+    // Fold those back to local@arcolist.com and pick the first one that
+    // is an actual connection — an exact endsWith("@arcolist.com") missed
+    // them, so the reply went out from the oldest connection (hello@).
     const rowToEmails = (row.to_emails ?? []) as string[]
+    const { data: conns } = await (supabase as any).from("gmail_connections").select("gmail_address")
+    const connected = new Set(((conns ?? []) as { gmail_address: string }[]).map((c) => c.gmail_address.toLowerCase()))
     const receivingMailbox =
-      rowToEmails.find((e) => e.toLowerCase().endsWith("@arcolist.com")) ?? null
+      rowToEmails
+        .map((e) => e.toLowerCase().trim().replace(/^(.+)@(?:[a-z0-9-]+\.)*arcolist\.com$/, "$1@arcolist.com"))
+        .find((e) => connected.has(e)) ?? null
     await sendGmailReply(supabase, {
       to: row.from_email,
       subject: replySubject,

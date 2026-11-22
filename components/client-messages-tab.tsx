@@ -1,5 +1,6 @@
 "use client"
 
+import { LogoFill } from "@/components/brand/brand-logo"
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
@@ -141,7 +142,7 @@ export function ClientMessagesTab() {
                     {company && (
                       <div className="pro-card-info" style={{ marginBottom: 12 }}>
                         {company.logo_url ? (
-                          <img src={company.logo_url} alt="" className="pro-card-logo" />
+                          <span className="pro-card-logo pro-card-logo-disc"><LogoFill src={company.logo_url} /></span>
                         ) : (
                           <div className="pro-card-logo pro-card-logo-placeholder">
                             {company.name.charAt(0).toUpperCase()}

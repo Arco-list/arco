@@ -8,7 +8,7 @@ import { AdminTabs, useAdminTab } from "@/components/admin/admin-tabs"
 import { clickedRateColor, deliveredRateColor, openedRateColor, unsubscribedRateColor, RATE_BENCHMARKS } from "@/lib/email-rate-colors"
 import { OutboundTemplateEditor } from "./outbound-template-editor"
 import { EmailPreviewModal } from "@/components/admin/email-preview-modal"
-import { TEMPLATE_CHANNEL, utmSourceFor, type EmailChannel } from "@/lib/email-channels"
+import { TEMPLATE_CHANNEL, senderForTemplate, utmSourceFor, type EmailChannel } from "@/lib/email-channels"
 
 /**
  * Two inline pills, sitting with the e-mail's name instead of in
@@ -55,6 +55,27 @@ const LABELLED_CHANNELS = new Set<EmailChannel>(["invite", "sales", "outbound", 
 
 const PILL_AUDIENCE = { borderColor: "#fcd9a8", color: "#b45309" } as const
 const PILL_CHANNEL = { borderColor: "#b5d5d6", color: "#016D75" } as const
+
+function FromCell({ templateId, external }: { templateId: string; external?: string }) {
+  // `external`: mail we never send ourselves (Stripe's invoice) — name the
+  // real sender instead of an address this code does not use.
+  if (external) {
+    return (
+      <td>
+        <span className="arco-table-secondary" style={{ marginTop: 0 }}>{external}</span>
+      </td>
+    )
+  }
+  const { local, domain } = senderForTemplate(templateId)
+  return (
+    <td>
+      <div className="flex flex-col min-w-0">
+        <span className="arco-table-primary">{local}@</span>
+        <span className="arco-table-secondary" style={{ marginTop: 1 }}>{domain}</span>
+      </div>
+    </td>
+  )
+}
 
 function ChannelPill({ templateId }: { templateId: string }) {
   const channel = TEMPLATE_CHANNEL[templateId]
@@ -870,9 +891,10 @@ function AdminEmailsPage() {
                             removed without removing its col, every
                             slot shifted one to the left and Subject
                             inherited the 110px meant for Audience.
-                            Eight cols, eight columns. */}
+                            Nine cols, nine columns. */}
                         <colgroup>
                           <col />{/* Email — takes the remainder */}
+                          <col style={{ width: 150 }} />{/* From */}
                           <col style={{ width: 300 }} />{/* Subject */}
                           <col style={{ width: 80 }} />{/* Sends */}
                           <col style={{ width: 90 }} />{/* Delivered */}
@@ -884,6 +906,7 @@ function AdminEmailsPage() {
                         <thead>
                           <tr>
                             <th>Email</th>
+                            <th>From</th>
                             <th style={{ width: "34%" }}>Subject</th>
                             <th style={{ textAlign: "right" }}>Sends</th>
                             <th style={{ textAlign: "right", whiteSpace: "nowrap" }}>Delivered<InfoTip text={RATE_BENCHMARKS.delivered} /></th>
@@ -910,6 +933,7 @@ function AdminEmailsPage() {
                                     <div className="arco-table-secondary" style={{ marginTop: 2 }}>{note}</div>
                                   </div>
                                 </td>
+                                <FromCell templateId={templateId} />
                                 <td className="text-xs text-[#6b6b68] truncate">{t.subject}</td>
                                 {statCells(templateId)}
                                 {/* Transactional stays locked: a receipt-class mail
@@ -937,6 +961,7 @@ function AdminEmailsPage() {
                                       <div className="arco-table-secondary" style={{ marginTop: 2 }}>{t.trigger}</div>
                                     </div>
                                   </td>
+                                  <FromCell templateId={id} />
                                   <td className="text-xs text-[#6b6b68] truncate">{t.subject}</td>
                                   {statCells(id)}
                                   <td style={{ textAlign: "center" }} onClick={e => e.stopPropagation()}>
@@ -1049,27 +1074,7 @@ function AdminEmailsPage() {
                           </div>
                         </div>
                       </td>
-                      <td>
-                        {t.from ? (
-                          <div className="flex items-center gap-2">
-                            {t.from.icon ? (
-                              <div className="arco-table-avatar" style={{ width: 20, height: 20 }}>
-                                <img src={t.from.icon} alt="" />
-                              </div>
-                            ) : (
-                              <div className="arco-table-avatar" style={{ width: 20, height: 20, background: "#f5f5f4", color: "#6b6b68", fontSize: 9 }}>
-                                {t.from.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
-                              </div>
-                            )}
-                            <div className="flex flex-col min-w-0">
-                              <span className="arco-table-primary">{t.from.name}</span>
-                              <span className="arco-table-secondary" style={{ marginTop: 1 }}>{t.from.email}</span>
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="arco-table-secondary" style={{ marginTop: 0 }}>—</span>
-                        )}
-                      </td>
+                      <FromCell templateId={t.id} external={t.from?.email === "via Stripe" ? "via Stripe" : undefined} />
                       <td className="text-xs text-[#6b6b68] truncate">
                         {t.subject}
                       </td>

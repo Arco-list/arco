@@ -28,6 +28,7 @@ export type PhotographerDetail = {
   collaborationsCount: number
   /** Address line for the contact section. */
   address: string | null
+  googlePlaceId: string | null
   /** Hero / cover photo URL. */
   coverPhotoUrl: string | null
   gallery: ProfessionalGalleryImage[]
@@ -230,6 +231,7 @@ export async function fetchPhotographerDetail(
     specialties,
     collaborationsCount,
     address: (company as any).address ?? null,
+    googlePlaceId: (company as any).google_place_id ?? null,
     coverPhotoUrl,
     gallery,
     projects,

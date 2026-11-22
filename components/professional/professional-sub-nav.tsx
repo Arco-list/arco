@@ -5,6 +5,7 @@ import { Link } from "@/i18n/navigation"
 import { useTranslations } from "next-intl"
 import { useSavedProfessionals } from "@/contexts/saved-professionals-context"
 import { ShareModal } from "@/components/share-modal"
+import { IntroductionRequestModal } from "@/components/introduction-request-modal"
 import type { ProfessionalCard } from "@/lib/professionals/types"
 
 type ProfessionalSubNavProps = {
@@ -15,14 +16,28 @@ type ProfessionalSubNavProps = {
   profession?: string
   location?: string
   hasProjects?: boolean
+  /** Contact-knop naast Delen: opent het kennismakingsverzoek. Vervangt
+   *  het contactblok onderaan de pagina, dat te ver weg zat. */
+  contact?: { logoUrl: string | null; initials: string; subtitle: string | null }
+  /** Merken staan op de pagina: link "Merken" in de navigatie. */
+  hasBrands?: boolean
+  /** Aantal showrooms op de pagina; 1 heet "Showroom", meer "Showrooms". */
+  showroomCount?: number
 }
 
-export function ProfessionalSubNav({ companyId, name, imageUrl, slug, profession, location, hasProjects = true }: ProfessionalSubNavProps) {
+export function ProfessionalSubNav({ companyId, name, imageUrl, slug, profession, location, hasProjects = true, contact, hasBrands = false, showroomCount = 0 }: ProfessionalSubNavProps) {
   const t = useTranslations("professional_detail")
   const { savedProfessionalIds, saveProfessional, removeProfessional, mutatingProfessionalIds } = useSavedProfessionals()
   const isSaved = savedProfessionalIds.has(companyId)
   const isMutating = mutatingProfessionalIds.has(companyId)
   const [shareOpen, setShareOpen] = useState(false)
+  const [contactOpen, setContactOpen] = useState(false)
+
+  // Oude links naar het contactblok (#contact) openen nu het venster.
+  useEffect(() => {
+    if (contact && window.location.hash === "#contact") setContactOpen(true)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [activeSection, setActiveSection] = useState<string>('details')
   const [scrollDirection, setScrollDirection] = useState<'down' | 'up'>('down')
 
@@ -41,7 +56,7 @@ export function ProfessionalSubNav({ companyId, name, imageUrl, slug, profession
       lastScrollY = currentScrollY
 
       // Find active section (top third of viewport)
-      const sections = hasProjects ? ['details', 'projects', 'contact'] : ['details', 'contact']
+      const sections = ['details', ...(hasProjects ? ['projects'] : []), ...(hasBrands ? ['brands'] : []), ...(showroomCount > 0 ? ['showrooms'] : [])]
       let active = 'details'
 
       for (const sectionId of sections) {
@@ -70,7 +85,7 @@ export function ProfessionalSubNav({ companyId, name, imageUrl, slug, profession
       window.removeEventListener('scroll', debouncedScroll)
       clearTimeout(timeout)
     }
-  }, [])
+  }, [hasProjects, hasBrands, showroomCount])
 
   const handleClick = (e: React.MouseEvent<HTMLAnchorElement>, sectionId: string) => {
     e.preventDefault()
@@ -125,17 +140,23 @@ export function ProfessionalSubNav({ companyId, name, imageUrl, slug, profession
                   {t("projects")}
                 </a>
               )}
-              <a
-                href="#contact"
-                onClick={(e) => handleClick(e, 'contact')}
-                className={`sub-nav-link arco-eyebrow ${
-                  activeSection === 'contact'
-                    ? scrollDirection === 'down' ? 'active' : 'active-reverse'
-                    : ''
-                }`}
-              >
-                {t("contact")}
-              </a>
+              {([
+                ...(hasBrands ? [{ id: "brands", label: t("brands") }] : []),
+                ...(showroomCount > 0 ? [{ id: "showrooms", label: showroomCount === 1 ? t("showroom") : t("showrooms") }] : []),
+              ]).map(({ id, label }) => (
+                <a
+                  key={id}
+                  href={`#${id}`}
+                  onClick={(e) => handleClick(e, id)}
+                  className={`sub-nav-link arco-eyebrow ${
+                    activeSection === id
+                      ? scrollDirection === 'down' ? 'active' : 'active-reverse'
+                      : ''
+                  }`}
+                >
+                  {label}
+                </a>
+              ))}
             </div>
           </div>
 
@@ -178,6 +199,11 @@ export function ProfessionalSubNav({ companyId, name, imageUrl, slug, profession
               </svg>
               <span className="sub-nav-pill-label">{t("share")}</span>
             </button>
+            {contact && (
+              <button type="button" className="filter-pill sub-nav-contact" onClick={() => setContactOpen(true)}>
+                {t("contact")}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -191,6 +217,17 @@ export function ProfessionalSubNav({ companyId, name, imageUrl, slug, profession
       imageUrl={imageUrl ?? "/placeholder.svg"}
       shareUrl={`/professionals/${slug}`}
     />
+    {contact && (
+      <IntroductionRequestModal
+        isOpen={contactOpen}
+        onClose={() => setContactOpen(false)}
+        companyId={companyId}
+        companyName={name}
+        companyLogoUrl={contact.logoUrl}
+        companyInitials={contact.initials}
+        subtitle={contact.subtitle}
+      />
+    )}
     </>
   )
 }

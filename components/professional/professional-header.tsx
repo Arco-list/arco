@@ -1,5 +1,6 @@
 "use client"
 
+import { BrandLogo } from "@/components/brand/brand-logo"
 import Image from "next/image"
 import { useEffect, useRef, useState } from "react"
 import { resolveProfessionalServiceIcon } from "@/lib/icons/professional-services"
@@ -51,13 +52,7 @@ export function ProfessionalHeader({
     <section className="professional-header">
       <div className="company-icon">
         {companyIcon ? (
-          <Image
-            src={companyIcon}
-            alt={name}
-            width={100}
-            height={100}
-            className="company-icon-image"
-          />
+          <BrandLogo logoUrl={companyIcon} name={name} size={100} />
         ) : (
           (() => {
             // `services` is a display string ("Architect · Amsterdam"

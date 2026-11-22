@@ -1,5 +1,7 @@
 import "server-only"
 
+import { ALL_SCOPES, resolveDefaultKind, resolveScopeSlugs, type ScopeSlug } from "@/lib/publish-scope"
+
 /**
  * Wat een bedrijf mag publiceren, afgeleid van de publiceerstanden van
  * zijn diensten (categories.publish_scope, migratie 297) en de ruimtes
@@ -10,7 +12,12 @@ import "server-only"
  * - scopes: mag architectuurprojecten publiceren (Nieuwbouw, Renovatie,
  *   Interieur) — ook waar als het bedrijf geen enkele publicerende
  *   dienst heeft, zodat een admin altijd verder kan.
- * - spaces: de ruimtes waaronder deelprojecten vallen (Keuken, Tuin).
+ * - scopeSlugs: welke scopes het scopevak toont (categories.project_scopes,
+ *   migratie 314): architect nieuwbouw + renovatie, interieurarchitect
+ *   interieur design. Leeg bij een dienst = alle drie.
+ * - spaces: de ruimtes waaronder ruimteprojecten vallen (Keuken, Tuin),
+ *   uit service_spaces van elke publicerende dienst — ook een architect
+ *   kan een tuinhuis publiceren.
  * - defaultKind: wat een nieuw project van dit bedrijf standaard is. Bij
  *   beide standen beslist de primaire dienst.
  */
@@ -18,6 +25,7 @@ import "server-only"
 export type PublishSpace = { id: string; slug: string }
 export type PublishOptions = {
   scopes: boolean
+  scopeSlugs: ScopeSlug[]
   spaces: PublishSpace[]
   defaultKind: "project" | "partial"
 }
@@ -25,7 +33,7 @@ export type PublishOptions = {
 type Client = any
 
 export async function getCompanyPublishOptions(supabase: Client, companyId: string): Promise<PublishOptions> {
-  const fallback: PublishOptions = { scopes: true, spaces: [], defaultKind: "project" }
+  const fallback: PublishOptions = { scopes: true, scopeSlugs: [...ALL_SCOPES], spaces: [], defaultKind: "project" }
   const { data: company } = await supabase
     .from("companies")
     .select("primary_service_id, services_offered")
@@ -36,17 +44,21 @@ export async function getCompanyPublishOptions(supabase: Client, companyId: stri
   if (serviceIds.length === 0) return fallback
 
   const [{ data: services }, { data: links }] = await Promise.all([
-    supabase.from("categories").select("id, publish_scope").in("id", serviceIds),
+    supabase.from("categories").select("id, publish_scope, project_scopes").in("id", serviceIds),
     supabase.from("service_spaces").select("service_id, space_id, spaces(id, slug, sort_order, is_active)").in("service_id", serviceIds),
   ])
-  const scopeById = new Map<string, string>(((services ?? []) as Array<{ id: string; publish_scope: string }>).map((s) => [s.id, s.publish_scope]))
+  const serviceRows = (services ?? []) as Array<{ id: string; publish_scope: string; project_scopes: string[] | null }>
+  const scopeById = new Map<string, string>(serviceRows.map((s) => [s.id, s.publish_scope]))
   const hasProject = Array.from(scopeById.values()).includes("project")
   const hasPartial = Array.from(scopeById.values()).includes("partial")
+  const scopeSlugs = resolveScopeSlugs(serviceRows)
+  const publishing = new Set(serviceRows.filter((s) => s.publish_scope !== "none").map((s) => s.id))
 
-  const spaces: PublishSpace[] = hasPartial
+  const spaces: PublishSpace[] = publishing.size > 0
     ? Array.from(
         new Map(
-          ((links ?? []) as Array<{ spaces: { id: string; slug: string; sort_order: number | null; is_active: boolean | null } | null }>)
+          ((links ?? []) as Array<{ service_id: string; spaces: { id: string; slug: string; sort_order: number | null; is_active: boolean | null } | null }>)
+            .filter((l) => publishing.has(l.service_id))
             .map((l) => l.spaces)
             .filter((s): s is NonNullable<typeof s> => Boolean(s) && s!.is_active !== false)
             .map((s) => [s.id, { id: s.id, slug: s.slug, sort: Number(s.sort_order ?? 0) }]),
@@ -56,14 +68,9 @@ export async function getCompanyPublishOptions(supabase: Client, companyId: stri
         .map(({ id, slug }) => ({ id, slug }))
     : []
 
-  let defaultKind: "project" | "partial" = "project"
-  if (hasPartial && !hasProject) defaultKind = "partial"
-  else if (hasPartial && hasProject) {
-    const primaryScope = company.primary_service_id ? scopeById.get(company.primary_service_id) : undefined
-    defaultKind = primaryScope === "partial" ? "partial" : "project"
-  }
+  const defaultKind = resolveDefaultKind(serviceRows, company.primary_service_id)
 
-  return { scopes: hasProject || !hasPartial, spaces, defaultKind }
+  return { scopes: hasProject || !hasPartial, scopeSlugs, spaces, defaultKind }
 }
 
 /** De primaire ruimte van een deelproject: de toegestane ruimte met de

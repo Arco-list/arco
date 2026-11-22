@@ -1,5 +1,6 @@
 "use client"
 
+import { LogoFill } from "@/components/brand/brand-logo"
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
@@ -623,7 +624,7 @@ export function PricingSection({
 
               <div className="credit-icon">
                 {company.logoUrl && (
-                  <Image src={company.logoUrl} alt={company.name} fill className="object-contain" />
+                  <LogoFill src={company.logoUrl} alt={company.name} />
                 )}
               </div>
 

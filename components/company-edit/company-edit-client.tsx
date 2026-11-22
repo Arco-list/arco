@@ -1,5 +1,6 @@
 "use client"
 
+import { BrandLogo } from "@/components/brand/brand-logo"
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import Image from "next/image"
 import Link from "next/link"
@@ -39,7 +40,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { CompanyEditSubNav } from "@/components/company-edit/company-edit-sub-nav"
-import { CompanyBrandsSection, type BrandOption, type CompanyBrandLink } from "@/components/company-edit/company-brands-section"
+import { CompanyBrandsSection, type BrandFilterCategory, type BrandOption, type CompanyBrandLink } from "@/components/company-edit/company-brands-section"
 import { CompanyLocationsSection } from "@/components/company-edit/company-locations-section"
 import type { LocationRecord } from "@/lib/locations/types"
 import { CompanyEditTour, type TourStep } from "@/components/company-edit/company-edit-tour"
@@ -113,7 +114,7 @@ interface CompanyProject {
 interface ServiceCategory {
   name: string
   slug: string
-  services: Array<{ id: string; name: string; slug: string | null; canPublishProjects?: boolean }>
+  services: Array<{ id: string; name: string; slug: string | null; canPublishProjects?: boolean; nameNl?: string | null }>
 }
 
 interface PendingProject {
@@ -126,7 +127,7 @@ interface PendingProject {
 export interface CompanyEditClientProps {
   company: CompanyRow
   socialLinks: SocialLinkRow[]
-  services: Array<{ id: string; name: string; slug: string | null; canPublishProjects?: boolean }>
+  services: Array<{ id: string; name: string; slug: string | null; canPublishProjects?: boolean; nameNl?: string | null }>
   serviceCategories: ServiceCategory[]
   professionalId: string | null
   projects: CompanyProject[]
@@ -146,6 +147,7 @@ export interface CompanyEditClientProps {
   /** Merken die het bedrijf voert, en de kieslijst (migratie 297). */
   brands?: CompanyBrandLink[]
   brandOptions?: BrandOption[]
+  brandFilterCategories?: BrandFilterCategory[]
   /** Showrooms, winkels en andere vestigingen. */
   locations?: LocationRecord[]
 }
@@ -169,6 +171,17 @@ const STATUS_LABELS: Record<CompanyStatus, string> = {
 
 // ── Pencil icon (reused from project edit) ──
 
+// Eén naam per categorie: het beroep (Meubelwinkel, Keukenstudio), zodat
+// niemand "Meubels" kiest omdat hij een meubel levert (categories.name,
+// migratie 306).
+type ServiceLike = { slug: string | null; name: string; nameNl?: string | null }
+const svcNameFor = (s: ServiceLike, locale: string) =>
+  (locale === "nl" ? s.nameNl : s.name) ?? translateProfessionalService(s.slug ?? s.name, locale) ?? s.name
+
+// Een bedrijf kiest ten hoogste drie categorieën: de eerste is de
+// hoofdcategorie. Meer zegt niets meer over wat het is.
+const MAX_CATEGORIES = 3
+
 const EditBadge = () => {
   const t = useTranslations("common")
   return (
@@ -191,7 +204,7 @@ const TOUR_STEPS: TourStep[] = [
 
 // ── Component ──
 
-export function CompanyEditClient({ company, socialLinks, services, serviceCategories, professionalId, projects, heroPhotoUrl: initialHeroUrl, heroPhotoProjectId: initialHeroProjectId, isSetupMode = false, pendingProjects = [], canPublishProjects = false, collaborationsCount = 0, showImportedBanner = false, importedProjectId = null, adminCompanyId, tourKey, tourSeen, brands = [], brandOptions = [], locations = [] }: CompanyEditClientProps) {
+export function CompanyEditClient({ company, socialLinks, services, serviceCategories, professionalId, projects, heroPhotoUrl: initialHeroUrl, heroPhotoProjectId: initialHeroProjectId, isSetupMode = false, pendingProjects = [], canPublishProjects = false, collaborationsCount = 0, showImportedBanner = false, importedProjectId = null, adminCompanyId, tourKey, tourSeen, brands = [], brandOptions = [], brandFilterCategories = [], locations = [] }: CompanyEditClientProps) {
   const router = useRouter()
   const { user } = useAuth()
   const isOwner = user?.id === company.owner_id
@@ -204,6 +217,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   const ownerStatusOptions = useMemo(() => buildOwnerStatusOptions((k) => tStatus(k)), [tStatus])
   const contributorStatusOptions = useMemo(() => buildContributorStatusOptions((k) => tStatus(k)), [tStatus])
   const locale = useLocale()
+  const svcName = (s: ServiceLike) => svcNameFor(s, locale)
 
   // Admin override: set the active company cookie so server actions can access it
   useEffect(() => {
@@ -220,6 +234,8 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   const [email, setEmail] = useState(company.email ?? "")
   const [phone, setPhone] = useState(company.phone ?? "")
   const [address, setAddress] = useState(company.address ?? "")
+  // Google-vermelding van het kantoor; de Locatie-cel linkt ernaar.
+  const [placeId, setPlaceId] = useState<string | null>((company as { google_place_id?: string | null }).google_place_id ?? null)
   const [city, setCity] = useState(company.city ?? "")
   const [country, setCountry] = useState(company.country ?? "Netherlands")
   const [domain, setDomain] = useState(company.domain ?? (company.website ? company.website.replace(/^https?:\/\//i, "") : ""))
@@ -314,6 +330,18 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
   const [verifyCodeSent, setVerifyCodeSent] = useState(false)
   const [verifyError, setVerifyError] = useState<string | null>(null)
   const [isVerifying, setIsVerifying] = useState(false)
+
+  /** Het domein wijzigen gaat altijd via de verificatie: een klik op de
+   *  websitecel opent de pop-up met domein en bedrijfsmail. */
+  const openDomainVerify = () => {
+    setPendingDomain(domain ?? "")
+    setVerifyEmail("")
+    setVerifyCode("")
+    setVerifyCodeSent(false)
+    setVerifyError(null)
+    setDomainVerifyOpen(true)
+  }
+  const cleanDomain = (raw: string) => raw.trim().toLowerCase().replace(/^https?:\/\//i, "").replace(/^www\./, "").replace(/\/.*$/, "")
 
   // ── Delete state ──
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -680,7 +708,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
     if (!activeEditField && !editingSpecBar) return
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement
-      if (activeEditField && !target.closest(".contact-row-item.on, .ec.on, .ccm-dropdown")) {
+      if (activeEditField && !target.closest(".contact-row-item.on, .spec-item-edit.editing, .ec.on, .ccm-dropdown")) {
         setActiveEditField(null)
         setAddressQuery("")
         setAddressResults([])
@@ -997,6 +1025,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
 
       const newAddress = resolved.streetAddress || resolved.formattedAddress
       setAddress(newAddress)
+      setPlaceId(resolved.placeId ?? null)
       if (resolved.city) setCity(resolved.city)
       if (resolved.country) setCountry(resolved.country)
       setActiveEditField(null)
@@ -1429,6 +1458,8 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         companyId={company.id}
         onStatusClick={() => setStatusDialogOpen(true)}
         onSearchPreviewClick={() => setSearchPreviewOpen(true)}
+        hasBrands={!isPhotographer && Boolean(adminCompanyId)}
+        showroomCount={!isPhotographer && Boolean(adminCompanyId) ? locations.length : null}
       />
 
       {/* Tour replay — a discreet help link rather than a sub-nav pill
@@ -1505,7 +1536,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
               onClick={() => {
                 setSetupBannerDismissed(true)
                 if (highlightMissing) {
-                  const fieldMap: Record<string, string> = { name: "header", services: "header", description: "header", location: "office-location", domain: "contact" }
+                  const fieldMap: Record<string, string> = { name: "header", services: "header", description: "header", location: "office-location", domain: "details-bar" }
                   for (const [key, sectionId] of Object.entries(fieldMap)) {
                     if (!setupComplete[key as keyof typeof setupComplete]) {
                       const el = document.getElementById(sectionId)
@@ -1534,7 +1565,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
           >
             <EditBadge />
             {logoUrl ? (
-              <Image src={logoUrl} alt={name} width={100} height={100} className="company-icon-image" unoptimized />
+              <BrandLogo logoUrl={logoUrl} name={name} size={100} />
             ) : (
               (() => {
                 // Primary service (servicesOffered is ordered) stands in
@@ -1669,24 +1700,64 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         </section>
 
         {/* ════════════════════ SPECS BAR ════════════════════ */}
-        <div className="edit-specs-bar" data-tour="details" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 32, padding: "32px 0", borderTop: "1px solid #e8e8e6", borderBottom: "1px solid #e8e8e6" }}>
-          {/* Location — read-only, clicks scroll to Office Location */}
+        <div id="details-bar" className="edit-specs-bar" data-tour="details" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 32, padding: "32px 0", borderTop: "1px solid #e8e8e6", borderBottom: "1px solid #e8e8e6" }}>
+          {/* Locatie — het kantooradres (straat, stad); publiek een kaartlink.
+              Zat eerder in het contactblok onderaan, dat is weg. */}
           <div
-            className="spec-item-edit"
-            style={{ position: "relative", cursor: "pointer" }}
-            onClick={() => {
-              const el = document.getElementById("office-location")
-              if (el) {
-                window.scrollTo({ top: el.offsetTop - 130, behavior: "smooth" })
-                setActiveEditField("address")
-              }
-            }}
+            id="office-location"
+            className={`spec-item-edit${activeEditField === "address" ? " editing" : ""}`}
+            style={{ position: "relative" }}
+            onClick={() => { if (activeEditField !== "address") setActiveEditField("address") }}
             data-setup-highlight={highlightMissing && !setupComplete.location ? "true" : undefined}
           >
+            <EditBadge />
             <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("location")}</span>
-            <span className="spec-inp-inline" style={{ display: "block" }}>
-              {city ? `${city}, NL` : <span style={{ color: "var(--arco-light)" }}>{t("location")}</span>}
-            </span>
+              {activeEditField === "address" ? (
+                <div style={{ position: "relative" }}>
+                  <input
+                    autoFocus
+                    className="spec-inp-inline"
+                    value={addressQuery}
+                    onChange={(e) => searchAddress(e.target.value)}
+                    placeholder={t("search_address")}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        setActiveEditField(null)
+                        setAddressQuery("")
+                        setAddressResults([])
+                      }
+                    }}
+                  />
+                  {addressQuery.trim().length >= 2 && (
+                    <div className="ccm-dropdown" style={{ position: "absolute", left: 0, right: 0, top: "100%", marginTop: 4, zIndex: 20 }}>
+                      {addressResults.map((r) => (
+                        <button
+                          key={r.placeId}
+                          type="button"
+                          className="ccm-row"
+                          onMouseDown={(e) => { e.preventDefault(); handleSelectAddress(r.placeId) }}
+                        >
+                          <span className="truncate">
+                            <span style={{ fontWeight: 400 }}>{r.mainText}</span>
+                            {r.secondaryText && <span style={{ color: "#a1a1a0", marginLeft: 4 }}>{r.secondaryText}</span>}
+                          </span>
+                        </button>
+                      ))}
+                      {isAddressSearching && (
+                        <div className="ccm-row" style={{ color: "#a1a1a0", cursor: "default" }}>{t("searching")}</div>
+                      )}
+                      {!isAddressSearching && addressResults.length === 0 && (
+                        <div className="ccm-row" style={{ color: "#a1a1a0", cursor: "default" }}>{t("no_results_found")}</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="arco-card-title" style={{ color: address || city ? undefined : "#b0b0ae" }}>
+                  {/* Gewone tekst: een klik bewerkt. De kaartlink staat op de publieke pagina. */}
+                  {address ? [address.split(",")[0]?.trim(), city].filter(Boolean).join(", ") : city ? city : t("add_address")}
+                </div>
+              )}
           </div>
 
           {/* Established */}
@@ -1795,42 +1866,6 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
             </div>
           )}
 
-          {/* Languages */}
-          <div
-            className={`spec-item-edit${editingSpecBar === "languages" ? " editing" : ""}`}
-            style={{ position: "relative" }}
-            onClick={() => { if (editingSpecBar !== "languages") setEditingSpecBar("languages") }}
-          >
-            <EditBadge />
-            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("languages")}</span>
-            <div className="arco-card-title" style={{ color: languages.length > 0 ? undefined : "#b0b0ae" }}>
-              {languages.length > 0 ? languages.join(", ") : t("add_languages")}
-            </div>
-            {editingSpecBar === "languages" && (
-              <>
-                <div style={{ position: "fixed", inset: 0, zIndex: 10 }} onClick={e => { e.stopPropagation(); setEditingSpecBar(null); saveServices({ languages }) }} />
-                <div className="dd-panel" style={{ maxHeight: 260, overflowY: "auto" }}>
-                  {languageOptions.map(lang => (
-                    <div
-                      key={lang}
-                      className={`dd-row${languages.includes(lang) ? " sel" : ""}`}
-                      onClick={e => {
-                        e.stopPropagation()
-                        const updated = languages.includes(lang)
-                          ? languages.filter(l => l !== lang)
-                          : [...languages, lang]
-                        setLanguages(updated)
-                      }}
-                    >
-                      <span>{lang}</span>
-                      {languages.includes(lang) && <span className="dd-check">✓</span>}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-
           {/* Certificates (homeowner-facing) ─ Collaborations (photographer, read-only) */}
           {isPhotographer ? (
             <div className="spec-item-edit" style={{ cursor: "default" }}>
@@ -1875,6 +1910,30 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
               )}
             </div>
           )}
+
+          {/* Website — laatste in de balk; een nieuw domein gaat via de verificatie */}
+          <div
+            className={`spec-item-edit${domainVerifyOpen ? " editing" : ""}`}
+            onClick={openDomainVerify}
+            data-setup-highlight={highlightMissing && !setupComplete.domain ? "true" : undefined}
+          >
+            <EditBadge />
+            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{t("website")}</span>
+            <div className="arco-card-title" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, minWidth: 0, color: domain ? undefined : "#b0b0ae" }}>
+                {domain ? (
+                  <>
+                    {/* Gewone tekst: een klik bewerkt. De link staat op de publieke pagina. */}
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{domain}</span>
+                    {company.is_verified && (
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ color: "#10b981", flexShrink: 0 }} aria-hidden>
+                        <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" />
+                      </svg>
+                    )}
+                  </>
+                ) : t("add_website")}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1966,125 +2025,11 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
           adminCompanyId is gezet zodra een admin de pagina bekijkt. */}
       {!isPhotographer && Boolean(adminCompanyId) && (
         <>
-          <CompanyBrandsSection companyId={company.id} brands={brands} options={brandOptions} />
-          <CompanyLocationsSection companyId={company.id} locations={locations} />
+          <CompanyBrandsSection companyId={company.id} brands={brands} options={brandOptions} filterCategories={brandFilterCategories} />
+          <CompanyLocationsSection companyId={company.id} companyName={company.name} logoUrl={logoUrl} locations={locations} />
         </>
       )}
 
-      {/* ════════════════════ CONTACT SECTION ════════════════════ */}
-      <section id="contact" className="contact-section" style={{ marginBottom: 60 }}>
-        <div className="wrap">
-          <div className="section-header">
-            <h2 className="arco-section-title">{t("contact_information")}</h2>
-          </div>
-          <div className="contact-row">
-            {/* Office Location */}
-            <div
-              id="office-location"
-              className={`contact-row-item${activeEditField === "address" ? " on" : ""}`}
-              onClick={() => { if (activeEditField !== "address") setActiveEditField("address") }}
-            >
-              <EditBadge />
-              <span className="arco-eyebrow">{t("office_location")}</span>
-              {activeEditField === "address" ? (
-                <div style={{ position: "relative" }}>
-                  <input
-                    autoFocus
-                    className="contact-edit-input"
-                    value={addressQuery}
-                    onChange={(e) => searchAddress(e.target.value)}
-                    placeholder={t("search_address")}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") {
-                        setActiveEditField(null)
-                        setAddressQuery("")
-                        setAddressResults([])
-                      }
-                    }}
-                  />
-                  {addressQuery.trim().length >= 2 && (
-                    <div className="ccm-dropdown" style={{ position: "absolute", left: 0, right: 0, top: "100%", marginTop: 4, zIndex: 20 }}>
-                      {addressResults.map((r) => (
-                        <button
-                          key={r.placeId}
-                          type="button"
-                          className="ccm-row"
-                          onMouseDown={(e) => { e.preventDefault(); handleSelectAddress(r.placeId) }}
-                        >
-                          <span className="truncate">
-                            <span style={{ fontWeight: 400 }}>{r.mainText}</span>
-                            {r.secondaryText && <span style={{ color: "#a1a1a0", marginLeft: 4 }}>{r.secondaryText}</span>}
-                          </span>
-                        </button>
-                      ))}
-                      {isAddressSearching && (
-                        <div className="ccm-row" style={{ color: "#a1a1a0", cursor: "default" }}>{t("searching")}</div>
-                      )}
-                      {!isAddressSearching && addressResults.length === 0 && (
-                        <div className="ccm-row" style={{ color: "#a1a1a0", cursor: "default" }}>{t("no_results_found")}</div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <p className="contact-row-value">
-                  {address || city ? [address?.split(",")[0]?.trim(), city].filter(Boolean).join(", ") : <span className="contact-row-placeholder">{t("add_address")}</span>}
-                </p>
-              )}
-            </div>
-
-            {/* Website */}
-            <div
-              className={`contact-row-item${activeEditField === "website" ? " on" : ""}`}
-              onClick={() => { if (activeEditField !== "website") setActiveEditField("website") }}
-              data-setup-highlight={highlightMissing && !setupComplete.domain ? "true" : undefined}
-            >
-              <EditBadge />
-              <span className="arco-eyebrow">{t("website")}</span>
-              {activeEditField === "website" ? (
-                <input
-                  autoFocus
-                  className="contact-edit-input"
-                  defaultValue={domain}
-                  placeholder="example.com"
-                  onBlur={(e) => {
-                    const val = e.target.value.trim().replace(/^https?:\/\//i, "")
-                    if (val && val !== domain) {
-                      setPendingDomain(val)
-                      setVerifyEmail("")
-                      setVerifyCode("")
-                      setVerifyCodeSent(false)
-                      setVerifyError(null)
-                      setDomainVerifyOpen(true)
-                    }
-                    setActiveEditField(null)
-                  }}
-                  onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur() }}
-                />
-              ) : (
-                <p className="contact-row-value" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  {domain ? (
-                    <>
-                      <a href={`https://${domain}`} target="_blank" rel="noopener noreferrer" className="text-link-plain" onClick={(e) => e.stopPropagation()}>
-                        {domain}
-                      </a>
-                      {company.is_verified && (
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ color: "#10b981", flexShrink: 0 }}>
-                          <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" />
-                        </svg>
-                      )}
-                    </>
-                  ) : (
-                    <span className="contact-row-placeholder">{t("add_website")}</span>
-                  )}
-                </p>
-              )}
-            </div>
-
-          </div>
-        </div>
-      </section>
 
       {/* ════════════════════ FIRST PROJECT POPUP ════════════════════ */}
       {/* Segment-specific hand-off after the tour: publish, complete a
@@ -2392,7 +2337,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
             {/* Selected services — ordered, draggable, first = primary */}
             {/* Same field-label voice as the claim funnel's "Je
                 diensten" (.form-label), not an eyebrow. */}
-            <label className="form-label">{t("services_your")}</label>
+            <label className="form-label">{t("services_your")} <span style={{ fontWeight: 400, color: servicesOffered.length > MAX_CATEGORIES ? "#b42318" : "#9a9a98" }}>({servicesOffered.length}/{MAX_CATEGORIES})</span></label>
             <p style={{ fontSize: 12, color: "#9a9a98", margin: "0 0 10px" }}>{t("services_drag_hint")}</p>
             <div className="sp-selected-list">
               {servicesOffered.map((id, idx) => {
@@ -2432,7 +2377,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                         row and would push that one out of line. */}
                     <Mark size={28} strokeWidth={1} className="sp-item-mark" aria-hidden />
                     {/* The badge annotates the name, so it follows it. */}
-                    <span className="sp-item-name">{translateProfessionalService(svc.slug ?? svc.name, locale) ?? svc.name}</span>
+                    <span className="sp-item-name">{svcName(svc)}</span>
                     {idx === 0 && <span className="sp-primary-badge">{t("services_primary")}</span>}
                     <button
                       className="sp-remove"
@@ -2463,14 +2408,14 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                   .flatMap((g) => g.services.map((s) => ({ service: s, group: g })))
                   .filter(({ service: s }) => !servicesOffered.includes(s.id))
                   .filter(({ service: s }) => {
-                    const label = translateProfessionalService(s.slug ?? s.name, locale) ?? s.name
+                    const label = svcName(s)
                     return label.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)
                   })
                   .slice(0, 8)
                 if (matches.length === 0) {
                   return <div className="sp-selected-empty">{t("services_search_none")}</div>
                 }
-                const atMax = servicesOffered.length >= 12
+                const atMax = servicesOffered.length >= MAX_CATEGORIES
                 return (
                   <div className="sp-results">
                     {matches.map(({ service: s, group: g }) => (
@@ -2479,7 +2424,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                           if (!atMax) setServicesOffered((prev) => [...prev, s.id])
                           setSpQuery("")
                         }}>
-                        <span>{translateProfessionalService(s.slug ?? s.name, locale) ?? s.name}</span>
+                        <span>{svcName(s)}</span>
                         <span className="sp-result-group">{translateProfessionalService(g.slug, locale) ?? g.name}</span>
                       </button>
                     ))}
@@ -2506,11 +2451,11 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                     services: group.services.map((svc) => ({
                       id: svc.id,
                       slug: svc.slug ?? svc.name,
-                      label: translateProfessionalService(svc.slug ?? svc.name, locale) ?? svc.name,
+                      label: svcName(svc),
                     })),
                   }))}
                 selectedIds={servicesOffered}
-                max={12}
+                max={MAX_CATEGORIES}
                 onToggle={(id) =>
                   setServicesOffered((prev) =>
                     prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
@@ -2527,10 +2472,14 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                 <button
                   type="button"
                   className="btn-primary"
-                  disabled={servicesOffered.length === 0}
+                  disabled={servicesOffered.length === 0 || servicesOffered.length > MAX_CATEGORIES}
                   onClick={async () => {
                     if (servicesOffered.length === 0) {
                       toast.error(t("select_service"))
+                      return
+                    }
+                    if (servicesOffered.length > MAX_CATEGORIES) {
+                      toast.error(t("services_over_max"))
                       return
                     }
                     await saveServices()
@@ -2546,7 +2495,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                       router.push(`/dashboard/edit/${importedProjectId}`)
                     }
                   }}
-                  style={{ width: "100%", fontSize: 14, padding: "12px 20px", opacity: servicesOffered.length === 0 ? 0.5 : 1 }}
+                  style={{ width: "100%", fontSize: 14, padding: "12px 20px", opacity: servicesOffered.length === 0 || servicesOffered.length > MAX_CATEGORIES ? 0.5 : 1 }}
                 >
                   {t("services_save_continue")}
                 </button>
@@ -2609,7 +2558,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
               <div style={{ padding: "12px 0 0" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   {logoUrl ? (
-                    <img src={logoUrl} alt="" style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover" }} />
+                    <BrandLogo logoUrl={logoUrl} name={name} size={32} />
                   ) : (
                     <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#f5f5f3", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 500, color: "#5c5c5a" }}>
                       {getInitials(name)}
@@ -3008,11 +2957,13 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
         <div className="popup-overlay" onClick={() => setDomainVerifyOpen(false)}>
           <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
             <div className="popup-header">
-              <h3 className="arco-section-title">Verify domain</h3>
-              <button className="popup-close" onClick={() => setDomainVerifyOpen(false)} aria-label="Close">✕</button>
+              <h3 className="arco-section-title">{t("verify_title")}</h3>
+              <button className="popup-close" onClick={() => setDomainVerifyOpen(false)} aria-label={t("verify_close")}>✕</button>
             </div>
             <p style={{ fontSize: 13, fontWeight: 300, color: "var(--arco-light)", margin: "0 0 20px" }}>
-              To update your domain to <strong>{pendingDomain}</strong>, verify ownership by entering a code sent to your company email.
+              {verifyCodeSent
+                ? t.rich("verify_intro_code", { domain: pendingDomain, strong: (chunks) => <strong>{chunks}</strong> })
+                : t("verify_intro")}
             </p>
 
             {verifyError && (
@@ -3025,32 +2976,45 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
             {!verifyCodeSent ? (
               <>
                 <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 400, color: "var(--arco-black)" }}>
-                  Company email
+                  {t("verify_domain_label")}
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={pendingDomain}
+                  onChange={(e) => setPendingDomain(e.target.value)}
+                  onBlur={(e) => setPendingDomain(cleanDomain(e.target.value))}
+                  placeholder="example.com"
+                  className="w-full px-3 py-2 text-sm border border-border rounded-[3px] mb-4 focus:outline-none focus:border-foreground"
+                />
+                <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 400, color: "var(--arco-black)" }}>
+                  {t("verify_email_label")}
                 </label>
                 <input
                   type="email"
-                  autoFocus
                   value={verifyEmail}
                   onChange={(e) => setVerifyEmail(e.target.value)}
-                  placeholder={`yourname@${pendingDomain}`}
+                  placeholder={`${t("verify_email_local")}@${cleanDomain(pendingDomain) || "example.com"}`}
                   className="w-full px-3 py-2 text-sm border border-border rounded-[3px] mb-4 focus:outline-none focus:border-foreground"
                   onKeyDown={(e) => { if (e.key === "Enter") document.getElementById("verify-send-btn")?.click() }}
                 />
                 <div className="popup-actions">
-                  <button className="btn-tertiary" onClick={() => setDomainVerifyOpen(false)} style={{ flex: 1 }}>Cancel</button>
+                  <button className="btn-tertiary" onClick={() => setDomainVerifyOpen(false)} style={{ flex: 1 }}>{t("verify_cancel")}</button>
                   <button
                     id="verify-send-btn"
                     className="btn-primary"
-                    disabled={isVerifying || !verifyEmail.includes("@")}
+                    disabled={isVerifying || !verifyEmail.includes("@") || !cleanDomain(pendingDomain).includes(".")}
                     onClick={async () => {
                       setVerifyError(null)
                       setIsVerifying(true)
-                      const result = await sendDomainVerificationAction({ domain: pendingDomain, email: verifyEmail, companyName: name })
+                      const target = cleanDomain(pendingDomain)
+                      setPendingDomain(target)
+                      const result = await sendDomainVerificationAction({ domain: target, email: verifyEmail, companyName: name })
                       if (result.success) {
                         setVerifyCodeSent(true)
                         toast.success(t("verify_code_sent"))
                       } else {
-                        setVerifyError(result.error ?? "Failed to send code.")
+                        setVerifyError(result.error ?? t("verify_err_send"))
                       }
                       setIsVerifying(false)
                     }}
@@ -3063,7 +3027,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
             ) : (
               <>
                 <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 400, color: "var(--arco-black)" }}>
-                  Enter the 6-digit code sent to {verifyEmail}
+                  {t("verify_code_label", { email: verifyEmail })}
                 </label>
                 <input
                   type="text"
@@ -3084,15 +3048,15 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                     setIsVerifying(true)
                     const result = await sendDomainVerificationAction({ domain: pendingDomain, email: verifyEmail, companyName: name })
                     if (result.success) toast.success(t("verify_new_code"))
-                    else setVerifyError(result.error ?? "Failed to resend.")
+                    else setVerifyError(result.error ?? t("verify_err_resend"))
                     setIsVerifying(false)
                   }}
                   style={{ fontSize: 12, fontWeight: 300, color: "var(--arco-accent)", background: "none", border: "none", cursor: "pointer", padding: 0, marginBottom: 16 }}
                 >
-                  Resend code
+                  {t("verify_resend")}
                 </button>
                 <div className="popup-actions">
-                  <button className="btn-tertiary" onClick={() => setDomainVerifyOpen(false)} style={{ flex: 1 }}>Cancel</button>
+                  <button className="btn-tertiary" onClick={() => setDomainVerifyOpen(false)} style={{ flex: 1 }}>{t("verify_cancel")}</button>
                   <button
                     id="verify-code-btn"
                     className="btn-primary"
@@ -3107,7 +3071,7 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                         setDomainVerifyOpen(false)
                         toast.success(t("verify_success"))
                       } else {
-                        setVerifyError(result.error ?? "Invalid or expired code.")
+                        setVerifyError(result.error ?? t("verify_err_code"))
                       }
                       setIsVerifying(false)
                     }}

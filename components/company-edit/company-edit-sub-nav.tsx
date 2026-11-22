@@ -11,9 +11,12 @@ interface CompanyEditSubNavProps {
   companyId: string
   onStatusClick: () => void
   onSearchPreviewClick: () => void
+  /** Merken- en showroomsectie staan op de pagina (nu alleen voor admins). */
+  hasBrands?: boolean
+  /** null = geen showroomsectie; anders het aantal (1 heet "Showroom"). */
+  showroomCount?: number | null
 }
 
-const SECTION_IDS = ["header", "projects", "contact"] as const
 
 export function CompanyEditSubNav({
   statusIndicatorClass,
@@ -23,11 +26,14 @@ export function CompanyEditSubNav({
   companyId,
   onStatusClick,
   onSearchPreviewClick,
+  hasBrands = false,
+  showroomCount = null,
 }: CompanyEditSubNavProps) {
   const t = useTranslations("company_edit")
   const [activeSection, setActiveSection] = useState<string | null>(null)
   const [scrollDirection, setScrollDirection] = useState<"down" | "up">("down")
   const lastScrollY = useRef(0)
+  const sectionIds = ["header", "projects", ...(hasBrands ? ["brands"] : []), ...(showroomCount != null ? ["locations"] : [])]
 
   useEffect(() => {
     const handleScroll = () => {
@@ -37,7 +43,7 @@ export function CompanyEditSubNav({
 
       // Find active section (top third of viewport)
       let active: string | null = null
-      for (const id of SECTION_IDS) {
+      for (const id of sectionIds) {
         const element = document.getElementById(id)
         if (element) {
           const rect = element.getBoundingClientRect()
@@ -61,7 +67,8 @@ export function CompanyEditSubNav({
       window.removeEventListener("scroll", debouncedScroll)
       clearTimeout(timeout)
     }
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasBrands, showroomCount])
 
   const handleClick = (e: React.MouseEvent<HTMLAnchorElement>, targetId: string) => {
     e.preventDefault()
@@ -93,7 +100,8 @@ export function CompanyEditSubNav({
               {([
                 { id: "header", label: t("nav_details") },
                 { id: "projects", label: t("nav_projects") },
-                { id: "contact", label: t("nav_contact") },
+                ...(hasBrands ? [{ id: "brands", label: t("nav_brands") }] : []),
+                ...(showroomCount != null ? [{ id: "locations", label: showroomCount === 1 ? t("nav_showroom") : t("nav_showrooms") }] : []),
               ]).map(({ id, label }) => (
                 <a key={id} href={`#${id}`} onClick={(e) => handleClick(e, id)} className={getLinkClass(id)}>
                   {label}

@@ -46,11 +46,11 @@ const SCOPE_LABELS: Record<ProjectScope, Record<ScopeLocale, string>> = {
   },
   renovation: {
     en: "Renovation",
-    nl: "Gerenoveerd",
+    nl: "Renovatie",
   },
   interior_design: {
     en: "Interior Design",
-    nl: "Interieur ontworpen",
+    nl: "Interieur design",
   },
 }
 
@@ -294,51 +294,53 @@ const PROFESSIONAL_SERVICE_LABELS: Record<string, Record<ScopeLocale, string>> =
   finishing: { en: "Finishing", nl: "Afwerking" },
   systems: { en: "Systems", nl: "Installaties" },
   "outdoor-garden": { en: "Outdoor & Garden", nl: "Buiten & Tuin" },
+  // Eén naam per dienst: het beroep (Keukenstudio, Zwembadbouwer), gelijk aan
+  // categories.name / name_nl (migratie 306). Houd ze gelijk.
   // Design & Planning
   architect: { en: "Architect", nl: "Architect" },
-  "interior-designer": { en: "Interior Designer", nl: "Interieurarchitect" },
+  "interior-designer": { en: "Interior designer", nl: "Interieurarchitect" },
   "garden-designer": { en: "Garden designer", nl: "Tuinontwerper" },
   "structural-engineer": { en: "Structural engineer", nl: "Constructeur" },
-  "lighting-designer": { en: "Lighting Designer", nl: "Lichtontwerper" },
+  "lighting-designer": { en: "Lighting designer", nl: "Lichtontwerper" },
   // Construction
   builder: { en: "Builder", nl: "Aannemer" },
-  "tiles-stones": { en: "Tiles & Stones", nl: "Tegels & Natuursteen" },
-  roofing: { en: "Roofing", nl: "Dakbedekking" },
-  "windows-doors": { en: "Windows & doors", nl: "Ramen & Deuren" },
-  kitchens: { en: "Kitchens", nl: "Keukens" },
-  bathrooms: { en: "Bathrooms", nl: "Badkamers" },
-  "stairs-elevator": { en: "Stairs & Elevators", nl: "Trappen & Liften" },
-  "swimming-pools": { en: "Swimming pools", nl: "Zwembaden" },
+  "tiles-stones": { en: "Tile store", nl: "Tegelwinkel" },
+  roofing: { en: "Roofer", nl: "Dakdekker" },
+  "windows-doors": { en: "Window & door supplier", nl: "Kozijnenleverancier" },
+  kitchens: { en: "Kitchen studio", nl: "Keukenstudio" },
+  bathrooms: { en: "Bathroom studio", nl: "Badkamerstudio" },
+  "stairs-elevator": { en: "Stair maker", nl: "Trappenmaker" },
+  "swimming-pools": { en: "Pool builder", nl: "Zwembadbouwer" },
   // Renamed from "Saunas & Spas" — the broader umbrella (sauna, hammam,
   // home spa); the old slug kept here as alias for any stale references.
-  wellness: { en: "Wellness", nl: "Wellness" },
-  "saunas-spas": { en: "Wellness", nl: "Wellness" },
+  wellness: { en: "Wellness builder", nl: "Wellnessbouwer" },
+  "saunas-spas": { en: "Wellness builder", nl: "Wellnessbouwer" },
   // Finishing
   painter: { en: "Painter", nl: "Schilder" },
-  flooring: { en: "Flooring", nl: "Vloeren" },
+  flooring: { en: "Flooring store", nl: "Vloerenwinkel" },
   "cabinet-maker": { en: "Cabinet maker", nl: "Meubelmaker" },
   "interior-stylist": { en: "Interior stylist", nl: "Interieurstylist" },
-  upholstery: { en: "Upholstery", nl: "Stoffering" },
-  fireplace: { en: "Fireplaces", nl: "Open haarden" },
+  upholstery: { en: "Upholsterer", nl: "Stoffeerder" },
+  fireplace: { en: "Fireplace store", nl: "Haardenwinkel" },
   // `photographer` is the real categories.slug; `photgraphy` is a
   // misspelled legacy key kept so stored values still resolve.
   photographer: { en: "Photographer", nl: "Fotograaf" },
   photgraphy: { en: "Photographer", nl: "Fotograaf" },
-  furniture: { en: "Furniture", nl: "Meubels" },
-  art: { en: "Art", nl: "Kunst" },
-  lighting: { en: "Lighting", nl: "Verlichting" },
+  furniture: { en: "Furniture store", nl: "Meubelwinkel" },
+  art: { en: "Gallery", nl: "Galerie" },
+  lighting: { en: "Lighting store", nl: "Verlichtingswinkel" },
   // Systems
-  "electrical-systems": { en: "Electrical systems", nl: "Elektra" },
-  "heating-ventilation": { en: "Heating & Ventilation", nl: "Verwarming & Ventilatie" },
-  "solar-installer": { en: "Solar installer", nl: "Zonnepanelen installateur" },
-  "smart-homes": { en: "Smart homes", nl: "Smart home" },
-  "security-systems": { en: "Security systems", nl: "Beveiligingssystemen" },
+  "electrical-systems": { en: "Electrician", nl: "Elektricien" },
+  "heating-ventilation": { en: "Heating installer", nl: "Verwarmingsinstallateur" },
+  "solar-installer": { en: "Solar installer", nl: "Zonnepaneelinstallateur" },
+  "smart-homes": { en: "Smart home installer", nl: "Domotica-installateur" },
+  "security-systems": { en: "Security company", nl: "Beveiligingsbedrijf" },
   // Outdoor & Garden
   gardener: { en: "Gardener", nl: "Hovenier" },
-  "outdoor-furniture": { en: "Outdoor furniture", nl: "Tuinmeubelen" },
-  "shed-builder": { en: "Shed builder", nl: "Schuurenbouwer" },
-  "fencing-gates": { en: "Fencing & Gates", nl: "Hekwerk & Poorten" },
-  "outdoor-lighting": { en: "Outdoor lighting", nl: "Buitenverlichting" },
+  "outdoor-furniture": { en: "Outdoor furniture store", nl: "Tuinmeubelwinkel" },
+  "shed-builder": { en: "Garden house builder", nl: "Tuinhuisbouwer" },
+  "fencing-gates": { en: "Fence & gate installer", nl: "Hekwerkinstallateur" },
+  "outdoor-lighting": { en: "Outdoor lighting store", nl: "Buitenverlichtingswinkel" },
 }
 
 /**

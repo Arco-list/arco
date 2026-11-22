@@ -1,5 +1,6 @@
 "use client"
 
+import { LogoFill } from "@/components/brand/brand-logo"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Link } from "@/i18n/navigation"
 import Image from "next/image"
@@ -120,12 +121,7 @@ export function CreditedProfessionals({ professionals }: CreditedProfessionalsPr
 
                 <div className="credit-icon">
                   {professional.logo ? (
-                    <Image
-                      src={professional.logo}
-                      alt={professional.companyName}
-                      fill
-                      className="object-contain"
-                    />
+                    <LogoFill src={professional.logo} alt={professional.companyName} />
                   ) : (
                     // Initials of a company you have never heard of say
                     // nothing. The service icon at least tells you what

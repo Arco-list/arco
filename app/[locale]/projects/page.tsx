@@ -115,6 +115,9 @@ export default async function ProjectsPage({
         iconKey: row?.icon_key ?? h.spaceValue ?? null,
       }
     })
+      // Een ruimte zonder uitsnede staat niet in de rij: de ingang is een
+      // rij foto's, een los pictogram ertussen oogt als een gat.
+      .filter((card) => Boolean(card.cutoutUrl))
   } catch { /* zonder cirkels is de pagina nog steeds de pagina */ }
 
   // Live count for the outro platform block.

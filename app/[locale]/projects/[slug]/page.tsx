@@ -7,9 +7,12 @@ import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { SubNav } from "@/components/project/sub-nav"
 import { ProjectHero } from "@/components/project/project-hero"
+import { focusFromRow } from "@/lib/images/focus"
 import { ProjectHeader } from "@/components/project/project-header"
 import { SpecificationsBar } from "@/components/project/specifications-bar"
 import { PhotoTour } from "@/components/project/photo-tour"
+import { getPhotoBrandTags } from "@/lib/projects/photo-brand-tags"
+import { pickHeroPhoto } from "@/lib/projects/hero-photo"
 import { CreditedProfessionals } from "@/components/project/credited-professionals"
 import { RelatedProjects } from "@/components/project/related-projects"
 import { SimilarProjects } from "@/components/project/similar-projects"
@@ -309,7 +312,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   const [photosResult, professionalsResult, featuresResult, photographerResult] = await Promise.all([
     supabase
       .from("project_photos")
-      .select("id, url, caption, alt_text, feature_id, is_primary, order_index, width, height")
+      .select("id, url, caption, alt_text, feature_id, is_primary, order_index, width, height, focus_x, focus_y")
       .eq("project_id", project.id)
       .order("is_primary", { ascending: false })
       .order("order_index", { ascending: true }),
@@ -414,6 +417,10 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       if (!p.space) p.space = "other"
     }
   }
+
+  // Merk-stippen per foto (migratie 317), voor de lightbox.
+  const brandTagsByPhoto = await getPhotoBrandTags(enrichedPhotos.map((p) => p.id), isAdmin)
+  const photosWithTags = enrichedPhotos.map((p) => ({ ...p, brandTags: brandTagsByPhoto.get(p.id) ?? [] }))
 
   // Get categories for professionals
   const categoryIds = Array.from(new Set(
@@ -763,6 +770,12 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
   }
 
   const coverPhoto = photos.find(p => p.is_primary) ?? photos[0]
+  // Hero: de cover als die liggend is, anders de eerste liggende foto
+  // (lib/projects/hero-photo). Kaarten en delen houden de cover.
+  const heroPhoto = pickHeroPhoto(
+    coverPhoto as (typeof coverPhoto & { width?: number | null; height?: number | null }) | undefined,
+    [...photos].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)) as Array<typeof coverPhoto & { width?: number | null; height?: number | null }>,
+  )
 
   // Resolve UUIDs → human-readable names
   // Type: edit page saves to project_type_category_id (UUID → categories table)
@@ -931,7 +944,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
       <div className="min-h-screen bg-white">
         <Header />
 
-        <ProjectHero imageUrl={coverPhoto?.url ?? null} alt={localizedTitle} photoCount={enrichedPhotos.length} />
+        <ProjectHero imageUrl={heroPhoto?.url ?? null} alt={localizedTitle} photoCount={enrichedPhotos.length} brandTags={heroPhoto ? brandTagsByPhoto.get(heroPhoto.id) ?? [] : []} imageWidth={heroPhoto?.width ?? null} imageHeight={heroPhoto?.height ?? null} focus={focusFromRow(heroPhoto as { focus_x?: number | null; focus_y?: number | null } | undefined)} />
 
         <SubNav projectId={project.id} title={localizedTitle} subtitle={[resolvedType, project.address_city].filter(Boolean).join(" · ")} imageUrl={coverPhoto?.url ?? null} slug={project.slug} />
 
@@ -971,7 +984,7 @@ export default async function ProjectDetailPage({ params, searchParams }: PagePr
           The outer .wrap provides consistent horizontal padding.
         */}
         <div className="wrap" style={{ marginBottom: '60px' }}>
-          <PhotoTour photos={enrichedPhotos} projectId={project.id} spaces={uniqueSpaces} />
+          <PhotoTour photos={photosWithTags} projectId={project.id} spaces={uniqueSpaces} />
         </div>
 
         <CreditedProfessionals professionals={formattedProfessionals} />

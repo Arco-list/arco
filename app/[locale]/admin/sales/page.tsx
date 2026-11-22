@@ -20,6 +20,16 @@ export default async function ProspectsPage() {
   const { companies, totalCompanies, funnel } = await fetchSalesCompanies({ limit: 50 })
   const totalEmailsSent = companies.reduce((sum, c) => sum + c.emailsSent, 0)
 
+  // Diensten voor het servicefilter en de vaste service bij de import.
+  const { data: serviceRows } = await supabase
+    .from("categories")
+    .select("id, name, slug, parent_id, sort_order")
+    .eq("is_active", true)
+    .eq("category_type", "Professional")
+    .order("sort_order", { ascending: true, nullsFirst: false })
+  const serviceOptions = ((serviceRows ?? []) as Array<{ id: string; name: string; slug: string | null; parent_id: string | null; sort_order: number | null }>)
+    .map((r) => ({ id: r.id, name: r.name, slug: r.slug, parentId: r.parent_id, sortOrder: r.sort_order }))
+
   // Most recently used Apollo list ID — pre-fills the Import Contacts
   // popup so the admin can re-import the same list with one click.
   const { data: lastListRow } = await supabase
@@ -73,6 +83,7 @@ export default async function ProspectsPage() {
         currentApolloListId={currentApolloListId}
         apolloProspectsCount={apolloProspectsCount ?? 0}
         apolloSyncStatus={apolloSyncStatus}
+        serviceOptions={serviceOptions}
       />
     </div>
   )

@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation"
+import { selectAll } from "@/lib/supabase/select-all"
 import { getTranslations } from "next-intl/server"
 
 import { CompanyEditClient } from "@/components/company-edit/company-edit-client"
-import type { BrandOption, CompanyBrandLink } from "@/components/company-edit/company-brands-section"
+import type { BrandFilterCategory, BrandOption, CompanyBrandLink } from "@/components/company-edit/company-brands-section"
 import { locationFromRow } from "@/lib/locations/types"
 import { createServerSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { getActiveCompanyId } from "@/lib/active-company"
@@ -187,7 +188,7 @@ export default async function CompanySettingsPage({
       .order("platform"),
     supabase
       .from("categories")
-      .select("id, name, slug, parent_id, sort_order, can_publish_projects")
+      .select("id, name, slug, parent_id, sort_order, can_publish_projects, name_nl")
       .eq("is_active", true)
       .order("sort_order", { ascending: true, nullsFirst: false })
       .order("name"),
@@ -244,6 +245,7 @@ export default async function CompanySettingsPage({
       name: item.name,
       slug: item.slug,
       canPublishProjects: item.can_publish_projects === true,
+      nameNl: (item as { name_nl?: string | null }).name_nl ?? null,
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
 
@@ -254,7 +256,7 @@ export default async function CompanySettingsPage({
       const children = cats
         .filter((c) => c.parent_id === parent.id)
         .sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99) || a.name.localeCompare(b.name))
-        .map((c) => ({ id: c.id, name: c.name, slug: c.slug }))
+        .map((c) => ({ id: c.id, name: c.name, slug: c.slug, nameNl: (c as { name_nl?: string | null }).name_nl ?? null }))
       return { name: parent.name, slug: parent.slug, services: children }
     })
     .filter((g) => g.services.length > 0)
@@ -402,20 +404,44 @@ export default async function CompanySettingsPage({
   // Merken en vestigingen (migratie 297). Service-role voor de merkenlijst:
   // brands is admin-only in RLS zolang de productlaag niet publiek is.
   const sr297 = createServiceRoleSupabaseClient()
-  const [{ data: companyBrandRows }, { data: brandOptionRows }, { data: locationRows }] = await Promise.all([
+  const [{ data: companyBrandRows }, { data: brandOptionRows }, { data: locationRows }, { data: brandCategoryRows }, { data: productCategoryRows }] = await Promise.all([
     sr297
       .from("company_brands")
       .select("brand_id, is_official_dealer, position, brands(id, slug, name, logo_url, status)")
       .eq("company_id", company.id)
       .order("position")
       .order("created_at"),
-    sr297.from("brands").select("id, slug, name, logo_url").neq("status", "deactivated").order("name"),
+    selectAll(() => sr297.from("brands").select("id, slug, name, logo_url").neq("status", "deactivated").order("name").order("id")),
     sr297.from("locations").select("*").eq("company_id", company.id).order("position").order("created_at"),
+    selectAll(() => sr297.from("brand_categories").select("brand_id, category_id").order("brand_id").order("category_id")),
+    sr297.from("product_categories").select("id, parent_id, name, name_nl, order_index"),
   ])
+  // Filterpills in de merkkiezer: de hoofdcategorie (Verlichting, Meubels,
+  // Buiten…) van elke categorie van een merk.
+  const productCats = (productCategoryRows ?? []) as Array<{ id: string; parent_id: string | null; name: string; name_nl: string | null; order_index: number | null }>
+  const catById = new Map(productCats.map((pc) => [pc.id, pc]))
+  const rootOf = (id: string): string => {
+    let cur = catById.get(id)
+    for (let i = 0; cur?.parent_id && i < 6; i++) cur = catById.get(cur.parent_id)
+    return cur?.id ?? id
+  }
+  const mainsByBrand = new Map<string, Set<string>>()
+  for (const r of (brandCategoryRows ?? []) as Array<{ brand_id: string; category_id: string }>) {
+    const set = mainsByBrand.get(r.brand_id) ?? new Set<string>()
+    set.add(rootOf(r.category_id))
+    mainsByBrand.set(r.brand_id, set)
+  }
+  const mainCount = new Map<string, number>()
+  for (const set of mainsByBrand.values()) for (const id of set) mainCount.set(id, (mainCount.get(id) ?? 0) + 1)
+  const brandFilterCategories: BrandFilterCategory[] = Array.from(mainCount.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([id]) => catById.get(id))
+    .filter((pc): pc is NonNullable<typeof pc> => Boolean(pc))
+    .map((pc) => ({ id: pc.id, name: pc.name, nameNl: pc.name_nl }))
   const companyBrands: CompanyBrandLink[] = ((companyBrandRows ?? []) as any[])
     .filter((r) => r.brands && r.brands.status !== "deactivated")
-    .map((r) => ({ id: r.brands.id, slug: r.brands.slug, name: r.brands.name, logoUrl: r.brands.logo_url ?? null, isOfficialDealer: r.is_official_dealer === true }))
-  const brandOptions: BrandOption[] = ((brandOptionRows ?? []) as any[]).map((b) => ({ id: b.id, slug: b.slug, name: b.name, logoUrl: b.logo_url ?? null }))
+    .map((r) => ({ id: r.brands.id, slug: r.brands.slug, name: r.brands.name, logoUrl: r.brands.logo_url ?? null, isOfficialDealer: r.is_official_dealer === true, categoryIds: Array.from(mainsByBrand.get(r.brands.id) ?? []) }))
+  const brandOptions: BrandOption[] = ((brandOptionRows ?? []) as any[]).map((b) => ({ id: b.id, slug: b.slug, name: b.name, logoUrl: b.logo_url ?? null, categoryIds: Array.from(mainsByBrand.get(b.id) ?? []) }))
   const companyLocations = ((locationRows ?? []) as Record<string, unknown>[]).map(locationFromRow)
 
   const pendingProjects = (pendingProjectLinks ?? [])
@@ -446,6 +472,7 @@ export default async function CompanySettingsPage({
       adminCompanyId={isAdmin ? company.id : undefined}
       brands={companyBrands}
       brandOptions={brandOptions}
+      brandFilterCategories={brandFilterCategories}
       locations={companyLocations}
       tourKey={tourKey}
       tourSeen={tourSeen}

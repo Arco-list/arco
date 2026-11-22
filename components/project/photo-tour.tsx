@@ -1,5 +1,7 @@
 "use client"
 
+import { PhotoBrandDots } from "@/components/project/photo-brand-dots"
+import type { PhotoBrandTag } from "@/lib/projects/photo-brand-tags"
 import { useState, useRef, useCallback, useMemo, useEffect } from "react"
 import Image from "next/image"
 import { ChevronRight } from "lucide-react"
@@ -13,6 +15,8 @@ interface Photo {
   feature_id: string | null
   /** Space slug derived from the feature's linked space */
   space?: string | null
+  /** Merk-stippen op deze foto (migratie 317). */
+  brandTags?: PhotoBrandTag[]
   /** Native pixel dimensions from upload. When present we render the
    *  thumbnail at its native aspect ratio (so portrait photos stay
    *  tall and landscape photos stay wide in the masonry grid).
@@ -643,6 +647,9 @@ export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
                     }
                   }}
                 />
+                {(photo.brandTags?.length ?? 0) > 0 && (
+                  <PhotoBrandDots tags={photo.brandTags ?? []} src={photo.url} width={photo.width} height={photo.height} fit="cover" />
+                )}
               </div>
             )
           })}
@@ -726,6 +733,15 @@ export function PhotoTour({ photos, spaces = [] }: PhotoTourProps) {
                 className="lightbox-image"
                 priority
               />
+              {/* Merk-stippen op deze foto (migratie 317). */}
+              {(lightboxPhotos[lightboxIndex].brandTags?.length ?? 0) > 0 && (
+                <PhotoBrandDots
+                  tags={lightboxPhotos[lightboxIndex].brandTags ?? []}
+                  src={lightboxPhotos[lightboxIndex].url}
+                  width={lightboxPhotos[lightboxIndex].width}
+                  height={lightboxPhotos[lightboxIndex].height}
+                />
+              )}
             </div>
 
             {/* Space navigation pills — highlight based on current photo's space */}

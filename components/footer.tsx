@@ -9,8 +9,8 @@ import { useAuth } from "@/contexts/auth-context"
 export function Footer() {
   const t = useTranslations("footer")
   const tn = useTranslations("nav")
-  // Photography landing is admin-only for now — same user_types check
-  // the header uses for its admin-only nav items.
+  // Photography landing and brands are admin-only for now — same
+  // user_types check the header uses for its admin-only nav items.
   const { profile } = useAuth()
   const hasAdminRole = (profile?.user_types as string[] | null)?.includes("admin") ?? false
 
@@ -47,6 +47,10 @@ export function Footer() {
                 <h4 className="arco-eyebrow footer-heading mb-1.5">{t("discover")}</h4>
                 <Link href="/projects" className="footer-link">{tn("projects")}</Link>
                 <Link href="/professionals" className="footer-link">{tn("professionals")}</Link>
+                {/* Merken: alleen voor admins zolang de merkenlaag niet publiek is. */}
+                {hasAdminRole && (
+                  <Link href="/brands" className="footer-link">{tn("admin_brands")}</Link>
+                )}
               </div>
 
               <div className="footer-col">

@@ -70,10 +70,11 @@ export async function updateCategoryAction(
     slug?: string
     parentId?: string | null
     /** Beroepsnamen (alleen diensten): enkelvoud en meervoud, EN en NL. */
-    proName?: string | null
-    proNameNl?: string | null
     proNamePlural?: string | null
     proNamePluralNl?: string | null
+    /** Marktomvang NL (alleen diensten): null = niet ingevuld. */
+    tamNl?: number | null
+    samNl?: number | null
   }
 ): Promise<ActionResult> {
   const parseResult = categoryIdSchema.safeParse(input.categoryId)
@@ -124,8 +125,16 @@ export async function updateCategoryAction(
     }
     updateData.name_nl = nl.length ? nl : null
   }
+  for (const [key, column] of [["tamNl", "tam_nl"], ["samNl", "sam_nl"]] as const) {
+    const raw = input[key]
+    if (raw === undefined) continue
+    if (raw !== null && (!Number.isInteger(raw) || raw < 0)) {
+      return createErrorResponse('VALIDATION', 'TAM and SAM must be whole numbers of 0 or more', {}, 'admin-categories-update')
+    }
+    updateData[column] = raw
+  }
   const proFields: Array<[keyof typeof input, string]> = [
-    ["proName", "pro_name"], ["proNameNl", "pro_name_nl"], ["proNamePlural", "pro_name_plural"], ["proNamePluralNl", "pro_name_plural_nl"],
+    ["proNamePlural", "pro_name_plural"], ["proNamePluralNl", "pro_name_plural_nl"],
   ]
   for (const [key, column] of proFields) {
     const raw = input[key]
@@ -710,11 +719,6 @@ export async function toggleServiceSpaceAction(input: { serviceId: string; space
   return toggleLink("service_spaces", ["service_id", "space_id"], { a: input.serviceId, b: input.spaceId, enabled: input.enabled }, 'admin-categories-service-space')
 }
 
-/** Productgroep ↔ ruimte: waar een productgroep thuishoort. */
-export async function toggleProductCategorySpaceAction(input: { productCategoryId: string; spaceId: string; enabled: boolean }): Promise<ActionResult> {
-  return toggleLink("product_category_spaces", ["product_category_id", "space_id"], { a: input.productCategoryId, b: input.spaceId, enabled: input.enabled }, 'admin-categories-product-space')
-}
-
 export async function uploadCategoryImageAction(
   formData: FormData
 ): Promise<ActionResult & { imageUrl?: string }> {
@@ -835,6 +839,75 @@ export async function updateSpaceImageAction(
 /**
  * Swap order_index of two product categories (for up/down reordering).
  */
+/** Zet een productcategorie aan of uit (migratie 320). Uit = niet in menu en
+ *  filters, met alles eronder; merken en collecties houden hun koppeling. */
+export async function setProductCategoryActiveAction(
+  id: string,
+  isActive: boolean,
+): Promise<ActionResult<{ success: true }>> {
+  const { error } = await assertAdmin()
+  if (error) return createErrorResponse("AUTH", error.message, {}, "admin-product-cat-active")
+
+  const supabase = createServiceRoleSupabaseClient()
+  const { error: updateError } = await supabase
+    .from("product_categories")
+    .update({ is_active: isActive } as any)
+    .eq("id", id)
+  if (updateError) return createErrorResponse("DATABASE", updateError.message, {}, "admin-product-cat-active")
+
+  revalidatePath("/admin/categories")
+  revalidatePath("/products")
+  revalidatePath("/brands")
+  return createSuccessResponse({ success: true as const })
+}
+
+/** Eigen beeld voor de schijf van een productgroep op /products (migratie
+ *  321): een uitsnede of productfoto op wit, ongewijzigd opgeslagen. */
+export async function uploadProductCategoryImageAction(
+  formData: FormData,
+): Promise<ActionResult & { imageUrl?: string }> {
+  const { error } = await assertAdmin()
+  if (error) return createErrorResponse("AUTH", error.message, {}, "admin-product-cat-image")
+
+  const file = formData.get("file") as File | null
+  const categoryId = formData.get("categoryId") as string | null
+  if (!file || !categoryId || !categoryIdSchema.safeParse(categoryId).success) {
+    return createErrorResponse("VALIDATION", "Missing file or category", {}, "admin-product-cat-image")
+  }
+  if (file.size > 5 * 1024 * 1024) return createErrorResponse("VALIDATION", "Image must be under 5MB", {}, "admin-product-cat-image")
+  const type = file.type || "image/png"
+  const ext = type === "image/webp" ? "webp" : type === "image/jpeg" ? "jpg" : "png"
+  // Eigen naam per upload: anders blijft de oude versie in de cache hangen.
+  const path = `product-categories/${categoryId}-${Date.now()}.${ext}`
+
+  const serviceSupabase = createServiceRoleSupabaseClient()
+  const buffer = Buffer.from(await file.arrayBuffer())
+  const { error: uploadError } = await serviceSupabase.storage.from("company-assets").upload(path, buffer, { contentType: type, upsert: true })
+  if (uploadError) return createErrorResponse("DATABASE", `Upload failed: ${uploadError.message}`, {}, "admin-product-cat-image")
+  const { data: urlData } = serviceSupabase.storage.from("company-assets").getPublicUrl(path)
+  const imageUrl = urlData.publicUrl
+  const { error: updateError } = await serviceSupabase.from("product_categories").update({ image_url: imageUrl } as any).eq("id", categoryId)
+  if (updateError) return createErrorResponse("DATABASE", updateError.message, {}, "admin-product-cat-image")
+
+  revalidatePath("/admin/categories")
+  revalidatePath("/products")
+  return { ...createSuccessResponse({ imageUrl }), imageUrl }
+}
+
+/** Terug naar automatisch: de productfoto van de meest toegepaste collectie. */
+export async function clearProductCategoryImageAction(categoryId: string): Promise<ActionResult> {
+  const parsed = categoryIdSchema.safeParse(categoryId)
+  if (!parsed.success) return createErrorResponse("VALIDATION", "Invalid category id", {}, "admin-product-cat-image")
+  const { error } = await assertAdmin()
+  if (error) return createErrorResponse("AUTH", error.message, {}, "admin-product-cat-image")
+  const serviceSupabase = createServiceRoleSupabaseClient()
+  const { error: updateError } = await serviceSupabase.from("product_categories").update({ image_url: null } as any).eq("id", parsed.data)
+  if (updateError) return createErrorResponse("DATABASE", updateError.message, {}, "admin-product-cat-image")
+  revalidatePath("/admin/categories")
+  revalidatePath("/products")
+  return createSuccessResponse({})
+}
+
 export async function swapProductCategoryOrderAction(
   idA: string,
   orderA: number,

@@ -1,5 +1,6 @@
 "use client"
 
+import { resolveDefaultKind } from "@/lib/publish-scope"
 import { useEffect, useRef, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
@@ -230,9 +231,31 @@ export function ImportProjectModal({
     setIsCreatingBlank(true)
     try {
       const slug = `untitled-project-${Date.now()}`
+      // Begint meteen als het juiste soort: een keukenbouwer krijgt een
+      // ruimteproject (met zijn ruimte als die er maar één is), net als
+      // bij de import. Lukt het opzoeken niet, dan een gewoon project.
+      let kindFields: { kind?: "project" | "partial"; primary_space_id?: string | null } = {}
+      try {
+        const { data: company } = await supabase
+          .from("companies")
+          .select("primary_service_id, services_offered")
+          .eq("id", companyId)
+          .maybeSingle()
+        const serviceIds = Array.from(new Set([company?.primary_service_id, ...(company?.services_offered ?? [])].filter(Boolean))) as string[]
+        if (serviceIds.length > 0) {
+          const { data: services } = await supabase.from("categories").select("id, publish_scope").in("id", serviceIds)
+          const rows = (services ?? []) as Array<{ id: string; publish_scope: string }>
+          if (resolveDefaultKind(rows, company?.primary_service_id) === "partial") {
+            const partialIds = rows.filter((r) => r.publish_scope === "partial").map((r) => r.id)
+            const { data: links } = await supabase.from("service_spaces").select("space_id").in("service_id", partialIds)
+            const spaceIds = Array.from(new Set(((links ?? []) as Array<{ space_id: string }>).map((l) => l.space_id)))
+            kindFields = { kind: "partial", primary_space_id: spaceIds.length === 1 ? spaceIds[0] : null }
+          }
+        }
+      } catch { /* gewoon project */ }
       const { data: project, error } = await supabase
         .from("projects")
-        .insert({ title: "Untitled Project", client_id: userId, status: "draft" as const, slug })
+        .insert({ title: "Untitled Project", client_id: userId, status: "draft" as const, slug, ...kindFields })
         .select("id")
         .single()
 

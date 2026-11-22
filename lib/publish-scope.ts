@@ -42,3 +42,42 @@ export function publishScopeLabel(scope: PublishScope, locale: string): string {
 export function publishScopeHint(scope: PublishScope, locale: string): string {
   return locale === "nl" ? HINT_NL[scope] : PUBLISH_SCOPE_HINT[scope]
 }
+
+/** De drie scopes van een project (projects.project_type, canoniek). */
+export const ALL_SCOPES = ["new_build", "renovation", "interior_design"] as const
+export type ScopeSlug = (typeof ALL_SCOPES)[number]
+
+/** De scopes die een bedrijf ziet: de vereniging van project_scopes van
+ *  zijn diensten met stand 'project'. Een dienst met een lege lijst, of
+ *  een bedrijf zonder dienst met stand 'project', krijgt alle drie. */
+export function resolveScopeSlugs(services: Array<{ publish_scope: string; project_scopes: string[] | null }>): ScopeSlug[] {
+  const projectServices = services.filter((s) => s.publish_scope === "project")
+  if (projectServices.length === 0) return [...ALL_SCOPES]
+  const set = new Set<string>()
+  for (const s of projectServices) {
+    const list = s.project_scopes ?? []
+    if (list.length === 0) return [...ALL_SCOPES]
+    for (const x of list) set.add(x)
+  }
+  return ALL_SCOPES.filter((x) => set.has(x))
+}
+
+
+/** Wat een nieuw project van een bedrijf standaard is: een ruimteproject
+ *  wanneer het alleen diensten met stand 'partial' heeft; bij beide
+ *  standen beslist de primaire dienst. Eén regel voor de import
+ *  (lib/projects/publish-options.ts) en voor "Leeg project". */
+export function resolveDefaultKind(
+  services: Array<{ id: string; publish_scope: string }>,
+  primaryServiceId: string | null | undefined,
+): "project" | "partial" {
+  const scopes = services.map((s) => s.publish_scope)
+  const hasProject = scopes.includes("project")
+  const hasPartial = scopes.includes("partial")
+  if (hasPartial && !hasProject) return "partial"
+  if (hasPartial && hasProject) {
+    const primary = services.find((s) => s.id === primaryServiceId)?.publish_scope
+    return primary === "partial" ? "partial" : "project"
+  }
+  return "project"
+}

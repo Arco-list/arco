@@ -1,5 +1,6 @@
 "use client"
 
+import { LogoFill } from "@/components/brand/brand-logo"
 import { Link } from "@/i18n/navigation"
 import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
@@ -131,15 +132,7 @@ export const ProfessionalCard = memo(function ProfessionalCard({
         {/* Text — logo spans title + subtitle */}
         <div className="pro-card-info">
           {logoUrl ? (
-            <img
-              src={logoUrl}
-              alt=""
-              className="pro-card-logo"
-              width={40}
-              height={40}
-              loading="lazy"
-              decoding="async"
-            />
+            <span className="pro-card-logo pro-card-logo-disc"><LogoFill src={logoUrl} /></span>
           ) : (
             (() => {
               // No logo: show the service mark instead of an initial.

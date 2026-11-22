@@ -1,7 +1,9 @@
 "use client"
 
+import { spaceLabelSingular } from "@/lib/type-labels"
 import { Fragment, useCallback, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import { useLocale } from "next-intl"
 import Link from "next/link"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
@@ -96,6 +98,8 @@ export type AdminProjectRow = {
   slug: string | null
   status: ProjectStatus
   projectType: string | null
+  /** "new_build" | "renovation" | "interior_design", "space:<slug>" voor een ruimteproject, of null. */
+  scopeKey: string | null
   imageCount: number
   isFeatured: boolean
   location: string | null
@@ -138,7 +142,63 @@ interface AdminProjectsDataTableProps {
   firstReviewProjectId?: string | null
 }
 
+const NONE = "__none__"
+
+/** Multi-select filter in de stijl van het statusfilter. Opties met een
+ *  `group` krijgen een kopje boven elke nieuwe groep. */
+function MultiFilter({ label, plural, options, value, onChange }: {
+  label: string
+  plural: string
+  options: Array<{ value: string; label: string; group?: string }>
+  value: string[]
+  onChange: (next: string[]) => void
+}) {
+  const toggle = (v: string) => onChange(value.includes(v) ? value.filter((x) => x !== v) : [...value, v])
+  const current = value.length === 1 ? options.find((o) => o.value === value[0])?.label ?? value[0] : null
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={`w-[140px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 shrink-0 ${
+            value.length > 0 ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"
+          }`}
+        >
+          <span className="truncate">
+            {value.length === 0 ? <span className="text-[#6b6b68]">All {plural}</span> : current ?? `${value.length} ${plural}`}
+          </span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-[180px] max-h-[360px] overflow-y-auto z-[120]" aria-label={`Filter by ${label}`}>
+        <DropdownMenuItem onClick={(e) => { e.preventDefault(); if (value.length > 0) onChange([]) }} className="text-xs">
+          Clear selection
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {options.map((o, i) => (
+          <Fragment key={o.value}>
+            {o.group !== undefined && o.group !== options[i - 1]?.group && (
+              o.group ? <DropdownMenuLabel className="text-[11px] text-[#a1a1a0] font-normal">{o.group}</DropdownMenuLabel> : <DropdownMenuSeparator />
+            )}
+            <DropdownMenuCheckboxItem
+              checked={value.includes(o.value)}
+              onCheckedChange={() => toggle(o.value)}
+              onSelect={(e) => e.preventDefault()}
+              className="text-xs"
+            >
+              {o.label}
+            </DropdownMenuCheckboxItem>
+          </Fragment>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewProjectId }: AdminProjectsDataTableProps) {
+  const locale = useLocale()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -339,7 +399,12 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
       cell: ({ row }) => {
         const project = row.original
         const { title, slug, projectType, location, isFeatured } = project
-        const descriptor = [projectType, location].filter(Boolean).join(" · ")
+        // Een ruimteproject "is" zijn ruimte (Tuin, Keuken): die staat waar
+        // een project zijn type toont, zoals op de kaarten.
+        const spaceLabel = project.scopeKey?.startsWith("space:")
+          ? spaceLabelSingular(project.scopeKey.slice(6), locale)
+          : null
+        const descriptor = [spaceLabel ?? projectType, location].filter(Boolean).join(" · ")
         return (
           <div className="flex items-start gap-2 min-w-0">
             <button
@@ -730,10 +795,35 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
     },
     // The "…" actions column is gone: the row itself opens the same
     // menu at the click position (companies pattern).
-  ], [])
+  ], [locale])
+
+  // Type- en scopefilter: voorfilters op de data (multi-select, leeg =
+  // alles). De statusteller en de funnel volgen zo dezelfde selectie.
+  const [typeFilter, setTypeFilter] = useState<string[]>([])
+  const [scopeFilter, setScopeFilter] = useState<string[]>([])
+  const typeOptions = useMemo(() => {
+    const labels = Array.from(new Set(projects.map((p) => p.projectType).filter((t): t is string => Boolean(t)))).sort((a, b) => a.localeCompare(b))
+    return [...labels.map((l) => ({ value: l, label: l })), { value: NONE, label: "No type" }]
+  }, [projects])
+  const scopeOptions = useMemo(() => {
+    const spaces = Array.from(new Set(projects.map((p) => p.scopeKey).filter((k): k is string => Boolean(k?.startsWith("space:")))))
+      .sort((a, b) => a.localeCompare(b))
+    return [
+      { group: "Project", value: "new_build", label: "New build" },
+      { group: "Project", value: "renovation", label: "Renovation" },
+      { group: "Project", value: "interior_design", label: "Interior design" },
+      ...spaces.map((k) => ({ group: "Space project", value: k, label: spaceLabelSingular(k.slice(6), "en") ?? k.slice(6) })),
+      { group: "", value: NONE, label: "No scope" },
+    ]
+  }, [projects])
+  const filteredProjects = useMemo(() => projects.filter((p) => {
+    if (typeFilter.length > 0 && !typeFilter.includes(p.projectType ?? NONE)) return false
+    if (scopeFilter.length > 0 && !scopeFilter.includes(p.scopeKey ?? NONE)) return false
+    return true
+  }), [projects, typeFilter, scopeFilter])
 
   const table = useReactTable({
-    data: projects,
+    data: filteredProjects,
     columns,
     state: {
       sorting,
@@ -756,11 +846,11 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {}
-    for (const p of projects) {
+    for (const p of filteredProjects) {
       counts[p.status] = (counts[p.status] ?? 0) + 1
     }
     return counts
-  }, [projects])
+  }, [filteredProjects])
 
   // Funnel buckets, mirroring the visual pattern of /admin/sales prospects.
   // Order: in progress → in review → rejected → listed → unlisted.
@@ -884,6 +974,8 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+          <MultiFilter label="type" plural="types" options={typeOptions} value={typeFilter} onChange={setTypeFilter} />
+          <MultiFilter label="scope" plural="scopes" options={scopeOptions} value={scopeFilter} onChange={setScopeFilter} />
           {/* Review CTA — rightmost, like Add company on Companies. */}
           {reviewCount > 0 && firstReviewProjectId && (
             <Link
@@ -1183,7 +1275,7 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
       {/* Count — directly above the table, margins as on Users */}
       <div className="discover-results-meta" style={{ marginBottom: 0 }}>
         <p className="discover-results-count">
-          <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{projects.length}</strong> projects
+          <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{filteredProjects.length}</strong> projects
         </p>
       </div>
 

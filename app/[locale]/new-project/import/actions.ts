@@ -16,6 +16,7 @@ import { logger } from "@/lib/logger"
 import Anthropic from "@anthropic-ai/sdk"
 import { Firecrawl } from "@mendable/firecrawl-js"
 import { SPACE_SLUGS, type SpaceSlug } from "@/lib/spaces"
+import { spaceLabelSingular } from "@/lib/type-labels"
 
 export type ScrapeResult =
   | { projectId: string; title: string }
@@ -43,7 +44,16 @@ interface ExtractedProject {
   building_type: string | null
   style: string | null
   is_relevant_project: boolean
+  /** Ruimteproject: de ruimte (spaces.slug) waar deze pagina over gaat,
+   *  gekozen uit de ruimtes van het bedrijf. Alleen gevuld wanneer de
+   *  import met een SpaceBrief draaide. */
+  primary_space?: string | null
 }
+
+/** Wat de extractie weet wanneer de importeur ruimteprojecten publiceert
+ *  (keukenbouwer, tuinontwerper): welke ruimtes het bedrijf maakt. Dan
+ *  gaat de tekst over die ruimte en niet over het huis eromheen. */
+type SpaceBrief = { spaces: Array<{ slug: string; label: string }> }
 
 /** Strip common suffixes from page titles: location, company name, separators */
 function cleanPageTitle(raw: string): string {
@@ -772,7 +782,20 @@ const escapeCtrlInJsonStrings = (src: string): string => {
 }
 
 /** Use Claude to intelligently extract structured project data */
-async function extractWithClaude(pageText: string, pageUrl: string, imageUrls: string[] = []): Promise<ExtractedProject> {
+/** Extra instructie bij een ruimteproject: de tekst gaat over de ruimte
+ *  die het bedrijf maakte (de keuken, de tuin), niet over het gebouw. */
+function spaceProjectInstructions(brief: SpaceBrief): string {
+  const list = brief.spaces.map((sp) => `"${sp.slug}" (${sp.label})`).join(", ")
+  return `
+
+SPACE PROJECT. This page is imported by a company that designs or builds one specific space, not whole buildings. The project is the space they made, not the house it sits in. The spaces this company makes: ${list}.
+- Decide which of those spaces this page shows and return its slug as "primary_space" (string, one of: ${brief.spaces.map((sp) => `"${sp.slug}"`).join(", ")}). Pick the one the text and photos are mostly about; if unsure, the first space in the list.
+- title: names the space and its character, e.g. "Warm kitchen with natural stone" / "Warme keuken met natuursteen", "Landscape garden around a farmhouse" / "Landschapstuin rond een boerderij". Never a title about the house ("Historic villa in Apeldoorn renovated").
+- description and body: about the space itself: its design, layout, materials, details, how it is used, and how it relates to the rooms or landscape around it. The building is context only, at most one clause. Do not describe the architecture, renovation or interior of the rest of the house.
+- scope and building_type: return null for both; a space project has neither.`
+}
+
+async function extractWithClaude(pageText: string, pageUrl: string, imageUrls: string[] = [], spaceBrief: SpaceBrief | null = null): Promise<ExtractedProject> {
   const client = new Anthropic()
 
   // Visual grounding: portfolio pages are often image-heavy and text-thin,
@@ -804,7 +827,7 @@ Fields:
 - scope (string | null): The project scope. MUST be one of: "New Build", "Renovation", "Interior Design". Return null if unclear.
 - location (string | null): City and/or country, e.g. "Amsterdam, Netherlands". Return null if not found.
 - building_type (string | null): The project type. MUST be one of: "villa", "apartment", "townhouse", "bungalow", "chalet", "farm", "extension". Use "farm" for farmhouses and farm conversions. Return null if none of these fit.
-- style (string | null): The design style. MUST be one of: "modern", "minimalist", "contemporary", "scandinavian", "industrial", "mid-century-modern", "traditional", "transitional", "eclectic", "farmhouse", "coastal", "mediterranean", "bohemian", "rustic", "urban-modern". Return null if unclear.`,
+- style (string | null): The design style. MUST be one of: "modern", "minimalist", "contemporary", "scandinavian", "industrial", "mid-century-modern", "traditional", "transitional", "eclectic", "farmhouse", "coastal", "mediterranean", "bohemian", "rustic", "urban-modern". Return null if unclear.${spaceBrief ? spaceProjectInstructions(spaceBrief) : ""}`,
     messages: [
       {
         role: "user",
@@ -900,13 +923,16 @@ Fields:
     body_en,
     body_nl,
     building_year: !isNaN(year) && year >= 1800 && year <= currentYear + 1 ? year : null,
-    scope: rawScope, // already canonicalised above; null if Claude returned something unknown
+    scope: spaceBrief ? null : rawScope, // already canonicalised above; null if Claude returned something unknown
     location: typeof parsed.location === "string" && parsed.location.trim()
       ? parsed.location.trim().slice(0, 120)
       : null,
-    building_type: rawBuildingType && validBuildingTypes.includes(rawBuildingType) ? rawBuildingType : null,
+    building_type: !spaceBrief && rawBuildingType && validBuildingTypes.includes(rawBuildingType) ? rawBuildingType : null,
     style: rawStyle && validStyles.includes(rawStyle) ? rawStyle : null,
     is_relevant_project: parsed.is_relevant_project === true,
+    primary_space: spaceBrief && typeof parsed.primary_space === "string" && spaceBrief.spaces.some((sp) => sp.slug === parsed.primary_space.trim())
+      ? parsed.primary_space.trim()
+      : null,
   }
 }
 
@@ -1083,6 +1109,17 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
     }
   }
 
+  // 3b. Wat dit bedrijf publiceert, vóór het lezen van de pagina: bij een
+  // ruimteproject (keukenbouwer, tuinontwerper) schrijft de extractie
+  // over de ruimte in plaats van over het huis eromheen.
+  const { getCompanyPublishOptions } = await import("@/lib/projects/publish-options")
+  const publishClient = (await import("@/lib/supabase/server")).createServiceRoleSupabaseClient()
+  const publish = resolvedCompanyId ? await getCompanyPublishOptions(publishClient, resolvedCompanyId) : null
+  const isPartialImport = publish?.defaultKind === "partial"
+  const spaceBrief: SpaceBrief | null = isPartialImport && publish && publish.spaces.length > 0
+    ? { spaces: publish.spaces.map((sp) => ({ slug: sp.slug, label: spaceLabelSingular(sp.slug, "en") ?? sp.slug })) }
+    : null
+
   // 3c. Check for duplicate imports — same source URL already imported
   const normalizedUrl = url.toString().replace(/\/+$/, "").toLowerCase()
   {
@@ -1208,7 +1245,7 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
       console.log("[scrape] ANTHROPIC_API_KEY set:", !!process.env.ANTHROPIC_API_KEY, "pageText length:", pageText.length)
       if (process.env.ANTHROPIC_API_KEY && pageText.length > 50) {
         try {
-          extracted = await extractWithClaude(pageText, url.toString(), imageUrls)
+          extracted = await extractWithClaude(pageText, url.toString(), imageUrls, spaceBrief)
         } catch (err) {
           logger.error("Claude extraction failed", { url: url.toString() }, err as Error)
           // Basic fallback from Firecrawl metadata. The user explicitly
@@ -1318,7 +1355,7 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
     if (process.env.ANTHROPIC_API_KEY) {
       try {
         pageText = extractReadableText(doc)
-        extracted = await extractWithClaude(pageText, url.toString(), imageUrls)
+        extracted = await extractWithClaude(pageText, url.toString(), imageUrls, spaceBrief)
       } catch (err) {
         logger.error("Claude extraction failed, falling back to jsdom", { url: url.toString() }, err as Error)
         extracted = extractWithJsdom(doc)
@@ -1447,10 +1484,18 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
   // geen "Interieur ontworpen" (geen optie voor hem) maar een deelproject
   // met de ruimte als scope; bij één toegestane ruimte staat die meteen,
   // anders kiest de fototagging de ruimte met de meeste foto's.
-  const { getCompanyPublishOptions } = await import("@/lib/projects/publish-options")
-  const publishClient = (await import("@/lib/supabase/server")).createServiceRoleSupabaseClient()
-  const publish = resolvedCompanyId ? await getCompanyPublishOptions(publishClient, resolvedCompanyId) : null
-  const isPartialImport = publish?.defaultKind === "partial"
+  // (publish en isPartialImport komen uit stap 3b.)
+  // De scope moet er een zijn die het bedrijf ziet (migratie 314): een
+  // interieurarchitect krijgt geen Nieuwbouw. Is de gelezen scope niet
+  // toegestaan, dan de enige toegestane als er maar één is, anders leeg —
+  // de scope-detectie na het taggen vult hem dan, binnen dezelfde grens.
+  const { canonicalizeScope: canonImportScope, translateScope: renderImportScope } = await import("@/lib/project-translations")
+  const importScope = (() => {
+    if (!publish) return scope
+    const canon = canonImportScope(scope)
+    if (canon && (publish.scopeSlugs as string[]).includes(canon)) return scope
+    return publish.scopeSlugs.length === 1 ? renderImportScope(publish.scopeSlugs[0], "en") : null
+  })()
 
   const projectData = {
     title,
@@ -1465,9 +1510,14 @@ export async function scrapeAndCreateProject(rawUrl: string, adminCompanyId?: st
     address_formatted: addressFormatted,
     latitude,
     longitude,
-    project_type: isPartialImport ? null : scope,
+    project_type: isPartialImport ? null : importScope,
     kind: isPartialImport ? ("partial" as const) : ("project" as const),
-    primary_space_id: isPartialImport && publish && publish.spaces.length === 1 ? publish.spaces[0].id : null,
+    // De ruimte die de extractie koos, anders de enige ruimte van het
+    // bedrijf; bij meerdere zonder keuze beslist de fototagging later.
+    primary_space_id: isPartialImport && publish
+      ? (publish.spaces.find((sp) => sp.slug === extracted.primary_space)?.id
+        ?? (publish.spaces.length === 1 ? publish.spaces[0].id : null))
+      : null,
     project_type_category_id: buildingTypeCategoryId,
     style_preferences: styleOptionId ? [styleOptionId] : null,
     status: "draft" as const,
@@ -2226,8 +2276,25 @@ Return ONLY this JSON:
       // taxonomy slug then render the English display string (which is
       // what the DB and the rest of the app currently store).
       const { canonicalizeScope, translateScope } = await import("@/lib/project-translations")
-      const canonicalSlug = canonicalizeScope(scopeSlug)
-      await serviceSupabase
+      let canonicalSlug = canonicalizeScope(scopeSlug)
+      // Alleen een scope die de eigenaar ziet (migratie 314).
+      if (canonicalSlug) {
+        const { data: ownerLink } = await serviceSupabase
+          .from("project_professionals")
+          .select("company_id")
+          .eq("project_id", projectId)
+          .eq("is_project_owner", true)
+          .not("company_id", "is", null)
+          .limit(1)
+          .maybeSingle()
+        const ownerId = (ownerLink as { company_id?: string | null } | null)?.company_id ?? null
+        if (ownerId) {
+          const { getCompanyPublishOptions } = await import("@/lib/projects/publish-options")
+          const allowed = (await getCompanyPublishOptions(serviceSupabase, ownerId)).scopeSlugs as string[]
+          if (!allowed.includes(canonicalSlug)) canonicalSlug = null
+        }
+      }
+      if (canonicalSlug) await serviceSupabase
         .from("projects")
         .update({ project_type: canonicalSlug ? translateScope(canonicalSlug, "en") : null })
         .eq("id", projectId)
@@ -2301,7 +2368,7 @@ export async function regenerateDescription(projectId: string): Promise<Regenera
   // Fetch current project state
   let projQuery = db
     .from("projects")
-    .select("title, description, project_year, location, building_type, project_type, address_city, style_preferences")
+    .select("title, description, project_year, location, building_type, project_type, address_city, style_preferences, kind, primary_space:spaces!projects_primary_space_id_fkey(slug)")
     .eq("id", projectId)
   if (!isAdmin) projQuery = projQuery.eq("client_id", user.id)
   const { data: proj } = await projQuery.single()
@@ -2320,13 +2387,17 @@ export async function regenerateDescription(projectId: string): Promise<Regenera
     .order("order_index", { ascending: true })
     .limit(6)
 
+  // Ruimteproject: de tekst gaat over de ruimte, niet over het huis.
+  const spaceSlug = (proj as any).kind === "partial" ? ((proj as any).primary_space?.slug as string | undefined) ?? null : null
+  const spaceName = spaceSlug ? spaceLabelSingular(spaceSlug, "en") ?? spaceSlug : null
   const context = [
     `Title: ${proj.title}`,
+    spaceName             ? `Space: ${spaceName}`                     : null,
     proj.address_city     ? `City: ${proj.address_city}`              : null,
     proj.location         ? `Location: ${proj.location}`              : null,
     proj.project_year     ? `Year: ${proj.project_year}`              : null,
-    proj.building_type    ? `Building type: ${proj.building_type}`    : null,
-    proj.project_type     ? `Scope: ${proj.project_type}`             : null,
+    proj.building_type    ? `${spaceName ? "In a" : "Building type:"} ${proj.building_type}` : null,
+    !spaceName && proj.project_type ? `Scope: ${proj.project_type}` : null,
   ].filter(Boolean).join("\n")
 
   try {
@@ -2353,7 +2424,9 @@ export async function regenerateDescription(projectId: string): Promise<Regenera
 2. "body" — a continuation shown behind a "Read more" link after the intro: 140-200 words in 2-3 short paragraphs separated by blank lines. Quiet, magazine-like tone; no superlatives, no marketing filler. Only facts visible in the photos or listed in the metadata — never invent materials, dimensions or client details. Do not repeat the intro's sentences.
 
 Also translate the project title to both English and Dutch.
-
+${spaceName ? `
+This is a SPACE PROJECT: the project is the ${spaceName.toLowerCase()}, made by a company that designs or builds that space, not the building around it. Write about the ${spaceName.toLowerCase()} itself: its design, layout, materials, details, how it is used and how it connects to its surroundings. Mention the building at most once, as context. Do not describe the architecture or other rooms of the house.
+` : ""}
 Return a JSON object with "en" and "nl" keys, each containing "title", "description" and "body" in that language.
 The JSON must be strictly valid: escape newlines inside strings as \\n (paragraph breaks in "body" become \\n\\n). Return ONLY the JSON, no markdown code fences or other text.
 

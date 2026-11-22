@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
     // response carries a non-null nextPage (large lists span multiple
     // invocations under the 300s function ceiling).
     const startPage = typeof body.start_page === "number" && body.start_page > 0 ? body.start_page : 1
-    const result = await recordRun("list", listId, () => syncApolloList(listId, { startPage }))
+    const result = await recordRun("list", listId, () => syncApolloList(listId, { startPage, serviceSlug: typeof body.service_slug === "string" && body.service_slug ? body.service_slug : null }))
     return NextResponse.json(result)
   }
 

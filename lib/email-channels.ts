@@ -40,13 +40,53 @@ export type EmailChannel = 'invite' | 'sales' | 'outbound' | 'email' | 'lifecycl
  */
 const OUTREACH_CHANNELS: ReadonlySet<EmailChannel> = new Set<EmailChannel>(['sales', 'invite'])
 
+/**
+ * Marketing drips to people who already have a page, sent from the
+ * outreach subdomain even though their channel is 'lifecycle'.
+ *
+ * A DOMAIN decision, not a channel one: moving them to sales/invite would
+ * also change their utm and what the funnel counts as acquisition, and
+ * these are not acquisition. They are reminders and nudges (Verified,
+ * Owned, Company live, Listed, Signup). Anything the recipient is waiting for
+ * (auth, payments, domain verification, project-live) stays on the root.
+ */
+const OUTREACH_DOMAIN_TEMPLATES: ReadonlySet<string> = new Set([
+  'verified-reminder',
+  'owned-publisher', 'owned-contributor', 'owned-invited',
+  'company-live-publisher', 'company-live-contributor',
+  'listed-professionals-publisher', 'listed-professionals-contributor',
+  'listed-backlink',
+  // Signup lane (client side): welcome plus the two nurture mails.
+  'welcome-homeowner', 'discover-projects', 'find-professionals',
+])
+
 /** Whether this template sends from the outreach subdomain. Unknown
  *  templates stay on the root: an unlabelled mail is far more likely to
  *  be a new lifecycle notice than a new cold series, and the root is
  *  the safer place to be wrong. */
 export function usesOutreachDomain(template: string): boolean {
+  if (OUTREACH_DOMAIN_TEMPLATES.has(template)) return true
   const channel = TEMPLATE_CHANNEL[template]
   return channel !== undefined && OUTREACH_CHANNELS.has(channel)
+}
+
+/** Founder-voice cold series: read as a 1:1 note from Niek. Single source
+ *  of truth for the send path (email-service) and the /admin/emails
+ *  From column, so the two can never disagree. */
+export function isPersonalSeriesTemplate(template: string): boolean {
+  return template.startsWith('prospect-') || template.startsWith('outreach-')
+    || template === 'visitor-nudge-showcase' || template === 'visitor-nudge-platform'
+    || template === 'visitor-nudge-2-showcase' || template === 'visitor-nudge-2-platform'
+}
+
+/** The From mailbox a template actually sends as: `niek` for the
+ *  personal series, `automated` for everything else, on the outreach
+ *  subdomain when its channel is cold. */
+export function senderForTemplate(template: string): { local: 'niek' | 'automated'; domain: string } {
+  return {
+    local: isPersonalSeriesTemplate(template) ? 'niek' : 'automated',
+    domain: usesOutreachDomain(template) ? 'mail.arcolist.com' : 'arcolist.com',
+  }
 }
 
 /**
@@ -114,6 +154,13 @@ export const TEMPLATE_CHANNEL: Record<string, EmailChannel> = {
   // — pro traffic on the client row, which is the thing this whole
   // model was rebuilt to stop.
   'visitor-nudge-platform': 'sales',
+  // Day 6 of the same drip. Missing from this map, they fell through to
+  // the root domain while Day 1 went from the outreach subdomain — the
+  // same stranger got two different senders, and the Day 6 clicks carried
+  // no channel utm. Same audience as Day 1, so same channel.
+  'visitor-nudge-2-invite': 'invite',
+  'visitor-nudge-2-showcase': 'sales',
+  'visitor-nudge-2-platform': 'sales',
   // Verified-reminder — cart-abandonment mail, +1 day after step 1
   // without a commit. One template for every channel: the argument is
   // "one step left", not the channel's asset.

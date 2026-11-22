@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { SpecClearButton } from "@/components/project/spec-clear-button"
 import { toast } from "sonner"
 import { useTranslations } from "next-intl"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
@@ -432,37 +433,13 @@ export function PhotographerSpecCell({ projectId, initial }: PhotographerSpecCel
       ) : (
         <>
           <div className="arco-card-title" style={{ color: photographer ? undefined : "#b0b0ae" }}>
-            {photographer?.name ?? t("add")}
+            {photographer ? (
+              <span className="spec-value">
+                {photographer.name}
+                <SpecClearButton label={t("remove_aria")} onClear={handleRemove} disabled={isRemoving} />
+              </span>
+            ) : t("add")}
           </div>
-          {photographer && (
-            <button
-              type="button"
-              aria-label={t("remove_aria")}
-              onClick={(e) => { e.stopPropagation(); handleRemove() }}
-              disabled={isRemoving}
-              style={{
-                position: "absolute",
-                top: -4,
-                right: -4,
-                width: 18,
-                height: 18,
-                borderRadius: "50%",
-                border: "1px solid var(--arco-rule)",
-                background: "white",
-                color: "var(--arco-light)",
-                fontSize: 11,
-                lineHeight: 1,
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: 0,
-                opacity: isRemoving ? 0.5 : 1,
-              }}
-            >
-              ×
-            </button>
-          )}
         </>
       )}
 

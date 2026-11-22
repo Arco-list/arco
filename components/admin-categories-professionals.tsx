@@ -45,7 +45,7 @@ type Props = {
 
 const COPY = {
   en: {
-    service: "Service", status: "Status", homepage: "Homepage", publishes: "Publishes", companies: "Companies", projects: "Projects", partial: "Partial projects",
+    service: "Service", status: "Status", homepage: "Homepage", publishes: "Publishes", companies: "On Arco", inSales: "In Sales", tam: "TAM NL", sam: "SAM NL", projects: "Projects", partial: "Partial projects",
     active: "Active", inactive: "Inactive", on: "On", off: "Off",
     activate: "Activate", deactivate: "Deactivate", edit: "Edit", delete: "Delete",
     editGroup: "Edit group", deleteGroup: "Delete group", groupActions: "Group actions",
@@ -55,7 +55,7 @@ const COPY = {
     onHome: "Shown on the homepage — click to remove", toHome: "Click to show on the homepage",
   },
   nl: {
-    service: "Dienst", status: "Status", homepage: "Homepage", publishes: "Publiceert", companies: "Bedrijven", projects: "Projecten", partial: "Deelprojecten",
+    service: "Dienst", status: "Status", homepage: "Homepage", publishes: "Publiceert", companies: "Op Arco", inSales: "In Sales", tam: "TAM NL", sam: "SAM NL", projects: "Projecten", partial: "Deelprojecten",
     active: "Actief", inactive: "Inactief", on: "Aan", off: "Uit",
     activate: "Activeren", deactivate: "Deactiveren", edit: "Bewerken", delete: "Verwijderen",
     editGroup: "Groep bewerken", deleteGroup: "Groep verwijderen", groupActions: "Groepsacties",
@@ -74,7 +74,8 @@ export function ProfessionalsTab({ items, spaces, serviceSpaces, search, pending
   const nl = locale === "nl"
   const c = nl ? COPY.nl : COPY.en
   const label = (row: AdminCategoryRow) => (nl && row.nameNl ? row.nameNl : row.name)
-  const proLabel = (row: AdminCategoryRow) => (nl ? row.proNameNl ?? row.proName : row.proName) ?? null
+  // Meervoud onder de naam: dat is de kop op de discover en het menu.
+  const plural = (row: AdminCategoryRow) => (nl ? row.proNamePluralNl ?? row.proNamePlural : row.proNamePlural) ?? null
   // Ruimtenamen per dienst, voor de kolom Publiceert bij deelprojecten.
   const spaceSlugById = useMemo(() => new Map(spaces.map((s) => [s.id, s.slug])), [spaces])
   const spacesByService = useMemo(() => {
@@ -95,6 +96,11 @@ export function ProfessionalsTab({ items, spaces, serviceSpaces, search, pending
     return null
   }
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  // Marktomvang: aantallen in NL-notatie, een streepje als nog niet ingevuld.
+  const num = (n: number | null | undefined) =>
+    n == null ? <span className="arco-table-secondary">—</span> : <span className="arco-table-primary" style={{ fontWeight: 400 }}>{n.toLocaleString("nl-NL")}</span>
+  const sumOf = (rows: AdminCategoryRow[], key: "tamNl" | "samNl") =>
+    rows.some((r) => r[key] != null) ? rows.reduce((sum, r) => sum + (r[key] ?? 0), 0) : null
   const [rowMenu, setRowMenu] = useState<{ row: AdminCategoryRow; x: number; y: number } | null>(null)
 
   const groups = useMemo(() => items.filter((c) => c.categoryHierarchy === 1), [items])
@@ -110,7 +116,7 @@ export function ProfessionalsTab({ items, spaces, serviceSpaces, search, pending
   }, [items])
 
   const q = search.trim().toLowerCase()
-  const matches = (s: AdminCategoryRow) => !q || s.name.toLowerCase().includes(q) || (s.nameNl ?? "").toLowerCase().includes(q) || (s.proName ?? "").toLowerCase().includes(q) || (s.proNameNl ?? "").toLowerCase().includes(q) || (s.proNamePlural ?? "").toLowerCase().includes(q) || (s.proNamePluralNl ?? "").toLowerCase().includes(q) || s.slug.toLowerCase().includes(q)
+  const matches = (s: AdminCategoryRow) => !q || s.name.toLowerCase().includes(q) || (s.nameNl ?? "").toLowerCase().includes(q) || (s.proNamePlural ?? "").toLowerCase().includes(q) || (s.proNamePluralNl ?? "").toLowerCase().includes(q) || s.slug.toLowerCase().includes(q)
 
   // Zoeken: de groepen met een treffer staan open, zonder treffer blijven
   // ze weg. Zonder zoekterm bepaalt de admin zelf wat open staat.
@@ -149,9 +155,7 @@ export function ProfessionalsTab({ items, spaces, serviceSpaces, search, pending
             </div>
             <div className="flex flex-col min-w-0">
               <span className="arco-table-primary" title={label(s)}>{label(s)}</span>
-              {/* Beroepsnaam in de taal van de header; de andere taal zie je
-                  door te wisselen, de slug in het bewerkvenster. */}
-              {proLabel(s) && <span className="arco-table-secondary">{proLabel(s)}</span>}
+              {plural(s) && <span className="arco-table-secondary">{plural(s)}</span>}
             </div>
           </div>
         </td>
@@ -208,6 +212,11 @@ export function ProfessionalsTab({ items, spaces, serviceSpaces, search, pending
         <td>
           {s.count > 0 ? <span className="arco-table-primary">{s.count}</span> : <span className="arco-table-secondary">—</span>}
         </td>
+        <td>
+          {(s.inSales ?? 0) > 0 ? <span className="arco-table-primary">{s.inSales}</span> : <span className="arco-table-secondary">—</span>}
+        </td>
+        <td>{num(s.tamNl)}</td>
+        <td>{num(s.samNl)}</td>
         <td></td>
       </tr>
     )
@@ -216,7 +225,7 @@ export function ProfessionalsTab({ items, spaces, serviceSpaces, search, pending
   return (
     <>
       <div className="arco-table-wrap max-w-full min-w-0">
-        <table className="arco-table" style={{ minWidth: 900 }}>
+        <table className="arco-table" style={{ minWidth: 960 }}>
           <thead>
             <tr>
               <th>{c.service}</th>
@@ -224,13 +233,16 @@ export function ProfessionalsTab({ items, spaces, serviceSpaces, search, pending
               <th>{c.homepage}</th>
               <th>{c.publishes}</th>
               <th>{c.companies}</th>
+              <th>{c.inSales}</th>
+              <th>{c.tam}</th>
+              <th>{c.sam}</th>
               <th style={{ width: 44 }}></th>
             </tr>
           </thead>
           <tbody>
             {visibleGroups.length === 0 && orphans.length === 0 ? (
               <tr>
-                <td colSpan={6} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
+                <td colSpan={9} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
                   {q ? c.noMatch : c.none}
                 </td>
               </tr>
@@ -240,6 +252,7 @@ export function ProfessionalsTab({ items, spaces, serviceSpaces, search, pending
                   const services = (servicesByGroup.get(g.id) ?? []).filter(matches)
                   const isOpen = expanded.has(g.id)
                   const companies = services.reduce((sum, s) => sum + s.count, 0)
+                  const inSales = services.reduce((sum, s) => sum + (s.inSales ?? 0), 0)
                   const active = services.filter((s) => s.isActive).length
                   return (
                     <Fragment key={g.id}>
@@ -275,6 +288,9 @@ export function ProfessionalsTab({ items, spaces, serviceSpaces, search, pending
                         <td></td>
                         <td></td>
                         <td>{companies > 0 ? <span className="arco-table-primary">{companies}</span> : <span className="arco-table-secondary">—</span>}</td>
+                        <td>{inSales > 0 ? <span className="arco-table-primary">{inSales}</span> : <span className="arco-table-secondary">—</span>}</td>
+                        <td>{num(sumOf(services, "tamNl"))}</td>
+                        <td>{num(sumOf(services, "samNl"))}</td>
                         <td style={{ paddingLeft: 0, paddingRight: 8 }}>
                           <div className="flex items-center justify-end">
                             <DropdownMenu>

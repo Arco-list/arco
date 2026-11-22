@@ -105,7 +105,7 @@ function pickCompanyPhone(contact: ApolloContact): string | null {
 
 export async function syncApolloList(
   listId: string,
-  opts?: { startPage?: number; timeBudgetMs?: number },
+  opts?: { startPage?: number; timeBudgetMs?: number; serviceSlug?: string | null },
 ): Promise<{ synced: number; errorCount: number; skippedOwned: number; lastError: string | null; nextPage: number | null }> {
   const supabase = createServiceRoleSupabaseClient()
   // Resumable pagination: a 1000-contact list takes far longer than a
@@ -124,6 +124,20 @@ export async function syncApolloList(
   let skippedOwnedCount = 0
   let lastError: string | null = null
   let hasMore = true
+
+  // Vaste service voor deze import (showcasebedrijven per branche, bijv.
+  // keukens): elk nieuw bedrijf uit deze lijst krijgt die dienst als
+  // hoofddienst. Een bedrijf dat al een dienst heeft blijft ongemoeid.
+  let importServiceId: string | null = null
+  if (opts?.serviceSlug) {
+    const { data: svc } = await supabase
+      .from("categories")
+      .select("id")
+      .eq("category_type", "Professional")
+      .eq("slug", opts.serviceSlug)
+      .maybeSingle()
+    importServiceId = (svc as { id?: string } | null)?.id ?? null
+  }
 
   while (hasMore) {
     if (Date.now() - startedAt > timeBudgetMs) {
@@ -390,6 +404,14 @@ export async function syncApolloList(
             .update({ company_id: prospectCompanyId })
             .eq("id", (upserted as any).id)
         }
+      }
+
+      if (prospectCompanyId && importServiceId) {
+        await supabase
+          .from("companies")
+          .update({ primary_service_id: importServiceId, services_offered: [importServiceId] })
+          .eq("id", prospectCompanyId)
+          .is("primary_service_id", null)
       }
 
       // Backfill companies.phone from Apollo — runs regardless of how the

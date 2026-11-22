@@ -6,6 +6,7 @@ import { useLocale } from "next-intl"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
 import { getLocalizedName } from "@/lib/locale-name"
 import type { Tables } from "@/lib/supabase/types"
+import { isDiscoverService } from "@/lib/professionals/discover-services"
 
 const CACHE_TTL_MS = 5 * 60 * 1000
 
@@ -212,7 +213,8 @@ export function useProfessionalTaxonomy(): ProfessionalTaxonomyState {
           // Parent categories (no parent_id) = top-level filter categories
           const allowedCategories = localizedRecords.filter((r) => !r.parent_id)
           // Child categories (have parent_id) = services within a category
-          const allowedServices = localizedRecords.filter((r) => !!r.parent_id)
+          // Fotografen niet als dienst om op te filteren (discover-services).
+          const allowedServices = localizedRecords.filter((r) => !!r.parent_id && isDiscoverService(r.slug))
 
           const locationRecords = (locationsResult.data as LocationRpcRow[] | null) ?? []
 

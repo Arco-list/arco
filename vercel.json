@@ -43,6 +43,10 @@
     {
       "path": "/api/cron/dispatch-pending-invites",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/collection-pipeline",
+      "schedule": "* * * * *"
     }
   ]
 }

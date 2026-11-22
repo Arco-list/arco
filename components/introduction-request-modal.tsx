@@ -1,5 +1,6 @@
 "use client"
 
+import { LogoFill } from "@/components/brand/brand-logo"
 import { useState, useTransition } from "react"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
@@ -143,7 +144,7 @@ export function IntroductionRequestModal({
           {/* Company — matching pro-card-info style */}
           <div className="pro-card-info" style={{ marginBottom: 24 }}>
             {companyLogoUrl ? (
-              <img src={companyLogoUrl} alt="" className="pro-card-logo" />
+              <span className="pro-card-logo pro-card-logo-disc"><LogoFill src={companyLogoUrl} /></span>
             ) : (
               <div className="pro-card-logo pro-card-logo-placeholder">
                 {companyInitials}

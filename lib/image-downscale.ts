@@ -48,9 +48,16 @@ async function encode(canvas: HTMLCanvasElement, quality: number): Promise<Blob 
  * original on any failure — the caller's own size validation then
  * reports it, exactly as before this existed.
  */
-export async function downscaleForUpload(file: File): Promise<DownscaleResult> {
+export async function downscaleForUpload(
+  file: File,
+  /** Kleinere grenzen voor uploads via een server action (die neemt
+   *  standaard maar 1 MB aan), zoals de showroomfoto. */
+  opts: { targetBytes?: number; maxEdge?: number } = {},
+): Promise<DownscaleResult> {
+  const TARGET_BYTES_ = opts.targetBytes ?? TARGET_BYTES
+  const MAX_EDGE_ = opts.maxEdge ?? MAX_EDGE
   const originalBytes = file.size
-  if (file.size <= TARGET_BYTES || !canDownscale()) {
+  if (file.size <= TARGET_BYTES_ || !canDownscale()) {
     return { file, changed: false, originalBytes }
   }
 
@@ -59,7 +66,7 @@ export async function downscaleForUpload(file: File): Promise<DownscaleResult> {
     // Re-encoding drops EXIF, so the rotation flag has to be baked into
     // the pixels here — without this, phone photos arrive sideways.
     bitmap = await createImageBitmap(file, { imageOrientation: "from-image" })
-    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height))
+    const scale = Math.min(1, MAX_EDGE_ / Math.max(bitmap.width, bitmap.height))
     const width = Math.round(bitmap.width * scale)
     const height = Math.round(bitmap.height * scale)
 
@@ -77,7 +84,7 @@ export async function downscaleForUpload(file: File): Promise<DownscaleResult> {
     for (const quality of QUALITY_STEPS) {
       const blob = await encode(canvas, quality)
       if (!blob) break
-      if (blob.size <= TARGET_BYTES) {
+      if (blob.size <= TARGET_BYTES_) {
         const name = file.name.replace(/\.[^.]+$/, "") + ".jpg"
         return {
           file: new File([blob], name, { type: "image/jpeg", lastModified: file.lastModified }),

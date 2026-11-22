@@ -4,10 +4,11 @@ import { useEffect, useRef, useState, type CSSProperties } from "react"
 import { useLocale } from "next-intl"
 
 import { LOCATION_KINDS, locationKindLabel, type LocationInput, type LocationKind, type LocationRecord } from "@/lib/locations/types"
-import { resolveAddressDetails, searchAddressPredictions, type AddressPrediction } from "@/lib/places/resolve-address"
+import { resolveAddressDetails, resolveEstablishmentDetails, searchAddressPredictions, searchEstablishmentPredictions, type AddressPrediction, type EstablishmentPrediction } from "@/lib/places/resolve-address"
 
 /**
- * Eén formulier voor een vestiging, in een popup: soort, naam, adres via
+ * Eén formulier om een showroom te BEWERKEN (toevoegen gaat via
+ * components/showroom-picker.tsx): soort, naam, adres via
  * Places (zoals elk adres op het platform — vrije tekst komt niet in de
  * database), telefoon, website, openingstijden. Gebruikt door de
  * bedrijfseditor (Vestigingen) en de merkadmin (Showrooms).
@@ -33,8 +34,8 @@ type Props = {
 
 const COPY = {
   nl: {
-    add: "Vestiging toevoegen",
-    edit: "Vestiging bewerken",
+    add: "Showroom toevoegen",
+    edit: "Showroom bewerken",
     kind: "Soort",
     name: "Naam",
     namePh: "Bijv. Showroom Amsterdam",
@@ -51,10 +52,14 @@ const COPY = {
     saving: "Opslaan…",
     delete: "Verwijderen",
     needAddress: "Kies een adres uit de lijst.",
+    google: "Zoek op Google Maps",
+    googlePh: "Naam van de showroom, bijv. Brouwer Maatkeukens",
+    googleHint: "Vult adres, telefoon, website en openingstijden in. Je kunt alles daarna aanpassen.",
+    googleFilled: "Ingevuld vanuit Google Maps",
   },
   en: {
-    add: "Add location",
-    edit: "Edit location",
+    add: "Add showroom",
+    edit: "Edit showroom",
     kind: "Type",
     name: "Name",
     namePh: "E.g. Showroom Amsterdam",
@@ -71,6 +76,10 @@ const COPY = {
     saving: "Saving…",
     delete: "Delete",
     needAddress: "Pick an address from the list.",
+    google: "Find on Google Maps",
+    googlePh: "Showroom name, e.g. Brouwer Maatkeukens",
+    googleHint: "Fills in address, phone, website and opening hours. You can edit everything afterwards.",
+    googleFilled: "Filled in from Google Maps",
   },
 }
 
@@ -112,6 +121,59 @@ export function LocationPopup({ initial, saving = false, onSave, onClose, onDele
       setResults(await searchAddressPredictions(q))
       setSearching(false)
     }, 300)
+  }
+
+  // Google Maps: zoek het bedrijf, vul adres, telefoon, website en
+  // openingstijden in één keer. De naam alleen als die nog leeg is.
+  const [gQuery, setGQuery] = useState("")
+  const [gResults, setGResults] = useState<EstablishmentPrediction[]>([])
+  const [gSearching, setGSearching] = useState(false)
+  const [gFilled, setGFilled] = useState(false)
+  const gTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (gTimer.current) clearTimeout(gTimer.current) }, [])
+  const searchGoogle = (q: string) => {
+    setGQuery(q)
+    setGFilled(false)
+    if (gTimer.current) clearTimeout(gTimer.current)
+    if (q.trim().length < 2) { setGResults([]); return }
+    gTimer.current = setTimeout(async () => {
+      setGSearching(true)
+      setGResults(await searchEstablishmentPredictions(q))
+      setGSearching(false)
+    }, 300)
+  }
+  const pickGoogle = async (prediction: EstablishmentPrediction) => {
+    setGSearching(true)
+    const [business, resolved] = await Promise.all([
+      resolveEstablishmentDetails(prediction.placeId),
+      resolveAddressDetails(prediction.placeId),
+    ])
+    setGSearching(false)
+    if (!business && !resolved) return
+    if (resolved) {
+      setAddress({
+        address: resolved.formattedAddress,
+        streetAddress: resolved.streetAddress || null,
+        postalCode: resolved.postalCode,
+        city: resolved.city,
+        stateRegion: resolved.stateRegion,
+        country: resolved.country,
+        googlePlaceId: resolved.placeId,
+        latitude: resolved.latitude,
+        longitude: resolved.longitude,
+      })
+      setEditingAddress(false)
+      setError(null)
+    }
+    if (business) {
+      if (!name.trim() && business.name) setName(business.name)
+      if (business.phone) setPhone(business.phone)
+      if (business.website) setWebsite(business.website)
+      if (business.openingHours) setHours(business.openingHours)
+    }
+    setGQuery("")
+    setGResults([])
+    setGFilled(true)
   }
 
   const pick = async (placeId: string) => {
@@ -159,6 +221,37 @@ export function LocationPopup({ initial, saving = false, onSave, onClose, onDele
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div>
+            <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>{c.google}</span>
+            <div style={{ position: "relative" }}>
+              <input
+                autoFocus={!initial}
+                className="input-base input-default"
+                style={{ width: "100%" }}
+                value={gQuery}
+                placeholder={c.googlePh}
+                onChange={(e) => searchGoogle(e.target.value)}
+              />
+              {gQuery.trim().length >= 2 && (
+                <div style={DROPDOWN}>
+                  {gResults.map((r) => (
+                    <button key={r.placeId} type="button" style={ROW} onMouseDown={(e) => { e.preventDefault(); void pickGoogle(r) }}>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <span style={{ fontWeight: 400 }}>{r.name}</span>
+                        {r.city && <span style={{ color: "#a1a1a0", marginLeft: 4 }}>{r.city}</span>}
+                      </span>
+                    </button>
+                  ))}
+                  {gSearching && <div style={{ ...ROW, color: "#a1a1a0", cursor: "default" }}>{c.searching}</div>}
+                  {!gSearching && gResults.length === 0 && <div style={{ ...ROW, color: "#a1a1a0", cursor: "default" }}>{c.noResults}</div>}
+                </div>
+              )}
+            </div>
+            <p className="arco-body-text" style={{ color: gFilled ? "var(--primary)" : "#a1a1a0", fontSize: 12, margin: "6px 0 0" }}>
+              {gFilled ? c.googleFilled : c.googleHint}
+            </p>
+          </div>
+
           <div>
             <span className="arco-eyebrow" style={{ display: "block", marginBottom: 8 }}>{c.kind}</span>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>

@@ -73,7 +73,7 @@ const SERVICE_PLURALS: Record<string, { nl: string; en: string }> = {
   // Ontwerp & Planning
   architect: { nl: "Architecten", en: "Architects" },
   "interior-designer": { nl: "Interieurarchitecten", en: "Interior designers" },
-  "garden-designer": { nl: "Tuinarchitecten", en: "Garden designers" },
+  "garden-designer": { nl: "Tuinontwerpers", en: "Garden designers" },
   "lighting-designer": { nl: "Lichtontwerpers", en: "Lighting designers" },
   photographer: { nl: "Fotografen", en: "Photographers" },
   "structural-engineer": { nl: "Constructeurs", en: "Structural engineers" },
@@ -83,9 +83,9 @@ const SERVICE_PLURALS: Record<string, { nl: string; en: string }> = {
   kitchens: { nl: "Keukenstudio's", en: "Kitchen studios" },
   bathrooms: { nl: "Badkamerstudio's", en: "Bathroom studios" },
   "swimming-pools": { nl: "Zwembadbouwers", en: "Pool builders" },
-  wellness: { nl: "Wellnessstudio's", en: "Wellness studios" },
-  "tiles-stones": { nl: "Tegelzetters & steenhouwers", en: "Tilers & stonemasons" },
-  "windows-doors": { nl: "Kozijnmakers", en: "Window & door makers" },
+  wellness: { nl: "Wellnessbouwers", en: "Wellness builders" },
+  "tiles-stones": { nl: "Tegelwinkels", en: "Tile stores" },
+  "windows-doors": { nl: "Kozijnenleveranciers", en: "Window & door suppliers" },
   "stairs-elevator": { nl: "Trappenmakers", en: "Stair makers" },
   // Afwerking
   "interior-stylist": { nl: "Interieurstylisten", en: "Interior stylists" },
@@ -105,8 +105,8 @@ const SERVICE_PLURALS: Record<string, { nl: string; en: string }> = {
   "fencing-gates": { nl: "Hekwerkinstallateurs", en: "Fence & gate installers" },
   // Installaties
   "electrical-systems": { nl: "Elektriciens", en: "Electricians" },
-  "heating-ventilation": { nl: "Installateurs", en: "HVAC installers" },
-  "security-systems": { nl: "Beveiligingsinstallateurs", en: "Security installers" },
+  "heating-ventilation": { nl: "Verwarmingsinstallateurs", en: "Heating installers" },
+  "security-systems": { nl: "Beveiligingsbedrijven", en: "Security companies" },
   "smart-homes": { nl: "Domotica-installateurs", en: "Smart home installers" },
   "solar-installer": { nl: "Zonnepaneelinstallateurs", en: "Solar installers" },
 }

@@ -27,6 +27,9 @@ export type UploadedPhoto = {
   storagePath: string | null
   width: number | null
   height: number | null
+  /** Focuspunt van de hero (migratie 328), 0–1. */
+  focusX?: number | null
+  focusY?: number | null
 }
 
 type SpaceRecord = { id: string; name: string; slug: string; sort_order: number | null }
@@ -614,7 +617,7 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
             .order("order_index", { ascending: true, nullsFirst: false }),
           supabase
             .from("project_photos")
-            .select("id, url, is_primary, order_index, feature_id, storage_path, width, height")
+            .select("id, url, is_primary, order_index, feature_id, storage_path, width, height, focus_x, focus_y")
             .eq("project_id", projectIdValue)
             .order("order_index", { ascending: true, nullsFirst: false }),
         ])
@@ -732,6 +735,8 @@ export function useProjectPhotoTour({ supabase, projectId }: UseProjectPhotoTour
           storagePath: photo.storage_path ?? null,
           width: photo.width ?? null,
           height: photo.height ?? null,
+          focusX: (photo as { focus_x?: number | null }).focus_x ?? null,
+          focusY: (photo as { focus_y?: number | null }).focus_y ?? null,
         }))
 
         const nextFeaturePhotos: Record<string, string[]> = {}

@@ -46,7 +46,7 @@ export function typeLabelSingular(typeValue: string | null | undefined, locale: 
 export const SCOPE_LABELS: Record<string, { nl: string; en: string }> = {
   renovation: { nl: "Renovatie", en: "Renovation" },
   new_build: { nl: "Nieuwbouw", en: "New build" },
-  interior_design: { nl: "Interieur", en: "Interior" },
+  interior_design: { nl: "Interieur design", en: "Interior design" },
 }
 
 export function scopeLabel(scope: string, locale: string): string {

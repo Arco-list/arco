@@ -20,6 +20,7 @@ import { ServiceHubProse } from "@/components/professional/service-hub-prose"
 import { SERVICE_HUB_PROSE } from "@/lib/professional-hubs"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { noIndexWhenFiltered } from "@/lib/seo-utils"
+import { isDiscoverService } from "@/lib/professionals/discover-services"
 
 // De teksten staan in lib/seo/copy.ts — zie de toelichting bij
 // app/[locale]/projects/page.tsx.
@@ -110,7 +111,7 @@ export default async function ProfessionalsPage({ params }: { params: Promise<{ 
   let serviceCards: { id: string; slug: string; name: string; nameNl: string | null; label: string }[] = []
   try {
     const qualifying = hubs
-      .filter((h) => h.kind === "service" && h.serviceSlug && h.count >= MIN_SERVICE_CARD_COUNT)
+      .filter((h) => h.kind === "service" && h.serviceSlug && h.count >= MIN_SERVICE_CARD_COUNT && isDiscoverService(h.serviceSlug))
       .sort((a, b) => b.count - a.count)
     if (qualifying.length > 0) {
       const supabase = await createServerSupabaseClient()

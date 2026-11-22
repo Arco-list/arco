@@ -1,8 +1,8 @@
 /**
  * Brands section gate.
  *
- * The brands layer (brand → series → photo) is admin-only while it is
- * being filled. The public /brands/[brand] and /brands/[brand]/[series]
+ * The brands layer (brand → collection → photo) is admin-only while it is
+ * being filled. The public /brands/[brand] and /brands/[brand]/[collection]
  * pages will call this so content can be staged without being exposed;
  * flip the gate (or remove the calls) when the layer goes public.
  *

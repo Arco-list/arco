@@ -1,5 +1,6 @@
 "use client"
 
+import { LogoFill } from "@/components/brand/brand-logo"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import Image from "next/image"
@@ -216,15 +217,7 @@ export function ProfessionalCarousel({
               </div>
               <div className="pro-card-info">
                 {pro.logoUrl ? (
-                  <img
-                    src={pro.logoUrl}
-                    alt=""
-                    className="pro-card-logo"
-                    width={40}
-                    height={40}
-                    loading="lazy"
-                    decoding="async"
-                  />
+                  <span className="pro-card-logo pro-card-logo-disc"><LogoFill src={pro.logoUrl} /></span>
                 ) : (
                   <div className="pro-card-logo pro-card-logo-placeholder">
                     {pro.name.charAt(0).toUpperCase()}

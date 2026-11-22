@@ -1899,10 +1899,13 @@ export async function addCompanyBrandAction(input: { brandId: string }, companyI
   const parsed = brandIdSchema.safeParse(input)
   if (!parsed.success) return { success: false, error: "Invalid brand" }
 
+  // Een bedrijf voegt alleen merken toe waarvan het officieel dealer is
+  // (zie de intro in de bedrijfseditor); de koppeling is dus altijd een
+  // dealerschap.
   const { count } = await supabase.from("company_brands").select("brand_id", { count: "exact", head: true }).eq("company_id", company!.id)
   const { error: dbError } = await supabase
     .from("company_brands")
-    .upsert({ company_id: company!.id, brand_id: parsed.data.brandId, position: count ?? 0, created_by: user?.id ?? null }, { onConflict: "company_id,brand_id" })
+    .upsert({ company_id: company!.id, brand_id: parsed.data.brandId, position: count ?? 0, created_by: user?.id ?? null, is_official_dealer: true }, { onConflict: "company_id,brand_id" })
   if (dbError) {
     logger.db("insert", "company_brands", "Failed to add brand", { companyId: company!.id, brandId: parsed.data.brandId }, dbError)
     return { success: false, error: "Could not add the brand." }
@@ -1962,6 +1965,7 @@ const locationInputSchema = z.object({
   email: z.string().max(200).nullable(),
   website: z.string().max(300).nullable(),
   openingHours: z.string().max(600).nullable(),
+  imageUrl: z.string().url().max(600).nullable().optional(),
 })
 
 export async function saveCompanyLocationAction(input: LocationInput, companyId?: string): Promise<ActionResult> {
@@ -1988,6 +1992,39 @@ export async function saveCompanyLocationAction(input: LocationInput, companyId?
   }
   revalidatePath("/dashboard/company")
   return { success: true }
+}
+
+/** Foto van een showroom: uploaden naar de eigen map van het bedrijf en
+ *  op de showroom zetten (migratie 315). */
+export async function uploadCompanyLocationPhotoAction(formData: FormData, companyId?: string): Promise<{ success: true; url: string } | { success: false; error: string }> {
+  const { supabase, company, user, error } = await getCompanyContext(companyId)
+  if (error) return { success: false, error }
+  const rateLimit = await checkRateLimit(`upload:photo:${user!.id}`)
+  if (!rateLimit.success) return { success: false, error: "Too many upload attempts. Please try again later." }
+
+  const file = formData.get("file")
+  const locationId = String(formData.get("locationId") ?? "")
+  if (!(file instanceof File)) return { success: false, error: "Photo file is required." }
+  if (!z.string().uuid().safeParse(locationId).success) return { success: false, error: "Invalid location" }
+
+  const { data: loc } = await supabase.from("locations").select("id").eq("id", locationId).eq("company_id", company!.id).maybeSingle()
+  if (!loc) return { success: false, error: "Location not found." }
+
+  const validation = await validateImageFile(file)
+  if (validation.error) return { success: false, error: validation.error }
+  const sanitizedFile = validation.sanitizedFile!
+  const path = `${company!.id}/locations/${randomUUID()}-${sanitizeFilename(sanitizedFile.name)}`
+  const uploadResult = await uploadToStorage(supabase, path, sanitizedFile)
+  if (!uploadResult.success) return { success: false, error: uploadResult.error?.message ?? "Could not upload photo." }
+
+  const url = buildPublicUrl(path)
+  const { error: dbError } = await supabase.from("locations").update({ image_url: url, updated_at: new Date().toISOString() } as any).eq("id", locationId).eq("company_id", company!.id)
+  if (dbError) {
+    await deleteFromStorage(supabase, company!.id, path)
+    return { success: false, error: "Could not save the photo." }
+  }
+  revalidatePath("/dashboard/company")
+  return { success: true, url }
 }
 
 export async function deleteCompanyLocationAction(input: { id: string }, companyId?: string): Promise<ActionResult> {

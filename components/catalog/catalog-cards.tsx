@@ -1,42 +1,76 @@
 import { Link } from "@/i18n/navigation"
 
-import type { CatalogProject, CatalogSeries } from "@/lib/products/catalog-types"
+import type { CatalogProject, CatalogCollection } from "@/lib/products/catalog-types"
+import { BrandLogo } from "@/components/brand/brand-logo"
+import { CollectionSub } from "@/components/catalog/collection-sub"
+import { PhotoBrandDots } from "@/components/project/photo-brand-dots"
+import { spaceLabelSingular } from "@/lib/type-labels"
 
 /**
  * De kaarten van de productlaag, in de vorm van de discover-kaart zodat
- * een serie, een merk en een project op dezelfde pagina hetzelfde
+ * een collectie, een merk en een project op dezelfde pagina hetzelfde
  * gewicht hebben.
  */
 
-export function SeriesCard({ series, locale, showBrand = true }: { series: CatalogSeries; locale: string; showBrand?: boolean }) {
+/**
+ * Onder de naam van een collectie: wat het is en van wie, zoals een project
+ * type · locatie toont. Op de merkpagina (het merk staat er al boven)
+ * is dat soort · designer; waar kaarten van meerdere merken door elkaar
+ * staan komt het merk voorop: merk · soort. Staat er geen van beide in,
+ * dan het aantal projecten, zodat de regel niet leeg blijft.
+ */
+export function CollectionCard({ collection, locale, showBrand = true, kind = null }: { collection: CatalogCollection; locale: string; showBrand?: boolean; /** Naam van de soort (categorie) van de collectie, in de taal van de pagina. */ kind?: string | null }) {
   const nl = locale === "nl"
-  const parts = [
-    showBrand ? series.brand.name : null,
-    series.projectCount > 0 ? `${series.projectCount} ${nl ? (series.projectCount === 1 ? "project" : "projecten") : series.projectCount === 1 ? "project" : "projects"}` : null,
-  ].filter(Boolean)
+  const projects = collection.projectCount > 0 ? `${collection.projectCount} ${nl ? (collection.projectCount === 1 ? "project" : "projecten") : collection.projectCount === 1 ? "project" : "projects"}` : null
+  const described = showBrand ? [collection.brand.name, kind] : [kind, collection.designer]
+  const parts = (described.some(Boolean) && (showBrand ? described.slice(1).some(Boolean) : true) ? described : [showBrand ? collection.brand.name : null, projects]).filter(Boolean)
   return (
-    <Link href={`/brands/${series.brand.slug}/${series.slug}`} className="discover-card">
+    <Link href={`/brands/${collection.brand.slug}/${collection.slug}`} className="discover-card">
       <div className="discover-card-image-wrap">
         <div className="discover-card-image-layer">
-          {series.heroImageUrl ? (
+          {collection.heroImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={series.heroImageUrl} alt={series.name} width={600} height={450} loading="lazy" decoding="async" />
+            <img src={collection.heroImageUrl} alt={collection.name} width={600} height={450} loading="lazy" decoding="async" />
           ) : (
             <div style={{ width: "100%", height: "100%", background: "#f0f0ee" }} />
           )}
         </div>
       </div>
-      <h3 className="discover-card-title">{series.name}</h3>
-      {parts.length > 0 && <p className="discover-card-sub">{parts.join(" · ")}</p>}
+      {showBrand ? (
+        // Waar kaarten van meerdere merken door elkaar staan: het merklogo
+        // naast naam en regel, zoals het bedrijfslogo op de professionalkaart.
+        <div className="pro-card-info">
+          <BrandLogo logoUrl={collection.brand.logoUrl} name={collection.brand.name} size={40} />
+          <div style={{ minWidth: 0 }}>
+            <h3 className="discover-card-title">{collection.name}</h3>
+            {parts.length > 0 && <p className="discover-card-sub">{parts.join(" · ")}</p>}
+          </div>
+        </div>
+      ) : (
+        <>
+          <h3 className="discover-card-title">{collection.name}</h3>
+          {kind || collection.designer
+            ? <CollectionSub kinds={kind} designer={collection.designer} nl={nl} />
+            : parts.length > 0 && <p className="discover-card-sub">{parts.join(" · ")}</p>}
+        </>
+      )}
     </Link>
   )
 }
 
-export function ProjectCard({ project }: { project: CatalogProject }) {
-  const sub = [project.type, project.location].filter(Boolean).join(" · ")
+export function ProjectCard({ project, locale = "nl" }: { project: CatalogProject; locale?: string }) {
+  // Een ruimteproject "is" zijn ruimte: Tuin · Reeuwijk, zoals op de
+  // projectkaarten elders.
+  const typeLabel = project.spaceSlug ? (spaceLabelSingular(project.spaceSlug, locale) ?? project.type) : project.type
+  const sub = [typeLabel, project.location].filter(Boolean).join(" · ")
+  const tagged = project.taggedPhoto
+  // Niet gepubliceerd (alleen admins zien die): zeg het op de kaart.
+  const unpublished = project.status && project.status !== "published"
+    ? (locale === "nl" ? (project.status === "in_progress" ? "In review" : "Concept") : (project.status === "in_progress" ? "In review" : "Draft"))
+    : null
   return (
     <Link href={`/projects/${project.slug}`} className="discover-card">
-      <div className="discover-card-image-wrap">
+      <div className="discover-card-image-wrap" style={{ position: "relative" }}>
         <div className="discover-card-image-layer">
           {project.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -45,6 +79,13 @@ export function ProjectCard({ project }: { project: CatalogProject }) {
             <div style={{ width: "100%", height: "100%", background: "#f0f0ee" }} />
           )}
         </div>
+        {/* De foto waarop het product staat, met de stip (migratie 317). */}
+        {tagged && tagged.tags.length > 0 && (
+          <PhotoBrandDots tags={tagged.tags} src={tagged.url} width={tagged.width} height={tagged.height} fit="cover" />
+        )}
+        {unpublished && (
+          <span className="status-pill" style={{ position: "absolute", top: 10, left: 10, background: "#fff", zIndex: 4 }}>{unpublished}</span>
+        )}
       </div>
       <h3 className="discover-card-title">{project.title}</h3>
       {sub && <p className="discover-card-sub">{sub}</p>}
@@ -52,22 +93,17 @@ export function ProjectCard({ project }: { project: CatalogProject }) {
   )
 }
 
-export function BrandCard({ brand, locale }: { brand: { slug: string; name: string; logoUrl: string | null; country: string | null; seriesCount: number; projectCount: number }; locale: string }) {
+export function BrandCard({ brand, locale }: { brand: { slug: string; name: string; logoUrl: string | null; country: string | null; collectionCount: number; projectCount: number }; locale: string }) {
   const nl = locale === "nl"
   const parts = [
     brand.country,
-    brand.seriesCount > 0 ? `${brand.seriesCount} series` : null,
+    brand.collectionCount > 0 ? `${brand.collectionCount} ${nl ? (brand.collectionCount === 1 ? "collectie" : "collecties") : brand.collectionCount === 1 ? "collection" : "collections"}` : null,
     brand.projectCount > 0 ? `${brand.projectCount} ${nl ? (brand.projectCount === 1 ? "project" : "projecten") : brand.projectCount === 1 ? "project" : "projects"}` : null,
   ].filter(Boolean)
   return (
     <Link href={`/brands/${brand.slug}`} className="discover-card" style={{ display: "flex", alignItems: "center", gap: 16 }}>
       <span className="company-icon" style={{ margin: 0 }}>
-        {brand.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={brand.logoUrl} alt={brand.name} className="company-icon-image" style={{ width: 56, height: 56 }} />
-        ) : (
-          <span className="company-icon-initials" style={{ width: 56, height: 56, fontSize: 20 }}>{brand.name.charAt(0).toUpperCase()}</span>
-        )}
+        <BrandLogo logoUrl={brand.logoUrl} name={brand.name} size={56} />
       </span>
       <span>
         <h3 className="discover-card-title" style={{ marginTop: 0 }}>{brand.name}</h3>

@@ -1,5 +1,7 @@
 "use client"
 
+import { LocationCards } from "@/components/locations/location-cards"
+import { ShowroomPicker } from "@/components/showroom-picker"
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -8,32 +10,35 @@ import { toast } from "sonner"
 
 import { handlePlainTextPaste, handlePlainTextDrop } from "@/lib/plain-text-paste"
 import {
-  deleteProductFamily,
+  deleteProductCollection,
   updateBrand,
   updateBrandCategories,
   updateBrandStatus,
-  updateProductFamily,
+  updateProductCollection,
   uploadBrandLogo,
-  uploadProductFamilyImage,
-  upsertProductFamily,
+  uploadProductCollectionImage,
+  upsertProductCollection,
   saveBrandLocation,
+  uploadBrandLocationPhoto,
   deleteBrandLocation,
 } from "../actions"
 import { EDIT_PAGE_CSS, EditBadge, PILL, scrollToSection } from "../edit-chrome"
 import { LocationPopup } from "@/components/location-form"
 import { locationKindLabel, type LocationRecord } from "@/lib/locations/types"
 import { ALL_STATUSES, STATUS_DESC, STATUS_DOT, STATUS_LABEL, type BrandStatus } from "../status"
+import { BrandLogo } from "@/components/brand/brand-logo"
+import { CollectionSub } from "@/components/catalog/collection-sub"
 
 /**
  * Merkpagina voor admins, gebouwd als de bedrijfspagina
  * (components/company-edit/company-edit-client.tsx): dezelfde kop, dezelfde
  * detailbalk, dezelfde kaarten, dezelfde contactrij. Wat bij een bedrijf
  * de dienst is ("Architect") is bij een merk de categorie ("Lighting");
- * wat daar de projecten zijn, zijn hier de series.
+ * wat daar de projecten zijn, zijn hier de collecties.
  *
  * Alles slaat op blur op, per veld; de pagina ververst daarna (router
  * .refresh) zodat de teller in de balk en de tabel elders kloppen. Een
- * serie heeft een eigen pagina (series/[familyId]); hier staan de kaarten.
+ * collectie heeft een eigen pagina (collection/[collectionId]); hier staan de kaarten.
  */
 
 export type BrandEditBrand = {
@@ -49,7 +54,7 @@ export type BrandEditBrand = {
   status: BrandStatus
 }
 
-export type BrandEditFamily = {
+export type BrandEditCollection = {
   id: string
   slug: string
   name: string
@@ -58,6 +63,8 @@ export type BrandEditFamily = {
   designer: string | null
   launch_year: number | null
   url: string | null
+  /** Soorten van de collectie (Fauteuils · Banken …), alleen te wijzigen op de collectiepagina. */
+  kinds_label: string | null
 }
 
 export type BrandEditCategory = {
@@ -73,32 +80,33 @@ export type BrandEditApplied = {
   note: string | null
   photoId: string | null
   project: { id: string; title: string; status: string; city: string | null }
-  familyName: string | null
+  collectionName: string | null
   spaceName: string | null
 }
 
 type Props = {
   brand: BrandEditBrand
-  families: BrandEditFamily[]
+  collections: BrandEditCollection[]
   categories: BrandEditCategory[]
   /** Gekozen categorieën, op positie: de eerste is de primaire. */
   categoryIds: string[]
+  /** Categorieën volgen de collecties: niet met de hand te wijzigen. */
+  categoriesAuto: boolean
   applied: BrandEditApplied[]
   /** Eigen showrooms van het merk. */
   locations: LocationRecord[]
 }
 
-// ── Sub-nav: sections left, status and website right ───────────────────
+// ── Sub-nav: sections left, status and preview right ───────────────────
 
 const SECTIONS = [
   { id: "header", label: "Details" },
-  { id: "series", label: "Series" },
+  { id: "collections", label: "Collections" },
   { id: "applied", label: "Projects" },
   { id: "showrooms", label: "Showrooms" },
-  { id: "contact", label: "Contact" },
 ] as const
 
-function BrandEditSubNav({ status, website, onStatusClick }: { status: BrandStatus; website: string | null; onStatusClick: () => void }) {
+function BrandEditSubNav({ status, previewHref, onStatusClick }: { status: BrandStatus; previewHref: string; onStatusClick: () => void }) {
   const [activeSection, setActiveSection] = useState<string | null>(null)
   const [scrollDirection, setScrollDirection] = useState<"down" | "up">("down")
   const lastScrollY = useRef(0)
@@ -150,14 +158,13 @@ function BrandEditSubNav({ status, website, onStatusClick }: { status: BrandStat
               <span className="inline-block rounded-full" style={{ width: 7, height: 7, flexShrink: 0, background: STATUS_DOT[status] }} />
               {STATUS_LABEL[status]}
             </button>
-            {website && (
-              <a className="filter-pill" href={website} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M11 6L11 2L7 2M11 2L5 8M6 3H3C1.89543 3 1 3.89543 1 5V12C1 13.1046 1.89543 14 3 14H10C11.1046 14 12 13.1046 12 12V9" />
-                </svg>
-                <span className="sub-nav-pill-label">Website</span>
-              </a>
-            )}
+            {/* Het voorbeeld is de publieke merkpagina, zoals op de projectbewerkpagina. */}
+            <a className="filter-pill" href={previewHref} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 6L11 2L7 2M11 2L5 8M6 3H3C1.89543 3 1 3.89543 1 5V12C1 13.1046 1.89543 14 3 14H10C11.1046 14 12 13.1046 12 12V9" />
+              </svg>
+              <span className="sub-nav-pill-label">Preview</span>
+            </a>
           </div>
         </div>
       </div>
@@ -165,24 +172,25 @@ function BrandEditSubNav({ status, website, onStatusClick }: { status: BrandStat
   )
 }
 
-// ── Series card (the ListingCard of a series) ──────────────────────────
+// ── Collection card (the ListingCard of a collection) ──────────────────────────
 
-function SeriesCard({
-  family, menuOpen, onMenuOpenChange, onEdit, onChangeCover, onDelete,
+function CollectionCard({
+  collection, menuOpen, onMenuOpenChange, onEdit, onChangeCover, onDelete,
 }: {
-  family: BrandEditFamily
+  collection: BrandEditCollection
   menuOpen: boolean
   onMenuOpenChange: (open: boolean) => void
   onEdit: () => void
   onChangeCover: () => void
   onDelete: () => void
 }) {
-  const meta = [family.designer, family.launch_year].filter(Boolean).join(" · ")
+  // Zoals de publieke kaart: soorten · designer. Beide komen van de collectiepagina en worden alleen daar ingevuld; zonder waarde blijft de regel weg.
+  const hasMeta = Boolean(collection.kinds_label || collection.designer)
   const actions = [
-    { key: "edit", label: "Edit series", run: onEdit },
+    { key: "edit", label: "Edit collection", run: onEdit },
     { key: "cover", label: "Change cover", run: onChangeCover },
-    ...(family.url ? [{ key: "open", label: "Open at the brand", run: () => window.open(family.url!, "_blank", "noopener,noreferrer") }] : []),
-    { key: "delete", label: "Delete series", run: onDelete, destructive: true },
+    ...(collection.url ? [{ key: "open", label: "Open at the brand", run: () => window.open(collection.url!, "_blank", "noopener,noreferrer") }] : []),
+    { key: "delete", label: "Delete collection", run: onDelete, destructive: true },
   ]
 
   return (
@@ -195,22 +203,22 @@ function SeriesCard({
         className="discover-card-image-wrap"
         style={{ position: "relative" }}
         onMouseEnter={(e) => {
-          const overlay = e.currentTarget.querySelector<HTMLElement>(".series-card-hover-overlay")
-          const pill = e.currentTarget.querySelector<HTMLElement>(".series-card-hover-pill")
+          const overlay = e.currentTarget.querySelector<HTMLElement>(".collection-card-hover-overlay")
+          const pill = e.currentTarget.querySelector<HTMLElement>(".collection-card-hover-pill")
           if (overlay) overlay.style.background = "rgba(0,0,0,.35)"
           if (pill) pill.style.opacity = "1"
         }}
         onMouseLeave={(e) => {
-          const overlay = e.currentTarget.querySelector<HTMLElement>(".series-card-hover-overlay")
-          const pill = e.currentTarget.querySelector<HTMLElement>(".series-card-hover-pill")
+          const overlay = e.currentTarget.querySelector<HTMLElement>(".collection-card-hover-overlay")
+          const pill = e.currentTarget.querySelector<HTMLElement>(".collection-card-hover-pill")
           if (overlay) overlay.style.background = "transparent"
           if (pill) pill.style.opacity = "0"
         }}
       >
         <div className="discover-card-image-layer">
-          {family.hero_image_url ? (
+          {collection.hero_image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={family.hero_image_url} alt={family.name} />
+            <img src={collection.hero_image_url} alt={collection.name} />
           ) : (
             <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#c8c8c6", background: "var(--arco-surface)" }}>
               <ImageIcon size={32} />
@@ -218,11 +226,11 @@ function SeriesCard({
           )}
         </div>
         <div
-          className="series-card-hover-overlay"
+          className="collection-card-hover-overlay"
           style={{ position: "absolute", inset: 0, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", transition: "background .2s", pointerEvents: "none" }}
         >
-          <span className="series-card-hover-pill" style={{ ...PILL, background: "rgba(0,0,0,.6)", opacity: 0, transition: "opacity .2s" }}>
-            Edit series
+          <span className="collection-card-hover-pill" style={{ ...PILL, background: "rgba(0,0,0,.6)", opacity: 0, transition: "opacity .2s" }}>
+            Edit collection
           </span>
         </div>
       </div>
@@ -233,7 +241,7 @@ function SeriesCard({
           className="filter-pill"
           onClick={() => onMenuOpenChange(!menuOpen)}
           data-open={menuOpen ? "true" : undefined}
-          aria-label="Series options"
+          aria-label="Collection options"
           style={{ padding: "6px 8px", gap: 0 }}
         >
           <MoreHorizontal style={{ width: 16, height: 16 }} />
@@ -252,15 +260,15 @@ function SeriesCard({
         </div>
       </div>
 
-      <h3 className="discover-card-title">{family.name}</h3>
-      <p className="discover-card-sub" style={meta ? undefined : { color: "#b0b0ae" }}>{meta || "Add designer and year"}</p>
+      <h3 className="discover-card-title">{collection.name}</h3>
+      {hasMeta && <CollectionSub kinds={collection.kinds_label} designer={collection.designer} />}
     </div>
   )
 }
 
 // ═══════════════════════════════════════════════════════════════════════
 
-export function BrandEditClient({ brand, families, categories, categoryIds, applied, locations }: Props) {
+export function BrandEditClient({ brand, collections, categories, categoryIds, categoriesAuto, applied, locations }: Props) {
   const [locPopup, setLocPopup] = useState<{ open: boolean; editing: LocationRecord | null }>({ open: false, editing: null })
   const [locSaving, setLocSaving] = useState(false)
   const router = useRouter()
@@ -291,7 +299,7 @@ export function BrandEditClient({ brand, families, categories, categoryIds, appl
   // ── Specs bar ──
   const [country, setCountry] = useState(brand.country ?? "")
   const [foundedYear, setFoundedYear] = useState<string>(brand.founded_year ? String(brand.founded_year) : "")
-  const [editingSpecBar, setEditingSpecBar] = useState<"country" | "founded" | null>(null)
+  const [editingSpecBar, setEditingSpecBar] = useState<"country" | "founded" | "website" | null>(null)
   const countryRef = useRef<HTMLInputElement | null>(null)
   const foundedRef = useRef<HTMLInputElement | null>(null)
   useEffect(() => {
@@ -307,15 +315,15 @@ export function BrandEditClient({ brand, families, categories, categoryIds, appl
   const [statusValue, setStatusValue] = useState<BrandStatus>(brand.status)
   const [statusSaving, setStatusSaving] = useState(false)
 
-  // ── Series ──
+  // ── Collection ──
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState("")
   const [creating, setCreating] = useState(false)
-  const [deleteTarget, setDeleteTarget] = useState<BrandEditFamily | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<BrandEditCollection | null>(null)
   const [deleting, setDeleting] = useState(false)
   const coverInputRef = useRef<HTMLInputElement | null>(null)
-  const coverTargetRef = useRef<BrandEditFamily | null>(null)
+  const coverTargetRef = useRef<BrandEditCollection | null>(null)
 
   // Het kaartmenu sluit bij een klik erbuiten — zoals op de bedrijfspagina.
   useEffect(() => {
@@ -381,6 +389,7 @@ export function BrandEditClient({ brand, families, categories, categoryIds, appl
 
   const commitWebsite = (raw: string) => {
     setActiveEditField(null)
+    setEditingSpecBar(null)
     const val = raw.trim()
     if (val === website) return
     setWebsite(val)
@@ -397,27 +406,27 @@ export function BrandEditClient({ brand, families, categories, categoryIds, appl
     router.refresh()
   }
 
-  // Series
-  const createFamily = async () => {
+  // Collection
+  const createCollection = async () => {
     const trimmed = newName.trim()
     if (!trimmed) return
     setCreating(true)
-    const result = await upsertProductFamily(brand.id, trimmed)
+    const result = await upsertProductCollection(brand.id, trimmed)
     setCreating(false)
     if ("error" in result) { toast.error(result.error); return }
     toast.success(`Added ${result.name}`)
     setNewName(""); setShowCreate(false)
-    router.push(`/admin/brands/${brand.id}/series/${result.id}`)
+    router.push(`/admin/brands/${brand.id}/collections/${result.id}`)
   }
 
-  // Een serie heeft een eigen pagina onder het merk — de kaart gaat
+  // Een collectie heeft een eigen pagina onder het merk — de kaart gaat
   // erheen, zoals een projectkaart naar de projecteditor.
-  const openSeries = (family: BrandEditFamily) => router.push(`/admin/brands/${brand.id}/series/${family.id}`)
+  const openCollection = (collection: BrandEditCollection) => router.push(`/admin/brands/${brand.id}/collections/${collection.id}`)
 
   const confirmDelete = async () => {
     if (!deleteTarget) return
     setDeleting(true)
-    const result = await deleteProductFamily(deleteTarget.id)
+    const result = await deleteProductCollection(deleteTarget.id)
     setDeleting(false)
     if ("error" in result) { toast.error(result.error); return }
     toast.success(`Deleted ${deleteTarget.name}`)
@@ -425,16 +434,16 @@ export function BrandEditClient({ brand, families, categories, categoryIds, appl
     router.refresh()
   }
 
-  const pickCover = (family: BrandEditFamily) => { coverTargetRef.current = family; coverInputRef.current?.click() }
+  const pickCover = (collection: BrandEditCollection) => { coverTargetRef.current = collection; coverInputRef.current?.click() }
   const handleCoverChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    const family = coverTargetRef.current
+    const collection = coverTargetRef.current
     if (coverInputRef.current) coverInputRef.current.value = ""
     coverTargetRef.current = null
-    if (!file || !family) return
+    if (!file || !collection) return
     const fd = new FormData()
     fd.append("file", file)
-    const result = await uploadProductFamilyImage(family.id, fd)
+    const result = await uploadProductCollectionImage(collection.id, fd)
     if ("error" in result) toast.error(result.error)
     else { toast.success("Cover updated"); router.refresh() }
   }
@@ -445,24 +454,17 @@ export function BrandEditClient({ brand, families, categories, categoryIds, appl
     <>
       <style>{EDIT_PAGE_CSS}</style>
 
-      <BrandEditSubNav status={brand.status} website={brand.website} onStatusClick={() => { setStatusValue(brand.status); setStatusOpen(true) }} />
+      <BrandEditSubNav status={brand.status} previewHref={`/brands/${brand.slug}`} onStatusClick={() => { setStatusValue(brand.status); setStatusOpen(true) }} />
 
       {/* ════════════════════ HEADER ════════════════════ */}
-      <div className="wrap" style={{ marginTop: 40, marginBottom: 60 }} id="header">
-        <Link href="/admin/brands" className="arco-small-text" style={{ display: "inline-block", marginBottom: 40 }}>
-          ← All brands
-        </Link>
-
+      {/* Zonder "← All brands": de pagina is alleen voor admins, die via het
+          menu terug kunnen. Kop op dezelfde afstand als company edit. */}
+      <div className="wrap" style={{ marginTop: 120, marginBottom: 60 }} id="header">
         <section className="professional-header">
           {/* Logo */}
           <div className="company-icon ec" onClick={() => logoInputRef.current?.click()} style={{ display: "inline-block" }}>
             <EditBadge />
-            {brand.logo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={brand.logo_url} alt={name} className="company-icon-image" />
-            ) : (
-              <div className="company-icon-initials">{name.charAt(0).toUpperCase()}</div>
-            )}
+            <BrandLogo logoUrl={brand.logo_url} name={name} />
             <input ref={logoInputRef} type="file" hidden accept="image/jpeg,image/png,image/webp,image/svg+xml" onChange={handleLogoUpload} />
           </div>
 
@@ -486,7 +488,14 @@ export function BrandEditClient({ brand, families, categories, categoryIds, appl
             </h1>
           </div>
 
-          {/* Categories — what the brand makes; the service line of a company. */}
+          {/* Categories — what the brand makes; the service line of a company.
+              Zodra de collecties soorten hebben volgen de categorieën die
+              (groep per soort, maximaal drie) en is er niets te wijzigen. */}
+          {categoriesAuto ? (
+            <p className="professional-badge" title="Set from the kinds of the collections" style={{ marginTop: 12, marginBottom: 24 }}>
+              {catLabel || "—"}
+            </p>
+          ) : (
           <div
             className={`ec ec--inline${catOpen ? " on" : ""}`}
             onClick={() => { if (!catOpen) openCats() }}
@@ -520,6 +529,7 @@ export function BrandEditClient({ brand, families, categories, categoryIds, appl
               </>
             )}
           </div>
+          )}
 
           {/* Description */}
           <div className={`ec${activeEditField === "desc" ? " on" : ""}`}>
@@ -597,11 +607,11 @@ export function BrandEditClient({ brand, families, categories, categoryIds, appl
             />
           </div>
 
-          {/* Series — read-only, scrolls to the section */}
-          <div className="spec-item-edit" style={{ cursor: "pointer" }} onClick={() => scrollToSection("series")}>
-            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Series</span>
-            <span className="spec-inp-inline" style={{ display: "block", color: families.length > 0 ? undefined : "#b0b0ae" }}>
-              {families.length > 0 ? families.length : "—"}
+          {/* Collection — read-only, scrolls to the section */}
+          <div className="spec-item-edit" style={{ cursor: "pointer" }} onClick={() => scrollToSection("collections")}>
+            <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Collections</span>
+            <span className="spec-inp-inline" style={{ display: "block", color: collections.length > 0 ? undefined : "#b0b0ae" }}>
+              {collections.length > 0 ? collections.length : "—"}
             </span>
           </div>
 
@@ -612,43 +622,84 @@ export function BrandEditClient({ brand, families, categories, categoryIds, appl
               {projectCount > 0 ? projectCount : "—"}
             </span>
           </div>
+
+          {/* Website — laatste in de balk, zoals bij bedrijven; het contactblok
+              onderaan is weg. Het domein (de sleutel die het merk herkent)
+              staat eronder als het van de website afwijkt. */}
+          {(() => {
+            const host = website ? website.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "") : ""
+            const href = website ? (/^https?:\/\//i.test(website) ? website : `https://${website}`) : null
+            return (
+              <div
+                className={`spec-item-edit${editingSpecBar === "website" ? " editing" : ""}`}
+                onClick={() => { if (editingSpecBar !== "website") setEditingSpecBar("website") }}
+              >
+                <EditBadge />
+                <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>Website</span>
+                {editingSpecBar === "website" ? (
+                  <input
+                    autoFocus
+                    type="url"
+                    className="spec-inp-inline"
+                    defaultValue={website}
+                    placeholder="https://…"
+                    onBlur={(e) => commitWebsite(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.currentTarget.blur()
+                      if (e.key === "Escape") { e.currentTarget.value = website; e.currentTarget.blur() }
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <span className="spec-inp-inline" style={{ display: "block", color: website ? undefined : "#b0b0ae", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {href ? (
+                      <a href={href} target="_blank" rel="noopener noreferrer" className="text-link-plain" onClick={(e) => e.stopPropagation()}>{host} →</a>
+                    ) : "Add website"}
+                  </span>
+                )}
+                {brand.domain && brand.domain !== host && (
+                  <span className="text-[11px] text-[#a1a1a0]" style={{ display: "block", marginTop: 4 }} title="Set when the brand was added; recognises it if added again.">Domain: {brand.domain}</span>
+                )}
+              </div>
+            )
+          })()}
         </div>
       </div>
 
-      {/* ════════════════════ SERIES ════════════════════ */}
-      <section id="series" style={{ marginBottom: 60 }}>
+      {/* ════════════════════ COLLECTION ════════════════════ */}
+      <section id="collections" style={{ marginBottom: 60 }}>
         <div className="wrap">
           <div className="section-header">
-            <h2 className="arco-section-title">Series</h2>
-            {families.length > 0 && (
+            <h2 className="arco-section-title">Collections</h2>
+            {collections.length > 0 && (
               <button type="button" className="btn-primary" style={{ fontSize: 13, padding: "8px 18px" }} onClick={() => setShowCreate(true)}>
-                Add series
+                Add collection
               </button>
             )}
           </div>
           <input ref={coverInputRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={handleCoverChange} />
-          {families.length > 0 ? (
+          {collections.length > 0 ? (
             <div className="discover-grid">
-              {families.map((family) => (
-                <SeriesCard
-                  key={family.id}
-                  family={family}
-                  menuOpen={menuOpenId === family.id}
-                  onMenuOpenChange={(open) => setMenuOpenId(open ? family.id : null)}
-                  onEdit={() => openSeries(family)}
-                  onChangeCover={() => pickCover(family)}
-                  onDelete={() => setDeleteTarget(family)}
+              {collections.map((collection) => (
+                <CollectionCard
+                  key={collection.id}
+                  collection={collection}
+                  menuOpen={menuOpenId === collection.id}
+                  onMenuOpenChange={(open) => setMenuOpenId(open ? collection.id : null)}
+                  onEdit={() => openCollection(collection)}
+                  onChangeCover={() => pickCover(collection)}
+                  onDelete={() => setDeleteTarget(collection)}
                 />
               ))}
             </div>
           ) : (
             <div style={{ border: "1px dashed var(--border)", borderRadius: 8, padding: "80px 24px", textAlign: "center" }}>
-              <p className="arco-eyebrow" style={{ marginBottom: 16 }}>No series yet</p>
-              <h2 className="arco-section-title" style={{ marginBottom: 12 }}>Add the series this brand is known for</h2>
+              <p className="arco-eyebrow" style={{ marginBottom: 16 }}>No collections yet</p>
+              <h2 className="arco-section-title" style={{ marginBottom: 12 }}>Add the collections this brand is known for</h2>
               <p className="arco-body-text" style={{ maxWidth: 400, margin: "0 auto 32px" }}>
-                A series is what architects specify and what a photo shows — Mito, Spa, Tobi-Ishi. No individual products.
+                A collection is what architects specify and what a photo shows — Mito, Spa, Tobi-Ishi. No individual products.
               </p>
-              <button type="button" className="btn-primary" onClick={() => setShowCreate(true)}>Add series</button>
+              <button type="button" className="btn-primary" onClick={() => setShowCreate(true)}>Add collection</button>
             </div>
           )}
         </div>
@@ -658,10 +709,10 @@ export function BrandEditClient({ brand, families, categories, categoryIds, appl
       <section id="applied" style={{ marginBottom: 60 }}>
         <div className="wrap">
           <div className="section-header" style={{ marginBottom: 8 }}>
-            <h2 className="arco-section-title">Applied in projects</h2>
+            <h2 className="arco-section-title">Projects</h2>
           </div>
           <p className="arco-body-text" style={{ color: "#8c8c8a", marginBottom: 24, maxWidth: 600 }}>
-            Tagged from the project editor (admins only for now). Brand, series and room; which photo comes later.
+            Tagged from the project editor (admins only for now). Brand, collection and room; which photo comes later.
           </p>
           {applied.length === 0 ? (
             <div style={{ border: "1px dashed var(--border)", borderRadius: 8, padding: "48px 24px", textAlign: "center" }}>
@@ -675,7 +726,7 @@ export function BrandEditClient({ brand, families, categories, categoryIds, appl
                     {l.project.title}
                     {l.project.city ? <span style={{ color: "#8c8c8a", fontWeight: 400 }}> · {l.project.city}</span> : null}
                   </Link>
-                  <span style={{ color: "#1c1c1a" }}>{l.familyName ?? <span style={{ color: "#a1a1a0" }}>—</span>}</span>
+                  <span style={{ color: "#1c1c1a" }}>{l.collectionName ?? <span style={{ color: "#a1a1a0" }}>—</span>}</span>
                   <span style={{ color: "#8c8c8a" }}>{l.spaceName ?? "—"}</span>
                   <span style={{ color: "#8c8c8a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.note ?? ""}</span>
                   <span className="arco-eyebrow" style={{ color: l.photoId ? "#016D75" : "#a1a1a0", textAlign: "right" }}>
@@ -700,87 +751,50 @@ export function BrandEditClient({ brand, families, categories, categoryIds, appl
           <p className="arco-body-text" style={{ color: "#8c8c8a", marginBottom: 24, maxWidth: 600 }}>
             The brand&apos;s own stores and showrooms. Dealers&apos; showrooms live on their company pages; the brand page lists those companies under &quot;Where to buy&quot;.
           </p>
-          {locations.length === 0 ? (
-            <div style={{ border: "1px dashed var(--border)", borderRadius: 8, padding: "48px 24px", textAlign: "center" }}>
-              <p className="arco-body-text" style={{ color: "#a1a1a0", margin: 0 }}>No showrooms yet.</p>
-            </div>
-          ) : (
-            <div className="contact-grid">
-              {locations.map((loc) => {
-                const street = loc.streetAddress ?? loc.address?.split(",")[0]?.trim() ?? null
-                const cityLine = [loc.postalCode, loc.city].filter(Boolean).join(" ")
-                return (
-                  <button
-                    key={loc.id}
-                    type="button"
-                    className="contact-card"
-                    onClick={() => setLocPopup({ open: true, editing: loc })}
-                    style={{ background: "none", border: "1px solid transparent", borderRadius: 6, padding: 12, margin: -12, cursor: "pointer", textAlign: "left" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#e5e5e4" }}
-                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = "transparent" }}
-                  >
-                    <span className="arco-eyebrow">{locationKindLabel(loc.kind, "en")}</span>
-                    <p className="arco-card-title" style={{ margin: "12px 0 4px" }}>{loc.name ?? loc.city ?? street}</p>
-                    {street && <p className="arco-body-text" style={{ margin: 0 }}>{street}</p>}
-                    {cityLine && <p className="arco-body-text" style={{ margin: 0 }}>{cityLine}</p>}
-                    {loc.openingHours && <p className="arco-body-text" style={{ margin: "8px 0 0", color: "#6b6b68", whiteSpace: "pre-line" }}>{loc.openingHours}</p>}
-                    <span style={{ display: "inline-block", marginTop: 10, fontSize: 12, color: "#a1a1a0" }}>Edit →</span>
-                  </button>
-                )
-              })}
-            </div>
+          {locations.length === 0 ? null : (
+            <LocationCards
+              mode="edit"
+              locale="en"
+              locations={locations}
+              fallbackLogoUrl={brand.logo_url}
+              onEdit={(loc) => setLocPopup({ open: true, editing: loc })}
+              onUpload={async (loc, file) => {
+                const fd = new FormData()
+                fd.set("file", file)
+                const res = await uploadBrandLocationPhoto(brand.id, loc.id, fd)
+                if ("error" in res) { toast.error(res.error); return }
+                toast.success("Photo saved")
+                router.refresh()
+              }}
+            />
           )}
-        </div>
-      </section>
-
-      {/* ════════════════════ CONTACT ════════════════════ */}
-      <section id="contact" className="contact-section" style={{ marginBottom: 80 }}>
-        <div className="wrap">
-          <div className="section-header">
-            <h2 className="arco-section-title">Contact information</h2>
-          </div>
-          <div className="contact-row">
-            {/* Website */}
-            <div
-              className={`contact-row-item${activeEditField === "website" ? " on" : ""}`}
-              onClick={() => { if (activeEditField !== "website") setActiveEditField("website") }}
-            >
-              <EditBadge />
-              <span className="arco-eyebrow">Website</span>
-              {activeEditField === "website" ? (
-                <input
-                  autoFocus
-                  type="url"
-                  className="contact-edit-input"
-                  defaultValue={website}
-                  placeholder="https://…"
-                  onBlur={(e) => commitWebsite(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") e.currentTarget.blur()
-                    if (e.key === "Escape") { e.currentTarget.value = website; e.currentTarget.blur() }
-                  }}
-                />
-              ) : (
-                <p className="contact-row-value">
-                  {website ? website.replace(/^https?:\/\//i, "").replace(/\/$/, "") : <span className="contact-row-placeholder">Add website</span>}
-                </p>
-              )}
-            </div>
-
-            {/* Domain — derived at scrape time, the key that recognises the brand */}
-            <div className="contact-row-item static">
-              <span className="arco-eyebrow">Domain</span>
-              <p className="contact-row-value">{brand.domain ?? <span className="contact-row-placeholder">—</span>}</p>
-              <p className="contact-row-sub">Set when the brand was added; recognises it if added again.</p>
-            </div>
-          </div>
         </div>
       </section>
 
       {/* ════════════════════ POPUPS ════════════════════ */}
 
       {/* Showroom add/edit */}
-      {locPopup.open && (
+      {locPopup.open && !locPopup.editing && (
+        <ShowroomPicker
+          suggestFor={brand.name}
+          existingPlaceIds={locations.map((l) => l.googlePlaceId).filter((id): id is string => Boolean(id))}
+          onAdd={async (inputs) => {
+            setLocSaving(true)
+            let ok = 0
+            for (const input of inputs) {
+              const res = await saveBrandLocation(brand.id, input)
+              if ("error" in res) toast.error(res.error)
+              else ok += 1
+            }
+            setLocSaving(false)
+            if (ok > 0) toast.success(ok === 1 ? "Showroom added" : `${ok} showrooms added`)
+            setLocPopup({ open: false, editing: null })
+            router.refresh()
+          }}
+          onClose={() => !locSaving && setLocPopup({ open: false, editing: null })}
+        />
+      )}
+      {locPopup.open && locPopup.editing && (
         <LocationPopup
           initial={locPopup.editing}
           saving={locSaving}
@@ -809,12 +823,12 @@ export function BrandEditClient({ brand, families, categories, categoryIds, appl
         />
       )}
 
-      {/* Add series */}
+      {/* Add collection */}
       {showCreate && (
         <div className="popup-overlay" onClick={() => !creating && setShowCreate(false)}>
           <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
             <div className="popup-header">
-              <h3 className="arco-section-title">Add series</h3>
+              <h3 className="arco-section-title">Add collection</h3>
               <button type="button" className="popup-close" onClick={() => !creating && setShowCreate(false)} aria-label="Close">✕</button>
             </div>
             <p className="arco-body-text" style={{ marginBottom: 16 }}>
@@ -823,17 +837,17 @@ export function BrandEditClient({ brand, families, categories, categoryIds, appl
             <input
               type="text"
               autoFocus
-              placeholder="Series name"
+              placeholder="Collection name"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && newName.trim()) void createFamily() }}
+              onKeyDown={(e) => { if (e.key === "Enter" && newName.trim()) void createCollection() }}
               className="input-base input-default"
               style={{ width: "100%", marginBottom: 20 }}
               disabled={creating}
             />
             <div className="popup-actions">
               <button type="button" className="btn-tertiary" onClick={() => setShowCreate(false)} disabled={creating} style={{ flex: 1 }}>Cancel</button>
-              <button type="button" className="btn-secondary" onClick={() => void createFamily()} disabled={creating || !newName.trim()} style={{ flex: 1 }}>
+              <button type="button" className="btn-secondary" onClick={() => void createCollection()} disabled={creating || !newName.trim()} style={{ flex: 1 }}>
                 {creating ? "Creating…" : "Create"}
               </button>
             </div>
@@ -841,7 +855,7 @@ export function BrandEditClient({ brand, families, categories, categoryIds, appl
         </div>
       )}
 
-      {/* Delete series */}
+      {/* Delete collection */}
       {deleteTarget && (
         <div className="popup-overlay" onClick={() => !deleting && setDeleteTarget(null)}>
           <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
@@ -850,12 +864,12 @@ export function BrandEditClient({ brand, families, categories, categoryIds, appl
               <button type="button" className="popup-close" onClick={() => !deleting && setDeleteTarget(null)} aria-label="Close">✕</button>
             </div>
             <p className="arco-body-text" style={{ marginBottom: 20 }}>
-              Projects tagged with this series keep the brand; the series on them is cleared.
+              Projects tagged with this collection keep the brand; the collection on them is cleared.
             </p>
             <div className="popup-actions">
               <button type="button" className="btn-tertiary" onClick={() => setDeleteTarget(null)} disabled={deleting} style={{ flex: 1 }}>Cancel</button>
               <button type="button" className="btn-primary" style={{ flex: 1, background: "var(--destructive)" }} onClick={() => void confirmDelete()} disabled={deleting}>
-                {deleting ? "Deleting…" : "Delete series"}
+                {deleting ? "Deleting…" : "Delete collection"}
               </button>
             </div>
           </div>

@@ -7,7 +7,7 @@ import { getProfessionalHubs, servicePlural } from "@/lib/professional-hubs"
 import { PROVINCES, cityLabel } from "@/lib/provinces"
 import { typeLabel, scopeLabel, spaceNoun } from "@/lib/type-labels"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
-import { categoryLabel, categoryTree, getCatalogCategories, getCatalogSeries } from "@/lib/products/catalog"
+import { activeCategories, categoryLabel, categoryTree, getCatalogCategories, getCatalogCollections } from "@/lib/products/catalog"
 
 /**
  * De twee uitklapmenu's in de header, gebouwd uit dezelfde
@@ -60,11 +60,11 @@ async function buildNavMenus(locale: string): Promise<NavMenus> {
   // Service-role, niet de cookie-client: binnen unstable_cache mag
   // cookies() niet, en de hubs tellen alleen publieke rijen.
   const supabase = createServiceRoleSupabaseClient()
-  const [projectHubs, proHubs, categories, catalogSeries] = await Promise.all([
+  const [projectHubs, proHubs, categories, catalogCollections] = await Promise.all([
     getHubs(supabase),
     getProfessionalHubs(supabase),
     getCatalogCategories(),
-    getCatalogSeries(),
+    getCatalogCollections(),
   ])
 
   // ── Projecten: vier assen ─────────────────────────────────────────
@@ -160,19 +160,19 @@ async function buildNavMenus(locale: string): Promise<NavMenus> {
   })
 
   // ── Producten: de zes hoofdgroepen, met de soorten eronder ──────────
-  // Rijen zijn soorten, geen merken of series: een serienaam zegt niets
+  // Rijen zijn soorten, geen merken of collecties: een collectienaam zegt niets
   // zonder merk, en één merk zou een kolom vullen. Alleen soorten waar
-  // een serie in staat; een lege groep rendert niet. De groepskop linkt
+  // een collectie in staat; een lege groep rendert niet. De groepskop linkt
   // wél — de groepspagina (alle verlichting) is een ingang die mensen
   // zoeken, anders dan een dienstgroep.
-  const tree = categoryTree(categories)
-  const seriesIn = (id: string) => {
+  const tree = categoryTree(activeCategories(categories))
+  const collectionsIn = (id: string) => {
     const ids = tree.subtreeIds(id)
-    return catalogSeries.filter((s) => s.categoryId && ids.has(s.categoryId)).length
+    return catalogCollections.filter((s) => s.categoryId && ids.has(s.categoryId)).length
   }
   const productColumns: NavMenuColumn[] = tree.roots
     .map((group) => {
-      const kinds = tree.children(group.id).map((k) => ({ k, n: seriesIn(k.id) })).filter((x) => x.n > 0)
+      const kinds = tree.children(group.id).map((k) => ({ k, n: collectionsIn(k.id) })).filter((x) => x.n > 0)
       const ordered = kinds.length > COLUMN_CAP ? kinds.slice().sort((a, b) => b.n - a.n) : kinds
       const links = ordered.map(({ k }) => ({ href: `/products/${k.slug}`, label: categoryLabel(k, locale) }))
       const label = categoryLabel(group, locale)

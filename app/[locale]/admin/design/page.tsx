@@ -11,6 +11,12 @@ import { CompanyLookupPreview } from "./company-lookup-preview"
 import { ServiceMarksPreview } from "./service-marks-preview"
 import { UiIconsPreview } from "./ui-icons-preview"
 import { CreditPreviews } from "./credit-previews"
+import { QuickTilePreview, type QuickTileBrand, type QuickTileSpace } from "./quick-tile-preview"
+import { LayeredFilterPreview } from "./layered-filter-preview"
+import type { LayeredGroup } from "@/components/filters/layered-filter"
+import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
+import { spaceNoun } from "@/lib/type-labels"
+import { SPACE_HUB_DEFS } from "@/lib/project-hubs"
 import { GardenDesignIcon, KitchenIcon } from "@/lib/icons/custom-service-icons"
 import type { Metadata } from "next"
 
@@ -158,7 +164,45 @@ function PhotoComboPreview({ combo, cols, unit, gap, autoFlow = "row" }: { combo
   )
 }
 
-export default function DesignPage() {
+export default async function DesignPage() {
+  // Echte ruimtes en merken voor het voorbeeld van de schijfkaart.
+  const sr = createServiceRoleSupabaseClient() as any
+  const [{ data: spaceRows }, { data: brandRows }, { data: productCatRows }, { data: collectionCatRows }, { data: serviceRows }] = await Promise.all([
+    sr.from("spaces").select("slug, cutout_url, icon_key").eq("is_active", true).not("cutout_url", "is", null).in("slug", SPACE_HUB_DEFS.filter((d) => d.featured).map((d) => d.space)),
+    sr.from("brands").select("id, name, logo_url").not("logo_url", "is", null).neq("status", "deactivated").order("name").limit(4),
+    sr.from("product_categories").select("id, name_nl, name, parent_id, order_index").order("order_index"),
+    sr.from("product_collections").select("category_id").not("category_id", "is", null),
+    sr.from("categories").select("id, name, name_nl, parent_id, sort_order").eq("category_type", "Professional").eq("is_active", true).order("sort_order"),
+  ])
+
+  // Gelaagd filter: soorten (groep › subgroep, met aantallen collecties) en
+  // diensten (dienstgroep › dienst), zoals de filterbalken ze tonen.
+  const pcats = (productCatRows ?? []) as Array<{ id: string; name_nl: string | null; name: string; parent_id: string | null }>
+  const pparent = new Map(pcats.map((c) => [c.id, c.parent_id]))
+  const collectionCount = new Map<string, number>()
+  for (const r of (collectionCatRows ?? []) as Array<{ category_id: string }>) {
+    for (let cur: string | null | undefined = r.category_id; cur; cur = pparent.get(cur)) collectionCount.set(cur, (collectionCount.get(cur) ?? 0) + 1)
+  }
+  const kindGroups: LayeredGroup[] = pcats.filter((c) => !c.parent_id).map((g) => ({
+    id: g.id,
+    label: g.name_nl ?? g.name,
+    count: collectionCount.get(g.id) ?? 0,
+    children: pcats.filter((c) => c.parent_id === g.id).map((c) => ({ id: c.id, label: c.name_nl ?? c.name, count: collectionCount.get(c.id) ?? 0 })),
+  }))
+  const scats = (serviceRows ?? []) as Array<{ id: string; name: string; name_nl: string | null; parent_id: string | null }>
+  const serviceGroups: LayeredGroup[] = scats.filter((c) => !c.parent_id).map((g) => ({
+    id: g.id,
+    label: g.name_nl ?? g.name,
+    children: scats.filter((c) => c.parent_id === g.id).map((c) => ({ id: c.id, label: c.name_nl ?? c.name })),
+  })).filter((g) => g.children.length > 0)
+  // Dezelfde rij als /projects: de uitgelichte ruimtes, in hun volgorde,
+  // alleen met uitsnede.
+  const hubOrder = new Map(SPACE_HUB_DEFS.map((d, i) => [d.space, i]))
+  const quickSpaces: QuickTileSpace[] = ((spaceRows ?? []) as any[])
+    .sort((a, b) => (hubOrder.get(a.slug) ?? 99) - (hubOrder.get(b.slug) ?? 99))
+    .map((r) => ({ slug: r.slug, label: spaceNoun(r.slug, "nl"), cutoutUrl: r.cutout_url ?? null, iconKey: r.icon_key ?? null }))
+  const quickBrands: QuickTileBrand[] = ((brandRows ?? []) as any[]).map((r) => ({ id: r.id, name: r.name, logoUrl: r.logo_url ?? null }))
+
   const colors = [
     { name: "White", hex: "#FAFAF9", desc: "Main background for pages, cards, and content areas", border: true },
     { name: "Black", hex: "#1c1c1a", desc: "Primary text color, secondary buttons, active states" },
@@ -170,7 +214,7 @@ export default function DesignPage() {
   ]
 
   const typography = [
-    { name: "Hero", className: "arco-hero-title", specs: ".arco-hero-title · Serif, 400 · 42–72px (5.5vw) · ≤768 42px · ≤480 42px", preview: <h1 className="arco-hero-title">Exceptional architecture.<br/>Trusted professionals.</h1> },
+    { name: "Hero", className: "arco-hero-title", specs: ".arco-hero-title · Serif, 400 · 42–72px (5.5vw) · ≤768 42px · ≤480 42px", preview: <h1 className="arco-hero-title">Exceptional architecture.<br/>With credit to the creators.</h1> },
     { name: "Page", className: "arco-page-title", specs: ".arco-page-title · Serif, 300 · 48px · ≤768 36px · ≤480 32px", preview: <h2 className="arco-page-title">The professional network architects trust</h2> },
     { name: "Section", className: "arco-section-title", specs: ".arco-section-title · Serif, 300 · 36px · ≤768 30px · ≤480 26px", preview: <h3 className="arco-section-title">Recent Projects</h3> },
     { name: "Sub-section", className: "arco-subsection-title", specs: ".arco-subsection-title · Serif, 300 · 28px · ≤768 24px · ≤480 22px", preview: <h3 className="arco-subsection-title">Curated Platform</h3> },
@@ -639,6 +683,22 @@ export default function DesignPage() {
                 <p className="arco-small-text">Uses <strong>Micro</strong> typography (500 weight). Black bg, white text, pill with ✕. Clear all: plain text button.</p>
               </div>
             </div>
+
+            <div>
+              <h4 id="layered-filter" className="arco-label" style={{ marginBottom: 20, marginTop: 32, scrollMarginTop: 140 }}>Layered filter</h4>
+              <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: 40, marginBottom: 16 }}>
+                <LayeredFilterPreview kinds={kindGroups} services={serviceGroups} />
+              </div>
+              <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
+                <p className="arco-small-text">
+                  Voor elk filter met twee lagen: soorten (groep › subgroep) en diensten (dienstgroep › dienst). Links de groepen, rechts de
+                  onderdelen van de actieve groep. <strong>Hover</strong> op een groep toont zijn onderdelen, <strong>klik</strong> kiest de hele
+                  groep. Een groep met gekozen onderdelen draagt een badge met het aantal. Een groep kiezen haalt zijn losse onderdelen weg; een onderdeel kiezen haalt de groep weg. De pill toont de
+                  keuze (&ldquo;Banken &amp; fauteuils +1&rdquo;), de chips het pad. Eén keuze (zoals /brands) krijgt rondjes en sluit na de keuze.
+                  Op ≤768px (geen hover) één kolom tegelijk: tik kiest de groep, het pijltje opent &ldquo;‹ Groep&rdquo; met wat erin zit.
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* ═══ Components ═══ */}
@@ -689,6 +749,31 @@ export default function DesignPage() {
                   words do. A missing cover photo falls back to <code>/placeholder.svg</code>, not to an empty frame. Subtitle is <strong>service · city</strong>, with services past the first collapsed behind <strong>+N</strong>.
                 </p>
               </div>
+            </div>
+          </div>
+
+          {/* QUICK TILES — cirkel + naam */}
+          <div className="design-section">
+            <h2 id="quick-tiles" className="arco-section-title" style={{ marginBottom: 24, scrollMarginTop: 140 }}>Disc tiles</h2>
+            <div style={{ background: "white", border: "1px solid var(--rule)", borderRadius: 6, padding: "clamp(10px, 3vw, 40px)", marginBottom: 16 }}>
+              <QuickTilePreview spaces={quickSpaces} brands={quickBrands} />
+            </div>
+            <div style={{ background: "var(--surface)", padding: "16px 20px", borderRadius: 6 }}>
+              <p className="arco-small-text">
+                One shape for every "pick a thing" entry: <code>.credit-card.service-quick-card.quick-tile</code> with a 100px <code>.credit-icon</code> disc and a
+                <code> .quick-tile-label</code> under it (Standard, centered, max 150px wide, turns teal on hover). Used for spaces, services and product groups under the
+                head of a discover page, and for the brand pickers on project edit and company edit.<br />
+                <strong>Image in the disc.</strong> A cut-out (<code>.credit-cutout</code>, square detail photo with one object) fills the circle. Spaces
+                require one: a space without a cut-out is left out of the row, never shown with a stand-in icon. Services have no photos and use the
+                hand-drawn service mark in the Service marks treatment (<code>.credit-icon-service</code>: 72px in the 100px disc, 0.45 stroke). Brand logos go through <code>useBrandLogoFit</code>: a logo with its own background fills the disc, a white or
+                transparent one sits on the grey with 7% padding (<code>mix-blend-mode: multiply</code>).<br />
+                <strong>Spacing.</strong> Everywhere the same as on /projects: tiles 150px wide (112px mobile) with an 8px gap, left-aligned — never stretched to fill
+                the width. Rows (<code>&lt;QuickRow&gt;</code>), wrapping lists (the brand pickers, brands on a company page) and grids (<code>.brands-disc-grid</code> on
+                /brands) all keep that pitch. A row with more tiles than fit lets the last one run under the arrow as a hint; arrows sit half over the content edge,
+                swipe with snap on touch. Only brand <em>cards</em> on /products stretch to fill the row (<code>fill</code>).<br />
+                <strong>Picking.</strong> <code>.brand-pick-badge</code> covers the disc on hover or keyboard focus: teal with a plus to add, near-black with a cross to
+                remove. A picked tile gets <code>.quick-tile-badge</code>: a 22px primary circle with a white check and a 2px white ring, on the rim of the disc at top right (its centre on the circumference at 45°), outside the clipped disc via <code>.quick-tile-disc</code>. It stays above the hover overlay; the name stays plain and centred.
+              </p>
             </div>
           </div>
 

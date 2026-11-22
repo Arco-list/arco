@@ -1,15 +1,16 @@
 import "server-only"
+import { selectAll } from "@/lib/supabase/select-all"
 
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
-import type { CatalogBrand, CatalogCategory, CatalogDealer, CatalogProject, CatalogSeries } from "@/lib/products/catalog-types"
+import type { CatalogBrand, CatalogCategory, CatalogDealer, CatalogProduct, CatalogProject, CatalogCollection } from "@/lib/products/catalog-types"
 import { locationFromRow, type LocationRecord } from "@/lib/locations/types"
 
-export { categoryLabel, categoryTree } from "@/lib/products/catalog-types"
-export type { CatalogBrand, CatalogCategory, CatalogDealer, CatalogProject, CatalogSeries } from "@/lib/products/catalog-types"
+export { activeCategories, categoryLabel, categoryTree, collectionKindsLabel } from "@/lib/products/catalog-types"
+export type { CatalogBrand, CatalogCategory, CatalogDealer, CatalogProduct, CatalogProject, CatalogCollection } from "@/lib/products/catalog-types"
 
 /**
  * De productlaag voor de publieke pagina's en het headermenu: soorten
- * (product_categories, drie niveaus), series (product_families) met hun
+ * (product_categories, drie niveaus), collecties (product_collections) met hun
  * merk en in hoeveel projecten ze zijn toegepast, en merken.
  *
  * Service-role: de tabellen zijn admin-only in RLS en de pagina's zitten
@@ -25,7 +26,7 @@ export async function getCatalogCategories(): Promise<CatalogCategory[]> {
   const supabase = createServiceRoleSupabaseClient() as any
   const { data } = await supabase
     .from("product_categories")
-    .select("id, slug, name, name_nl, parent_id, order_index")
+    .select("id, slug, name, name_nl, parent_id, order_index, is_active, image_url")
     .order("order_index")
   return ((data ?? []) as any[]).map((c) => ({
     id: c.id,
@@ -34,27 +35,46 @@ export async function getCatalogCategories(): Promise<CatalogCategory[]> {
     nameNl: c.name_nl ?? null,
     parentId: c.parent_id ?? null,
     orderIndex: c.order_index ?? 0,
+    isActive: c.is_active ?? true,
+    imageUrl: c.image_url ?? null,
   }))
 }
 
-/** Alle series met merk en projectteller — klein genoeg om in één keer te
+/** Alle collecties met merk en projectteller — klein genoeg om in één keer te
  *  halen en in code te filteren, en dat blijft lang zo. */
-export async function getCatalogSeries(): Promise<CatalogSeries[]> {
+export async function getCatalogCollections(): Promise<CatalogCollection[]> {
   const supabase = createServiceRoleSupabaseClient() as any
-  const [{ data: families }, { data: links }] = await Promise.all([
-    supabase
-      .from("product_families")
+  const [{ data: collections }, { data: links }, { data: kindRows }, { data: productShots }, { data: productRows }] = await Promise.all([
+    // In blokken: Supabase kapt elke query af op 1000 rijen.
+    selectAll(() => supabase
+      .from("product_collections")
       .select("id, slug, name, description, hero_image_url, designer, launch_year, url, category_id, is_featured, brands(id, slug, name, logo_url, status)")
-      .order("name"),
-    supabase.from("project_brands").select("family_id, project_id").not("family_id", "is", null),
+      .order("name")
+      .order("id")),
+    supabase.from("project_brands").select("collection_id, project_id").not("collection_id", "is", null),
+    selectAll(() => supabase.from("product_collection_kinds").select("collection_id, category_id, position").order("position").order("collection_id").order("category_id")),
+    // Productfoto's op wit (migratie 318), anders het beeld van het eerste product.
+    selectAll(() => supabase.from("product_collection_photos").select("collection_id, url, order_index").eq("kind", "product").order("order_index").order("id")),
+    selectAll(() => supabase.from("products").select("collection_id, image_url, position").not("image_url", "is", null).order("position").order("id")),
   ])
-  const projectsByFamily = new Map<string, Set<string>>()
-  for (const l of (links ?? []) as Array<{ family_id: string; project_id: string }>) {
-    const set = projectsByFamily.get(l.family_id) ?? new Set<string>()
-    set.add(l.project_id)
-    projectsByFamily.set(l.family_id, set)
+  const productImageByCollection = new Map<string, string>()
+  for (const p of (productShots ?? []) as Array<{ collection_id: string; url: string }>) {
+    if (!productImageByCollection.has(p.collection_id)) productImageByCollection.set(p.collection_id, p.url)
   }
-  return ((families ?? []) as any[])
+  for (const p of (productRows ?? []) as Array<{ collection_id: string | null; image_url: string }>) {
+    if (p.collection_id && !productImageByCollection.has(p.collection_id)) productImageByCollection.set(p.collection_id, p.image_url)
+  }
+  const kindsByCollection = new Map<string, string[]>()
+  for (const k of (kindRows ?? []) as Array<{ collection_id: string; category_id: string }>) {
+    kindsByCollection.set(k.collection_id, [...(kindsByCollection.get(k.collection_id) ?? []), k.category_id])
+  }
+  const projectsByCollection = new Map<string, Set<string>>()
+  for (const l of (links ?? []) as Array<{ collection_id: string; project_id: string }>) {
+    const set = projectsByCollection.get(l.collection_id) ?? new Set<string>()
+    set.add(l.project_id)
+    projectsByCollection.set(l.collection_id, set)
+  }
+  return ((collections ?? []) as any[])
     .filter((f) => f.brands && (PUBLIC_BRAND_STATUSES === null || PUBLIC_BRAND_STATUSES.includes(f.brands.status)))
     .map((f) => ({
       id: f.id,
@@ -62,25 +82,28 @@ export async function getCatalogSeries(): Promise<CatalogSeries[]> {
       name: f.name,
       description: f.description ?? null,
       heroImageUrl: f.hero_image_url ?? null,
+      productImageUrl: productImageByCollection.get(f.id) ?? null,
       designer: f.designer ?? null,
       launchYear: f.launch_year ?? null,
       url: f.url ?? null,
       categoryId: f.category_id ?? null,
+      kindIds: kindsByCollection.get(f.id) ?? [],
       isFeatured: Boolean(f.is_featured),
       brand: { id: f.brands.id, slug: f.brands.slug, name: f.brands.name, logoUrl: f.brands.logo_url ?? null },
-      projectCount: projectsByFamily.get(f.id)?.size ?? 0,
+      projectCount: projectsByCollection.get(f.id)?.size ?? 0,
     }))
 }
 
 export async function getCatalogBrands(): Promise<CatalogBrand[]> {
   const supabase = createServiceRoleSupabaseClient() as any
-  const [{ data: brands }, { data: cats }, { data: families }, { data: links }] = await Promise.all([
-    supabase
+  const [{ data: brands }, { data: cats }, { data: collections }, { data: links }] = await Promise.all([
+    selectAll(() => supabase
       .from("brands")
       .select("id, slug, name, domain, website, logo_url, description, country, founded_year, status")
-      .order("name"),
-    supabase.from("brand_categories").select("brand_id, category_id, position").order("position"),
-    supabase.from("product_families").select("id, brand_id"),
+      .order("name")
+      .order("id")),
+    selectAll(() => supabase.from("brand_categories").select("brand_id, category_id, position").order("position").order("brand_id").order("category_id")),
+    supabase.from("product_collections").select("id, brand_id"),
     supabase.from("project_brands").select("brand_id, project_id"),
   ])
   const catsByBrand = new Map<string, string[]>()
@@ -89,8 +112,8 @@ export async function getCatalogBrands(): Promise<CatalogBrand[]> {
     list.push(r.category_id)
     catsByBrand.set(r.brand_id, list)
   }
-  const seriesByBrand = new Map<string, number>()
-  for (const f of (families ?? []) as Array<{ brand_id: string }>) seriesByBrand.set(f.brand_id, (seriesByBrand.get(f.brand_id) ?? 0) + 1)
+  const collectionByBrand = new Map<string, number>()
+  for (const f of (collections ?? []) as Array<{ brand_id: string }>) collectionByBrand.set(f.brand_id, (collectionByBrand.get(f.brand_id) ?? 0) + 1)
   const projectsByBrand = new Map<string, Set<string>>()
   for (const l of (links ?? []) as Array<{ brand_id: string; project_id: string }>) {
     const set = projectsByBrand.get(l.brand_id) ?? new Set<string>()
@@ -111,45 +134,110 @@ export async function getCatalogBrands(): Promise<CatalogBrand[]> {
       foundedYear: b.founded_year ?? null,
       status: b.status,
       categoryIds: catsByBrand.get(b.id) ?? [],
-      seriesCount: seriesByBrand.get(b.id) ?? 0,
+      collectionCount: collectionByBrand.get(b.id) ?? 0,
       projectCount: projectsByBrand.get(b.id)?.size ?? 0,
     }))
 }
 
-export async function getSeriesPhotos(familyId: string): Promise<Array<{ id: string; url: string; alt: string | null; isPrimary: boolean }>> {
+/** De producten van een collectie, in de volgorde van de pagina bij het merk. */
+export async function getCollectionProducts(collectionId: string): Promise<CatalogProduct[]> {
   const supabase = createServiceRoleSupabaseClient() as any
-  const { data } = await supabase
-    .from("product_family_photos")
-    .select("id, url, alt_text, is_primary, order_index")
-    .eq("family_id", familyId)
-    .order("order_index")
-  return ((data ?? []) as any[]).map((p) => ({ id: p.id, url: p.url, alt: p.alt_text ?? null, isPrimary: Boolean(p.is_primary) }))
+  const { data } = await supabase.from("products").select("id, name, url, image_url, category_id").eq("collection_id", collectionId).order("position")
+  return ((data ?? []) as any[]).map((p) => ({ id: p.id, name: p.name, url: p.url ?? null, imageUrl: p.image_url ?? null, categoryId: p.category_id ?? null }))
 }
 
-/** Gepubliceerde projecten waarin een serie of een merk is toegepast,
- *  als kaart — uit de materialized view die de discover-grid ook leest. */
-async function projectsFor(column: "family_id" | "brand_id", id: string): Promise<CatalogProject[]> {
+export async function getCollectionPhotos(collectionId: string): Promise<Array<{ id: string; url: string; alt: string | null; isPrimary: boolean; kind: string | null; width: number | null; height: number | null; focus: { x: number; y: number } | null }>> {
   const supabase = createServiceRoleSupabaseClient() as any
-  const { data: links } = await supabase.from("project_brands").select("project_id").eq(column, id)
-  const ids = Array.from(new Set(((links ?? []) as Array<{ project_id: string }>).map((l) => l.project_id)))
+  const { data } = await supabase
+    .from("product_collection_photos")
+    .select("id, url, alt_text, is_primary, order_index, kind, width, height, focus_x, focus_y")
+    .eq("collection_id", collectionId)
+    .order("order_index")
+  return ((data ?? []) as any[]).map((p) => ({ id: p.id, url: p.url, alt: p.alt_text ?? null, isPrimary: Boolean(p.is_primary), kind: p.kind ?? null, width: p.width ?? null, height: p.height ?? null, focus: p.focus_x != null && p.focus_y != null ? { x: p.focus_x, y: p.focus_y } : null }))
+}
+
+/** Projecten waarin een collectie of een merk is toegepast, als kaart —
+ *  uit de materialized view die de discover-grid ook leest. Een project
+ *  telt mee via project_brands of via een stip op een van zijn foto's
+ *  (migratie 317); staat er een stip, dan toont de kaart die foto met de
+ *  stip in plaats van de omslag.
+ *
+ *  `includeInReview`: ook projecten in review en concepten. Alleen voor
+ *  admins, en alleen zolang de merk- en collectiepagina's admin-only zijn
+ *  (requireProductsAdmin); zet het uit als de laag publiek gaat. */
+async function projectsFor(column: "collection_id" | "brand_id", id: string, options?: { includeInReview?: boolean }): Promise<CatalogProject[]> {
+  const supabase = createServiceRoleSupabaseClient() as any
+  const [{ data: links }, { data: tagRows }] = await Promise.all([
+    supabase.from("project_brands").select("project_id").eq(column, id),
+    supabase.from("project_photo_brand_tags").select("photo_id, created_at, photo:project_photos!inner(id, project_id, url, width, height)").eq(column, id).order("created_at"),
+  ])
+  // Per project de eerste foto met een stip voor dit merk of deze collectie.
+  const taggedByProject = new Map<string, { id: string; url: string; width: number | null; height: number | null }>()
+  for (const r of (tagRows ?? []) as Array<{ photo: { id: string; project_id: string; url: string; width: number | null; height: number | null } | null }>) {
+    if (r.photo && !taggedByProject.has(r.photo.project_id)) taggedByProject.set(r.photo.project_id, r.photo)
+  }
+  const ids = Array.from(new Set([
+    ...((links ?? []) as Array<{ project_id: string }>).map((l) => l.project_id),
+    ...taggedByProject.keys(),
+  ]))
   if (ids.length === 0) return []
   const { data } = await supabase
     .from("mv_project_summary")
-    .select("id, slug, title, primary_photo_url, location, primary_category")
+    .select("id, slug, title, primary_photo_url, location, primary_category, status")
     .in("id", ids)
     .eq("status", "published")
     .not("slug", "is", null)
-  return ((data ?? []) as any[]).map((p) => ({
-    id: p.id,
-    slug: p.slug,
-    title: p.title,
-    imageUrl: p.primary_photo_url ?? null,
-    location: p.location ?? null,
-    type: p.primary_category ?? null,
-  }))
+  const rows = (data ?? []) as any[]
+  // De view kent alleen gepubliceerde projecten; voor admins de rest uit
+  // de tabel (in review en concept), met hun omslagfoto.
+  if (options?.includeInReview) {
+    const seen = new Set(rows.map((r) => r.id))
+    const rest = ids.filter((pid) => !seen.has(pid))
+    if (rest.length > 0) {
+      const [{ data: extra }, { data: covers }] = await Promise.all([
+        supabase.from("projects").select("id, slug, title, location, status").in("id", rest).in("status", ["in_progress", "draft"]).not("slug", "is", null),
+        supabase.from("project_photos").select("project_id, url, is_primary, order_index").in("project_id", rest).order("is_primary", { ascending: false }).order("order_index"),
+      ])
+      const coverBy = new Map<string, string>()
+      for (const c of (covers ?? []) as Array<{ project_id: string; url: string }>) if (!coverBy.has(c.project_id)) coverBy.set(c.project_id, c.url)
+      for (const e of (extra ?? []) as any[]) rows.push({ ...e, primary_photo_url: coverBy.get(e.id) ?? null, primary_category: null })
+    }
+  }
+
+  // Ruimteprojecten tonen hun ruimte in plaats van het type.
+  const { data: kinds } = rows.length > 0
+    ? await supabase.from("projects").select("id, kind, primary_space:spaces!projects_primary_space_id_fkey(slug)").in("id", rows.map((r) => r.id))
+    : { data: [] }
+  const spaceById = new Map<string, string>()
+  for (const k of (kinds ?? []) as Array<{ id: string; kind: string | null; primary_space: { slug: string | null } | null }>) {
+    if (k.kind === "partial" && k.primary_space?.slug) spaceById.set(k.id, k.primary_space.slug)
+  }
+
+  const { getPhotoBrandTags } = await import("@/lib/projects/photo-brand-tags")
+  const photoIds = rows.map((p) => taggedByProject.get(p.id)?.id).filter((x): x is string => Boolean(x))
+  // De pagina's zijn admin-only, dus de stippen linken naar Arco.
+  const tagsByPhoto = await getPhotoBrandTags(photoIds, true)
+
+  return rows
+    .map((p) => {
+      const photo = taggedByProject.get(p.id) ?? null
+      return {
+        id: p.id,
+        slug: p.slug,
+        title: p.title,
+        imageUrl: photo?.url ?? p.primary_photo_url ?? null,
+        location: p.location ?? null,
+        type: p.primary_category ?? null,
+        spaceSlug: spaceById.get(p.id) ?? null,
+        status: p.status ?? null,
+        taggedPhoto: photo ? { url: photo.url, width: photo.width, height: photo.height, tags: tagsByPhoto.get(photo.id) ?? [] } : null,
+      }
+    })
+    // Projecten met een stip eerst: die laten het product echt zien.
+    .sort((a, b) => Number(Boolean(b.taggedPhoto)) - Number(Boolean(a.taggedPhoto)))
 }
-export const getSeriesProjects = (familyId: string) => projectsFor("family_id", familyId)
-export const getBrandProjects = (brandId: string) => projectsFor("brand_id", brandId)
+export const getCollectionProjects = (collectionId: string, options?: { includeInReview?: boolean }) => projectsFor("collection_id", collectionId, options)
+export const getBrandProjects = (brandId: string, options?: { includeInReview?: boolean }) => projectsFor("brand_id", brandId, options)
 
 /** Verkooppunten van een merk: bedrijven met het merk in company_brands,
  *  voor zover ze zelf zichtbaar zijn (listed, prospected). Officiële

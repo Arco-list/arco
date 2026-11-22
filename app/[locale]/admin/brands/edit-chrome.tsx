@@ -1,7 +1,7 @@
 "use client"
 
 /**
- * De gedeelde randen van de merk- en seriepagina: dezelfde EDIT-chip,
+ * De gedeelde randen van de merk- en collectiepagina: dezelfde EDIT-chip,
  * dezelfde scroll naar een sectie, en de regels die de bedrijfspagina
  * inline draagt (components/company-edit/company-edit-client.tsx) maar
  * die niet in globals.css staan. Eén bron, zodat de twee pagina's niet
@@ -19,7 +19,7 @@ export const EditBadge = () => (
   </span>
 )
 
-/** De hover-pill op een kaart ("Edit series"), zoals op ListingCard. */
+/** De hover-pill op een kaart ("Edit collection"), zoals op ListingCard. */
 export const PILL: React.CSSProperties = {
   display: "inline-flex", alignItems: "center", gap: 7,
   fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 400,
@@ -70,7 +70,7 @@ export const EDIT_PAGE_CSS = `
   .contact-row-placeholder { color: #b0b0ae; font-weight: 400; }
   .contact-edit-input { width: 100%; font-size: 15px; font-weight: 400; color: #1c1c1a; background: transparent; border: none; border-bottom: 1px solid rgba(1,109,117,.3); outline: none; padding: 0 0 2px; font-family: inherit; margin-top: 8px; }
   @media (max-width: 768px) { .contact-row { flex-direction: column; gap: 24px; } }
-  /* Hero image of a series: the .ec outline sits around the picture. */
+  /* Hero image of a collection: the .ec outline sits around the picture. */
   .hero-cover-edit { position: relative; cursor: pointer; }
   .hero-cover-edit img { display: block; }
 `

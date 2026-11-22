@@ -1,5 +1,6 @@
 "use client"
 
+import { LogoFill } from "@/components/brand/brand-logo"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useLocale, useTranslations } from "next-intl"
 import { Link } from "@/i18n/navigation"
@@ -879,7 +880,7 @@ export function ClaimClient({ token, email, channel, sessionUser, initialScreen,
             <div key={idx} className={styles.proRow}>
               <div className="credit-icon" style={{ width: 52, height: 52, margin: 0, flex: "none" }}>
                 {r.logoUrl
-                  ? <img src={r.logoUrl} alt="" />
+                  ? <LogoFill src={r.logoUrl} />
                   : Icon
                     ? <Icon className="credit-icon-service" style={{ width: 28, height: 28, strokeWidth: 1.1 }} />
                     : <span className="credit-icon-initials" style={{ fontSize: 18 }}>{initials}</span>}

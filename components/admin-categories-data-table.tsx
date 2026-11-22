@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { AdminTabs, useAdminTab } from "@/components/admin/admin-tabs"
 import { MoreHorizontal, Plus } from "lucide-react"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
 
 import {
   createCategoryAction,
@@ -14,6 +15,7 @@ import {
   toggleHomeCarrouselAction,
   toggleSpaceHomeCarrouselAction,
   toggleSpaceStatusAction,
+  toggleServiceSpaceAction,
   uploadSpaceCutoutAction,
   clearSpaceCutoutAction,
   updateCategoryAction,
@@ -52,9 +54,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { ConnectionsTab } from "@/components/admin-categories-connections"
 import { ProfessionalsTab } from "@/components/admin-categories-professionals"
 import { ProjectsTab } from "@/components/admin-categories-projects"
+import { SpacesTab } from "@/components/admin-categories-spaces"
 import { useLocale } from "next-intl"
 import { publishScopeLabel, type PublishScope } from "@/lib/publish-scope"
 
@@ -65,10 +67,13 @@ export type AdminCategoryRow = {
   nameNl: string | null
   /** Beroepsnaam, alleen voor diensten: Pool builder / Zwembadbouwer en
    *  het meervoud voor koppen en menu's. */
-  proName: string | null
-  proNameNl: string | null
   proNamePlural: string | null
   proNamePluralNl: string | null
+  /** Marktomvang NL: bedrijven in de dienst (TAM) en daarvan geschikt voor Arco (SAM). */
+  tamNl: number | null
+  samNl: number | null
+  /** Bedrijven met deze hoofddienst die in Sales staan (niet verwijderd). */
+  inSales?: number
   slug: string
   description: string | null
   parentId: string | null
@@ -81,10 +86,12 @@ export type AdminCategoryRow = {
   inHomeCarrousel: boolean
   imageUrl: string | null
   publishScope: PublishScope
+  /** Scopes die deze dienst in het scopevak ziet (migratie 314); leeg = alle. */
+  projectScopes?: string[]
   count: number
 }
 
-type TabKey = "project" | "professional" | "spaces" | "products" | "links"
+type TabKey = "project" | "professional" | "spaces" | "products"
 type CreateMode = "type" | "service" | "group"
 
 export type AdminSpaceRow = {
@@ -108,6 +115,16 @@ export type AdminProductCategoryRow = {
   parentId: string | null
   parentName: string | null
   orderIndex: number
+  nameNl?: string | null
+  /** Inactief: niet in menu en filters (migratie 320). */
+  isActive: boolean
+  /** Merken en collecties in deze categorie en alles eronder. */
+  brandCount: number
+  collectionCount: number
+  /** Eigen beeld voor de schijf op /products (migratie 321). */
+  imageUrl?: string | null
+  /** Wat /products zonder eigen beeld toont: een productfoto uit de groep. */
+  autoImageUrl?: string | null
 }
 
 interface Props {
@@ -116,12 +133,13 @@ interface Props {
   productCategories?: AdminProductCategoryRow[]
   /** Dienst ↔ ruimte en productgroep ↔ ruimte (migratie 297). */
   serviceSpaces?: Array<{ serviceId: string; spaceId: string }>
-  productCategorySpaces?: Array<{ productCategoryId: string; spaceId: string }>
   /** Deelprojecten per ruimte-id (projects.kind = 'partial'). */
   partialCountBySpace?: Record<string, number>
+  /** Aantal projecten per scope (new_build, renovation, interior_design). */
+  scopeCounts?: Record<string, number>
 }
 
-export function AdminCategoriesDataTable({ categories, spaces = [], productCategories = [], serviceSpaces = [], productCategorySpaces = [], partialCountBySpace = {} }: Props) {
+export function AdminCategoriesDataTable({ categories, spaces = [], productCategories = [], serviceSpaces = [], scopeCounts = {}, partialCountBySpace = {} }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   // De paginakop, tabs en knoppen volgen de taalkeuze in de header
@@ -130,7 +148,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
   const nl = useLocale() === "nl"
   // Tab lives in the URL (?tab=…) via the sticky bar; per-tab view state
   // resets on change (the old handleTabChange behaviour), skipping mount.
-  const activeTab = useAdminTab(["project", "professional", "spaces", "products", "links"] as const)
+  const activeTab = useAdminTab(["project", "professional", "spaces", "products"] as const)
 
   // Split categories by type, pre-sorted: parents first, then children grouped under each parent
   const buildSortedItems = (type: string) => {
@@ -200,6 +218,15 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
   const [editName, setEditName] = useState("")
   const [editNameNl, setEditNameNl] = useState("")
   const [editPro, setEditPro] = useState({ en: "", nl: "", enPlural: "", nlPlural: "" })
+  const [editMarket, setEditMarket] = useState({ tam: "", sam: "" })
+  // Ruimtes waaronder een dienst deelprojecten publiceert (service_spaces),
+  // direct bewerkbaar in het bewerkvenster van de dienst.
+  const [editSpaceIds, setEditSpaceIds] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    if (!editCategory) return
+    setEditSpaceIds(new Set(serviceSpaces.filter((l) => l.serviceId === editCategory.id).map((l) => l.spaceId)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editCategory?.id])
   const [editSlug, setEditSlug] = useState("")
   const [editParentId, setEditParentId] = useState<string | null>(null)
   const [editImageUrl, setEditImageUrl] = useState<string | null>(null)
@@ -293,7 +320,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
         slug: editSlug.trim() || undefined,
         parentId: editParentId,
         ...(editCategory.categoryType === "Professional" && editCategory.categoryHierarchy !== 1
-          ? { proName: editPro.en.trim() || null, proNameNl: editPro.nl.trim() || null, proNamePlural: editPro.enPlural.trim() || null, proNamePluralNl: editPro.nlPlural.trim() || null }
+          ? { tamNl: editMarket.tam.trim() === "" ? null : Number(editMarket.tam), samNl: editMarket.sam.trim() === "" ? null : Number(editMarket.sam), proNamePlural: editPro.enPlural.trim() || null, proNamePluralNl: editPro.nlPlural.trim() || null }
           : {}),
       })
       if (!result.success) {
@@ -483,16 +510,15 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
           { key: "project", label: nl ? "Projecten" : "Projects" },
           { key: "professional", label: "Professionals" },
           { key: "spaces", label: nl ? "Ruimtes" : "Spaces" },
-          { key: "products", label: nl ? "Productcategorieën" : "Product Categories" },
-          { key: "links", label: nl ? "Samenhang" : "Connections" },
+          { key: "products", label: nl ? "Producten" : "Products" },
         ]}
         active={activeTab}
-        actions={activeTab === "project" || activeTab === "professional" ? (
+        actions={activeTab === "project" || activeTab === "professional" || activeTab === "spaces" ? (
           <>
           <div className="relative shrink-0" style={{ width: 220 }}>
           <input
             type="text"
-            placeholder={activeTab === "project" ? (nl ? "Zoek types\u2026" : "Search types\u2026") : nl ? "Zoek diensten\u2026" : "Search services\u2026"}
+            placeholder={activeTab === "project" ? (nl ? "Zoek types\u2026" : "Search types\u2026") : activeTab === "spaces" ? (nl ? "Zoek ruimtes\u2026" : "Search spaces\u2026") : nl ? "Zoek diensten\u2026" : "Search services\u2026"}
             className="w-full h-9 pl-8 pr-3 text-xs border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#a1a1a0] transition-colors placeholder:text-[#a1a1a0]"
             value={searchTerm}
             onChange={(e) => {
@@ -517,17 +543,19 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
               {nl && activeTab === "professional" ? "Groep toevoegen" : "Add group"}
             </button>
           )}
-          <button
-            className="btn-primary shrink-0"
-            style={{ fontSize: 13, padding: "6px 16px", borderRadius: 3 }}
-            onClick={() => {
-              setCreateMode(activeTab === "project" ? "type" : "service")
-              setCreateName("")
-              setCreateParentId(null)
-            }}
-          >
-            {activeTab === "project" ? (nl ? "Type toevoegen" : "Add type") : nl ? "Dienst toevoegen" : "Add service"}
-          </button>
+          {activeTab !== "spaces" && (
+            <button
+              className="btn-primary shrink-0"
+              style={{ fontSize: 13, padding: "6px 16px", borderRadius: 3 }}
+              onClick={() => {
+                setCreateMode(activeTab === "project" ? "type" : "service")
+                setCreateName("")
+                setCreateParentId(null)
+              }}
+            >
+              {activeTab === "project" ? (nl ? "Type toevoegen" : "Add type") : nl ? "Dienst toevoegen" : "Add service"}
+            </button>
+          )}
           </>
         ) : undefined}
       />
@@ -536,7 +564,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
 
     <div className="flex flex-col gap-6 min-w-0 max-w-full overflow-hidden">
       {/* Page meta — count in the discover style */}
-      {activeTab !== "links" && (
+      {activeTab !== "spaces" && (
         <div className="discover-results-meta" style={{ marginBottom: 0 }}>
           <p className="discover-results-count">
             <strong style={{ fontWeight: 500, color: "var(--arco-black)" }}>{currentItems.length}</strong> {nl ? "totaal" : "total"} &middot; {activeCount} {nl ? "actief" : "active"}
@@ -545,168 +573,46 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
       )}
 
 
-      {/* Spaces tab — matches Types/Services table styling */}
+      {/* Spaces tab — same design as Projects and Professionals */}
       {activeTab === "spaces" && (
-        <div className="arco-table-wrap max-w-full min-w-0">
-          <table className="arco-table">
-            <thead>
-              <tr>
-                <th>Space</th>
-                <th>Status</th>
-                <th>Homepage</th>
-                <th>Image</th>
-                <th>Cut-out</th>
-                <th>Photos</th>
-                <th>Order</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {spaces.length === 0 ? (
-                <tr>
-                  <td colSpan={8} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>No spaces found.</td>
-                </tr>
-              ) : (
-                spaces.sort((a, b) => a.sortOrder - b.sortOrder).map((space) => (
-                  <tr key={space.id}>
-                    <td>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-sm font-medium text-[#1c1c1a]">{space.name}</span>
-                        <span className="text-[11px] text-[#a1a1a0]">{space.slug}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <Switch checked={space.isActive} onCheckedChange={(checked) => handleToggleSpaceStatus(space, checked)} />
-                    </td>
-                    <td>
-                      <Switch
-                        checked={space.inHomeCarrousel}
-                        onCheckedChange={(checked) => {
-                          startTransition(async () => {
-                            const result = await toggleSpaceHomeCarrouselAction({ spaceId: space.id, enabled: checked })
-                            if (!result.success) {
-                              toast.error("Failed to update", { description: result.error.message })
-                            } else {
-                              toast.success(checked ? "Added to homepage" : "Removed from homepage")
-                              router.refresh()
-                            }
-                          })
-                        }}
-                      />
-                    </td>
-                    <td>
-                      <label className="cursor-pointer inline-flex items-center gap-2 group" title={space.imageUrl ? "Click to change image" : "Click to upload image"}>
-                        {space.imageUrl ? (
-                          <img src={space.imageUrl} alt="" className="w-10 h-7 object-cover rounded-[2px] group-hover:opacity-70 transition-opacity" />
-                        ) : (
-                          <div className="w-10 h-7 rounded-[2px] bg-[#f5f5f4] group-hover:bg-[#e5e5e4] transition-colors flex items-center justify-center">
-                            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#a1a1a0" strokeWidth="1.5"><path d="M8 3v10M3 8h10" strokeLinecap="round" /></svg>
-                          </div>
-                        )}
-                        <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => {
-                          if (!e.target.files?.[0]) return
-                          const file = e.target.files[0]
-                          if (file.size > 10 * 1024 * 1024) {
-                            toast.error("Image must be under 10MB")
-                            return
-                          }
-                          setEditingSpaceId(space.id)
-                          setCropTargetId(space.id)
-                          setCropTargetType("space")
-                          const reader = new FileReader()
-                          reader.onload = () => {
-                            setCropImageSrc(reader.result as string)
-                            setCropOffset({ x: 0, y: 0 })
-                            setCropScale(1)
-                          }
-                          reader.readAsDataURL(file)
-                          e.target.value = ""
-                        }} />
-                      </label>
-                    </td>
-                    <td>
-                      {/* Uitsnede: object op witte of transparante achtergrond,
-                          zonder bijsnijden geüpload; de cirkel op /projects
-                          legt hem met multiply op de beige schijf. */}
-                      <label className="cursor-pointer inline-flex items-center gap-2 group" title={space.cutoutUrl ? "Click to replace the cut-out" : "Click to upload a cut-out (PNG with transparency or a product photo on white)"}>
-                        <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "#f5f5f4" }}>
-                          {space.cutoutUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={space.cutoutUrl} alt="" className="group-hover:opacity-70 transition-opacity" style={{ width: "74%", height: "74%", objectFit: "contain", mixBlendMode: "multiply" }} />
-                          ) : (
-                            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#a1a1a0" strokeWidth="1.5"><path d="M8 3v10M3 8h10" strokeLinecap="round" /></svg>
-                          )}
-                        </div>
-                        <input type="file" accept="image/png,image/webp,image/jpeg" hidden onChange={(e) => {
-                          const file = e.target.files?.[0]
-                          e.target.value = ""
-                          if (!file) return
-                          if (file.size > 5 * 1024 * 1024) { toast.error("Cut-out must be under 5MB"); return }
-                          const fd = new FormData()
-                          fd.append("file", file)
-                          fd.append("spaceId", space.id)
-                          startTransition(async () => {
-                            const result = await uploadSpaceCutoutAction(fd)
-                            if (!result.success) toast.error("Upload failed", { description: result.error.message })
-                            else { toast.success("Cut-out saved"); router.refresh() }
-                          })
-                        }} />
-                      </label>
-                    </td>
-                    <td>
-                      <span className="text-xs text-[#6b6b68]">{space.photoCount}</span>
-                    </td>
-                    <td>
-                      <span className="text-xs text-[#6b6b68]">{space.sortOrder}</span>
-                    </td>
-                    <td>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="flex h-7 w-7 items-center justify-center rounded-[3px] text-[#a1a1a0] hover:bg-[#f5f5f4] hover:text-[#1c1c1a] transition-colors">
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Actions</span>
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem asChild>
-                            <label className="cursor-pointer">
-                              {space.imageUrl ? "Change image" : "Upload image"}
-                              <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => {
-                                if (!e.target.files?.[0]) return
-                                setEditingSpaceId(space.id)
-                                setCropTargetId(space.id)
-                                setCropTargetType("space")
-                                const reader = new FileReader()
-                                reader.onload = () => {
-                                  setCropImageSrc(reader.result as string)
-                                  setCropOffset({ x: 0, y: 0 })
-                                  setCropScale(1)
-                                }
-                                reader.readAsDataURL(e.target.files[0])
-                                e.target.value = ""
-                              }} />
-                            </label>
-                          </DropdownMenuItem>
-                          {space.cutoutUrl && (
-                            <DropdownMenuItem
-                              onClick={() => startTransition(async () => {
-                                const result = await clearSpaceCutoutAction({ spaceId: space.id })
-                                if (!result.success) toast.error("Failed to remove", { description: result.error.message })
-                                else { toast.success("Cut-out removed"); router.refresh() }
-                              })}
-                            >
-                              Remove cut-out
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <SpacesTab
+          spaces={spaces}
+          services={professionalItems}
+          serviceSpaces={serviceSpaces}
+          search={searchTerm}
+          pending={isPending}
+          onToggleStatus={handleToggleSpaceStatus}
+          onToggleHomepage={handleToggleSpaceHomepage}
+          onPickImage={(space, file) => {
+            if (file.size > 10 * 1024 * 1024) { toast.error("Image must be under 10MB"); return }
+            setEditingSpaceId(space.id)
+            setCropTargetId(space.id)
+            setCropTargetType("space")
+            const reader = new FileReader()
+            reader.onload = () => {
+              setCropImageSrc(reader.result as string)
+              setCropOffset({ x: 0, y: 0 })
+              setCropScale(1)
+            }
+            reader.readAsDataURL(file)
+          }}
+          onUploadCutout={(space, file) => {
+            if (file.size > 5 * 1024 * 1024) { toast.error("Cut-out must be under 5MB"); return }
+            const fd = new FormData()
+            fd.append("file", file)
+            fd.append("spaceId", space.id)
+            startTransition(async () => {
+              const result = await uploadSpaceCutoutAction(fd)
+              if (!result.success) toast.error("Upload failed", { description: result.error.message })
+              else { toast.success("Cut-out saved"); router.refresh() }
+            })
+          }}
+          onClearCutout={(space) => startTransition(async () => {
+            const result = await clearSpaceCutoutAction({ spaceId: space.id })
+            if (!result.success) toast.error("Failed to remove", { description: result.error.message })
+            else { toast.success("Cut-out removed"); router.refresh() }
+          })}
+        />
       )}
 
       {/* Projects tab — building types and partial-project spaces as two collapsible groups */}
@@ -717,13 +623,15 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
           services={professionalItems}
           serviceSpaces={serviceSpaces}
           partialCounts={partialCountBySpace}
+          scopeCounts={scopeCounts}
           search={searchTerm}
           pending={isPending}
           onEdit={(row) => {
             setEditCategory(row)
             setEditName(row.name)
             setEditNameNl(row.nameNl ?? "")
-            setEditPro({ en: row.proName ?? "", nl: row.proNameNl ?? "", enPlural: row.proNamePlural ?? "", nlPlural: row.proNamePluralNl ?? "" })
+            setEditMarket({ tam: row.tamNl == null ? "" : String(row.tamNl), sam: row.samNl == null ? "" : String(row.samNl) })
+            setEditPro({ en: "", nl: "", enPlural: row.proNamePlural ?? "", nlPlural: row.proNamePluralNl ?? "" })
             setEditSlug(row.slug)
             setEditParentId(row.parentId)
             setEditImageUrl(row.imageUrl)
@@ -749,7 +657,8 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
             setEditCategory(row)
             setEditName(row.name)
             setEditNameNl(row.nameNl ?? "")
-            setEditPro({ en: row.proName ?? "", nl: row.proNameNl ?? "", enPlural: row.proNamePlural ?? "", nlPlural: row.proNamePluralNl ?? "" })
+            setEditMarket({ tam: row.tamNl == null ? "" : String(row.tamNl), sam: row.samNl == null ? "" : String(row.samNl) })
+            setEditPro({ en: "", nl: "", enPlural: row.proNamePlural ?? "", nlPlural: row.proNamePluralNl ?? "" })
             setEditSlug(row.slug)
             setEditParentId(row.parentId)
             setEditImageUrl(row.imageUrl)
@@ -763,18 +672,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
 
       {/* Product Categories tab */}
       {activeTab === "products" && (
-        <ProductCategoriesTab productCategories={productCategories} />
-      )}
-
-      {/* Connections tab — service ↔ space, product group ↔ space */}
-      {activeTab === "links" && (
-        <ConnectionsTab
-          services={professionalItems}
-          spaces={spaces}
-          productCategories={productCategories}
-          serviceSpaces={serviceSpaces}
-          productCategorySpaces={productCategorySpaces}
-        />
+        <ProductCategoriesTab productCategories={productCategories} nl={nl} />
       )}
 
 
@@ -816,14 +714,6 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
             {editCategory?.categoryType === "Professional" && editCategory.categoryHierarchy !== 1 && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-[#6b6b68] block mb-1">Professional (EN)</label>
-                  <input className="w-full px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors" value={editPro.en} onChange={(e) => setEditPro((p) => ({ ...p, en: e.target.value }))} placeholder="Pool builder" />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-[#6b6b68] block mb-1">Professional (NL)</label>
-                  <input className="w-full px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors" value={editPro.nl} onChange={(e) => setEditPro((p) => ({ ...p, nl: e.target.value }))} placeholder="Zwembadbouwer" />
-                </div>
-                <div>
                   <label className="text-xs font-medium text-[#6b6b68] block mb-1">Plural (EN)</label>
                   <input className="w-full px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors" value={editPro.enPlural} onChange={(e) => setEditPro((p) => ({ ...p, enPlural: e.target.value }))} placeholder="Pool builders" />
                 </div>
@@ -831,7 +721,52 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
                   <label className="text-xs font-medium text-[#6b6b68] block mb-1">Plural (NL)</label>
                   <input className="w-full px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors" value={editPro.nlPlural} onChange={(e) => setEditPro((p) => ({ ...p, nlPlural: e.target.value }))} placeholder="Zwembadbouwers" />
                 </div>
-                <p className="col-span-2 text-[11px] text-[#a1a1a0] -mt-1">The plural is the heading above the professionals discover, the home cards and the header menu. The category name stays in filters and on company pages.</p>
+                <div>
+                  <label className="text-xs font-medium text-[#6b6b68] block mb-1">TAM NL</label>
+                  <input type="number" min={0} className="w-full px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors" value={editMarket.tam} onChange={(e) => setEditMarket((m) => ({ ...m, tam: e.target.value }))} placeholder={nl ? "Bedrijven in NL" : "Companies in NL"} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-[#6b6b68] block mb-1">SAM NL</label>
+                  <input type="number" min={0} className="w-full px-3 py-2 text-sm border border-[#e5e5e4] rounded-[3px] outline-none focus:border-[#1c1c1a] transition-colors" value={editMarket.sam} onChange={(e) => setEditMarket((m) => ({ ...m, sam: e.target.value }))} placeholder={nl ? "Geschikt voor Arco" : "Suitable for Arco"} />
+                </div>
+                <p className="col-span-2 text-[11px] text-[#a1a1a0] -mt-1">The name is the category everywhere: filter, picker and company page. The plural is the heading above the professionals discover, the home cards and the header menu.</p>
+              </div>
+            )}
+            {editCategory?.categoryType === "Professional" && editCategory.categoryHierarchy !== 1 && editCategory.publishScope === "partial" && (
+              <div>
+                <label className="text-xs font-medium text-[#6b6b68] block mb-1">{nl ? "Publiceert deelprojecten onder" : "Publishes partial projects under"}</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {spaces.filter((s) => s.isActive && !["exterior", "other"].includes(s.slug)).sort((a, b) => a.sortOrder - b.sortOrder).map((s) => {
+                    const on = editSpaceIds.has(s.id)
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        className="filter-pill"
+                        data-active={on ? "true" : undefined}
+                        style={{ fontSize: 12 }}
+                        onClick={() => {
+                          const target = editCategory
+                          const next = new Set(editSpaceIds)
+                          if (on) next.delete(s.id); else next.add(s.id)
+                          setEditSpaceIds(next)
+                          startTransition(async () => {
+                            const result = await toggleServiceSpaceAction({ serviceId: target.id, spaceId: s.id, enabled: !on })
+                            if (!result.success) {
+                              toast.error("Failed to update", { description: result.error.message })
+                              setEditSpaceIds(editSpaceIds)
+                            } else {
+                              router.refresh()
+                            }
+                          })
+                        }}
+                      >
+                        {s.name}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="text-[11px] text-[#a1a1a0] mt-1.5">{nl ? "Een deelproject van deze dienst verschijnt onder deze ruimtefilters; het scopevak in de editor biedt deze ruimtes aan." : "A partial project from this service appears under these space filters; the scope field in the editor offers these spaces."}</p>
               </div>
             )}
             <div>
@@ -1125,7 +1060,7 @@ export function AdminCategoriesDataTable({ categories, spaces = [], productCateg
 
 /* ── Product Categories sub-component with expandable parents ──────── */
 
-function ProductCategoriesTab({ productCategories }: { productCategories: AdminProductCategoryRow[] }) {
+function ProductCategoriesTab({ productCategories, nl }: { productCategories: AdminProductCategoryRow[]; nl: boolean }) {
   const router = useRouter()
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [, startTransition] = useTransition()
@@ -1167,6 +1102,90 @@ function ProductCategoriesTab({ productCategories }: { productCategories: AdminP
     })
   }
 
+  const label = (c: AdminProductCategoryRow) => (nl ? c.nameNl ?? c.name : c.name)
+
+  // Status zoals bij diensten: klik wisselt. Inactief haalt de categorie en
+  // alles eronder uit menu en filters; koppelingen blijven staan.
+  const handleToggleActive = (item: AdminProductCategoryRow) => {
+    startTransition(async () => {
+      const { setProductCategoryActiveAction } = await import("@/app/admin/categories/actions")
+      const result = await setProductCategoryActiveAction(item.id, !item.isActive)
+      if (!result.success) toast.error(nl ? "Status wijzigen mislukt" : "Failed to change status")
+      else router.refresh()
+    })
+  }
+
+  // Beeld voor de schijf op /products (alleen hoofdgroepen staan daar):
+  // eigen uitsnede, anders automatisch een productfoto uit de groep.
+  const handleImage = (item: AdminProductCategoryRow, file: File | null) => {
+    startTransition(async () => {
+      const { uploadProductCategoryImageAction, clearProductCategoryImageAction } = await import("@/app/admin/categories/actions")
+      let ok = false
+      if (file) {
+        const fd = new FormData()
+        fd.append("file", file)
+        fd.append("categoryId", item.id)
+        ok = (await uploadProductCategoryImageAction(fd)).success
+      } else {
+        ok = (await clearProductCategoryImageAction(item.id)).success
+      }
+      if (!ok) toast.error(nl ? "Beeld opslaan mislukt" : "Failed to save image")
+      else router.refresh()
+    })
+  }
+
+  const imageCell = (item: AdminProductCategoryRow) => {
+    const url = item.imageUrl ?? item.autoImageUrl ?? null
+    return (
+      <td>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div
+            title={item.imageUrl ? (nl ? "Eigen beeld" : "Custom image") : (nl ? "Automatisch: productfoto uit de groep" : "Automatic: product photo from the group")}
+            style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--arco-surface)", overflow: "hidden", flexShrink: 0, opacity: item.imageUrl ? 1 : 0.6 }}
+          >
+            {url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", padding: "12%", boxSizing: "border-box", mixBlendMode: "multiply" }} />
+            )}
+          </div>
+          <label className="arco-table-secondary" style={{ cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2 }}>
+            {item.imageUrl ? (nl ? "Wijzig" : "Change") : (nl ? "Upload" : "Upload")}
+            <input
+              type="file"
+              accept="image/png,image/webp,image/jpeg"
+              style={{ display: "none" }}
+              onChange={(e) => { const f = e.target.files?.[0] ?? null; e.target.value = ""; if (f) handleImage(item, f) }}
+            />
+          </label>
+          {item.imageUrl && (
+            <button type="button" className="arco-table-secondary" onClick={() => handleImage(item, null)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }} title={nl ? "Terug naar automatisch" : "Back to automatic"}>
+              ✕
+            </button>
+          )}
+        </div>
+      </td>
+    )
+  }
+
+  const cells = (item: AdminProductCategoryRow) => (
+    <>
+      <td>
+        <button
+          type="button"
+          className="arco-table-status"
+          title={item.isActive ? (nl ? "Klik om te verbergen" : "Click to hide") : (nl ? "Klik om te tonen" : "Click to show")}
+          onClick={() => handleToggleActive(item)}
+          style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}
+        >
+          <span className={cn("arco-table-status-dot", item.isActive ? "bg-emerald-500" : "bg-[#d4d4d3]")} />
+          <span>{item.isActive ? (nl ? "Actief" : "Active") : (nl ? "Inactief" : "Inactive")}</span>
+        </button>
+      </td>
+      <td className="arco-table-nowrap" style={{ fontVariantNumeric: "tabular-nums", color: item.brandCount ? undefined : "var(--text-disabled)" }}>{item.brandCount}</td>
+      <td className="arco-table-nowrap" style={{ fontVariantNumeric: "tabular-nums", color: item.collectionCount ? undefined : "var(--text-disabled)" }}>{item.collectionCount}</td>
+    </>
+  )
+
   const ArrowButtons = ({ item, siblings }: { item: AdminProductCategoryRow; siblings: AdminProductCategoryRow[] }) => {
     const idx = siblings.findIndex((s) => s.id === item.id)
     const isFirst = idx === 0
@@ -1200,14 +1219,18 @@ function ProductCategoriesTab({ productCategories }: { productCategories: AdminP
       <table className="arco-table">
         <thead>
           <tr>
-            <th>Category</th>
-            <th style={{ width: 60 }}>Order</th>
+            <th>{nl ? "Categorie" : "Category"}</th>
+            <th style={{ width: 150 }}>{nl ? "Beeld" : "Image"}</th>
+            <th style={{ width: 120 }}>Status</th>
+            <th style={{ width: 100 }}>{nl ? "Merken" : "Brands"}</th>
+            <th style={{ width: 100 }}>{nl ? "Collecties" : "Collections"}</th>
+            <th style={{ width: 60 }}>{nl ? "Volgorde" : "Order"}</th>
           </tr>
         </thead>
         <tbody>
           {parents.length === 0 ? (
             <tr>
-              <td colSpan={2} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>No product categories found.</td>
+              <td colSpan={6} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>No product categories found.</td>
             </tr>
           ) : (
             parents.map((parent) => {
@@ -1237,11 +1260,13 @@ function ProductCategoriesTab({ productCategories }: { productCategories: AdminP
                           <div style={{ width: 14 }} />
                         )}
                         <div>
-                          <div className="arco-table-primary" style={{ fontWeight: 500 }}>{parent.name}</div>
+                          <div className="arco-table-primary" style={{ fontWeight: 500 }}>{label(parent)}</div>
                           <div className="arco-table-secondary">{parent.slug}</div>
                         </div>
                       </div>
                     </td>
+                    {imageCell(parent)}
+                    {cells(parent)}
                     <td><ArrowButtons item={parent} siblings={parents} /></td>
                   </tr>
                   {isExpanded && children.map((child) => {
@@ -1271,21 +1296,25 @@ function ProductCategoriesTab({ productCategories }: { productCategories: AdminP
                                 <div style={{ width: 14 }} />
                               )}
                               <div>
-                                <div className="arco-table-primary">{child.name}</div>
+                                <div className="arco-table-primary">{label(child)}</div>
                                 <div className="arco-table-secondary">{child.slug}</div>
                               </div>
                             </div>
                           </td>
+                          <td />
+                          {cells(child)}
                           <td><ArrowButtons item={child} siblings={children} /></td>
                         </tr>
                         {isChildExpanded && grandchildren.map((gc) => (
                           <tr key={gc.id}>
                             <td>
                               <div style={{ paddingLeft: 52 }}>
-                                <div className="arco-table-primary">{gc.name}</div>
+                                <div className="arco-table-primary">{label(gc)}</div>
                                 <div className="arco-table-secondary">{gc.slug}</div>
                               </div>
                             </td>
+                            <td />
+                            {cells(gc)}
                             <td><ArrowButtons item={gc} siblings={grandchildren} /></td>
                           </tr>
                         ))}

@@ -1,9 +1,9 @@
 "use client"
 
-import { Fragment, useMemo, useState, useTransition } from "react"
+import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { AlertTriangle, Check, MoreHorizontal, X } from "lucide-react"
+import { AlertTriangle, Check, ExternalLink, MoreHorizontal, X } from "lucide-react"
 import { toast } from "sonner"
 import { format } from "date-fns"
 
@@ -14,11 +14,20 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { addBrandFromSite, deleteBrand, discoverBrandSeries, fetchSeriesFromBrandPage, updateBrandStatus } from "./actions"
-import type { AdminBrandRow } from "./page"
+import { addBrandFromSite, deleteBrand, importBrandsFromApollo, updateBrandSegment, discoverBrandCollections, fetchCollectionFromBrandPage, updateBrandDomain, updateBrandStatus, uploadBrandLogo } from "./actions"
+import type { AdminBrandCategory, AdminBrandRow } from "./page"
+import { startCollectionInventory } from "./collection-actions"
+import { CollectionPicker } from "./collection-picker"
+import { LogoPicker } from "./logo-picker"
+import { findMissingLogos } from "./logo-actions"
 import { ALL_STATUSES, STATUS_DESC, STATUS_DOT, STATUS_LABEL, type BrandStatus } from "./status"
+import { BrandLogo } from "@/components/brand/brand-logo"
+import { normalizeDomain } from "@/lib/products/domain"
 
 /**
  * Merken in admin — dezelfde werkbank als Companies: sticky balk met
@@ -30,20 +39,182 @@ import { ALL_STATUSES, STATUS_DESC, STATUS_DOT, STATUS_LABEL, type BrandStatus }
  * en uitleg staan in ./status, gedeeld met de merkpagina.
  */
 
-type TaggedFilter = "all" | "tagged" | "untagged"
 
 type StepStatus = "pending" | "active" | "done" | "error"
 type AddPhase = "input" | "processing" | "done" | "error"
-const ADD_STEPS = ["Brand from the homepage", "Series on the page", "Photos from each series page"] as const
+const ADD_STEPS = ["Brand from the homepage", "Collections on the page", "Photos from each collection page"] as const
 
-export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[] }) {
+/** Het domein in de tabel: klik om te wijzigen, Enter of weggaan slaat op, Escape breekt af — zoals bij bedrijven. Het pijltje opent de website. */
+function BrandDomainCell({ domain, website, onSave }: { domain: string | null; website: string | null; onSave: (value: string) => Promise<boolean> }) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(normalizeDomain(domain))
+  const [saving, setSaving] = useState(false)
+  const current = normalizeDomain(domain)
+
+  const commit = async () => {
+    const next = normalizeDomain(value)
+    if (next === current) { setEditing(false); setValue(current); return }
+    setSaving(true)
+    const ok = await onSave(value)
+    setSaving(false)
+    // Bij een fout blijft het veld open, zodat je het kunt verbeteren.
+    if (ok) setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        className="arco-table-primary border-b border-[#016D75] bg-transparent outline-none w-[140px]"
+        style={{ fontWeight: 400, opacity: saving ? 0.5 : 1 }}
+        value={value}
+        disabled={saving}
+        placeholder="tribu.com"
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => void commit()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur()
+          if (e.key === "Escape") { setValue(current); setEditing(false) }
+        }}
+        onClick={(e) => e.stopPropagation()}
+      />
+    )
+  }
+  return (
+    <div className="inline-flex items-center gap-1.5">
+      <button
+        type="button"
+        className="arco-table-primary hover:opacity-70 transition-opacity cursor-pointer"
+        style={{ fontWeight: 400 }}
+        onClick={(e) => { e.stopPropagation(); setValue(current); setEditing(true) }}
+        title="Click to edit domain"
+      >
+        {current || <span className="text-[#c4c4c2] italic">Add domain...</span>}
+      </button>
+      {website && current && (
+        <a href={website} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="shrink-0 text-[#a1a1a0] hover:text-[#1c1c1a] transition-colors" title="Open website" aria-label="Open website">
+          <ExternalLink className="h-3 w-3" />
+        </a>
+      )}
+    </div>
+  )
+}
+
+/** Segment van een merk (migratie 324). Luxury en premium zijn het
+ *  werkterrein van Arco; mid maakt zichtbaar wat buiten de doelgroep valt. */
+type Segment = "luxury" | "premium" | "mid"
+const SEGMENTS: Array<{ value: Segment; label: string; hint: string; dot: string }> = [
+  { value: "luxury", label: "Luxury", hint: "Absolute top (Minotti, B&B Italia, Gaggenau)", dot: "#1c1c1a" },
+  { value: "premium", label: "Premium", hint: "High-quality design (Hay, Muuto, Flos)", dot: "#016D75" },
+  { value: "mid", label: "Mid-market", hint: "Below our audience (Kave Home, Calligaris)", dot: "#c4c4c2" },
+]
+const SEGMENT_BY_VALUE = new Map(SEGMENTS.map((x) => [x.value, x]))
+type SegmentFilter = Segment | "none"
+
+/** Voortgang van de collectiepijplijn (migratie 325) in de Collection-kolom. */
+const JOB_ACTIVE = (j: AdminBrandRow["collection_job"]) => Boolean(j && j.stage !== "done" && j.stage !== "error")
+function jobLabel(j: NonNullable<AdminBrandRow["collection_job"]>): string {
+  if (j.kind === "enrich") return j.total ? `Fetching ${j.done}/${j.total}` : "Fetching…"
+  switch (j.stage) {
+    case "queued": return "Queued…"
+    case "picking_pages": return "Mapping site…"
+    case "fetching_pages": return j.total ? `Reading pages ${j.done}/${j.total}` : "Reading pages…"
+    case "reading_pages": return "Finding collections…"
+    case "storing_images": return j.total ? `Saving images ${j.done}/${j.total}` : "Saving images…"
+    default: return "Working…"
+  }
+}
+
+/** Landnamen uit Apollo lopen soms uiteen; voor het filter één naam. */
+const COUNTRY_ALIAS: Record<string, string> = { "Czech Republic": "Czechia", "Macedonia (FYROM)": "North Macedonia" }
+const countryOf = (b: { country: string | null }) => (b.country ? COUNTRY_ALIAS[b.country] ?? b.country : null)
+
+export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBrands: AdminBrandRow[]; categoryTree?: AdminBrandCategory[] }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
   // ── Filters ──────────────────────────────────────────────────────────
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<BrandStatus[]>([])
-  const [taggedFilter, setTaggedFilter] = useState<TaggedFilter>("all")
+  // Categoriefilter op id, gegroepeerd: groep › subgroep. Een groep omvat
+  // alles eronder; een merk met een soort (Kookplaten) valt onder zijn
+  // subgroep (Apparatuur) en groep (Keuken).
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([])
+  const [segmentFilter, setSegmentFilter] = useState<SegmentFilter[]>([])
+  const toggleSegment = (v: SegmentFilter) => setSegmentFilter((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]))
+  const [countryFilter, setCountryFilter] = useState<string[]>([])
+  const toggleCountry = (c: string) => setCountryFilter((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]))
+  // Segment direct bijgewerkt in de tabel, zonder op de refresh te wachten.
+  const [segmentOverrides, setSegmentOverrides] = useState<Record<string, Segment | null>>({})
+  // Keuze-pop-up na een inventarisatie, en verversen zolang er iets loopt.
+  const [pickerBrand, setPickerBrand] = useState<{ id: string; name: string } | null>(null)
+  // Logo's van de website: per merk kiezen, of alle ontbrekende in één keer.
+  const [logoBrand, setLogoBrand] = useState<{ id: string; name: string } | null>(null)
+  const [logoBusy, setLogoBusy] = useState<{ found: number; done: number } | null>(null)
+  const missingLogos = initialBrands.filter((b) => !b.logo_url && b.status !== "deactivated").length
+  const findAllLogos = async () => {
+    setLogoBusy({ found: 0, done: 0 })
+    const skip: string[] = []
+    let found = 0, done = 0
+    try {
+      for (let round = 0; round < 200; round++) {
+        const res = await findMissingLogos(skip)
+        if ("error" in res) { toast.error(res.error); break }
+        found += res.found; done += res.processed
+        skip.push(...res.failedIds)
+        setLogoBusy({ found, done })
+        if (res.processed === 0 || res.remaining === 0) break
+      }
+      toast.success(`Logos: ${found} found${skip.length ? `, ${skip.length} without a logo on their website` : ""}`)
+    } catch (err) {
+      toast.error(`Stopped after ${done} brands: ${String(err)}`)
+    } finally {
+      setLogoBusy(null)
+      router.refresh()
+    }
+  }
+  const anyJobActive = initialBrands.some((b) => JOB_ACTIVE(b.collection_job))
+  useEffect(() => {
+    if (!anyJobActive) return
+    const t = setInterval(() => router.refresh(), 20_000)
+    return () => clearInterval(t)
+  }, [anyJobActive, router])
+  const inventory = async (b: AdminBrandRow, pageUrl?: string | null) => {
+    const res = await startCollectionInventory([b.id], pageUrl)
+    if ("error" in res) { toast.error(res.error); return }
+    if (res.started === 0) toast.message(`${b.name} is already being inventoried`)
+    else toast.success(`Inventorying ${b.name} in the background — progress shows in the Collection column`)
+    router.refresh()
+  }
+  const segmentOf = (b: AdminBrandRow): Segment | null => (b.id in segmentOverrides ? segmentOverrides[b.id] : b.market_segment)
+  const countryOptions = useMemo(() => {
+    const count = new Map<string, number>()
+    for (const b of initialBrands) { const c = countryOf(b) ?? "—"; count.set(c, (count.get(c) ?? 0) + 1) }
+    return Array.from(count.entries()).sort((a, b) => (a[0] === "—" ? 1 : b[0] === "—" ? -1 : b[1] - a[1] || a[0].localeCompare(b[0])))
+  }, [initialBrands])
+  const toggleCategory = (id: string) => setCategoryFilter((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  const categoryById = useMemo(() => new Map(categoryTree.map((c) => [c.id, c])), [categoryTree])
+  const subtreeOf = useMemo(() => {
+    const kids = new Map<string, string[]>()
+    for (const c of categoryTree) if (c.parentId) kids.set(c.parentId, [...(kids.get(c.parentId) ?? []), c.id])
+    const out = new Map<string, Set<string>>()
+    const walk = (id: string, acc: Set<string>) => { acc.add(id); for (const k of kids.get(id) ?? []) walk(k, acc) }
+    for (const c of categoryTree) { const acc = new Set<string>(); walk(c.id, acc); out.set(c.id, acc) }
+    return out
+  }, [categoryTree])
+  const brandInCategory = (b: AdminBrandRow, id: string) => { const sub = subtreeOf.get(id); return Boolean(sub && b.category_ids.some((c) => sub.has(c))) }
+  const categoryGroups = useMemo(() => {
+    const byOrder = (a: AdminBrandCategory, b: AdminBrandCategory) => a.orderIndex - b.orderIndex
+    const count = (id: string) => initialBrands.filter((b) => brandInCategory(b, id)).length
+    return categoryTree.filter((c) => !c.parentId).sort(byOrder)
+      .map((g) => ({
+        group: g,
+        count: count(g.id),
+        children: categoryTree.filter((c) => c.parentId === g.id).sort(byOrder).map((c) => ({ cat: c, count: count(c.id) })).filter((c) => c.count > 0),
+      }))
+      .filter((g) => g.count > 0)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryTree, initialBrands, subtreeOf])
 
   const toggleStatus = (s: BrandStatus) =>
     setStatusFilter((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
@@ -53,12 +224,14 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
   const funnelData = useMemo(() => {
     const q = searchTerm.trim().toLowerCase()
     return initialBrands.filter((b) => {
-      if (taggedFilter === "tagged" && b.project_count === 0) return false
-      if (taggedFilter === "untagged" && b.project_count > 0) return false
+      if (categoryFilter.length > 0 && !categoryFilter.some((id) => brandInCategory(b, id))) return false
+      if (segmentFilter.length > 0 && !segmentFilter.includes(segmentOf(b) ?? "none")) return false
+      if (countryFilter.length > 0 && !countryFilter.includes(countryOf(b) ?? "—")) return false
       if (!q) return true
-      return [b.name, b.domain ?? "", b.country ?? "", b.owner_name ?? ""].join(" ").toLowerCase().includes(q)
+      return [b.name, b.domain ?? "", b.category ?? "", b.city ?? "", b.country ?? "", b.owner_name ?? ""].join(" ").toLowerCase().includes(q)
     })
-  }, [initialBrands, searchTerm, taggedFilter])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialBrands, searchTerm, categoryFilter, subtreeOf, segmentFilter, countryFilter, segmentOverrides])
 
   const rows = useMemo(
     () => (statusFilter.length === 0 ? funnelData : funnelData.filter((b) => statusFilter.includes(b.status as BrandStatus))),
@@ -92,6 +265,9 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
   // ── Add brand: drie stappen, elk een eigen server action, zodat de
   //    popup kan laten zien waar hij is — zoals de projectupload. ────────
   const [showAdd, setShowAdd] = useState(false)
+  const [apolloBusy, setApolloBusy] = useState(false)
+  // Voortgang van de import: verwerkte accounts van het totaal op de lijst.
+  const [apolloProgress, setApolloProgress] = useState<{ done: number; total: number } | null>(null)
   const [scrapeUrl, setScrapeUrl] = useState("")
   const [addPhase, setAddPhase] = useState<AddPhase>("input")
   const [addSteps, setAddSteps] = useState<StepStatus[]>(["pending", "pending", "pending"])
@@ -119,39 +295,50 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
     setAddSteps(["active", "pending", "pending"]); setAddNotes(["", "", ""]); setAddError(null)
 
     // 1. Het merk, van de homepage.
-    const brand = await addBrandFromSite(url)
-    if ("error" in brand) { setStep(0, "error"); setAddError(brand.error); setAddPhase("error"); return }
-    setAddBrand({ id: brand.brandId, name: brand.name })
-    setStep(0, "done", brand.created ? `${brand.name} — added from the homepage` : `${brand.name} — already in the list`)
+    const added = await addBrandFromSite(url)
+    if ("error" in added) { setStep(0, "error"); setAddError(added.error); setAddPhase("error"); return }
+    const brand = { brandId: added.brandId, name: added.name }
+    setAddBrand({ id: added.brandId, name: added.name })
+    setStep(0, "done", added.created ? `${added.name} — added from the homepage` : `${added.name} — already in the list`)
 
-    // 2. De series van de geplakte pagina.
+    // 2. De collecties van de geplakte pagina.
     setStep(1, "active")
-    const series = await discoverBrandSeries(brand.brandId, url)
-    if ("error" in series) { setStep(1, "error"); setAddError(series.error); setAddPhase("error"); return }
-    setStep(1, "done", `${series.seriesFound} found · ${series.seriesAdded} new`)
+    const collection = await discoverBrandCollections(brand.brandId, url)
+    if ("error" in collection) { setStep(1, "error"); setAddError(collection.error); setAddPhase("error"); return }
+    setStep(1, "done", `${collection.collectionsFound} found · ${collection.collectionsAdded} new`)
 
-    // 3. Elke seriepagina: foto's, designer, jaar, omschrijving — drie
+    // 3. Elke collectiepagina: foto's, designer, jaar, omschrijving — drie
     //    tegelijk, elk een eigen call, zodat de teller echt loopt.
-    const queue = series.pending
+    const queue = collection.pending
     if (queue.length === 0) {
       setStep(2, "done", "Nothing left to read")
     } else {
       setStep(2, "active")
       setPhotoProgress({ done: 0, total: queue.length, current: queue[0].name })
-      let next = 0, done = 0, photos = 0, failed = 0
+      let next = 0, done = 0, photos = 0, products = 0, failed = 0
+      let firstError: string | null = null
       const worker = async () => {
         while (next < queue.length) {
           const item = queue[next++]
           setPhotoProgress((p) => ({ ...p, current: item.name }))
-          const r = await fetchSeriesFromBrandPage(item.id)
-          if ("error" in r) failed++
-          else photos += r.photos
+          const r = await fetchCollectionFromBrandPage(item.id)
+          if ("error" in r) { failed++; firstError ??= r.error }
+          else { photos += r.photos; products += r.products }
           done++
           setPhotoProgress((p) => ({ ...p, done }))
         }
       }
       await Promise.all(Array.from({ length: Math.min(3, queue.length) }, worker))
-      setStep(2, "done", `${photos} photos from ${done - failed} series${failed > 0 ? ` · ${failed} could not be read` : ""}`)
+      // Mislukt het met alle collecties, dan is het een storing (tegoed,
+      // sleutel) en geen pagina: laat de reden zien in plaats van een telling.
+      if (failed > 0 && failed === done) {
+        setStep(2, "error", `${failed} of ${done} could not be read`)
+        setAddError(firstError ?? "The collection pages could not be read.")
+        setAddPhase("error")
+        router.refresh()
+        return
+      }
+      setStep(2, "done", `${photos} photos and ${products} products from ${done - failed} collection${done - failed === 1 ? "" : "s"}${failed > 0 ? ` · ${failed} could not be read${firstError ? ` (${firstError})` : ""}` : ""}`)
     }
 
     setAddPhase("done")
@@ -159,6 +346,33 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
   }
 
   // ── Status / delete dialogs ──────────────────────────────────────────
+  // Logo uploaden vanuit de tabel: het icoon van een merk is de knop. Het
+  // nieuwe adres krijgt een versie mee, want een logo met dezelfde
+  // bestandsnaam komt anders uit de browsercache.
+  const logoInputRef = useRef<HTMLInputElement | null>(null)
+  const logoTargetRef = useRef<AdminBrandRow | null>(null)
+  const [logoOverrides, setLogoOverrides] = useState<Record<string, string>>({})
+  const [logoUploadingId, setLogoUploadingId] = useState<string | null>(null)
+  // Het domein dat net is opgeslagen, tot de pagina vers binnen is.
+  const [domainOverrides, setDomainOverrides] = useState<Record<string, { domain: string | null; website: string | null }>>({})
+  const pickLogo = (b: AdminBrandRow) => {
+    logoTargetRef.current = b
+    logoInputRef.current?.click()
+  }
+  const onLogoChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    const brand = logoTargetRef.current
+    e.target.value = ""
+    if (!file || !brand) return
+    setLogoUploadingId(brand.id)
+    const fd = new FormData()
+    fd.append("file", file)
+    const res = await uploadBrandLogo(brand.id, fd)
+    setLogoUploadingId(null)
+    if ("error" in res) { toast.error(res.error); return }
+    setLogoOverrides((prev) => ({ ...prev, [brand.id]: `${res.url}?v=${Date.now()}` }))
+    toast.success(`Logo van ${brand.name} bijgewerkt`)
+  }
   const [statusBrand, setStatusBrand] = useState<AdminBrandRow | null>(null)
   const [statusValue, setStatusValue] = useState<BrandStatus>("unclaimed")
   const [deleteTarget, setDeleteTarget] = useState<AdminBrandRow | null>(null)
@@ -184,6 +398,75 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
       router.refresh()
     })
   }
+
+  // Status direct zetten vanuit het rijmenu, zoals "Update status" bij
+  // bedrijven: een submenu met de statussen als stip plus woord, de
+  // huidige vet. Het dialoogvenster blijft bestaan voor de uitleg.
+  const applyStatus = (b: AdminBrandRow, status: BrandStatus) => {
+    startTransition(async () => {
+      const result = await updateBrandStatus(b.id, status)
+      if ("error" in result) { toast.error(result.error); return }
+      toast.success(`${b.name} → ${STATUS_LABEL[status]}`)
+      router.refresh()
+    })
+  }
+  // Eén menu voor de "…"-knop en de klik in de rij, zodat de twee nooit
+  // uit elkaar lopen.
+  const [rowMenu, setRowMenu] = useState<{ id: string; x: number; y: number } | null>(null)
+  const renderBrandMenuItems = (b: AdminBrandRow) => (
+    <>
+      <DropdownMenuItem asChild>
+        <a href={`/brands/${b.slug}`} target="_blank" rel="noopener noreferrer" className="text-xs cursor-pointer">View brand</a>
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild>
+        <Link href={`/admin/brands/${b.id}`} className="text-xs cursor-pointer">Edit brand</Link>
+      </DropdownMenuItem>
+      <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => setLogoBrand({ id: b.id, name: b.name })}>
+        Find logo
+      </DropdownMenuItem>
+      <DropdownMenuItem className="text-xs cursor-pointer" disabled={JOB_ACTIVE(b.collection_job)} onClick={() => void inventory(b)}>
+        Inventory collections
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        className="text-xs cursor-pointer"
+        disabled={JOB_ACTIVE(b.collection_job)}
+        onClick={() => {
+          const url = window.prompt(`Page that lists the collections of ${b.name}:`, b.website ?? "")
+          if (url) void inventory(b, url)
+        }}
+      >
+        Inventory from a page…
+      </DropdownMenuItem>
+      {b.candidates_found > 0 && (
+        <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => setPickerBrand({ id: b.id, name: b.name })}>
+          Choose collections ({b.candidates_found})
+        </DropdownMenuItem>
+      )}
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger className="text-xs">Update status</DropdownMenuSubTrigger>
+        <DropdownMenuSubContent className="min-w-[160px]">
+          {ALL_STATUSES.map((st) => {
+            const isCurrent = b.status === st
+            return (
+              <DropdownMenuItem
+                key={st}
+                disabled={isPending}
+                className={`text-xs cursor-pointer flex items-center gap-1.5${isCurrent ? " font-semibold bg-[#f5f5f4]" : ""}`}
+                onClick={() => { if (!isCurrent) applyStatus(b, st) }}
+              >
+                <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: STATUS_DOT[st] }} />
+                {STATUS_LABEL[st]}
+              </DropdownMenuItem>
+            )
+          })}
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem className="text-xs cursor-pointer text-red-600 focus:text-red-600" onClick={() => setDeleteTarget(b)}>
+        Delete
+      </DropdownMenuItem>
+    </>
+  )
 
   const dash = <span className="arco-table-secondary" style={{ marginTop: 0 }}>—</span>
 
@@ -249,27 +532,152 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Getagd of niet — het merk-equivalent van "heeft gepubliceerd werk". */}
+            {/* Categoriefilter — meerkeuze over de productcategorieën van het merk. */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className={`w-[150px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 shrink-0 ${taggedFilter !== "all" ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"}`}
+                  className={`w-[160px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 shrink-0 ${categoryFilter.length > 0 ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"}`}
                 >
-                  <span className={taggedFilter === "all" ? "text-[#6b6b68]" : ""}>
-                    {taggedFilter === "all" ? "All brands" : taggedFilter === "tagged" ? "In projects" : "Not in projects"}
+                  <span className={`truncate ${categoryFilter.length === 0 ? "text-[#6b6b68]" : ""}`}>
+                    {categoryFilter.length === 0 ? "All categories" : categoryFilter.length === 1 ? categoryById.get(categoryFilter[0])?.name ?? "1 category" : `${categoryFilter.length} categories`}
                   </span>
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]"><path d="M6 9l6 6 6-6" /></svg>
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="min-w-[180px] z-[120]">
-                {([["all", "All brands"], ["tagged", "In projects"], ["untagged", "Not in projects"]] as [TaggedFilter, string][]).map(([v, label]) => (
-                  <DropdownMenuCheckboxItem key={v} checked={taggedFilter === v} onCheckedChange={() => setTaggedFilter(v)} onSelect={(e) => e.preventDefault()} className="text-xs">
-                    {label}
+              <DropdownMenuContent align="start" className="min-w-[240px] max-h-[420px] overflow-y-auto z-[120]">
+                <DropdownMenuItem onClick={(e) => { e.preventDefault(); if (categoryFilter.length > 0) setCategoryFilter([]) }} className="text-xs">
+                  Clear selection
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {categoryGroups.map(({ group, count, children }, gi) => (
+                  <Fragment key={group.id}>
+                    {gi > 0 && <DropdownMenuSeparator />}
+                    <DropdownMenuCheckboxItem checked={categoryFilter.includes(group.id)} onCheckedChange={() => toggleCategory(group.id)} onSelect={(e) => e.preventDefault()} className="text-xs font-medium">
+                      <span className="flex-1">{group.name}</span>
+                      <span className="ml-3 tabular-nums text-[#a1a1a0] font-normal">{count}</span>
+                    </DropdownMenuCheckboxItem>
+                    {children.map(({ cat, count: n }) => (
+                      <DropdownMenuCheckboxItem key={cat.id} checked={categoryFilter.includes(cat.id)} onCheckedChange={() => toggleCategory(cat.id)} onSelect={(e) => e.preventDefault()} className="text-xs pl-12 text-[#6b6b68]">
+                        <span className="flex-1">{cat.name}</span>
+                        <span className="ml-3 tabular-nums text-[#a1a1a0]">{n}</span>
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </Fragment>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Segment — luxury, premium, mid, of nog niet beoordeeld. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={`w-[140px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 shrink-0 ${segmentFilter.length > 0 ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"}`}
+                >
+                  <span className={`truncate ${segmentFilter.length === 0 ? "text-[#6b6b68]" : ""}`}>
+                    {segmentFilter.length === 0 ? "All segments" : segmentFilter.length === 1 ? (segmentFilter[0] === "none" ? "No segment" : SEGMENT_BY_VALUE.get(segmentFilter[0])?.label) : `${segmentFilter.length} segments`}
+                  </span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]"><path d="M6 9l6 6 6-6" /></svg>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-[200px] z-[120]">
+                <DropdownMenuItem onClick={(e) => { e.preventDefault(); if (segmentFilter.length > 0) setSegmentFilter([]) }} className="text-xs">
+                  Clear selection
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {[...SEGMENTS.map((x) => ({ value: x.value as SegmentFilter, label: x.label, dot: x.dot })), { value: "none" as SegmentFilter, label: "No segment", dot: "transparent" }].map((x) => (
+                  <DropdownMenuCheckboxItem key={x.value} checked={segmentFilter.includes(x.value)} onCheckedChange={() => toggleSegment(x.value)} onSelect={(e) => e.preventDefault()} className="text-xs">
+                    <span className="h-1.5 w-1.5 rounded-full shrink-0 mr-2" style={{ background: x.dot, border: x.value === "none" ? "1px solid #c4c4c2" : undefined }} />
+                    <span className="flex-1">{x.label}</span>
+                    <span className="ml-3 tabular-nums text-[#a1a1a0]">{initialBrands.filter((b) => (segmentOf(b) ?? "none") === x.value).length}</span>
                   </DropdownMenuCheckboxItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {/* Land — van het merk (Apollo), meest voorkomend eerst. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={`w-[140px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 shrink-0 ${countryFilter.length > 0 ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"}`}
+                >
+                  <span className={`truncate ${countryFilter.length === 0 ? "text-[#6b6b68]" : ""}`}>
+                    {countryFilter.length === 0 ? "All countries" : countryFilter.length === 1 ? (countryFilter[0] === "—" ? "No country" : countryFilter[0]) : `${countryFilter.length} countries`}
+                  </span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]"><path d="M6 9l6 6 6-6" /></svg>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-[220px] max-h-[420px] overflow-y-auto z-[120]">
+                <DropdownMenuItem onClick={(e) => { e.preventDefault(); if (countryFilter.length > 0) setCountryFilter([]) }} className="text-xs">
+                  Clear selection
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {countryOptions.map(([c, n]) => (
+                  <DropdownMenuCheckboxItem key={c} checked={countryFilter.includes(c)} onCheckedChange={() => toggleCountry(c)} onSelect={(e) => e.preventDefault()} className="text-xs">
+                    <span className="flex-1">{c === "—" ? "No country" : c}</span>
+                    <span className="ml-3 tabular-nums text-[#a1a1a0]">{n}</span>
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+
+            {missingLogos > 0 && (
+              <button
+                type="button"
+                className="btn-tertiary shrink-0"
+                style={{ height: 36, fontSize: 13, padding: "0 16px" }}
+                disabled={logoBusy != null}
+                title="Look up the logo on the website of every brand without one, and use the best candidate"
+                onClick={() => void findAllLogos()}
+              >
+                {logoBusy ? `Finding logos… ${logoBusy.found}/${logoBusy.done}` : `Find ${missingLogos} missing logos`}
+              </button>
+            )}
+
+            <button
+              type="button"
+              className="btn-tertiary shrink-0"
+              style={{ height: 36, fontSize: 13, padding: "0 16px" }}
+              disabled={apolloBusy}
+              title="Read the Apollo company list “Brands” and add new brands; empty fields of existing brands are filled in"
+              onClick={async () => {
+                // Blok voor blok (25 accounts per aanroep), zodat ook een
+                // lijst van duizenden merken binnen de tijdslimiet blijft.
+                setApolloBusy(true)
+                setApolloProgress(null)
+                const sum = { created: 0, updated: 0, unchanged: 0, categorised: 0, skipped: 0 }
+                let page: number | null = 1
+                let done = 0
+                try {
+                  while (page != null) {
+                    const res = await importBrandsFromApollo("Brands", page)
+                    if ("error" in res) {
+                      toast.error(done > 0 ? `${res.error} (stopped after ${done} accounts; run again to continue)` : res.error)
+                      break
+                    }
+                    sum.created += res.created; sum.updated += res.updated; sum.unchanged += res.unchanged
+                    sum.categorised += res.categorised; sum.skipped += res.skipped
+                    done += res.found
+                    setApolloProgress({ done, total: res.total })
+                    page = res.nextPage
+                  }
+                  if (page == null) {
+                    toast.success(`Apollo: ${sum.created} added, ${sum.updated} updated, ${sum.unchanged} unchanged, ${sum.categorised} categorised${sum.skipped ? `, ${sum.skipped} skipped` : ""}`)
+                  }
+                } catch (err) {
+                  toast.error(`Import stopped after ${done} accounts: ${String(err)}. Run again to continue.`)
+                } finally {
+                  setApolloBusy(false)
+                  setApolloProgress(null)
+                  router.refresh()
+                }
+              }}
+            >
+              {apolloBusy ? (apolloProgress ? `Importing… ${apolloProgress.done}/${apolloProgress.total}` : "Importing…") : "Import from Apollo"}
+            </button>
 
             <button type="button" className="btn-primary shrink-0" style={{ height: 36, fontSize: 13, padding: "0 16px" }} onClick={() => openAdd()}>
               Add brand
@@ -360,14 +768,16 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
           </p>
         </div>
 
+        <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={onLogoChosen} style={{ display: "none" }} />
         <div className="arco-table-wrap">
-          <table className="arco-table" style={{ minWidth: 980 }}>
+          <table className="arco-table" style={{ minWidth: 1080 }}>
             <thead>
               <tr>
                 <th>Brand</th>
                 <th>Domain</th>
                 <th>Status</th>
-                <th style={{ textAlign: "right" }}>Series</th>
+                <th>Segment</th>
+                <th style={{ textAlign: "right" }}>Collection</th>
                 <th style={{ textAlign: "right" }}>Projects</th>
                 <th>Owner</th>
                 <th>Last change</th>
@@ -378,30 +788,51 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
+                  <td colSpan={10} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
                     {initialBrands.length === 0 ? "No brands yet — add one from a brand's homepage." : "No brands match these filters."}
                   </td>
                 </tr>
               ) : rows.map((b) => (
-                <tr key={b.id}>
+                <tr
+                  key={b.id}
+                  onClick={(e) => {
+                    if ((e.target as HTMLElement).closest("button, a, input, select, textarea, [role='menuitem']")) return
+                    setRowMenu({ id: b.id, x: e.clientX, y: e.clientY })
+                  }}
+                  style={{ cursor: "pointer" }}
+                >
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      {b.logo_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <div className="arco-table-avatar"><img src={b.logo_url} alt={b.name} /></div>
-                      ) : (
-                        <div className="arco-table-avatar" style={{ background: "#f5f5f4", color: "#6b6b68" }}>{b.name.charAt(0).toUpperCase()}</div>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => pickLogo(b)}
+                        disabled={logoUploadingId === b.id}
+                        title="Upload logo"
+                        aria-label={`Upload logo voor ${b.name}`}
+                        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", borderRadius: "50%", opacity: logoUploadingId === b.id ? 0.4 : 1, flexShrink: 0 }}
+                        className="hover:opacity-70 transition-opacity"
+                      >
+                        <BrandLogo logoUrl={logoOverrides[b.id] ?? b.logo_url} name={b.name} size={32} />
+                      </button>
                       <div style={{ minWidth: 0 }}>
                         <Link href={`/admin/brands/${b.id}`} className="arco-table-primary arco-table-primary--wrap hover:text-[#016D75] transition-colors">{b.name}</Link>
-                        {b.country && <div className="arco-table-secondary">{b.country}</div>}
+                        {(b.category || b.country) && <div className="arco-table-secondary">{[b.category, countryOf(b)].filter(Boolean).join(" · ")}</div>}
                       </div>
                     </div>
                   </td>
                   <td>
-                    {b.website && b.domain ? (
-                      <a href={b.website} target="_blank" rel="noopener noreferrer" className="arco-table-primary hover:opacity-70 transition-opacity" style={{ fontWeight: 400 }}>{b.domain}</a>
-                    ) : (b.domain ?? dash)}
+                    <BrandDomainCell
+                      domain={domainOverrides[b.id]?.domain ?? b.domain}
+                      website={domainOverrides[b.id]?.website ?? b.website}
+                      onSave={async (value) => {
+                        const res = await updateBrandDomain(b.id, value)
+                        if ("error" in res) { toast.error(res.error); return false }
+                        setDomainOverrides((prev) => ({ ...prev, [b.id]: res }))
+                        toast.success("Domain updated")
+                        router.refresh()
+                        return true
+                      }}
+                    />
                   </td>
                   <td>
                     <button type="button" onClick={() => openStatus(b)} className="arco-table-status" style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }} title="Update status">
@@ -409,7 +840,68 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
                       <span style={{ fontWeight: 500 }}>{STATUS_LABEL[b.status as BrandStatus] ?? b.status}</span>
                     </button>
                   </td>
-                  <td style={{ textAlign: "right" }}>{b.series_count || dash}</td>
+                  <td>
+                    {(() => {
+                      const seg = segmentOf(b)
+                      const meta = seg ? SEGMENT_BY_VALUE.get(seg) : null
+                      const save = async (next: Segment | null) => {
+                        const prev = seg
+                        setSegmentOverrides((o) => ({ ...o, [b.id]: next }))
+                        const res = await updateBrandSegment(b.id, next)
+                        if ("error" in res) { setSegmentOverrides((o) => ({ ...o, [b.id]: prev })); toast.error(res.error) }
+                      }
+                      return (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button type="button" className="arco-table-status" style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }} title="Set segment">
+                              {meta ? (
+                                <>
+                                  <span className="arco-table-status-dot" style={{ background: meta.dot }} />
+                                  <span style={{ fontWeight: 500 }}>{meta.label}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="arco-table-status-dot" style={{ background: "transparent", boxShadow: "inset 0 0 0 1px #c4c4c2" }} />
+                                  <span style={{ fontWeight: 500, color: "#a1a1a0" }}>No segment</span>
+                                </>
+                              )}
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="min-w-[260px] z-[120]">
+                            {SEGMENTS.map((x) => (
+                              <DropdownMenuCheckboxItem key={x.value} checked={seg === x.value} onCheckedChange={() => void save(x.value)} className="text-xs">
+                                <span className="h-1.5 w-1.5 rounded-full shrink-0 mr-2" style={{ background: x.dot }} />
+                                <span className="flex-1">
+                                  <span style={{ fontWeight: 500 }}>{x.label}</span>
+                                  <span className="block text-[#a1a1a0]">{x.hint}</span>
+                                </span>
+                              </DropdownMenuCheckboxItem>
+                            ))}
+                            {seg && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => void save(null)} className="text-xs text-[#6b6b68]">Clear segment</DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )
+                    })()}
+                  </td>
+                  <td style={{ textAlign: "right" }}>
+                    <div>{b.collection_count || dash}</div>
+                    {(() => {
+                      const j = b.collection_job
+                      if (j && JOB_ACTIVE(j)) return <div className="arco-table-secondary" style={{ color: "#016D75", whiteSpace: "nowrap" }}>{jobLabel(j)}</div>
+                      if (j?.stage === "error") return <div className="arco-table-secondary" style={{ color: "#c0392b", whiteSpace: "nowrap" }} title={j.error ?? undefined}>{j.kind === "inventory" ? "Inventory failed" : "Fetch failed"}</div>
+                      if (b.candidates_found > 0) return (
+                        <button type="button" className="arco-table-secondary hover:underline" style={{ color: "#016D75", background: "none", border: 0, padding: 0, cursor: "pointer", whiteSpace: "nowrap" }} onClick={() => setPickerBrand({ id: b.id, name: b.name })}>
+                          {b.candidates_found} found · Choose
+                        </button>
+                      )
+                      return null
+                    })()}
+                  </td>
                   <td style={{ textAlign: "right" }}>
                     {b.project_count ? (
                       <>
@@ -428,11 +920,8 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
                           <MoreHorizontal className="h-4 w-4" />
                         </button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44">
-                        <DropdownMenuItem asChild><Link href={`/admin/brands/${b.id}`}>Edit brand</Link></DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => openStatus(b)}>Update status</DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => setDeleteTarget(b)} className="text-red-600">Delete brand</DropdownMenuItem>
+                      <DropdownMenuContent align="end" className="w-48">
+                        {renderBrandMenuItems(b)}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </td>
@@ -442,6 +931,41 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
           </table>
         </div>
       </div>
+
+      {/* Rijmenu op de klikpositie, zoals bij bedrijven: een onzichtbaar
+          vast punt waar het menu aan hangt, zodat het oog niet naar de
+          "…"-kolom hoeft. Zelfde items als de knop. */}
+      {(() => {
+        const brand = rowMenu ? initialBrands.find((x) => x.id === rowMenu.id) ?? null : null
+        return (
+          <DropdownMenu open={Boolean(rowMenu && brand)} onOpenChange={(open) => { if (!open) setRowMenu(null) }}>
+            <DropdownMenuTrigger asChild>
+              <span aria-hidden style={{ position: "fixed", left: rowMenu?.x ?? 0, top: rowMenu?.y ?? 0, width: 0, height: 0, padding: 0, margin: 0 }} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              {brand && renderBrandMenuItems(brand)}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
+      })()}
+
+      {/* ── Logo van de website ──────────────────────────────────────── */}
+      {logoBrand && (
+        <LogoPicker
+          brand={logoBrand}
+          onClose={() => setLogoBrand(null)}
+          onSaved={(url) => { setLogoOverrides((prev) => ({ ...prev, [logoBrand.id]: url })); setLogoBrand(null); router.refresh() }}
+        />
+      )}
+
+      {/* ── Collecties kiezen na een inventarisatie ─────────────────── */}
+      {pickerBrand && (
+        <CollectionPicker
+          brand={pickerBrand}
+          onClose={() => setPickerBrand(null)}
+          onDone={() => { setPickerBrand(null); router.refresh() }}
+        />
+      )}
 
       {/* ── Add brand ───────────────────────────────────────────────── */}
       {showAdd && (
@@ -459,7 +983,7 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
             {addPhase === "input" && (
               <>
                 <p className="arco-body-text" style={{ marginBottom: 16 }}>
-                  Paste the brand&rsquo;s products or collections overview — or its homepage. The brand comes from the homepage; the series from the page you paste, and their photos from each series&rsquo; own page.
+                  Paste the brand&rsquo;s products or collections overview — or its homepage. The brand comes from the homepage; the collections from the page you paste, and their photos from each collection&rsquo;s own page.
                 </p>
                 <input
                   type="url"
@@ -510,7 +1034,7 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
                 {isScraping && (
                   <div className="scrape-progress-track" style={{ marginTop: 20 }}>
                     {/* Echte voortgang: stap 1 en 2 elk een derde, stap 3
-                        de teller over de seriepagina's. */}
+                        de teller over de collectiepagina's. */}
                     <div
                       className="scrape-progress-bar"
                       style={{
@@ -597,7 +1121,7 @@ export function BrandsClient({ initialBrands }: { initialBrands: AdminBrandRow[]
               <button type="button" className="popup-close" onClick={() => setDeleteTarget(null)} aria-label="Close">✕</button>
             </div>
             <p className="arco-body-text" style={{ marginBottom: 20 }}>
-              Removes the brand, its {deleteTarget.series_count} series and its tags on {deleteTarget.project_count} project{deleteTarget.project_count === 1 ? "" : "s"}. This cannot be undone.
+              Removes the brand, its {deleteTarget.collection_count} collection and its tags on {deleteTarget.project_count} project{deleteTarget.project_count === 1 ? "" : "s"}. This cannot be undone.
             </p>
             <div className="popup-actions">
               <button type="button" className="btn-tertiary" style={{ flex: 1 }} onClick={() => setDeleteTarget(null)}>Cancel</button>

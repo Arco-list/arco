@@ -1,5 +1,6 @@
 "use client"
 
+import { LogoFill } from "@/components/brand/brand-logo"
 import { spaceLabelSingular } from "@/lib/type-labels"
 import type React from "react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -111,6 +112,7 @@ import {
 } from "@/lib/project-details"
 import { PHOTOGRAPHER_SERVICE_SLUG } from "@/lib/photographer-specialties"
 import { getBrowserSupabaseClient } from "@/lib/supabase/browser"
+import { focusFromClick, focusPosition } from "@/lib/images/focus"
 import type { Enums, Tables, TablesUpdate } from "@/lib/supabase/types"
 import { useProjectTaxonomyOptions } from "@/hooks/use-project-taxonomy-options"
 import {
@@ -139,6 +141,8 @@ import {
 import { createUnlistedCompanyAction, confirmLinkExistingCompanyAction, sendInviteEmailAction, getCompanyOwnerEmailAction } from "@/app/dashboard/edit/actions"
 import { enrichCompanyAction } from "@/app/dashboard/edit/enrich-company-actions"
 import { PhotographerSpecCell } from "./photographer-spec-cell"
+import { SpecClearButton } from "@/components/project/spec-clear-button"
+import { ALL_SCOPES, resolveScopeSlugs } from "@/lib/publish-scope"
 import { ProjectBrandsEditor } from "./project-brands-editor"
 import { isAdminUser } from "@/lib/auth-utils"
 import { trackProjectPublished, trackProfessionalInvited } from "@/lib/tracking"
@@ -591,6 +595,7 @@ export default function ListingEditorPage() {
   const [uploadTracker, setUploadTracker] = useState<Array<{ name: string; thumbnail: string; status: "pending" | "uploading" | "done" | "error"; error?: string }>>([])
   const [showUploadPopup, setShowUploadPopup] = useState(false)
   const [showCoverPicker, setShowCoverPicker] = useState(false)
+  const [coverFocusOverride, setCoverFocusOverride] = useState<{ id: string; x: number; y: number } | null>(null)
   const [editingSpecBar, setEditingSpecBar] = useState<string | null>(null)
   const [specScope, setSpecScope] = useState("")
   // Deelproject of project. Geen aparte vraag: het scopevak beslist. Een
@@ -599,7 +604,7 @@ export default function ListingEditorPage() {
   // van de diensten van het bedrijf dat eigenaar is (migratie 297/301).
   const [projectKind, setProjectKind] = useState<"project" | "partial">("project")
   const [primarySpaceId, setPrimarySpaceId] = useState<string | null>(null)
-  const [publishOptions, setPublishOptions] = useState<{ scopes: boolean; spaces: Array<{ id: string; slug: string }> }>({ scopes: true, spaces: [] })
+  const [publishOptions, setPublishOptions] = useState<{ scopes: boolean; scopeSlugs: string[]; spaces: Array<{ id: string; slug: string }> }>({ scopes: true, scopeSlugs: [...ALL_SCOPES], spaces: [] })
 
   // City lookup state (specs bar location)
   const [cityQuery, setCityQuery] = useState("")
@@ -4175,6 +4180,25 @@ export default function ListingEditorPage() {
     if (!projectId || !hasProjectAccess) return
     let cancelled = false
     const load = async () => {
+      // Een admin ziet altijd beide reeksen: de scopes plus elke ruimte
+      // waaronder een deelproject kan vallen (de ruimtes van alle
+      // diensten met publiceerstand 'partial'), los van wat de eigenaar
+      // zelf mag. Zo wordt het poolhouse van een architect een
+      // deelproject zonder dat de architect zelf die keuze krijgt.
+      if (isAdmin || viewerIsAdmin) {
+        const { data: partialServices } = await supabase.from("categories").select("id").eq("publish_scope", "partial")
+        const ids = ((partialServices ?? []) as Array<{ id: string }>).map((c) => c.id)
+        const { data: links } = ids.length
+          ? await supabase.from("service_spaces").select("space_id, spaces(id, slug, sort_order, is_active)").in("service_id", ids)
+          : { data: [] }
+        const spaces = Array.from(new Map(((links ?? []) as any[])
+          .map((l) => l.spaces).filter((sp) => sp && sp.is_active !== false)
+          .map((sp) => [sp.id as string, { id: sp.id as string, slug: sp.slug as string, sort: Number(sp.sort_order ?? 0) }])).values())
+          .sort((a, b) => a.sort - b.sort)
+          .map(({ id, slug }) => ({ id, slug }))
+        if (!cancelled) setPublishOptions({ scopes: true, scopeSlugs: [...ALL_SCOPES], spaces })
+        return
+      }
       const { data: owner } = await supabase
         .from("project_professionals")
         .select("company_id, companies(primary_service_id, services_offered)")
@@ -4185,16 +4209,21 @@ export default function ListingEditorPage() {
         .maybeSingle()
       const company = (owner as any)?.companies as { primary_service_id: string | null; services_offered: string[] | null } | null
       const serviceIds = Array.from(new Set([company?.primary_service_id, ...(company?.services_offered ?? [])].filter(Boolean))) as string[]
-      if (serviceIds.length === 0) { if (!cancelled) setPublishOptions({ scopes: true, spaces: [] }); return }
+      if (serviceIds.length === 0) { if (!cancelled) setPublishOptions({ scopes: true, scopeSlugs: [...ALL_SCOPES], spaces: [] }); return }
       const [{ data: services }, { data: links }] = await Promise.all([
-        supabase.from("categories").select("id, publish_scope").in("id", serviceIds),
+        supabase.from("categories").select("id, publish_scope, project_scopes").in("id", serviceIds),
         supabase.from("service_spaces").select("service_id, space_id, spaces(id, slug, sort_order, is_active)").in("service_id", serviceIds),
       ])
-      const scopes = (services ?? []).map((s: any) => s.publish_scope as string)
+      // project_scopes (migratie 314) staat nog niet in de gegenereerde types.
+      const serviceRows = (services ?? []) as unknown as Array<{ id: string; publish_scope: string; project_scopes: string[] | null }>
+      const scopes = serviceRows.map((s) => s.publish_scope)
       const hasProject = scopes.includes("project")
       const hasPartial = scopes.includes("partial")
-      const spaces = hasPartial
+      // Ruimtes van elke publicerende dienst, ook een architect (tuinhuis).
+      const publishing = new Set(serviceRows.filter((s) => s.publish_scope !== "none").map((s) => s.id))
+      const spaces = publishing.size > 0
         ? Array.from(new Map(((links ?? []) as any[])
+            .filter((l) => publishing.has(l.service_id))
             .map((l) => l.spaces).filter((s) => s && s.is_active !== false)
             .map((s) => [s.id as string, { id: s.id as string, slug: s.slug as string, sort: Number(s.sort_order ?? 0) }])).values())
             .sort((a, b) => a.sort - b.sort)
@@ -4202,11 +4231,11 @@ export default function ListingEditorPage() {
         : []
       // Geen enkele publicerende dienst (bijv. admin bewerkt een project
       // zonder eigenaar): de scopes blijven beschikbaar.
-      if (!cancelled) setPublishOptions({ scopes: hasProject || !hasPartial, spaces })
+      if (!cancelled) setPublishOptions({ scopes: hasProject || !hasPartial, scopeSlugs: resolveScopeSlugs(serviceRows), spaces })
     }
     void load()
     return () => { cancelled = true }
-  }, [projectId, hasProjectAccess, supabase])
+  }, [projectId, hasProjectAccess, supabase, isAdmin, viewerIsAdmin])
 
   // City search for specs bar location
   const searchCity = useCallback((query: string) => {
@@ -5064,6 +5093,23 @@ export default function ListingEditorPage() {
   )
 
   // ── Derived values for the new layout ──────────────────────────────────────
+  // Focuspunt van de omslag (migratie 328): een klik op de hero zet het,
+  // meteen zichtbaar, en slaat het op. Geen melding: je ziet het effect.
+  const coverPhoto = uploadedPhotos.find(p => p.isCover) ?? null
+  const coverFocus = coverPhoto
+    ? coverFocusOverride?.id === coverPhoto.id
+      ? coverFocusOverride
+      : coverPhoto.focusX != null && coverPhoto.focusY != null ? { x: coverPhoto.focusX, y: coverPhoto.focusY } : null
+    : null
+  const pickCoverFocus = async (e: React.MouseEvent<HTMLImageElement>) => {
+    if (!coverPhoto) return
+    const f = focusFromClick(e, coverFocus)
+    if (!f) return
+    const previous = coverFocusOverride
+    setCoverFocusOverride({ id: coverPhoto.id, ...f })
+    const { error } = await supabase.from("project_photos").update({ focus_x: f.x, focus_y: f.y } as never).eq("id", coverPhoto.id)
+    if (error) { toast.error(error.message); setCoverFocusOverride(previous) }
+  }
   const coverPhotoUrl =
     uploadedPhotos.find(p => p.isCover)?.url ??
     getFeatureCoverPhoto(BUILDING_FEATURE_ID) ??
@@ -5229,6 +5275,7 @@ export default function ListingEditorPage() {
         .hero-add-photo-cta:hover { opacity: 0.8 !important; }
         .hero-cover-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2; display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-sans); font-size: 13px; font-weight: 400; color: #fff; background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.25); border-radius: 100px; padding: 8px 18px; cursor: pointer; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: background .15s, border-color .15s; }
         .hero-cover-btn:hover { background: rgba(0,0,0,.6); border-color: rgba(255,255,255,.4); }
+        .hero-focus-hint { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 2; font-family: var(--font-sans); font-size: 11px; color: #fff; background: rgba(0,0,0,.4); border-radius: 100px; padding: 4px 12px; pointer-events: none; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); white-space: nowrap; }
 
         /* ── Professionals grid ── */
         .credit-card-edit { position: relative; text-align: center; display: block; cursor: pointer; }
@@ -5608,11 +5655,10 @@ export default function ListingEditorPage() {
       <div>
 
         {/* ── Hero ──────────────────────────────────────────────── */}
-        <section style={{
-          // Same wide-screen guard as .project-hero: the height floor
-          // follows the width (42vw, capped) so ultrawide windows keep
-          // a hero-worthy aspect instead of a strip.
-          position: "relative", width: "100%", height: "82vh", minHeight: "max(560px, min(42vw, 950px))",
+        <section className="hero-max-width project-hero-frame" style={{
+          // Zelfde hero als de projectpagina (.project-hero-frame): de
+          // hoogte volgt de breedte (2 : 1), begrensd door de schermhoogte.
+          position: "relative", width: "100%",
           overflow: "hidden", background: "#111",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
@@ -5621,9 +5667,13 @@ export default function ListingEditorPage() {
               <img
                 src={coverPhotoUrl}
                 alt={t("cover_alt")}
-                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
+                onClick={coverPhoto && coverPhoto.url === coverPhotoUrl ? (e) => void pickCoverFocus(e) : undefined}
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: coverPhoto && coverPhoto.url === coverPhotoUrl ? focusPosition(coverFocus) : "center", cursor: coverPhoto && coverPhoto.url === coverPhotoUrl ? "crosshair" : undefined }}
               />
-              <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.18)" }} />
+              <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.18)", pointerEvents: "none" }} />
+              {coverPhoto && coverPhoto.url === coverPhotoUrl && (
+                <span className="hero-focus-hint">{t("focus_hint")}</span>
+              )}
               {/* Change cover button */}
               <button
                 onClick={() => setShowCoverPicker(true)}
@@ -5937,7 +5987,18 @@ export default function ListingEditorPage() {
               </div>
             ) : (
               <div className="arco-card-title" style={{ color: locationDisplayValue ? undefined : "#b0b0ae" }}>
-                {locationDisplayValue || tSpecs("add_location")}
+                {locationDisplayValue ? (
+                  <span className="spec-value">
+                    {locationDisplayValue}
+                    <SpecClearButton
+                      label={tSpecs("clear_aria")}
+                      onClear={() => {
+                        setDetailsForm(prev => ({ ...prev, city: "", region: "", address: "" }))
+                        void saveFieldDirect({ location: null, address_city: null, address_region: null, address_formatted: null })
+                      }}
+                    />
+                  </span>
+                ) : tSpecs("add_location")}
               </div>
             )}
           </div>
@@ -5952,6 +6013,20 @@ export default function ListingEditorPage() {
               <span className="ec-txt">{t("edit_badge")}</span>
             </span>
             <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{tSpecs("year_label")}</span>
+            {editingSpecBar !== "year" && String(detailsForm.yearBuilt ?? "").trim() ? (
+              <div className="arco-card-title">
+                <span className="spec-value">
+                  {detailsForm.yearBuilt}
+                  <SpecClearButton
+                    label={tSpecs("clear_aria")}
+                    onClear={() => {
+                      setDetailsForm(prev => ({ ...prev, yearBuilt: "" }))
+                      saveSpecBarField("project_year", "")
+                    }}
+                  />
+                </span>
+              </div>
+            ) : (
             <input
               type="number"
               className="spec-inp-inline"
@@ -5972,6 +6047,7 @@ export default function ListingEditorPage() {
               onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur() }}
               onClick={e => { if (editingSpecBar === "year") e.stopPropagation() }}
             />
+            )}
           </div>
 
           {/* Project Type */}
@@ -5987,7 +6063,18 @@ export default function ListingEditorPage() {
             </span>
             <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{tSpecs("type_label")}</span>
             <div className="arco-card-title" style={{ color: projectTypeLabel ? undefined : "#b0b0ae" }}>
-              {projectTypeLabel || tSpecs("select_type")}
+              {projectTypeLabel ? (
+                <span className="spec-value">
+                  {projectTypeLabel}
+                  <SpecClearButton
+                    label={tSpecs("clear_aria")}
+                    onClear={() => {
+                      setDetailsForm(prev => ({ ...prev, projectType: "", category: "", buildingType: "" }))
+                      void saveFieldDirect({ project_type_category_id: null, building_type: null })
+                    }}
+                  />
+                </span>
+              ) : tSpecs("select_type")}
             </div>
             {editingSpecBar === "type" && (
               <>
@@ -6059,9 +6146,23 @@ export default function ListingEditorPage() {
             </span>
             <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{tSpecs("scope_label")}</span>
             <div className="arco-card-title" style={{ color: specScope || primarySpaceId ? undefined : "#b0b0ae" }}>
-              {primarySpaceId
-                ? (spaceLabelSingular(publishOptions.spaces.find((s) => s.id === primarySpaceId)?.slug ?? null, locale) ?? "…")
-                : (translateScopeInput(specScope, locale) || tSpecs("select_scope"))}
+              {specScope || primarySpaceId ? (
+                <span className="spec-value">
+                  {primarySpaceId
+                    ? (spaceLabelSingular(publishOptions.spaces.find((s) => s.id === primarySpaceId)?.slug ?? null, locale) ?? "…")
+                    : (translateScopeInput(specScope, locale) || specScope)}
+                  {/* Leegmaken laat het soort (project/deelproject) staan:
+                      alleen een nieuwe keuze in het vak verandert dat. */}
+                  <SpecClearButton
+                    label={tSpecs("clear_aria")}
+                    onClear={() => {
+                      setSpecScope("")
+                      setPrimarySpaceId(null)
+                      void saveFieldDirect({ project_type: null, primary_space_id: null })
+                    }}
+                  />
+                </span>
+              ) : tSpecs("select_scope")}
             </div>
             {editingSpecBar === "scope" && (
               <>
@@ -6070,7 +6171,7 @@ export default function ListingEditorPage() {
                   {publishOptions.scopes && (
                     <>
                       {publishOptions.spaces.length > 0 && <div className="dd-group-label">{tSpecs("scope_group_work")}</div>}
-                      {SCOPE_OPTIONS.map(opt => (
+                      {SCOPE_OPTIONS.filter(opt => publishOptions.scopeSlugs.includes(opt.slug)).map(opt => (
                         <div
                           key={opt.slug}
                           className={`dd-row${opt.value === specScope ? " sel" : ""}`}
@@ -6105,7 +6206,7 @@ export default function ListingEditorPage() {
           {/* Style */}
           <div
             className={`spec-item-edit${editingSpecBar === "style" ? " editing" : ""}`}
-            data-submit-highlight={highlightMissingFields && !detailsForm.projectStyle ? "true" : undefined}
+            data-submit-highlight={highlightMissingFields && projectKind !== "partial" && !detailsForm.projectStyle ? "true" : undefined}
             style={{ position: "relative" }}
             onClick={() => editingSpecBar !== "style" && setEditingSpecBar("style")}
           >
@@ -6115,7 +6216,18 @@ export default function ListingEditorPage() {
             </span>
             <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>{tSpecs("style_label")}</span>
             <div className="arco-card-title" style={{ color: styleLabel ? undefined : "#b0b0ae" }}>
-              {styleLabel || tSpecs("select_style")}
+              {styleLabel ? (
+                <span className="spec-value">
+                  {styleLabel}
+                  <SpecClearButton
+                    label={tSpecs("clear_aria")}
+                    onClear={() => {
+                      setDetailsForm(prev => ({ ...prev, projectStyle: "" }))
+                      void saveFieldDirect({ style_preferences: null })
+                    }}
+                  />
+                </span>
+              ) : tSpecs("select_style")}
             </div>
             {editingSpecBar === "style" && (
               <>
@@ -6342,7 +6454,7 @@ export default function ListingEditorPage() {
                       service), else initials. */}
                   <div className="credit-icon">
                     {inv.companyLogo ? (
-                      <img src={inv.companyLogo} alt={inv.companyName ?? ""} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />
+                      <LogoFill src={inv.companyLogo} alt={inv.companyName ?? ""} />
                     ) : (() => {
                       // Initials of an unfamiliar company say nothing; the
                       // service mark at least says what they did here.
@@ -6903,7 +7015,7 @@ export default function ListingEditorPage() {
                       <div className="add-pro-selected">
                         <div className="credit-icon">
                           {dialogArcoCompany?.logoUrl ? (
-                            <img src={dialogArcoCompany.logoUrl} alt={dialogArcoCompany.name} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />
+                            <LogoFill src={dialogArcoCompany.logoUrl} alt={dialogArcoCompany.name} />
                           ) : (
                             (() => {
                               // Service mark, matching the credit rows —
@@ -7202,7 +7314,7 @@ export default function ListingEditorPage() {
                 {/* Icon */}
                 <div className="credit-icon">
                   {draftCard.companyLogo ? (
-                    <img src={draftCard.companyLogo} alt={draftCard.companyName} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />
+                    <LogoFill src={draftCard.companyLogo} alt={draftCard.companyName} />
                   ) : (
                     (() => {
                       const opt = professionalServices.find(o => o.id === draftCard.serviceIds?.[0])
@@ -7735,7 +7847,9 @@ export default function ListingEditorPage() {
           { label: tSubmit("req_location"), ok: Boolean(location) },
           { label: tSubmit("req_type"), ok: projectKind === "partial" || Boolean(type) },
           { label: tSubmit("req_scope"), ok: Boolean(scope) },
-          { label: tSubmit("req_style"), ok: Boolean(style) },
+          // Stijl is niet verplicht bij een ruimteproject: een zwembad of
+          // tuin past vaak in geen van de woonstijlen.
+          ...(projectKind === "partial" ? [] : [{ label: tSubmit("req_style"), ok: Boolean(style) }]),
           { label: tSubmit("req_min_photos"), ok: photoCount >= 5 },
         ]
         const allRequiredMet = required.every(r => r.ok)

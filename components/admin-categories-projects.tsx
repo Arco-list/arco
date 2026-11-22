@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react"
 import { useLocale, useTranslations } from "next-intl"
-import { ChevronRight, Home } from "lucide-react"
+import { ChevronRight, Home, Hammer, Building2, Sofa } from "lucide-react"
 
 import type { AdminCategoryRow, AdminSpaceRow } from "@/components/admin-categories-data-table"
 import {
@@ -14,14 +14,19 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { SUBTYPE_ICON_MAP } from "@/components/filter-icon-map"
 import { resolveFeatureIcon } from "@/lib/icons/project-features"
-import { spaceNoun } from "@/lib/type-labels"
+import { spaceNoun, scopeLabel } from "@/lib/type-labels"
 import { cn } from "@/lib/utils"
 
 /**
  * De Projecten-tab van /admin/categories, in het ontwerp van de
- * Professionals-tab: twee uitklapgroepen. "Projecten" zijn de
- * gebouwtypes (villa, appartement, chalet) van architectuurprojecten.
- * "Deelprojecten" zijn de ruimtes waaronder diensten deelprojecten
+ * Professionals-tab: drie uitklapgroepen. De eerste twee zijn precies wat
+ * het scopevak in de projecteditor aanbiedt, en wie welke optie ziet:
+ * "Project" zijn de scopes (Nieuwbouw, Renovatie, Interieur), voor de
+ * diensten met publiceerstand Projecten. "Ruimteproject" zijn de ruimtes
+ * waaronder diensten ruimteprojecten publiceren. "Gebouwtypes" (villa,
+ * appartement, chalet) is het vak Type, los van de scope.
+ *
+ * Ruimteprojecten: de ruimtes waaronder diensten deelprojecten
  * publiceren (keukens, badkamers, zwembaden, wellness, tuinen,
  * tuinhuizen): een ruimte staat hier zodra een dienst eraan gekoppeld
  * is op de tab Samenhang. Ruimtes zelf beheer je op de tab Ruimtes.
@@ -36,8 +41,10 @@ type Props = {
   spaces: AdminSpaceRow[]
   services: AdminCategoryRow[]
   serviceSpaces: Array<{ serviceId: string; spaceId: string }>
-  /** Aantal deelprojecten per ruimte-id. */
+  /** Aantal ruimteprojecten per primaire ruimte-id. */
   partialCounts: Record<string, number>
+  /** Aantal projecten per scope (new_build, renovation, interior_design). */
+  scopeCounts: Record<string, number>
   search: string
   pending: boolean
   onEdit: (row: AdminCategoryRow) => void
@@ -51,10 +58,12 @@ type Props = {
 
 const COPY = {
   en: {
-    type: "Type", status: "Status", homepage: "Homepage", publishes: "Publishes", projects: "Projects",
-    groupProjects: "Projects", groupPartial: "Partial projects",
+    type: "Name", status: "Status", homepage: "Homepage", publishes: "Shown to", projects: "Projects",
+    groupScopes: "Project", groupPartial: "Space project", groupProjects: "Building types",
+    groupScopesSub: (n: number, total: number) => `${n} ${n === 1 ? "scope" : "scopes"} · ${total} ${total === 1 ? "project" : "projects"}`,
     groupProjectsSub: (n: number, total: number) => `${n} ${n === 1 ? "type" : "types"} · ${total} ${total === 1 ? "project" : "projects"}`,
-    groupPartialSub: (n: number, total: number) => `${n} ${n === 1 ? "space" : "spaces"} · ${total} ${total === 1 ? "partial project" : "partial projects"}`,
+    groupPartialSub: (n: number, total: number) => `${n} ${n === 1 ? "space" : "spaces"} · ${total} ${total === 1 ? "space project" : "space projects"}`,
+    fixed: "Fixed",
     active: "Active", inactive: "Inactive", on: "On", off: "Off",
     activate: "Activate", deactivate: "Deactivate", edit: "Edit", delete: "Delete",
     editInSpaces: "Edit on the Spaces tab",
@@ -63,10 +72,12 @@ const COPY = {
     onHome: "Shown on the homepage — click to remove", toHome: "Click to show on the homepage",
   },
   nl: {
-    type: "Type", status: "Status", homepage: "Homepage", publishes: "Publiceert", projects: "Projecten",
-    groupProjects: "Projecten", groupPartial: "Deelprojecten",
+    type: "Naam", status: "Status", homepage: "Homepage", publishes: "Zichtbaar voor", projects: "Projecten",
+    groupScopes: "Project", groupPartial: "Ruimteproject", groupProjects: "Gebouwtypes",
+    groupScopesSub: (n: number, total: number) => `${n} ${n === 1 ? "scope" : "scopes"} · ${total} ${total === 1 ? "project" : "projecten"}`,
     groupProjectsSub: (n: number, total: number) => `${n} ${n === 1 ? "type" : "types"} · ${total} ${total === 1 ? "project" : "projecten"}`,
-    groupPartialSub: (n: number, total: number) => `${n} ${n === 1 ? "ruimte" : "ruimtes"} · ${total} ${total === 1 ? "deelproject" : "deelprojecten"}`,
+    groupPartialSub: (n: number, total: number) => `${n} ${n === 1 ? "ruimte" : "ruimtes"} · ${total} ${total === 1 ? "ruimteproject" : "ruimteprojecten"}`,
+    fixed: "Vast",
     active: "Actief", inactive: "Inactief", on: "Aan", off: "Uit",
     activate: "Activeren", deactivate: "Deactiveren", edit: "Bewerken", delete: "Verwijderen",
     editInSpaces: "Bewerken op tab Ruimtes",
@@ -80,7 +91,7 @@ type RowMenu =
   | { kind: "type"; row: AdminCategoryRow; x: number; y: number }
   | { kind: "space"; row: AdminSpaceRow; x: number; y: number }
 
-export function ProjectsTab({ types, spaces, services, serviceSpaces, partialCounts, search, pending, onEdit, onDelete, onToggleStatus, onToggleHomepage, onToggleSpaceStatus, onToggleSpaceHomepage, onOpenSpaces }: Props) {
+export function ProjectsTab({ types, spaces, services, serviceSpaces, partialCounts, scopeCounts, search, pending, onEdit, onDelete, onToggleStatus, onToggleHomepage, onToggleSpaceStatus, onToggleSpaceHomepage, onOpenSpaces }: Props) {
   const locale = useLocale()
   const nl = locale === "nl"
   const c = nl ? COPY.nl : COPY.en
@@ -89,12 +100,12 @@ export function ProjectsTab({ types, spaces, services, serviceSpaces, partialCou
   // spaceNoun is het meervoud voor koppen en wordt hier alleen doorzocht.
   const tf = useTranslations("projects.filters")
   const spaceLabel = (s: AdminSpaceRow) => (tf.has(s.slug) ? tf(s.slug) : s.name)
-  // Wie publiceert architectuurprojecten: de diensten met stand Projecten.
-  const projectPublishers = useMemo(
-    () => services.filter((s) => s.publishScope === "project").map(label).join(" · "),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [services, nl],
-  )
+  // Wie ziet een scope: de diensten met stand Projecten die hem in hun
+  // project_scopes hebben (leeg = alle drie, migratie 314).
+  const scopePublishers = (slug: string) => services
+    .filter((s) => s.publishScope === "project" && (!(s.projectScopes?.length) || s.projectScopes.includes(slug)))
+    .map(label)
+    .join(" · ")
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [rowMenu, setRowMenu] = useState<RowMenu | null>(null)
 
@@ -107,6 +118,15 @@ export function ProjectsTab({ types, spaces, services, serviceSpaces, partialCou
       .filter((t) => !q || t.name.toLowerCase().includes(q) || (t.nameNl ?? "").toLowerCase().includes(q) || t.slug.toLowerCase().includes(q)),
     [types, q],
   )
+
+  // De scopes zijn vast (lib/project-translations): geen status- of
+  // homepage-schakelaar, wel wie ze in het scopevak ziet.
+  const SCOPE_ROWS = [
+    { slug: "new_build", Icon: Building2 },
+    { slug: "renovation", Icon: Hammer },
+    { slug: "interior_design", Icon: Sofa },
+  ] as const
+  const scopeRows = SCOPE_ROWS.filter((r) => !q || scopeLabel(r.slug, locale).toLowerCase().includes(q) || r.slug.includes(q))
 
   // Deelprojecten: de ruimtes met minstens één publicerende dienst, met
   // die diensten erbij als tweede regel.
@@ -136,6 +156,7 @@ export function ProjectsTab({ types, spaces, services, serviceSpaces, partialCou
     if (!q) return
     const open = new Set<string>()
     if (typeRows.length) open.add("projects")
+    if (scopeRows.length) open.add("scopes")
     if (partialRows.length) open.add("partial")
     setExpanded(open)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -206,6 +227,8 @@ export function ProjectsTab({ types, spaces, services, serviceSpaces, partialCou
   const totalPartial = partialRows.reduce((sum, s) => sum + (partialCounts[s.id] ?? 0), 0)
   const showProjects = !q || typeRows.length > 0
   const showPartial = !q || partialRows.length > 0
+  const showScopes = !q || scopeRows.length > 0
+  const totalScoped = scopeRows.reduce((sum, r) => sum + (scopeCounts[r.slug] ?? 0), 0)
 
   return (
     <>
@@ -222,40 +245,35 @@ export function ProjectsTab({ types, spaces, services, serviceSpaces, partialCou
             </tr>
           </thead>
           <tbody>
-            {!showProjects && !showPartial ? (
+            {!showProjects && !showPartial && !showScopes ? (
               <tr>
                 <td colSpan={6} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>{c.noMatch}</td>
               </tr>
             ) : (
               <>
-                {showProjects && (
-                  <Fragment key="projects">
-                    {groupRow("projects", c.groupProjects, c.groupProjectsSub(typeRows.length, totalProjects))}
-                    {expanded.has("projects") && (typeRows.length === 0 ? (
-                      <tr><td colSpan={6} style={{ height: 64, textAlign: "center", color: "var(--text-disabled)" }}>{c.none}</td></tr>
-                    ) : typeRows.map((t) => {
-                      const Icon = SUBTYPE_ICON_MAP[`house-${t.slug}`] ?? Home
-                      return (
-                        <tr key={t.id} onClick={(e) => openMenu(e, { kind: "type", row: t, x: e.clientX, y: e.clientY })} style={{ cursor: "pointer" }}>
-                          <td>
-                            <div className="flex items-center gap-2" style={{ paddingLeft: 22 }}>
-                              <div className="arco-table-avatar" style={{ background: "#f5f5f4", color: "#1c1c1a" }}>
-                                <Icon className="h-4 w-4" />
-                              </div>
-                              <div className="flex flex-col min-w-0">
-                                <span className="arco-table-primary" title={label(t)}>{label(t)}</span>
-                                <span className="arco-table-secondary">{nl && t.nameNl ? `${t.name} · ${t.slug}` : t.slug}</span>
-                              </div>
+                {showScopes && (
+                  <Fragment key="scopes">
+                    {groupRow("scopes", c.groupScopes, c.groupScopesSub(scopeRows.length, totalScoped))}
+                    {expanded.has("scopes") && scopeRows.map(({ slug, Icon }) => (
+                      <tr key={slug}>
+                        <td>
+                          <div className="flex items-center gap-2" style={{ paddingLeft: 22 }}>
+                            <div className="arco-table-avatar" style={{ background: "#f5f5f4", color: "#1c1c1a" }}>
+                              <Icon className="h-4 w-4" strokeWidth={1.5} />
                             </div>
-                          </td>
-                          <td>{statusButton(t.isActive, () => onToggleStatus(t, !t.isActive))}</td>
-                          <td>{homepageButton(t.inHomeCarrousel, () => onToggleHomepage(t, !t.inHomeCarrousel))}</td>
-                          <td>{projectPublishers ? <span className="arco-table-primary" style={{ fontWeight: 400 }}>{projectPublishers}</span> : <span className="arco-table-secondary">—</span>}</td>
-                          <td>{count(t.count)}</td>
-                          <td></td>
-                        </tr>
-                      )
-                    }))}
+                            <div className="flex flex-col min-w-0">
+                              <span className="arco-table-primary">{scopeLabel(slug, locale)}</span>
+                              <span className="arco-table-secondary">{slug}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td><span className="arco-table-secondary">{c.fixed}</span></td>
+                        <td><span className="arco-table-secondary">—</span></td>
+                        <td>{scopePublishers(slug) ? <span className="arco-table-primary" style={{ fontWeight: 400 }}>{scopePublishers(slug)}</span> : <span className="arco-table-secondary">—</span>}</td>
+                        <td>{count(scopeCounts[slug] ?? 0)}</td>
+                        <td></td>
+                      </tr>
+                    ))}
                   </Fragment>
                 )}
                 {showPartial && (
@@ -283,6 +301,36 @@ export function ProjectsTab({ types, spaces, services, serviceSpaces, partialCou
                           <td>{homepageButton(s.inHomeCarrousel, () => onToggleSpaceHomepage(s, !s.inHomeCarrousel))}</td>
                           <td>{publishers ? <span className="arco-table-primary" style={{ fontWeight: 400 }}>{publishers}</span> : <span className="arco-table-secondary">—</span>}</td>
                           <td>{count(partialCounts[s.id] ?? 0)}</td>
+                          <td></td>
+                        </tr>
+                      )
+                    }))}
+                  </Fragment>
+                )}
+                {showProjects && (
+                  <Fragment key="projects">
+                    {groupRow("projects", c.groupProjects, c.groupProjectsSub(typeRows.length, totalProjects))}
+                    {expanded.has("projects") && (typeRows.length === 0 ? (
+                      <tr><td colSpan={6} style={{ height: 64, textAlign: "center", color: "var(--text-disabled)" }}>{c.none}</td></tr>
+                    ) : typeRows.map((t) => {
+                      const Icon = SUBTYPE_ICON_MAP[`house-${t.slug}`] ?? Home
+                      return (
+                        <tr key={t.id} onClick={(e) => openMenu(e, { kind: "type", row: t, x: e.clientX, y: e.clientY })} style={{ cursor: "pointer" }}>
+                          <td>
+                            <div className="flex items-center gap-2" style={{ paddingLeft: 22 }}>
+                              <div className="arco-table-avatar" style={{ background: "#f5f5f4", color: "#1c1c1a" }}>
+                                <Icon className="h-4 w-4" />
+                              </div>
+                              <div className="flex flex-col min-w-0">
+                                <span className="arco-table-primary" title={label(t)}>{label(t)}</span>
+                                <span className="arco-table-secondary">{nl && t.nameNl ? `${t.name} · ${t.slug}` : t.slug}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td>{statusButton(t.isActive, () => onToggleStatus(t, !t.isActive))}</td>
+                          <td>{homepageButton(t.inHomeCarrousel, () => onToggleHomepage(t, !t.inHomeCarrousel))}</td>
+                          <td><span className="arco-table-secondary">—</span></td>
+                          <td>{count(t.count)}</td>
                           <td></td>
                         </tr>
                       )

@@ -100,6 +100,9 @@ async function loadLandingData(locale: string) {
       .select("id, is_featured, project_type")
       .eq("status", "published")
       .eq("is_featured", true)
+      // Ruimteprojecten (een keuken, een tuin) staan niet tussen de
+      // uitgelichte architectuurprojecten, net als in de hoofdgrid.
+      .neq("kind", "partial")
       .limit(1000),
     supabase
       .from("categories")

@@ -8,7 +8,6 @@ import { ProfessionalSubNav } from "@/components/professional/professional-sub-n
 import { ProfessionalHeader } from "@/components/professional/professional-header"
 import { PhotographerSpecs } from "@/components/professional/photographer-specs"
 import { ProfessionalProjects } from "@/components/professional/professional-projects"
-import { ProfessionalContact } from "@/components/professional/professional-contact"
 import { fetchPhotographerDetail, fetchPhotographerMetadata } from "@/lib/photographers/queries"
 import { TrackProfessionalView } from "@/components/track-view"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
@@ -146,6 +145,7 @@ export default async function PhotographerDetailPage({ params }: { params: Promi
         profession={servicesBadge}
         location={locationLabel ?? undefined}
         hasProjects={photographer.projects.length > 0}
+        contact={{ logoUrl: companyIcon ?? null, initials: companyInitials, subtitle: [servicesBadge, photographer.city].filter(Boolean).join(" · ") || null }}
       />
 
       <div id="details" className="wrap" style={{ marginTop: "120px", marginBottom: "60px" }}>
@@ -160,10 +160,14 @@ export default async function PhotographerDetailPage({ params }: { params: Promi
 
         <PhotographerSpecs
           location={locationLabel}
+          address={photographer.address ?? null}
+          city={photographer.city ?? null}
+          name={photographer.name}
+          placeId={photographer.googlePlaceId ?? null}
           foundedYear={photographer.foundedYear}
           specialties={photographer.specialties}
-          languages={photographer.languages}
           collaborationsCount={photographer.collaborationsCount}
+          domain={photographer.websiteUrl ?? null}
         />
       </div>
 
@@ -173,17 +177,6 @@ export default async function PhotographerDetailPage({ params }: { params: Promi
           heading={t("photographed_projects")}
         />
       )}
-
-      <ProfessionalContact
-        companyId={photographer.id}
-        companyName={photographer.name}
-        companyLogoUrl={companyIcon}
-        companyInitials={companyInitials}
-        serviceLabel={servicesBadge}
-        officeAddress={photographer.address}
-        city={photographer.city}
-        websiteUrl={photographer.websiteUrl}
-      />
 
       <Footer />
     </div>

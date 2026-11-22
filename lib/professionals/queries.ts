@@ -949,6 +949,7 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
   // admin-only in RLS zolang de productlaag niet publiek is, en de
   // bedrijfspagina toont alleen naam en logo.
   let brands: ProfessionalBrand[] = []
+  let brandCategories: ProfessionalDetail["brandCategories"] = []
   let locations: LocationRecord[] = []
   try {
     const sr = createServiceRoleSupabaseClient() as any
@@ -969,7 +970,33 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
         name: r.brands.name as string,
         logoUrl: (r.brands.logo_url as string | null) ?? null,
         isOfficialDealer: r.is_official_dealer === true,
+        categoryIds: [] as string[],
       }))
+    // Hoofdcategorie van elke categorie van die merken, voor de pills.
+    if (brands.length > 0) {
+      const [{ data: bc }, { data: pcs }] = await Promise.all([
+        sr.from("brand_categories").select("brand_id, category_id").in("brand_id", brands.map((b) => b.id)),
+        sr.from("product_categories").select("id, parent_id, name, name_nl"),
+      ])
+      const catById = new Map(((pcs ?? []) as Array<{ id: string; parent_id: string | null; name: string; name_nl: string | null }>).map((c) => [c.id, c]))
+      const rootOf = (id: string) => {
+        let cur = catById.get(id)
+        for (let i = 0; cur?.parent_id && i < 6; i++) cur = catById.get(cur.parent_id)
+        return cur?.id ?? id
+      }
+      const byBrand = new Map<string, Set<string>>()
+      for (const r of (bc ?? []) as Array<{ brand_id: string; category_id: string }>) {
+        const set = byBrand.get(r.brand_id) ?? new Set<string>()
+        set.add(rootOf(r.category_id))
+        byBrand.set(r.brand_id, set)
+      }
+      brands = brands.map((b) => ({ ...b, categoryIds: Array.from(byBrand.get(b.id) ?? []) }))
+      const used = new Set(brands.flatMap((b) => b.categoryIds))
+      brandCategories = Array.from(used)
+        .map((id) => catById.get(id))
+        .filter((c): c is NonNullable<typeof c> => Boolean(c))
+        .map((c) => ({ id: c.id, name: c.name, nameNl: c.name_nl }))
+    }
     locations = ((locationRows.data ?? []) as Record<string, unknown>[]).map(locationFromRow)
   } catch (error) {
     logger.warn("Failed to load brands/locations for professional detail", { companyId, error: String(error) })
@@ -1017,6 +1044,7 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
       website: company.website ?? null,
       domain: company.domain ?? null,
       address: company.address ?? null,
+      googlePlaceId: (company as { google_place_id?: string | null }).google_place_id ?? null,
       city: company.city ?? null,
       country: company.country ?? null,
       primaryService: primaryServiceName,
@@ -1034,6 +1062,7 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
     socialLinks,
     projects,
     brands,
+    brandCategories,
     locations,
   }
 }

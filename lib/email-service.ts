@@ -1,7 +1,7 @@
 'use server'
 
 import { buildUnsubscribeUrl } from './unsubscribe-token'
-import { TEMPLATE_CHANNEL, countsAsContact, usesOutreachDomain, utmSourceFor, type EmailChannel } from './email-channels'
+import { TEMPLATE_CHANNEL, countsAsContact, isPersonalSeriesTemplate, usesOutreachDomain, utmSourceFor, type EmailChannel } from './email-channels'
 import { isOptedOutOfMarketing } from './email/opt-out'
 
 // Exhaustiveness lives here, because EmailTemplate lives here. If a new
@@ -2989,17 +2989,11 @@ export async function sendTransactionalEmail(
   // personally. The Invite series (new-professional-*) is automated and
   // brand-voiced, so it goes from the generic Arco address.
   //
-  // The two founding mails join them. Founding access was handed out
-  // personally, the mail that ends it asks a personal question, and
-  // 'automated@' asking whether you want to keep paying reads like a
-  // collections notice. The other four subscription mails stay on the
-  // brand address: they report facts about an account, and a person's
-  // name on a failed-payment notice invites a reply to someone who
-  // cannot fix it any faster than the button can.
-  const isPersonalSeries = template.startsWith('prospect-') || template.startsWith('outreach-')
-    || template === 'visitor-nudge-showcase' || template === 'visitor-nudge-platform'
-    || template === 'visitor-nudge-2-showcase' || template === 'visitor-nudge-2-platform'
-    || template.startsWith('founding-')
+  // The two founding mails are deliberately NOT in this group: they go
+  // from the brand address like the other subscription mails. Replies are
+  // still routed to Niek (see the reply_to below) because the ending mail
+  // asks a question a person should answer.
+  const isPersonalSeries = isPersonalSeriesTemplate(template)
 
   try {
     const { data, error } = await getResend().emails.send({
@@ -3026,13 +3020,15 @@ export async function sendTransactionalEmail(
         { name: 'template', value: template },
         { name: 'locale', value: locale },
       ],
-      // Reply-to routes inbound replies to the shared sales inbox (hello@)
-      // rather than Niek's personal mailbox. Recipients still see "From:
-      // Niek van Leeuwen <niek@arcolist.com>" so the founder-voice tone of
-      // the Showcase / Outreach series stays intact — only the reply
-      // landing zone changes. hello@ is the mailbox connected to
-      // /admin/inbox so admins read replies on the platform.
-      ...(isPersonalSeries ? { reply_to: 'hello@arcolist.com' } : {}),
+      // Whatever the From (niek@ / automated@, root or the outreach
+      // subdomain), a reply lands in a mailbox that is connected to
+      // /admin/inbox: Niek's own series and the founding mails answer to
+      // niek@arcolist.com, every other mail to the shared hello@.
+      // The SDK field is `replyTo`; a raw `reply_to` key is dropped by it,
+      // which is why replies used to go to the From address.
+      replyTo: isPersonalSeries || template.startsWith('founding-')
+        ? 'niek@arcolist.com'
+        : 'hello@arcolist.com',
       // RFC 2369 + 8058 unsubscribe headers for marketing/sales sends.
       // Gmail/Apple Mail render their own one-click unsubscribe button
       // from these; the body footer link covers clients that don't.

@@ -10,6 +10,8 @@ import {
   PROFESSIONAL_SORT_OPTIONS,
 } from "@/contexts/professional-filter-context"
 import { PROVINCES, cityLabel } from "@/lib/provinces"
+import { DrawerSection } from "@/components/filters/drawer-section"
+import { LayeredFilterPanel, layeredPath, layeredPillLabel, nextLayeredSelection, type LayeredGroup } from "@/components/filters/layered-filter"
 
 // ─── Icons ──────────────────────────────────────────────────────────────────
 
@@ -72,44 +74,6 @@ function FilterDropdown({ open, children, minWidth }: { open: boolean; children:
   return dropdown
 }
 
-// ─── DrawerSection ──────────────────────────────────────────────────────────
-
-interface DrawerSectionProps {
-  title: string
-  activeCount: number
-  selectedLabel: string
-  children: React.ReactNode
-}
-
-function DrawerSection({ title, activeCount, selectedLabel, children }: DrawerSectionProps) {
-  const [collapsed, setCollapsed] = useState(false)
-  return (
-    <div className="drawer-section" data-collapsed={collapsed}>
-      <div
-        className="drawer-section-header"
-        role="button"
-        tabIndex={0}
-        aria-expanded={!collapsed}
-        onClick={() => setCollapsed((c) => !c)}
-        onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
-          if (e.key === " " || e.key === "Enter") { e.preventDefault(); setCollapsed((c) => !c) }
-        }}
-      >
-        <div className="drawer-section-header-left">
-          <span className="drawer-section-title">{title}</span>
-          {activeCount > 0 && (
-            <span className="drawer-section-badge">{selectedLabel}</span>
-          )}
-        </div>
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5"
-          className="drawer-section-chevron">
-          <path d="M2 4l3 3 3-3" />
-        </svg>
-      </div>
-      {!collapsed && <div className="drawer-section-body">{children}</div>}
-    </div>
-  )
-}
 
 // ─── ProfessionalsFilterBar ─────────────────────────────────────────────────
 
@@ -141,7 +105,7 @@ export function ProfessionalsFilterBar() {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [locationSearch, setLocationSearch] = useState("")
-  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({})
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean | undefined>>({})
 
   const barRef = useRef<HTMLDivElement>(null)
 
@@ -187,6 +151,14 @@ export function ProfessionalsFilterBar() {
       .filter((s) => s.services.length > 0)
   }, [taxonomy.categories, taxonomy.services])
 
+  // Dezelfde indeling voor het gelaagde filter: dienstgroep › dienst.
+  const serviceGroups: LayeredGroup[] = useMemo(() => sections.map((s) => ({
+    id: s.category.id ?? "",
+    label: s.category.name ?? "",
+    children: s.services.map((svc) => ({ id: svc.id ?? "", label: svc.name ?? "" })),
+  })), [sections])
+  const categoryIds = useMemo(() => new Set(serviceGroups.map((g) => g.id)), [serviceGroups])
+
   // ── Filtered regions (provinces) ──
   const filteredRegions = useMemo(() => {
     const term = locationSearch.trim().toLowerCase()
@@ -212,8 +184,9 @@ export function ProfessionalsFilterBar() {
     selectedCategories.forEach((id) =>
       tags.push({ type: "category", value: id, label: taxonomyLabelMap.get(id) ?? id }),
     )
+    // Een losse dienst met zijn groep ervoor: "Bouw › Keukenstudio".
     selectedServices.forEach((id) =>
-      tags.push({ type: "service", value: id, label: taxonomyLabelMap.get(id) ?? id }),
+      tags.push({ type: "service", value: id, label: layeredPath(serviceGroups, id) ?? taxonomyLabelMap.get(id) ?? id }),
     )
     selectedRegions.forEach((region) =>
       tags.push({ type: "region", value: region, label: regionLabel(region) }),
@@ -222,7 +195,7 @@ export function ProfessionalsFilterBar() {
       tags.push({ type: "city", value: city, label: cityLabel(city, locale) }),
     )
     return tags
-  }, [keyword, selectedCategories, selectedServices, selectedCities, selectedRegions, taxonomyLabelMap, locale])
+  }, [keyword, selectedCategories, selectedServices, selectedCities, selectedRegions, taxonomyLabelMap, serviceGroups, locale])
 
   const totalCount = activeFilterTags.length
   const serviceFilterCount = selectedCategories.length + selectedServices.length
@@ -231,23 +204,6 @@ export function ProfessionalsFilterBar() {
 
   const toggleDropdown = (name: string) =>
     setActiveDropdown((prev) => (prev === name ? null : name))
-
-  const toggleCategorySelection = (categoryId: string) => {
-    if (selectedCategories.includes(categoryId)) {
-      setSelectedCategories(selectedCategories.filter((v) => v !== categoryId))
-    } else {
-      setSelectedCategories([...selectedCategories, categoryId])
-    }
-  }
-
-  const toggleServiceSelection = (serviceId: string) => {
-    if (!serviceId) return
-    if (selectedServices.includes(serviceId)) {
-      setSelectedServices(selectedServices.filter((v) => v !== serviceId))
-    } else {
-      setSelectedServices([...selectedServices, serviceId])
-    }
-  }
 
   const handleClearAllFilters = () => {
     clearAllFilters()
@@ -293,91 +249,21 @@ export function ProfessionalsFilterBar() {
                 onClick={() => toggleDropdown("service")}
                 aria-expanded={activeDropdown === "service"}
               >
-                {t("service")}
-                {serviceFilterCount > 0 && (
-                  <span className="filter-pill-badge">{serviceFilterCount}</span>
-                )}
+                {layeredPillLabel(serviceGroups, [...selectedCategories, ...selectedServices], t("service"), locale)}
                 <ChevronDownIcon className="filter-pill-chevron" />
               </button>
-              <FilterDropdown open={activeDropdown === "service"} minWidth={280}>
-                <div style={{ maxHeight: 360, overflowY: "auto" }}>
-                  {sections.map((section) => {
-                    const catId = section.category.id ?? ""
-                    const catChecked = selectedCategories.includes(catId)
-                    const isExpanded = Boolean(expandedCategories[catId])
-                    return (
-                      <div key={catId}>
-                        <div
-                          className="filter-dropdown-option"
-                          data-checked={catChecked}
-                          role="option"
-                          aria-selected={catChecked}
-                          tabIndex={0}
-                          onClick={() => toggleCategorySelection(catId)}
-                          onKeyDown={(e) => {
-                            if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleCategorySelection(catId) }
-                          }}
-                        >
-                          <div className="filter-dropdown-option-left">
-                            <div className="filter-checkbox">{catChecked && <CheckIcon />}</div>
-                            <span className="filter-dropdown-label" style={{ fontWeight: 500 }}>{section.category.name}</span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setExpandedCategories((prev) => ({ ...prev, [catId]: !prev[catId] }))
-                            }}
-                            style={{
-                              fontSize: 11,
-                              color: "var(--text-secondary)",
-                              background: "none",
-                              border: "none",
-                              cursor: "pointer",
-                              padding: "0 4px",
-                              flexShrink: 0,
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 3,
-                            }}
-                          >
-                            {isExpanded ? t("hide") : t("show_all")}
-                            <svg
-                              width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5"
-                              style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}
-                            >
-                              <path d="M2 4l3 3 3-3" />
-                            </svg>
-                          </button>
-                        </div>
-                        {isExpanded && section.services.map((service) => {
-                          const sId = service.id ?? ""
-                          const sChecked = selectedServices.includes(sId)
-                          return (
-                            <div
-                              key={sId}
-                              className="filter-dropdown-option"
-                              data-checked={sChecked}
-                              role="option"
-                              aria-selected={sChecked}
-                              tabIndex={0}
-                              onClick={() => toggleServiceSelection(sId)}
-                              onKeyDown={(e) => {
-                                if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleServiceSelection(sId) }
-                              }}
-                              style={{ paddingLeft: 36 }}
-                            >
-                              <div className="filter-dropdown-option-left">
-                                <div className="filter-checkbox">{sChecked && <CheckIcon />}</div>
-                                <span className="filter-dropdown-label">{service.name}</span>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )
-                  })}
-                </div>
+              <FilterDropdown open={activeDropdown === "service"}>
+                {activeDropdown === "service" && (
+                  <LayeredFilterPanel
+                    groups={serviceGroups}
+                    selected={[...selectedCategories, ...selectedServices]}
+                    onChange={(next) => {
+                      setSelectedCategories(next.filter((id) => categoryIds.has(id)))
+                      setSelectedServices(next.filter((id) => !categoryIds.has(id)))
+                    }}
+                    locale={locale}
+                  />
+                )}
               </FilterDropdown>
             </div>
 
@@ -549,60 +435,56 @@ export function ProfessionalsFilterBar() {
               {sections.map((section) => {
                 const catId = section.category.id ?? ""
                 const catChecked = selectedCategories.includes(catId)
-                const isExpanded = Boolean(expandedCategories[catId])
+                const childCount = section.services.filter((svc) => selectedServices.includes(svc.id ?? "")).length
+                // Open als je hem opende, of als er al een dienst in gekozen is.
+                const isExpanded = expandedCategories[catId] ?? childCount > 0
+                const selectedAll = [...selectedCategories, ...selectedServices]
+                // Zelfde keuzeregels als de dropdown (layered-filter): een groep
+                // kiezen haalt zijn losse diensten weg, een dienst de groep.
+                const apply = (next: string[]) => {
+                  setSelectedCategories(next.filter((id) => categoryIds.has(id)))
+                  setSelectedServices(next.filter((id) => !categoryIds.has(id)))
+                }
+                const pickGroup = () => apply(nextLayeredSelection(serviceGroups, selectedAll, catId, null))
+                const pickService = (sId: string) => apply(nextLayeredSelection(serviceGroups, selectedAll, catId, sId))
 
                 return (
                   <div key={catId}>
-                    {/* Category row: checkbox + label + show all */}
+                    {/* Groep: vinkje + naam kiest de groep, badge telt de
+                        gekozen diensten, het pijltje klapt de diensten uit. */}
                     <div className="drawer-option" data-checked={catChecked}>
-                      <div className="drawer-option-left">
-                        <div
-                          role="option"
-                          aria-selected={catChecked}
-                          tabIndex={0}
-                          className="drawer-option-checkbox"
-                          onClick={() => toggleCategorySelection(catId)}
-                          onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
-                            if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleCategorySelection(catId) }
-                          }}
-                        >
-                          {catChecked && <CheckIcon />}
-                        </div>
-                        <span
-                          className="drawer-option-label"
-                          style={{ fontWeight: 500, cursor: "pointer" }}
-                          onClick={() => toggleCategorySelection(catId)}
-                        >
-                          {section.category.name}
-                        </span>
+                      <div
+                        className="drawer-option-left"
+                        role="option"
+                        aria-selected={catChecked}
+                        tabIndex={0}
+                        style={{ cursor: "pointer", flex: 1 }}
+                        onClick={pickGroup}
+                        onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+                          if (e.key === " " || e.key === "Enter") { e.preventDefault(); pickGroup() }
+                        }}
+                      >
+                        <div className="drawer-option-checkbox">{catChecked && <CheckIcon />}</div>
+                        <span className="drawer-option-label" style={{ fontWeight: 500 }}>{section.category.name}</span>
+                        {childCount > 0 && <span className="filter-pill-badge">{childCount}</span>}
                       </div>
                       <button
                         type="button"
-                        onClick={() => setExpandedCategories((prev) => ({ ...prev, [catId]: !prev[catId] }))}
-                        style={{
-                          fontSize: 11,
-                          color: "var(--text-secondary)",
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          padding: "0 4px",
-                          flexShrink: 0,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 3,
-                        }}
+                        aria-expanded={isExpanded}
+                        aria-label={section.category.name ?? ""}
+                        onClick={() => setExpandedCategories((prev) => ({ ...prev, [catId]: !isExpanded }))}
+                        className="drawer-option-expand"
                       >
-                        {isExpanded ? t("hide") : t("show_all")}
                         <svg
-                          width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5"
-                          style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}
+                          width="7" height="11" viewBox="0 0 7 11" fill="none" aria-hidden
+                          style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0)", transition: "transform 0.2s" }}
                         >
-                          <path d="M2 4l3 3 3-3" />
+                          <path d="M1.5 1.5l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                       </button>
                     </div>
 
-                    {/* Expanded child services */}
+                    {/* Uitgeklapte diensten */}
                     {isExpanded && section.services.map((service) => {
                       const sId = service.id ?? ""
                       const sChecked = selectedServices.includes(sId)
@@ -614,9 +496,9 @@ export function ProfessionalsFilterBar() {
                           tabIndex={0}
                           className="drawer-option"
                           data-checked={sChecked}
-                          onClick={() => toggleServiceSelection(sId)}
+                          onClick={() => pickService(sId)}
                           onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
-                            if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleServiceSelection(sId) }
+                            if (e.key === " " || e.key === "Enter") { e.preventDefault(); pickService(sId) }
                           }}
                           style={{ paddingLeft: 26 }}
                         >
@@ -636,7 +518,7 @@ export function ProfessionalsFilterBar() {
           </DrawerSection>
 
           {/* Location */}
-          <DrawerSection title={t("location")} activeCount={selectedCities.length} selectedLabel={t("selected", { count: selectedCities.length })}>
+          <DrawerSection title={t("location")} activeCount={selectedCities.length + selectedRegions.length} selectedLabel={t("selected", { count: selectedCities.length + selectedRegions.length })}>
             <input
               className="drawer-search"
               type="text"
@@ -645,6 +527,32 @@ export function ProfessionalsFilterBar() {
               onChange={(e) => setLocationSearch(e.target.value)}
             />
             <div className="drawer-option-list" style={{ maxHeight: 240, overflowY: "auto" }}>
+              {/* Eerst provincies, dan steden: dezelfde lijst als de dropdown. */}
+              {filteredRegions.map((region) => {
+                const regionChecked = selectedRegions.includes(region)
+                const toggleRegion = () =>
+                  setSelectedRegions(regionChecked ? selectedRegions.filter((r) => r !== region) : [...selectedRegions, region])
+                return (
+                  <div
+                    key={`region-${region}`}
+                    role="option"
+                    aria-selected={regionChecked}
+                    tabIndex={0}
+                    className="drawer-option"
+                    data-checked={regionChecked}
+                    onClick={toggleRegion}
+                    onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+                      if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleRegion() }
+                    }}
+                  >
+                    <div className="drawer-option-left">
+                      <div className="drawer-option-checkbox">{regionChecked && <CheckIcon />}</div>
+                      <span className="drawer-option-label">{regionLabel(region)}</span>
+                    </div>
+                    <span style={{ fontSize: 11, color: "#a1a1a0", flexShrink: 0 }}>{locale === "nl" ? "Provincie" : "Province"}</span>
+                  </div>
+                )
+              })}
               {filteredCities.map((city) => {
                 const cityChecked = selectedCities.includes(city)
                 return (
@@ -677,11 +585,15 @@ export function ProfessionalsFilterBar() {
                       <div className="drawer-option-checkbox">
                         {cityChecked && <CheckIcon />}
                       </div>
-                      <span className="drawer-option-label">{city}</span>
+                      <span className="drawer-option-label">{cityLabel(city, locale)}</span>
                     </div>
+                    <span style={{ fontSize: 11, color: "#a1a1a0", flexShrink: 0 }}>{locale === "nl" ? "Stad" : "City"}</span>
                   </div>
                 )
               })}
+              {filteredRegions.length === 0 && filteredCities.length === 0 && (
+                <div style={{ padding: "10px 0", fontSize: 13, color: "var(--text-secondary)" }}>{t("no_locations")}</div>
+              )}
             </div>
           </DrawerSection>
 

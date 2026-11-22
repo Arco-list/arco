@@ -5,9 +5,12 @@ import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { Link } from "@/i18n/navigation"
 import { requireProductsAdmin } from "@/lib/products-gate"
-import { categoryLabel, categoryTree, getBrandDealers, getBrandLocations, getBrandProjects, getCatalogBrands, getCatalogCategories, getCatalogSeries } from "@/lib/products/catalog"
+import { categoryLabel, categoryTree, collectionKindsLabel, getBrandDealers, getBrandLocations, getBrandProjects, getCatalogBrands, getCatalogCategories, getCatalogCollections } from "@/lib/products/catalog"
 import { ProfessionalLocations } from "@/components/professional/professional-locations"
-import { ProjectCard, SeriesCard } from "@/components/catalog/catalog-cards"
+import { BrandSubNav } from "@/components/brand/brand-sub-nav"
+import { CollectionGrid } from "@/components/catalog/collection-grid"
+import { ProjectCard, CollectionCard } from "@/components/catalog/catalog-cards"
+import { BrandLogo } from "@/components/brand/brand-logo"
 
 export const dynamic = "force-dynamic"
 
@@ -21,7 +24,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 
 /**
  * /brands/[merk] — het merk zoals een bezoeker het ziet: logo, naam,
- * omschrijving, wat het maakt; dan de series; dan de projecten waarin
+ * omschrijving, wat het maakt; dan de collecties; dan de projecten waarin
  * het is toegepast. Admin-only tot de laag publiek gaat.
  */
 export default async function BrandPage({ params }: { params: Params }) {
@@ -29,12 +32,13 @@ export default async function BrandPage({ params }: { params: Params }) {
   const { locale, brand: slug } = await params
   const nl = locale === "nl"
 
-  const [brands, categories, allSeries] = await Promise.all([getCatalogBrands(), getCatalogCategories(), getCatalogSeries()])
+  const [brands, categories, allCollections] = await Promise.all([getCatalogBrands(), getCatalogCategories(), getCatalogCollections()])
   const brand = brands.find((b) => b.slug === slug)
   if (!brand) notFound()
   const tree = categoryTree(categories)
-  const series = allSeries.filter((s) => s.brand.id === brand.id).sort((a, b) => b.projectCount - a.projectCount || a.name.localeCompare(b.name))
-  const [projects, dealers, locations] = await Promise.all([getBrandProjects(brand.id), getBrandDealers(brand.id, locale), getBrandLocations(brand.id)])
+  // Eerst collecties met een hoofdbeeld, dan op aantal projecten, dan op naam: bij een ingeklapt raster bepaalt dit wat de bezoeker als eerste ziet.
+  const collections = allCollections.filter((s) => s.brand.id === brand.id).sort((a, b) => Number(Boolean(b.heroImageUrl)) - Number(Boolean(a.heroImageUrl)) || b.projectCount - a.projectCount || a.name.localeCompare(b.name))
+  const [projects, dealers, locations] = await Promise.all([getBrandProjects(brand.id, { includeInReview: true }), getBrandDealers(brand.id, locale), getBrandLocations(brand.id)])
   const makes = brand.categoryIds.map((id) => tree.byId.get(id)).filter((c): c is NonNullable<typeof c> => Boolean(c))
   const facts = [
     brand.country,
@@ -42,26 +46,29 @@ export default async function BrandPage({ params }: { params: Params }) {
   ].filter(Boolean)
   const website = brand.website ? brand.website.replace(/^https?:\/\//i, "").replace(/\/$/, "") : null
 
+  const kindOf = (s: (typeof collections)[number]) => collectionKindsLabel(s, tree.byId, locale)
+  // De secties van de subnavigatie: alleen wat er ook staat.
+  const sections = [
+    { id: "details", label: "Details" },
+    { id: "collections", label: nl ? "Collecties" : "Collections" },
+    ...(projects.length > 0 ? [{ id: "projects", label: nl ? "Projecten" : "Projects" }] : []),
+    ...(dealers.length > 0 || locations.length > 0 ? [{ id: "dealers", label: nl ? "Verkooppunten" : "Where to buy" }] : []),
+  ]
+
   return (
     <div className="min-h-screen bg-white">
       <Header />
+      <BrandSubNav
+        sections={sections}
+        backLabel={nl ? "Terug" : "Back"}
+        shareLabel={nl ? "Delen" : "Share"}
+        copiedLabel={nl ? "Link gekopieerd" : "Link copied"}
+        shareTitle={brand.name}
+      />
       <main className="wrap" style={{ paddingTop: 120, paddingBottom: 80 }}>
-        <nav aria-label="Breadcrumb" className="discover-breadcrumb" style={{ marginBottom: 32 }}>
-          <Link href="/products" className="discover-breadcrumb-item">{nl ? "Producten" : "Products"}</Link>
-          <span className="discover-breadcrumb-sep" aria-hidden="true"> › </span>
-          <Link href="/brands" className="discover-breadcrumb-item">{nl ? "Merken" : "Brands"}</Link>
-          <span className="discover-breadcrumb-sep" aria-hidden="true"> › </span>
-          <span className="discover-breadcrumb-item discover-breadcrumb-current">{brand.name}</span>
-        </nav>
-
-        <section className="professional-header">
+        <section id="details" className="professional-header">
           <div className="company-icon">
-            {brand.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={brand.logoUrl} alt={brand.name} className="company-icon-image" />
-            ) : (
-              <div className="company-icon-initials">{brand.name.charAt(0).toUpperCase()}</div>
-            )}
+            <BrandLogo logoUrl={brand.logoUrl} name={brand.name} />
           </div>
           <h1 className="arco-page-title">{brand.name}</h1>
           {makes.length > 0 && (
@@ -92,8 +99,8 @@ export default async function BrandPage({ params }: { params: Params }) {
               </div>
             )}
             <div className="spec-item">
-              <span className="arco-eyebrow">Series</span>
-              <div className="arco-card-title">{series.length}</div>
+              <span className="arco-eyebrow">{nl ? "Collecties" : "Collections"}</span>
+              <div className="arco-card-title">{collections.length}</div>
             </div>
             <div className="spec-item">
               <span className="arco-eyebrow">{nl ? "In projecten" : "In projects"}</span>
@@ -110,32 +117,34 @@ export default async function BrandPage({ params }: { params: Params }) {
           </section>
         )}
 
-        <section style={{ marginBottom: 60 }}>
+        <section id="collections" style={{ marginBottom: 60 }}>
           <div className="section-header">
-            <h2 className="arco-section-title">Series</h2>
+            <h2 className="arco-section-title">{nl ? "Collecties" : "Collections"}</h2>
           </div>
-          {series.length === 0 ? (
-            <p className="arco-body-text" style={{ color: "#a1a1a0" }}>{nl ? "Nog geen series." : "No series yet."}</p>
+          {collections.length === 0 ? (
+            <p className="arco-body-text" style={{ color: "#a1a1a0" }}>{nl ? "Nog geen collecties." : "No collections yet."}</p>
           ) : (
-            <div className="discover-grid">
-              {series.map((s) => <SeriesCard key={s.id} series={s} locale={locale} showBrand={false} />)}
-            </div>
+            <CollectionGrid
+              cards={collections.map((s) => <CollectionCard key={s.id} collection={s} locale={locale} showBrand={false} kind={kindOf(s)} />)}
+              showAllLabel={nl ? `Toon alle ${collections.length} collecties` : `Show all ${collections.length} collections`}
+            />
           )}
         </section>
 
         {projects.length > 0 && (
-          <section style={{ marginBottom: 60 }}>
+          <section id="projects" style={{ marginBottom: 60 }}>
             <div className="section-header">
               <h2 className="arco-section-title">{nl ? "Toegepast in projecten" : "Applied in projects"}</h2>
             </div>
             <div className="discover-grid">
-              {projects.map((p) => <ProjectCard key={p.id} project={p} />)}
+              {projects.map((p) => <ProjectCard key={p.id} project={p} locale={locale} />)}
             </div>
           </section>
         )}
 
         {/* Verkooppunten: de bedrijven die het merk voeren — dezelfde rijen
             die op hun eigen pagina onder "Merken" staan. */}
+        <div id="dealers">
         {dealers.length > 0 && (
           <section style={{ marginBottom: 60 }}>
             <div className="section-header">
@@ -166,7 +175,8 @@ export default async function BrandPage({ params }: { params: Params }) {
         )}
 
         {/* Eigen showrooms van het merk (locations met brand_id). */}
-        <ProfessionalLocations locations={locations} heading="Showrooms" inWrap={false} />
+        <ProfessionalLocations locations={locations} inWrap={false} fallbackLogoUrl={brand.logoUrl} />
+        </div>
       </main>
       <Footer />
     </div>

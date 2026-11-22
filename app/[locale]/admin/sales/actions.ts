@@ -505,6 +505,8 @@ type FetchSalesCompaniesFilters = {
    *  suppression states (bounced/complained/unsubscribed) which match
    *  the row's primary contact's suppression flags. */
   sequences?: SequenceFilterValue[]
+  /** Dienst-ids: bedrijven met een van deze als hoofddienst of in services_offered. */
+  services?: string[]
   search?: string
   offset?: number
   limit?: number
@@ -739,6 +741,7 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
     statuses,
     channels,
     sequences,
+    services,
     search,
     offset = 0,
     limit = 50,
@@ -1283,6 +1286,19 @@ export async function fetchSalesCompanies(filters: FetchSalesCompaniesFilters = 
   //     the toggle for that filter).
   // So we apply source + sequence + search first, compute the funnel
   // against that narrowed set, then apply status as a table-only filter.
+  if (services && services.length > 0) {
+    // Zoals het servicefilter op /companies: hoofddienst óf een van de
+    // aangeboden diensten. Eén query op companies, dan de rijen erop
+    // filteren; de funnel rekent op de versmalde set zoals bij kanaal.
+    const list = services.join(",")
+    const { data: svcCompanies } = await supabase
+      .from("companies")
+      .select("id")
+      .or(`primary_service_id.in.(${list}),services_offered.ov.{${list}}`)
+      .limit(5000)
+    const allowed = new Set(((svcCompanies ?? []) as Array<{ id: string }>).map((c) => c.id))
+    rows = rows.filter((r) => r.companyId != null && allowed.has(r.companyId))
+  }
   if (channels && channels.length > 0) {
     // Het primaire kanaal matcht exact; outbound en email OR'en als
     // overlay ernaast, zodat "Showcase + Outbound" alles teruggeeft dat

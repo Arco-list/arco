@@ -554,6 +554,13 @@ p a:hover {
   opacity: 1;
 }
 
+/* De sectie waar je bent (Projecten, Professionals, Producten) houdt het
+   lijntje op de onderrand van de header, zoals de actieve tab in de
+   subnavigatie. */
+.header-rule[data-active="true"]::after {
+  opacity: 1;
+}
+
 /* A group keeps its rule while the pointer is anywhere inside it — the
    panel included. Without this the rule would blink out the moment you
    moved off the label and down into the menu it opened. */
@@ -1761,6 +1768,31 @@ footer .footer-heading {
   .hero-photos-btn { right: 16px; }
 }
 
+/* Hero's (project, projectbewerking, collectie): niet breder dan 1920px.
+   Op een breder scherm blijft de foto gecentreerd met wit ernaast, in
+   plaats van een uitgerekte strook van een te kleine bronfoto. */
+:root { --hero-max-width: 1920px; }
+.hero-max-width {
+  max-width: var(--hero-max-width);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Projecthero: de hoogte volgt de breedte (2 : 1), zodat de verhouding
+   gelijk blijft op elk scherm — niet 82vh, dat op een hoog of ingezoomd
+   venster bij een afgetopte breedte een staand beeld gaf. Bovengrens: de
+   schermhoogte (82vh) en 950px; ondergrens 560px. Op een telefoon een
+   vaste hoogte, want 2 : 1 is daar te laag. */
+.project-hero-frame { height: 600px; }
+@media (min-width: 768px) {
+  .project-hero-frame {
+    height: auto;
+    aspect-ratio: 2 / 1;
+    max-height: min(82vh, 950px);
+    min-height: 560px;
+  }
+}
+
 /* Hero */
 .project-hero {
   margin-top: 60px;
@@ -1986,6 +2018,21 @@ footer .footer-heading {
   .sub-nav-actions .filter-pill > .sub-nav-pill-label {
     display: none;
   }
+}
+
+/* Contact-knop in de sub-nav van een bedrijf: de hoofdactie van de
+   pagina, dus zwart gevuld naast de lichte Bewaren/Delen-pillen. Het
+   woord blijft ook op mobiel staan (er is geen icoon om op terug te
+   vallen). */
+.sub-nav-actions .filter-pill.sub-nav-contact {
+  background: #1c1c1a;
+  border-color: #1c1c1a;
+  color: #fff;
+}
+.sub-nav-actions .filter-pill.sub-nav-contact:hover {
+  background: #000;
+  border-color: #000;
+  color: #fff;
 }
 
 /* Container */
@@ -2269,6 +2316,42 @@ footer .footer-heading {
 .spec-item-edit:hover::before,
 .spec-item-edit.editing::before { border-color: var(--arco-black); }
 .spec-item-edit.editing { z-index: 10; }
+
+/* Kruisje naast een waarde in de detailsbalk (components/project/
+   spec-clear-button.tsx). De wrapper is inline-block en relatief, het
+   kruisje hangt er absoluut naast: de tekst blijft gecentreerd, ook als
+   het kruisje verschijnt. */
+.spec-value { position: relative; display: inline-block; max-width: 100%; }
+.spec-clear {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 6px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #f0f0ee;
+  color: #6b6b68;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .15s, background-color .15s, color .15s;
+}
+.spec-item-edit:hover .spec-clear,
+.spec-clear:focus-visible { opacity: 1; pointer-events: auto; }
+.spec-clear:hover { background: var(--arco-black); color: #fff; }
+.spec-clear:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.spec-clear:disabled { opacity: .4; cursor: default; }
+.spec-item-edit.editing .spec-clear { display: none; }
+@media (hover: none) {
+  .spec-clear { opacity: 1; pointer-events: auto; }
+}
 
 /* Chip repositioned to sit centered above the cell (vs the top-left anchor
    used by the generic .ec wrapper). Coloring on hover/editing is inherited
@@ -2789,14 +2872,14 @@ footer .footer-heading {
 .quick-tile .credit-icon {
   margin-bottom: 12px;
 }
-/* Uitsnede op de schijf (ruimtes op /projects): het object op een witte
-   of transparante achtergrond, vermenigvuldigd met de schijfkleur zodat
-   wit wegvalt — zoals de categoriecirkels van Archiproducts. */
+/* Beeld in de schijf (ruimtes op /projects): een vierkante detailfoto
+   met één element erin (een bad, een bank), gevuld in de cirkel. */
 .credit-cutout {
-  width: 74%;
-  height: 74%;
-  object-fit: contain;
-  mix-blend-mode: multiply;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
 }
 .quick-tile-label {
   font-family: var(--font-sans);
@@ -2811,9 +2894,41 @@ footer .footer-heading {
 .quick-tile:hover .quick-tile-label {
   color: var(--primary);
 }
+/* Merkkiezer op project edit: een plus (toevoegen) of kruis (weghalen)
+   in het midden van de schijf, alleen bij hover of toetsenbordfocus. */
+.brand-pick-badge {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(1, 109, 117, 0.82);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+.brand-pick-badge--remove {
+  background: rgba(28, 28, 26, 0.72);
+}
+.quick-tile:hover .brand-pick-badge,
+.quick-tile:focus-visible .brand-pick-badge {
+  opacity: 1;
+}
+/* Een kaart in een QuickRow die geen schijf is (merkkaarten op /products):
+   dezelfde breedte uit --quick-tile-w, snap per kaart. */
+.quick-row-item {
+  flex: 0 0 var(--quick-tile-w, 240px);
+  width: var(--quick-tile-w, 240px);
+  scroll-snap-align: start;
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
 .quick-row-arrow {
   position: absolute;
-  top: 50px;
+  top: var(--quick-row-arrow-top, 50px);
   transform: translateY(-50%);
   width: 36px;
   height: 36px;
@@ -6589,21 +6704,24 @@ body.no-scroll {
 
 /* â”€â”€â”€ Discover filter bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
+/* Even hoog en op dezelfde plek als de sub-nav van een detailpagina
+   (.sub-nav): direct onder de header (57px mobiel, 65px desktop), 60px
+   inhoud + 1px onderrand. Stond eerst op 59px en schoof daardoor op
+   desktop 6px onder de header, zodat hij lager leek dan de sub-nav. */
 .discover-filter-bar {
   position: sticky;
-  top: 59px;
+  top: 57px;
   z-index: 150;
   background: white;
-  border-top: 1px solid var(--arco-rule);
   border-bottom: 1px solid var(--arco-rule);
-  height: 60px;
-  margin-top: 59px;
+  height: 61px;
+  margin-top: 57px;
 }
 
-@media (max-width: 768px) {
+@media (min-width: 769px) {
   .discover-filter-bar {
-    top: 56px;
-    margin-top: 56px;
+    top: 65px;
+    margin-top: 65px;
   }
 }
 
@@ -6915,6 +7033,113 @@ body.no-scroll {
   font-weight: 500;
 }
 
+/* ── Gelaagd filter (components/filters/layered-filter.tsx) ──────────
+   Groepen links, de onderdelen van de actieve groep rechts. De laag
+   blijkt uit de plek, niet uit inspringing. Op een smal scherm één
+   kolom tegelijk: eerst de groepen, dan "‹ Groep" met wat erin zit. */
+.layered-filter {
+  display: grid;
+  grid-template-columns: 220px 280px;
+  min-height: 260px;
+  max-height: 420px;
+  margin: -8px 0; /* de dropdown heeft 8px binnenruimte; de kolomlijn loopt door */
+}
+.layered-filter-groups {
+  border-right: 1px solid var(--arco-rule);
+  overflow-y: auto;
+  padding: 8px 0;
+}
+.layered-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px 9px 16px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-secondary);
+  transition: background 0.1s, color 0.1s;
+}
+.layered-filter-group-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.layered-filter-group:hover,
+.layered-filter-group[data-active="true"] {
+  background: var(--arco-surface);
+  color: var(--arco-black);
+}
+.layered-filter-group[data-active="true"] { font-weight: 500; }
+/* Gekozen groep: zelfde vinkje als een optie, label in zwart. */
+.layered-filter-group[data-checked="true"] { color: var(--arco-black); }
+.layered-filter-group[data-checked="true"] .filter-checkbox {
+  background: var(--arco-black);
+  border-color: var(--arco-black);
+}
+/* Het pijltje: op desktop een aanwijzing (hover opent al), op mobiel de
+   knop die de subgroepen opent. Ruim raakvlak, los van "kiezen". */
+.layered-filter-open {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: -4px -6px -4px 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.layered-filter-open svg { opacity: 0.4; }
+.layered-filter-group[data-active="true"] .layered-filter-open svg { opacity: 0.8; }
+.layered-filter-children {
+  overflow-y: auto;
+  padding: 8px 0;
+}
+.layered-filter-back { display: none; }
+.layered-filter-rule {
+  height: 1px;
+  background: var(--arco-rule);
+  margin: 4px 16px;
+}
+.layered-filter-count {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.filter-checkbox--radio { border-radius: 50%; }
+
+@media (max-width: 768px) {
+  .layered-filter {
+    grid-template-columns: 1fr;
+    max-height: none;
+    min-height: 0;
+  }
+  .layered-filter-groups { border-right: none; }
+  .layered-filter[data-stage="groups"] .layered-filter-children,
+  .layered-filter[data-stage="children"] .layered-filter-groups { display: none; }
+  .layered-filter-group[data-active="true"] { background: none; font-weight: 400; color: var(--text-secondary); }
+  .layered-filter-group[data-checked="true"] { color: var(--arco-black); }
+  /* Op een touchscherm groter raakvlak voor het openen. */
+  .layered-filter-open { width: 40px; height: 36px; margin: -10px -12px -10px 0; }
+  .layered-filter-back {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 16px 12px;
+    border: none;
+    border-bottom: 1px solid var(--arco-rule);
+    margin-bottom: 4px;
+    background: none;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--arco-black);
+    cursor: pointer;
+    text-align: left;
+  }
+}
+
 /* The one item in a menu that cannot be undone: a rule above it, and
    the destructive colour. The colour has to sit on the label — the
    label declares its own, so a colour set on the row was inherited by
@@ -7050,7 +7275,7 @@ body.no-scroll {
 
 .discover-chip-strip {
   position: sticky;
-  top: 119px; /* header 59px + filter bar 60px */
+  top: 126px; /* header 65px + filter bar 61px */
   z-index: 149;
   background: white;
   border-bottom: 1px solid var(--arco-rule);
@@ -7058,7 +7283,7 @@ body.no-scroll {
 
 @media (max-width: 768px) {
   .discover-chip-strip {
-    top: 116px; /* header 56px + filter bar 60px */
+    top: 118px; /* header 57px + filter bar 61px */
   }
 }
 
@@ -7330,6 +7555,24 @@ body.no-scroll {
   gap: 10px;
 }
 
+/* Pijltje bij een dienstgroep in de lade: klapt de diensten uit, zoals
+   het pijltje in de dropdown (layered-filter). Ruim raakvlak. */
+.drawer-option-expand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 32px;
+  margin: -6px -10px -6px 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.drawer-option-expand:hover { color: var(--arco-black); }
+
 .drawer-option-left {
   display: flex;
   align-items: center;
@@ -7523,8 +7766,59 @@ body.no-scroll {
   }
 }
 
+/* Serie-hero: het grote beeld bovenaan een serie. Liggend = volle
+   breedte (cover); staand of studiobeeld = heel, op het grijs van de
+   dienstkaarten (contain). Tot het beeld gemeten is blijft het vlak
+   grijs en het beeld onzichtbaar, zodat er niets verspringt. */
+.collection-hero {
+  margin-top: 60px;
+  position: relative;
+  width: 100%;
+  max-width: var(--hero-max-width);
+  margin-left: auto;
+  margin-right: auto;
+  height: min(72vh, 760px);
+  min-height: 420px;
+  background: var(--surface, #f5f5f4);
+  overflow: hidden;
+}
+.collection-hero img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.collection-hero[data-fit="cover"] img { object-fit: cover; opacity: 1; }
+.collection-hero[data-fit="contain"] img {
+  object-fit: contain;
+  box-sizing: border-box;
+  padding: 48px;
+  mix-blend-mode: multiply;
+  opacity: 1;
+}
+/* Staat de subnavigatie er direct boven (publieke collectiepagina), dan
+   begint het beeld eronder: de balk zit al in de stroom, 60px hoog. */
+.sub-nav + .collection-hero { margin-top: 65px; }
+@media (max-width: 768px) {
+  .collection-hero { height: 52vh; min-height: 320px; }
+  .sub-nav + .collection-hero { margin-top: 57px; }
+  .collection-hero[data-fit="contain"] img { padding: 24px; }
+}
+
 /* CSS columns masonry — images render at natural proportions,
    flow into columns without forced aspect ratios or black bars. */
+/* Producten op de collectiepagina: hetzelfde raster als de foto's op
+   collection edit (.photo-edit-grid), even grote tegels. */
+.collection-product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+@media (max-width: 768px) {
+  .collection-product-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+}
+
 .product-gallery {
   columns: 3;
   column-gap: 6px;
@@ -7979,6 +8273,23 @@ body.no-scroll {
   }
 }
 
+/* Merkpagina: het collectieraster ingeklapt (CollectionGrid). De eerste
+   6 blijven staan op computer en tablet, de eerste 4 op telefoon; de rest
+   wordt alleen weggestopt, niet weggelaten, en de knop klapt alles open. */
+@media (min-width: 769px) {
+  .collection-grid[data-collapsed="true"] .cg-d { display: none; }
+  .collection-grid-more:not(.cg-more-d) { display: none; }
+}
+@media (max-width: 768px) {
+  .collection-grid[data-collapsed="true"] .cg-m { display: none; }
+  .collection-grid-more:not(.cg-more-m) { display: none; }
+}
+.collection-grid-more {
+  display: flex;
+  justify-content: center;
+  margin: -16px 0 48px;
+}
+
 /* Discover card */
 .discover-card {
   display: block;
@@ -8187,6 +8498,13 @@ body.no-scroll {
   object-fit: cover;
   background: var(--arco-surface);
   flex-shrink: 0;
+}
+
+/* Een logo in de schijf (LogoFill): eigen achtergrond vult hem, wit of
+   doorzichtig staat met marge op het grijs — net als bij merken. */
+.pro-card-logo-disc {
+  display: block;
+  overflow: hidden;
 }
 
 .pro-card-logo-placeholder {
@@ -9587,4 +9905,316 @@ body.no-scroll {
 
 @media (max-width: 480px) {
   .pricing-section-wrap { padding: 0 16px; }
+}
+
+/* Showroomkaart (components/locations/location-cards.tsx): geen foto =
+   grijs vlak met het logo; in de editor een uploadknop op de foto. */
+.location-card-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f4;
+  color: #a1a1a0;
+}
+.location-card-placeholder-logo {
+  width: 72px !important;
+  height: 72px !important;
+  object-fit: contain;
+  border-radius: 50%;
+  background: #fff;
+}
+.location-card-image { position: relative; }
+/* Uploadknop in de editor: dezelfde pil als "Project bewerken" op een
+   projectkaart (components/listing-card.tsx), midden op de foto, met de
+   foto 35% donkerder bij hover. Zonder foto staat de pil er altijd. De
+   laag zelf vangt geen klikken: buiten de pil opent de kaart het
+   bewerkformulier. */
+.location-card-upload-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  transition: background .2s;
+  pointer-events: none;
+}
+.location-card-upload {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  color: #fff;
+  background: rgba(0, 0, 0, .6);
+  border: 1px solid rgba(255, 255, 255, .25);
+  border-radius: 100px;
+  padding: 8px 18px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .2s;
+}
+.location-card-upload:disabled { cursor: progress; }
+.discover-card:hover .location-card-upload-layer:not([data-empty="true"]) { background: rgba(0, 0, 0, .35); }
+.discover-card:hover .location-card-upload,
+.location-card-upload:focus-visible,
+.location-card-upload-layer[data-empty="true"] .location-card-upload,
+.location-card-upload-layer[data-busy="true"] .location-card-upload { opacity: 1; }
+@media (hover: none) { .location-card-upload { opacity: 1; } }
+
+/* Showroom-pop-up (LocationDetailPopup in components/locations/location-cards.tsx):
+   foto bovenaan met de sluitknop erop, scrollend midden, vaste knoppen
+   onderaan. Nooit hoger dan het scherm. */
+.showroom-popup {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: calc(100% - 32px);
+  max-width: 560px;
+  max-height: calc(100dvh - 48px);
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, .18);
+}
+.showroom-popup-photo {
+  position: relative;
+  flex-shrink: 0;
+  aspect-ratio: 16 / 10;
+  max-height: 34dvh;
+  width: 100%;
+  background: #f5f5f4;
+}
+.showroom-popup-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.showroom-popup-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 0;
+  background: transparent;
+  color: #1c1c1a;
+  cursor: pointer;
+  transition: background .15s;
+}
+.showroom-popup-close:hover { background: #f5f5f4; }
+.showroom-popup-close--on-photo {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
+}
+.showroom-popup-close--on-photo:hover { background: #fff; }
+.showroom-popup-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px 28px 8px;
+}
+.showroom-popup-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.showroom-popup-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--arco-mid, #6b6b68);
+}
+.showroom-popup-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #c8c8c6;
+}
+.showroom-popup-status[data-open="true"] { color: #1c1c1a; }
+.showroom-popup-status[data-open="true"] .showroom-popup-dot { background: #10b981; }
+.showroom-popup-rows { margin: 20px 0 0; }
+.showroom-popup-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid #f0f0ee;
+}
+.showroom-popup-row dt { margin: 0; padding-top: 3px; }
+.showroom-popup-row dd {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: #1c1c1a;
+  overflow-wrap: anywhere;
+}
+.showroom-popup-hours { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.showroom-popup-hours th,
+.showroom-popup-hours td {
+  padding: 0 0 4px;
+  text-align: left;
+  font-weight: 400;
+  vertical-align: top;
+}
+.showroom-popup-hours th { padding-right: 20px; color: var(--arco-mid, #6b6b68); white-space: nowrap; }
+.showroom-popup-hours tr[data-closed="true"] td { color: #a1a1a0; }
+.showroom-popup-hours tr[data-today="true"] th,
+.showroom-popup-hours tr[data-today="true"] td { color: #1c1c1a; font-weight: 500; }
+.showroom-popup-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  padding: 16px 28px 20px;
+  border-top: 1px solid #f0f0ee;
+  background: #fff;
+}
+.showroom-popup-actions > a { flex: 1; text-align: center; }
+@media (max-width: 480px) {
+  .showroom-popup-body { padding: 20px 20px 4px; }
+  .showroom-popup-actions { padding: 14px 20px 16px; }
+  .showroom-popup-row { grid-template-columns: 1fr; gap: 4px; }
+}
+
+/* Merkkiezer in de bedrijfseditor: tegel met rond logo en naam. */
+.brand-pick-tile { transition: background-color .15s; }
+.brand-pick-tile:hover { background: #f5f5f4 !important; }
+.brand-pick-tile:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* Gekozen schijfkaart (merkkiezers): een primaire badge met een wit
+   vinkje op de rand van de schijf, rechtsboven (45°, het midden van de
+   badge op de omtrek). Buiten .credit-icon, want die knipt af
+   (overflow: hidden); .quick-tile-disc is de houder. De witte rand houdt
+   hem los van elk logo, ook een zwart. Blijft zichtbaar boven het
+   hover-vlak met plus of kruis. */
+.quick-tile-disc {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  margin: 0 auto 12px;
+}
+.quick-tile-disc .credit-icon { margin: 0; }
+.quick-tile-badge {
+  position: absolute;
+  left: calc(85.36% - 11px);
+  top: calc(14.64% - 11px);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 2px solid #fff;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Disc tile zonder actie (merken op de bedrijfspagina, nog zonder link):
+   geen hover-belofte. */
+.quick-tile--static { cursor: default; }
+.quick-tile--static:hover .credit-icon { background: var(--surface); }
+.quick-tile--static:hover .quick-tile-label { color: var(--arco-black); }
+
+/* Merkkiezer-pop-up in de bedrijfseditor: drie kolommen disc tiles, de
+   tegel vult zijn kolom (de schijf blijft 100px); onder 480px twee. */
+.brand-pick-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px 8px;
+  padding: 4px 0;
+}
+.brand-pick-grid .quick-tile { width: 100%; flex: none; }
+@media (max-width: 480px) {
+  .brand-pick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Merk-stippen op een projectfoto: hero, fototour en lightbox
+   (components/project/photo-brand-dots.tsx). De laag ligt over het vak
+   van de foto en laat klikken door, behalve op de stip. De stip is
+   primair met een witte rand en een rustige hartslag: een kring die
+   uitdijt en vervaagt, zodat hij op een drukke foto opvalt zonder te
+   knipperen. De kaart is de kaart van de professionalskaart (6px hoeken,
+   dezelfde schaduw) en zweeft boven alles, ook boven de lightbox. */
+.photo-dots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.photo-dot {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 0.15s ease;
+}
+.photo-dot::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  animation: photo-dot-beat 2.4s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes photo-dot-beat {
+  0% { transform: scale(1); opacity: 0.9; }
+  70% { transform: scale(2.2); opacity: 0; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.photo-dot:hover,
+.photo-dot[aria-expanded="true"] { transform: translate(-50%, -50%) scale(1.15); }
+.photo-dot[aria-expanded="true"]::after { animation: none; opacity: 0; }
+.photo-dot:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  .photo-dot::after { animation: none; opacity: 0; }
+}
+.photo-dot-card {
+  position: fixed;
+  width: 240px;
+  background: #fff;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  z-index: 10001;
+}
+
+/* /brands: grid van disc tiles (components/catalog/brands-discover-client.tsx).
+   Tegels van minstens 150px (112px op mobiel), zoals de rijen op discover. */
+/* Vaste kolommen van 150px met 8px ertussen, links uitgelijnd: dezelfde
+   maat en afstand als de schijven op /projects (geen 1fr, dat rekte de
+   kolommen op en maakte de afstand groter dan elders). */
+.brands-disc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 150px);
+  gap: 32px 8px;
+}
+.brands-disc-grid .quick-tile { width: 100%; flex: none; }
+@media (max-width: 768px) {
+  .brands-disc-grid { grid-template-columns: repeat(auto-fill, 112px); gap: 24px 8px; }
 }

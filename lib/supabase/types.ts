@@ -92,60 +92,219 @@ export type Database = {
           },
         ]
       }
+      brand_collection_candidates: {
+        Row: {
+          brand_id: string
+          category_id: string | null
+          collection_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          image_url: string | null
+          name: string
+          slug: string
+          source_image_url: string | null
+          source_page_url: string | null
+          status: string
+          url: string | null
+        }
+        Insert: {
+          brand_id: string
+          category_id?: string | null
+          collection_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          name: string
+          slug: string
+          source_image_url?: string | null
+          source_page_url?: string | null
+          status?: string
+          url?: string | null
+        }
+        Update: {
+          brand_id?: string
+          category_id?: string | null
+          collection_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          name?: string
+          slug?: string
+          source_image_url?: string | null
+          source_page_url?: string | null
+          status?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_collection_candidates_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_collection_candidates_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "product_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_collection_candidates_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "product_collections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brand_collection_jobs: {
+        Row: {
+          brand_id: string
+          created_at: string
+          error: string | null
+          finished_at: string | null
+          firecrawl_credits: number
+          id: string
+          kind: string
+          locked_until: string | null
+          progress_done: number
+          progress_total: number
+          stage: string
+          state: Json
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          firecrawl_credits?: number
+          id?: string
+          kind: string
+          locked_until?: string | null
+          progress_done?: number
+          progress_total?: number
+          stage?: string
+          state?: Json
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          firecrawl_credits?: number
+          id?: string
+          kind?: string
+          locked_until?: string | null
+          progress_done?: number
+          progress_total?: number
+          stage?: string
+          state?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_collection_jobs_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brands: {
         Row: {
+          apollo_account_id: string | null
           auto_approve_product_links: boolean
+          city: string | null
           country: string | null
           created_at: string
           description: string | null
           domain: string | null
+          facebook_url: string | null
           founded_year: number | null
           id: string
           is_featured: boolean
           is_verified: boolean
+          linkedin_url: string | null
           logo_url: string | null
+          market_segment: string | null
+          naics_codes: string[] | null
           name: string
           owner_user_id: string | null
+          phone: string | null
+          postal_code: string | null
+          sic_codes: string[] | null
           slug: string
           status: Database["public"]["Enums"]["brand_status"]
+          street_address: string | null
           updated_at: string
           website: string | null
+          x_url: string | null
         }
         Insert: {
+          apollo_account_id?: string | null
           auto_approve_product_links?: boolean
+          city?: string | null
           country?: string | null
           created_at?: string
           description?: string | null
           domain?: string | null
+          facebook_url?: string | null
           founded_year?: number | null
           id?: string
           is_featured?: boolean
           is_verified?: boolean
+          linkedin_url?: string | null
           logo_url?: string | null
+          market_segment?: string | null
+          naics_codes?: string[] | null
           name: string
           owner_user_id?: string | null
+          phone?: string | null
+          postal_code?: string | null
+          sic_codes?: string[] | null
           slug: string
           status?: Database["public"]["Enums"]["brand_status"]
+          street_address?: string | null
           updated_at?: string
           website?: string | null
+          x_url?: string | null
         }
         Update: {
+          apollo_account_id?: string | null
           auto_approve_product_links?: boolean
+          city?: string | null
           country?: string | null
           created_at?: string
           description?: string | null
           domain?: string | null
+          facebook_url?: string | null
           founded_year?: number | null
           id?: string
           is_featured?: boolean
           is_verified?: boolean
+          linkedin_url?: string | null
           logo_url?: string | null
+          market_segment?: string | null
+          naics_codes?: string[] | null
           name?: string
           owner_user_id?: string | null
+          phone?: string | null
+          postal_code?: string | null
+          sic_codes?: string[] | null
           slug?: string
           status?: Database["public"]["Enums"]["brand_status"]
+          street_address?: string | null
           updated_at?: string
           website?: string | null
+          x_url?: string | null
         }
         Relationships: []
       }
@@ -171,9 +330,12 @@ export type Database = {
           pro_name_nl: string | null
           pro_name_plural: string | null
           pro_name_plural_nl: string | null
+          project_scopes: string[]
           publish_scope: string
+          sam_nl: number | null
           slug: string
           sort_order: number | null
+          tam_nl: number | null
           updated_at: string | null
         }
         Insert: {
@@ -197,9 +359,12 @@ export type Database = {
           pro_name_nl?: string | null
           pro_name_plural?: string | null
           pro_name_plural_nl?: string | null
+          project_scopes?: string[]
           publish_scope?: string
+          sam_nl?: number | null
           slug: string
           sort_order?: number | null
+          tam_nl?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -223,9 +388,12 @@ export type Database = {
           pro_name_nl?: string | null
           pro_name_plural?: string | null
           pro_name_plural_nl?: string | null
+          project_scopes?: string[]
           publish_scope?: string
+          sam_nl?: number | null
           slug?: string
           sort_order?: number | null
+          tam_nl?: number | null
           updated_at?: string | null
         }
         Relationships: [
@@ -1625,6 +1793,7 @@ export type Database = {
           email: string | null
           google_place_id: string | null
           id: string
+          image_url: string | null
           kind: string
           latitude: number | null
           longitude: number | null
@@ -1648,6 +1817,7 @@ export type Database = {
           email?: string | null
           google_place_id?: string | null
           id?: string
+          image_url?: string | null
           kind?: string
           latitude?: number | null
           longitude?: number | null
@@ -1671,6 +1841,7 @@ export type Database = {
           email?: string | null
           google_place_id?: string | null
           id?: string
+          image_url?: string | null
           kind?: string
           latitude?: number | null
           longitude?: number | null
@@ -2192,6 +2363,8 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          image_url: string | null
+          is_active: boolean
           name: string
           name_nl: string | null
           order_index: number
@@ -2201,6 +2374,8 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          image_url?: string | null
+          is_active?: boolean
           name: string
           name_nl?: string | null
           order_index?: number
@@ -2210,6 +2385,8 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          image_url?: string | null
+          is_active?: boolean
           name?: string
           name_nl?: string | null
           order_index?: number
@@ -2259,7 +2436,99 @@ export type Database = {
           },
         ]
       }
-      product_families: {
+      product_collection_kinds: {
+        Row: {
+          category_id: string
+          collection_id: string
+          created_at: string
+          position: number
+        }
+        Insert: {
+          category_id: string
+          collection_id: string
+          created_at?: string
+          position?: number
+        }
+        Update: {
+          category_id?: string
+          collection_id?: string
+          created_at?: string
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_collection_kinds_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "product_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_collection_kinds_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "product_collections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_collection_photos: {
+        Row: {
+          alt_text: string | null
+          collection_id: string
+          created_at: string
+          focus_x: number | null
+          focus_y: number | null
+          height: number | null
+          id: string
+          is_primary: boolean
+          kind: string | null
+          order_index: number
+          source_url: string | null
+          url: string
+          width: number | null
+        }
+        Insert: {
+          alt_text?: string | null
+          collection_id: string
+          created_at?: string
+          focus_x?: number | null
+          focus_y?: number | null
+          height?: number | null
+          id?: string
+          is_primary?: boolean
+          kind?: string | null
+          order_index?: number
+          source_url?: string | null
+          url: string
+          width?: number | null
+        }
+        Update: {
+          alt_text?: string | null
+          collection_id?: string
+          created_at?: string
+          focus_x?: number | null
+          focus_y?: number | null
+          height?: number | null
+          id?: string
+          is_primary?: boolean
+          kind?: string | null
+          order_index?: number
+          source_url?: string | null
+          url?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_collection_photos_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "product_collections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_collections: {
         Row: {
           brand_id: string
           category_id: string | null
@@ -2310,14 +2579,14 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "product_families_brand_id_fkey"
+            foreignKeyName: "product_collections_brand_id_fkey"
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brands"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "product_families_category_id_fkey"
+            foreignKeyName: "product_collections_category_id_fkey"
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "product_categories"
@@ -2325,43 +2594,69 @@ export type Database = {
           },
         ]
       }
-      product_family_photos: {
+      products: {
         Row: {
-          alt_text: string | null
+          brand_id: string
+          category_id: string | null
+          collection_id: string
           created_at: string
-          family_id: string
           id: string
-          is_primary: boolean
-          order_index: number
-          source_url: string | null
-          url: string
+          image_url: string | null
+          name: string
+          position: number
+          slug: string
+          source_image_url: string | null
+          updated_at: string
+          url: string | null
         }
         Insert: {
-          alt_text?: string | null
+          brand_id: string
+          category_id?: string | null
+          collection_id: string
           created_at?: string
-          family_id: string
           id?: string
-          is_primary?: boolean
-          order_index?: number
-          source_url?: string | null
-          url: string
+          image_url?: string | null
+          name: string
+          position?: number
+          slug: string
+          source_image_url?: string | null
+          updated_at?: string
+          url?: string | null
         }
         Update: {
-          alt_text?: string | null
+          brand_id?: string
+          category_id?: string | null
+          collection_id?: string
           created_at?: string
-          family_id?: string
           id?: string
-          is_primary?: boolean
-          order_index?: number
-          source_url?: string | null
-          url?: string
+          image_url?: string | null
+          name?: string
+          position?: number
+          slug?: string
+          source_image_url?: string | null
+          updated_at?: string
+          url?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "product_family_photos_family_id_fkey"
-            columns: ["family_id"]
+            foreignKeyName: "products_brand_id_fkey"
+            columns: ["brand_id"]
             isOneToOne: false
-            referencedRelation: "product_families"
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "product_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "product_collections"
             referencedColumns: ["id"]
           },
         ]
@@ -2538,9 +2833,9 @@ export type Database = {
       project_brands: {
         Row: {
           brand_id: string
+          collection_id: string | null
           confidence: number | null
           created_at: string
-          family_id: string | null
           id: string
           note: string | null
           photo_id: string | null
@@ -2558,9 +2853,9 @@ export type Database = {
         }
         Insert: {
           brand_id: string
+          collection_id?: string | null
           confidence?: number | null
           created_at?: string
-          family_id?: string | null
           id?: string
           note?: string | null
           photo_id?: string | null
@@ -2578,9 +2873,9 @@ export type Database = {
         }
         Update: {
           brand_id?: string
+          collection_id?: string | null
           confidence?: number | null
           created_at?: string
-          family_id?: string | null
           id?: string
           note?: string | null
           photo_id?: string | null
@@ -2605,10 +2900,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "project_brands_family_id_fkey"
-            columns: ["family_id"]
+            foreignKeyName: "project_brands_collection_id_fkey"
+            columns: ["collection_id"]
             isOneToOne: false
-            referencedRelation: "product_families"
+            referencedRelation: "product_collections"
             referencedColumns: ["id"]
           },
           {
@@ -2877,6 +3172,58 @@ export type Database = {
           },
         ]
       }
+      project_photo_brand_tags: {
+        Row: {
+          brand_id: string
+          collection_id: string | null
+          created_at: string
+          id: string
+          photo_id: string
+          x: number
+          y: number
+        }
+        Insert: {
+          brand_id: string
+          collection_id?: string | null
+          created_at?: string
+          id?: string
+          photo_id: string
+          x: number
+          y: number
+        }
+        Update: {
+          brand_id?: string
+          collection_id?: string | null
+          created_at?: string
+          id?: string
+          photo_id?: string
+          x?: number
+          y?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_photo_brand_tags_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_photo_brand_tags_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "product_collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_photo_brand_tags_photo_id_fkey"
+            columns: ["photo_id"]
+            isOneToOne: false
+            referencedRelation: "project_photos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_photos: {
         Row: {
           alt_text: string | null
@@ -2884,6 +3231,8 @@ export type Database = {
           created_at: string | null
           feature_id: string | null
           file_size: number | null
+          focus_x: number | null
+          focus_y: number | null
           height: number | null
           id: string
           is_primary: boolean | null
@@ -2900,6 +3249,8 @@ export type Database = {
           created_at?: string | null
           feature_id?: string | null
           file_size?: number | null
+          focus_x?: number | null
+          focus_y?: number | null
           height?: number | null
           id?: string
           is_primary?: boolean | null
@@ -2916,6 +3267,8 @@ export type Database = {
           created_at?: string | null
           feature_id?: string | null
           file_size?: number | null
+          focus_x?: number | null
+          focus_y?: number | null
           height?: number | null
           id?: string
           is_primary?: boolean | null

@@ -1,5 +1,6 @@
 "use client"
 
+import { LogoFill } from "@/components/brand/brand-logo"
 import Image from "next/image"
 import { Link } from "@/i18n/navigation"
 import { useTranslations } from "next-intl"
@@ -72,15 +73,7 @@ export function FeaturedCompanies({ companies }: FeaturedCompaniesProps) {
                 {/* Text — logo + name + subtitle */}
                 <div className="pro-card-info">
                   {company.logoUrl ? (
-                    <img
-                      src={company.logoUrl}
-                      alt=""
-                      className="pro-card-logo"
-                      width={40}
-                      height={40}
-                      loading="lazy"
-                      decoding="async"
-                    />
+                    <span className="pro-card-logo pro-card-logo-disc"><LogoFill src={company.logoUrl} /></span>
                   ) : (
                     <div className="pro-card-logo pro-card-logo-placeholder">
                       {company.name.charAt(0).toUpperCase()}

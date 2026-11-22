@@ -355,11 +355,21 @@ export function useProjectsQuery({
             .select("project_id, project_photos!project_photos_feature_id_fkey(id)")
             .eq("space_id", spaceId)
 
-          const projectIds = [...new Set(
-            (featureRows ?? [])
+          // Plus de deelprojecten die deze ruimte ZIJN (primary_space_id):
+          // een tuinhuis hoeft geen foto onder "Tuinhuis" te hebben om
+          // een tuinhuis te zijn. De kaart valt dan terug op de omslag.
+          const { data: partialRows } = await supabase
+            .from("project_search_documents")
+            .select("id")
+            .eq("kind", "partial")
+            .eq("primary_space_id", spaceId)
+
+          const projectIds = [...new Set([
+            ...(featureRows ?? [])
               .filter((f) => f.project_id && Array.isArray(f.project_photos) && f.project_photos.length > 0)
-              .map((f) => f.project_id as string)
-          )]
+              .map((f) => f.project_id as string),
+            ...((partialRows ?? []) as Array<{ id: string | null }>).map((r) => r.id).filter((id): id is string => Boolean(id)),
+          ])]
           if (projectIds.length > 0) {
             query = query.in("id", projectIds)
           } else {

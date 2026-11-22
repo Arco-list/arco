@@ -67,6 +67,8 @@ export type ProfessionalBrand = {
   name: string
   logoUrl: string | null
   isOfficialDealer: boolean
+  /** Hoofdcategorieën (Verlichting, Meubels…), voor de filterpills. */
+  categoryIds: string[]
 }
 
 export type ProfessionalDetail = {
@@ -101,6 +103,8 @@ export type ProfessionalDetail = {
     website: string | null
     domain: string | null
     address: string | null
+    /** Google-vermelding van het kantoor; de Locatie-cel linkt ernaar. */
+    googlePlaceId: string | null
     city: string | null
     country: string | null
     primaryService: string | null
@@ -119,6 +123,8 @@ export type ProfessionalDetail = {
   projects: ProfessionalProjectSummary[]
   /** Merken die het bedrijf voert, op volgorde. */
   brands: ProfessionalBrand[]
+  /** De hoofdcategorieën waarin de merken van het bedrijf vallen. */
+  brandCategories: Array<{ id: string; name: string; nameNl: string | null }>
   /** Showrooms, winkels en andere vestigingen (locations). */
   locations: LocationRecord[]
 }

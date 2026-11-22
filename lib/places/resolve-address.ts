@@ -161,6 +161,9 @@ export type ResolvedEstablishment = {
   domain: string | null
   editorialSummary: string | null
   googleTypes: string[] | null
+  /** Openingstijden per dag, één regel per dag ("maandag: 09:00–17:30"),
+   *  in de taal van het Maps-script. Null als Google ze niet heeft. */
+  openingHours: string | null
   latitude: number | null
   longitude: number | null
 }
@@ -193,6 +196,39 @@ export async function searchEstablishmentPredictions(query: string): Promise<Est
   }
 }
 
+/** Alle vestigingen van een bedrijf op Google Maps, op naam: een
+ *  tekstzoekopdracht geeft tot 20 plekken, waar de autocomplete er 5
+ *  geeft. Voor het showroomformulier, dat de locaties van een bedrijf
+ *  of merk meteen aanbiedt om te kiezen. */
+export type EstablishmentResult = EstablishmentPrediction & { address: string | null }
+
+export async function searchEstablishmentsByName(query: string, region = "nl"): Promise<EstablishmentResult[]> {
+  const q = query.trim()
+  if (q.length < 2) return []
+  try {
+    const lib = await placesLib()
+    if (!lib?.PlacesService) return []
+    const service = new lib.PlacesService(document.createElement("div"))
+    const results = await new Promise<any[]>((resolve) => {
+      service.textSearch({ query: q, region }, (res: any, status: string) => resolve(status === "OK" && res ? res : []))
+    })
+    return results.slice(0, 20).map((r: any) => {
+      const address: string | null = r.formatted_address ?? null
+      const parts = (address ?? "").split(",").map((x: string) => x.trim()).filter(Boolean)
+      // "Straat 1, 1234 AB Plaats, Nederland" → "Plaats"
+      const cityPart = parts.length >= 2 ? parts[parts.length - 2] : parts[0] ?? ""
+      return {
+        placeId: r.place_id,
+        name: r.name ?? "",
+        city: cityPart.replace(/^\d{4}\s?[A-Z]{2}\s+/, "") || null,
+        address,
+      }
+    }).filter((r) => r.placeId)
+  } catch {
+    return []
+  }
+}
+
 /** Full business record for a picked establishment — the create-company
  *  modal's getDetails call, shared. */
 export async function resolveEstablishmentDetails(placeId: string): Promise<ResolvedEstablishment | null> {
@@ -205,7 +241,7 @@ export async function resolveEstablishmentDetails(placeId: string): Promise<Reso
         service.getDetails(
           {
             placeId,
-            fields: ["name", "place_id", "formatted_address", "address_components", "formatted_phone_number", "website", "editorial_summary", "types", "geometry"],
+            fields: ["name", "place_id", "formatted_address", "address_components", "formatted_phone_number", "website", "editorial_summary", "types", "geometry", "opening_hours"],
           },
           (p: any, status: string) => (status === "OK" && p ? resolve(p) : reject(new Error(status))),
         )
@@ -248,6 +284,9 @@ export async function resolveEstablishmentDetails(placeId: string): Promise<Reso
       domain,
       editorialSummary: place.editorial_summary?.text ?? null,
       googleTypes: place.types ?? null,
+      openingHours: Array.isArray(place.opening_hours?.weekday_text) && place.opening_hours.weekday_text.length > 0
+        ? place.opening_hours.weekday_text.join("\n")
+        : null,
       latitude: typeof place.geometry?.location?.lat === "function" ? place.geometry.location.lat() : null,
       longitude: typeof place.geometry?.location?.lng === "function" ? place.geometry.location.lng() : null,
     }

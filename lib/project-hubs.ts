@@ -393,7 +393,7 @@ export async function getHubs(
   const [{ data }, { data: cats }, feats] = await Promise.all([
     supabase
       .from("projects")
-      .select("id, address_city, address_region, project_type, project_type_category_id")
+      .select("id, address_city, address_region, project_type, project_type_category_id, kind, primary_space:spaces!projects_primary_space_id_fkey(slug)")
       .eq("status", "published")
       .not("slug", "is", null),
     supabase
@@ -425,6 +425,18 @@ export async function getHubs(
     const set = spacesByProject.get(pid) ?? new Set<string>()
     set.add(slug)
     spacesByProject.set(pid, set)
+  }
+  // Een deelproject telt ook mee in de ruimte die het IS
+  // (primary_space_id), los van zijn fototags — gelijk aan het
+  // ruimtefilter in de feed en aan getHubProjects.
+  for (const row of rows as Array<ProjectRowLite & { kind?: string | null; primary_space?: { slug?: string | null } | Array<{ slug?: string | null }> | null }>) {
+    if (row.kind !== "partial") continue
+    const rel = row.primary_space
+    const slug = (Array.isArray(rel) ? rel[0]?.slug : rel?.slug) ?? null
+    if (!slug) continue
+    const set = spacesByProject.get(row.id) ?? new Set<string>()
+    set.add(slug)
+    spacesByProject.set(row.id, set)
   }
   const spaceDefBySpace = new Map(SPACE_HUB_DEFS.map((d) => [d.space, d]))
   // Type axis = the project-type CATEGORY taxonomy (what the Type filter
@@ -776,6 +788,17 @@ export async function getHubProjects(hub: Hub): Promise<HubProjectCard[]> {
         if (f.project_id && !seen.has(f.project_id)) { seen.add(f.project_id); ids.push(f.project_id) }
       }
       if (feats.length < PAGE) break
+    }
+    // Plus de deelprojecten die deze ruimte ZIJN (primary_space_id),
+    // ook zonder foto onder die ruimte — zie getHubs en het ruimtefilter.
+    const { data: partials } = await supabase
+      .from("projects")
+      .select("id, primary_space:spaces!projects_primary_space_id_fkey!inner(slug)")
+      .eq("kind", "partial")
+      .eq("status", "published")
+      .eq("primary_space.slug", hub.spaceValue)
+    for (const p of (partials ?? []) as Array<{ id: string }>) {
+      if (!seen.has(p.id)) { seen.add(p.id); ids.push(p.id) }
     }
     if (ids.length === 0) return []
     q = q.in("id", ids)

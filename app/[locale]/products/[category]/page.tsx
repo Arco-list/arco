@@ -4,7 +4,7 @@ import { notFound } from "next/navigation"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { requireProductsAdmin } from "@/lib/products-gate"
-import { categoryLabel, getCatalogBrands, getCatalogCategories, getCatalogSeries } from "@/lib/products/catalog"
+import { activeCategories, categoryLabel, getCatalogBrands, getCatalogCategories, getCatalogCollections } from "@/lib/products/catalog"
 import { ProductsDiscoverClient } from "@/components/catalog/products-discover-client"
 
 export const dynamic = "force-dynamic"
@@ -27,7 +27,9 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 export default async function ProductCategoryPage({ params }: { params: Params }) {
   await requireProductsAdmin()
   const { locale, category: slug } = await params
-  const [categories, series, brands] = await Promise.all([getCatalogCategories(), getCatalogSeries(), getCatalogBrands()])
+  const [allCategories, collection, brands] = await Promise.all([getCatalogCategories(), getCatalogCollections(), getCatalogBrands()])
+  // Een inactieve soort heeft geen pagina.
+  const categories = activeCategories(allCategories)
   const category = categories.find((c) => c.slug === slug)
   if (!category) notFound()
 
@@ -35,7 +37,7 @@ export default async function ProductCategoryPage({ params }: { params: Params }
     <div className="min-h-screen bg-white">
       <Header />
       <main style={{ paddingBottom: 80 }}>
-        <ProductsDiscoverClient locale={locale} series={series} brands={brands} categories={categories} fixedKind={category} />
+        <ProductsDiscoverClient locale={locale} collection={collection} brands={brands} categories={categories} fixedKind={category} />
       </main>
       <Footer />
     </div>

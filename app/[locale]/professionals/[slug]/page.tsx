@@ -9,7 +9,6 @@ import { ProfessionalHeader } from "@/components/professional/professional-heade
 import { ProfessionalSpecs } from "@/components/professional/professional-specs"
 import { PhotographerSpecs } from "@/components/professional/photographer-specs"
 import { ProfessionalProjects } from "@/components/professional/professional-projects"
-import { ProfessionalContact } from "@/components/professional/professional-contact"
 import { ProfessionalBrands } from "@/components/professional/professional-brands"
 import { ProfessionalLocations } from "@/components/professional/professional-locations"
 import { fetchProfessionalDetail, fetchProfessionalMetadata } from "@/lib/professionals/queries"
@@ -316,6 +315,14 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
         profession={servicesBadge}
         location={specs.location ?? undefined}
         hasProjects={professional.projects.length > 0}
+        // Merken en showrooms staan (nog) alleen voor admins op de pagina.
+        hasBrands={viewerIsAdmin && professional.brands.length > 0}
+        showroomCount={viewerIsAdmin ? professional.locations.length : 0}
+        contact={{
+          logoUrl: companyIcon,
+          initials: companyInitials,
+          subtitle: [servicesBadge, professional.company.city].filter(Boolean).join(" · ") || null,
+        }}
       />
 
       <div id="details" className="wrap" style={{ marginTop: '120px', marginBottom: '60px' }}>
@@ -332,18 +339,26 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
         {isPhotographer ? (
           <PhotographerSpecs
             location={specs.location}
+            address={contact.officeAddress ?? null}
+            city={professional.company.city ?? null}
+            name={professional.name}
+            placeId={professional.company.googlePlaceId ?? null}
             foundedYear={specs.established}
             specialties={photographerSpecialties}
-            languages={specs.languages}
             collaborationsCount={photographerCollaborationsCount}
+            domain={professional.company.domain ?? null}
           />
         ) : (
           <ProfessionalSpecs
             location={specs.location}
+            address={contact.officeAddress ?? null}
+            city={professional.company.city ?? null}
+            name={professional.name}
+            placeId={professional.company.googlePlaceId ?? null}
             established={specs.established}
             teamSize={specs.teamSize}
-            languages={specs.languages}
             certificates={specs.certificates}
+            domain={professional.company.domain ?? null}
           />
         )}
       </div>
@@ -358,21 +373,10 @@ export default async function ProfessionalDetailPage({ params }: { params: Promi
 
       {viewerIsAdmin && (
         <>
-          <ProfessionalBrands brands={professional.brands} />
-          <ProfessionalLocations locations={professional.locations} />
+          <ProfessionalBrands brands={professional.brands} categories={professional.brandCategories} />
+          <ProfessionalLocations locations={professional.locations} fallbackLogoUrl={companyIcon} />
         </>
       )}
-
-      <ProfessionalContact
-        companyId={professional.company.id}
-        companyName={professional.name}
-        companyLogoUrl={companyIcon}
-        companyInitials={companyInitials}
-        serviceLabel={servicesBadge}
-        officeAddress={contact.officeAddress}
-        city={professional.company.city ?? null}
-        websiteUrl={contact.websiteUrl}
-      />
 
       <Footer />
     </div>

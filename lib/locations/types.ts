@@ -28,6 +28,8 @@ export type LocationRecord = {
   email: string | null
   website: string | null
   openingHours: string | null
+  /** Eigen foto van de showroom (migratie 315). */
+  imageUrl?: string | null
   position: number
 }
 
@@ -72,6 +74,7 @@ export function locationFromRow(row: Record<string, unknown>): LocationRecord {
     email: (row.email as string | null) ?? null,
     website: (row.website as string | null) ?? null,
     openingHours: (row.opening_hours as string | null) ?? null,
+    imageUrl: (row.image_url as string | null) ?? null,
     position: Number(row.position ?? 0),
   }
 }
@@ -98,5 +101,8 @@ export function locationToRow(input: LocationInput): Record<string, unknown> {
     email: clean(input.email),
     website: clean(input.website),
     opening_hours: clean(input.openingHours),
+    // Alleen meesturen als het in de input staat: een save zonder foto
+    // (formulier, keuzelijst) laat een bestaande foto staan.
+    ...(input.imageUrl !== undefined ? { image_url: clean(input.imageUrl) } : {}),
   }
 }
