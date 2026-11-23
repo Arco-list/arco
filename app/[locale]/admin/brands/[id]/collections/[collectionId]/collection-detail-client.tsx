@@ -120,9 +120,10 @@ const PHOTO_GRID_CSS = `
   .product-tile:hover .product-ext-link { opacity: 1; }
   .product-ext-link:hover { color: #6b6b68; }
   .hero-focus-hint { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 2; font-size: 11px; color: #fff; background: rgba(0,0,0,.4); border-radius: 100px; padding: 4px 12px; pointer-events: none; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); white-space: nowrap; }
-  .photo-kind-chip { position: absolute; left: 8px; bottom: 8px; z-index: 1; font-size: 10px; font-weight: 500; letter-spacing: .03em; padding: 3px 7px; border-radius: 3px; border: none; cursor: pointer; background: rgba(255,255,255,.92); color: #1c1c1a; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
-  .photo-kind-chip[data-kind="ambiance"] { background: #016D75; color: #fff; }
-  .photo-kind-chip[data-kind="none"] { color: #a1a1a0; }
+  /* Zelfde pil als "Eigenaar" op de projectkaarten. */
+  .photo-kind-chip { position: absolute; left: 10px; bottom: 10px; z-index: 1; display: inline-flex; align-items: center; font-family: var(--font-sans); font-size: 11px; font-weight: 500; letter-spacing: .02em; color: #fff; background: rgba(0,0,0,.45); border: none; border-radius: 100px; padding: 4px 10px; cursor: pointer; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: background .15s; }
+  .photo-kind-chip:hover { background: rgba(0,0,0,.65); }
+  .photo-kind-chip[data-kind="none"] { color: rgba(255,255,255,.7); }
   .photo-cover-badge { position: absolute; top: 8px; left: 8px; z-index: 1; font-size: 10px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: #fff; background: rgba(0,0,0,.6); padding: 3px 8px; border-radius: 3px; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
   .photo-del-confirm { position: absolute; inset: 0; background: rgba(0,0,0,.7); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; z-index: 10; }
   .photo-del-confirm p { color: #fff; font-size: 13px; font-weight: 500; margin: 0; }
@@ -286,7 +287,14 @@ export function CollectionEditClient({ brand, collection, photos, applied, categ
   const cover = useMemo(() => photos.find((p) => p.is_primary) ?? photos[0] ?? null, [photos])
   // Wat bovenaan staat is wat de bezoeker ziet (pickCollectionHero); zonder
   // foto's het beeld dat de kaart al had.
-  const heroPhoto = useMemo(() => pickCollectionHero(photos.map((p) => ({ ...p, isPrimary: p.is_primary }))), [photos])
+  // Een gekozen cover staat meteen bovenaan, nog voor de server klaar is.
+  const [coverOverrideId, setCoverOverrideId] = useState<string | null>(null)
+  // Verse gegevens van de server: die weten de cover zelf.
+  useEffect(() => { setCoverOverrideId(null) }, [photos])
+  const heroPhoto = useMemo(
+    () => pickCollectionHero(photos.map((p) => ({ ...p, isPrimary: coverOverrideId ? p.id === coverOverrideId : p.is_primary }))),
+    [photos, coverOverrideId],
+  )
   const coverUrl = heroPhoto?.url ?? collection.hero_image_url
   // Wat als cover kan dienen, volgens dezelfde regel als de hero: zijn er
   // sfeerbeelden, dan alleen die; anders geen png-studiobeelden (tenzij er
@@ -298,6 +306,8 @@ export function CollectionEditClient({ brand, collection, photos, applied, categ
     return scenes.length > 0 ? scenes : photos
   }, [photos])
   const [coverPickerOpen, setCoverPickerOpen] = useState(false)
+  // Terugval voor een product zonder eigen beeld: de productfoto van de collectie.
+  const productShot = photos.find((p) => p.kind === "product")?.url ?? null
   // Het focuspunt van de hero: een klik op het beeld zet het (meteen
   // zichtbaar, daarna opgeslagen).
   const [focusOverride, setFocusOverride] = useState<{ id: string; x: number; y: number } | null>(null)
@@ -404,9 +414,9 @@ export function CollectionEditClient({ brand, collection, photos, applied, categ
   const toggleKind = (id: string) => setSelectedKinds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
 
   const handleSetCover = async (photoId: string) => {
+    setCoverOverrideId(photoId)
     const result = await setProductCollectionCover(photoId)
-    if ("error" in result) { toast.error(result.error); return }
-    toast.success("Cover updated")
+    if ("error" in result) { toast.error(result.error); setCoverOverrideId(null); return }
     router.refresh()
   }
 
@@ -443,22 +453,18 @@ export function CollectionEditClient({ brand, collection, photos, applied, categ
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={ph.url} alt={ph.alt_text ?? ""} />
 
-                {ph.is_primary ? (
-                  <span className="photo-cover-badge">Cover</span>
-                ) : (
-                  <button type="button" className="photo-tile-btn cover" onClick={() => void handleSetCover(ph.id)} title="Use as cover" aria-label="Use as cover">
-                    <ImageIcon size={13} />
-                  </button>
-                )}
+                {/* De cover kies je in de hero ("Change cover"); hier alleen het label. */}
+                {ph.is_primary && <span className="photo-cover-badge">Cover</span>}
 
-                {/* Soort (migratie 318): alleen Ambiance staat in de galerij
-                    van de publieke pagina. Klik wisselt naar de volgende. */}
+                {/* Soort (migratie 318): bepaalt de volgorde in de galerij en
+                    wat hero of cover kan worden (alleen Ambiance). Klik
+                    wisselt naar de volgende. */}
                 <button
                   type="button"
                   className="photo-kind-chip"
                   data-kind={kindOf(ph) ?? "none"}
                   onClick={() => void cycleKind(ph)}
-                  title="Ambiance shows in the gallery; product and detail don't. Click to change."
+                  title="Ambiance can be the hero and comes first in the gallery. Click to change."
                 >
                   {kindOf(ph) === "ambiance" ? "Ambiance" : kindOf(ph) === "product" ? "Product" : kindOf(ph) === "detail" ? "Detail" : "Unsorted"}
                 </button>
@@ -568,8 +574,8 @@ export function CollectionEditClient({ brand, collection, photos, applied, categ
           {products.map((p) => (
             <div key={p.id} className="product-tile" style={{ cursor: "pointer" }} onClick={() => openProductDialog(p)} title="Edit product">
               <div style={{ aspectRatio: "4 / 3", background: "var(--arco-surface)", borderRadius: 4, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                {p.image_url ? (
-                  <ProductImage url={p.image_url} alt={p.name} />
+                {(p.image_url ?? productShot) ? (
+                  <ProductImage url={(p.image_url ?? productShot) as string} alt={p.name} />
                 ) : (
                   <ImageIcon size={24} style={{ color: "#c8c8c6" }} />
                 )}

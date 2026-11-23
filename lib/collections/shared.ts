@@ -75,6 +75,28 @@ async function fetchImage(remoteUrl: string): Promise<Response | null> {
   return null
 }
 
+/**
+ * Het hoofdbeeld van een productpagina (og:image of twitter:image): voor
+ * een product dat op de collectiepagina geen beeld had maar wel een eigen
+ * pagina. Gratis, één verzoek.
+ */
+export async function pageMainImage(pageUrl: string): Promise<string | null> {
+  for (const ua of IMAGE_USER_AGENTS) {
+    try {
+      const res = await fetch(pageUrl, { headers: { "User-Agent": ua, Accept: "text/html" }, signal: AbortSignal.timeout(15000), redirect: "follow", cache: "no-store" })
+      if (!res.ok) continue
+      const html = (await res.text()).slice(0, 400_000)
+      const m = html.match(/<meta[^>]+(?:property|name)=["'](?:og:image(?::secure_url)?|twitter:image)["'][^>]*>/i)
+      const content = m?.[0].match(/content=["']([^"']+)["']/i)?.[1]
+      if (!content) return null
+      try { return new URL(content.replace(/&amp;/g, "&"), res.url || pageUrl).toString() } catch { return null }
+    } catch {
+      // volgende identificatie
+    }
+  }
+  return null
+}
+
 export async function storeRemoteImage(supabase: any, remoteUrl: string, folder: string, name?: string): Promise<string | null> {
   try {
     const res = await fetchImage(remoteUrl)
@@ -118,7 +140,9 @@ export async function storeRemoteImage(supabase: any, remoteUrl: string, folder:
 }
 
 /** De cover is de primaire foto, anders de eerste; zonder foto's geen cover. */
-export async function syncCollectionCover(supabase: any, collectionId: string): Promise<void> {
+/** `focus: false`: geen focuspunt zoeken (bv. bij het toevoegen van veel
+ *  collecties tegelijk; het ophalen daarna zet de echte hero en zoekt dan). */
+export async function syncCollectionCover(supabase: any, collectionId: string, options?: { focus?: boolean }): Promise<void> {
   const { data: primary } = await supabase
     .from("product_collection_photos")
     .select("url")
@@ -130,6 +154,7 @@ export async function syncCollectionCover(supabase: any, collectionId: string): 
   await supabase.from("product_collections").update({ hero_image_url: primary?.url ?? null }).eq("id", collectionId)
   // De hero snijdt bij rond het product: een nieuwe hero krijgt een
   // focuspunt (één Claude-blik, alleen als er nog geen is).
+  if (options?.focus === false) return
   try {
     const { ensureHeroFocus } = await import("@/lib/collections/hero-focus")
     await ensureHeroFocus(supabase, collectionId)

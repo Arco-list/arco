@@ -1,5 +1,8 @@
 "use server"
 
+import { after } from "next/server"
+import { ensureHeroFocus } from "@/lib/collections/hero-focus"
+import { descriptionTranslations, mergeTranslations, translateToDutch, type Translations } from "@/lib/collections/translate"
 import { revalidatePath } from "next/cache"
 import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
@@ -744,8 +747,18 @@ export async function updateBrand(
 
   if (Object.keys(patch).length === 0) return { ok: true }
 
+  // Een nieuwe (Engelse) beschrijving: meteen als en-tekst, het Nederlands
+  // volgt op de achtergrond (migratie 330).
+  if (fields.description !== undefined) patch.translations = descriptionTranslations(fields.description?.trim() || null, null)
   const { error } = await (supabase as any).from("brands").update(patch).eq("id", brandId)
   if (error) return { error: error.message }
+  if (fields.description?.trim()) {
+    const text = fields.description.trim()
+    after(async () => {
+      const nl = await translateToDutch(text)
+      if (nl) await (supabase as any).from("brands").update({ translations: descriptionTranslations(text, nl) }).eq("id", brandId).eq("description", text)
+    })
+  }
 
   revalidatePath("/admin/brands")
   return { ok: true }
@@ -1115,7 +1128,14 @@ export async function updateProductCollection(
   }
   if (fields.hero_image_url !== undefined) patch.hero_image_url = fields.hero_image_url
   // Wat een collectiepagina toont en een catalogus niet geeft (migratie 289).
-  if (fields.description !== undefined) patch.description = fields.description?.trim() || null
+  if (fields.description !== undefined) {
+    patch.description = fields.description?.trim() || null
+    // Het Nederlands volgt op de achtergrond (migratie 330), zie onder.
+    // Samengevoegd met wat er staat: materialen en afwerkingen in het
+    // Nederlands (migratie 331) blijven.
+    const { data: current } = await supabase.from("product_collections").select("translations").eq("id", collectionId).maybeSingle()
+    patch.translations = mergeTranslations(current?.translations, descriptionTranslations(patch.description, null) as Translations)
+  }
   if (fields.designer !== undefined) patch.designer = fields.designer?.trim() || null
   if (fields.url !== undefined) patch.url = fields.url?.trim() || null
   if (fields.category_id !== undefined) patch.category_id = fields.category_id
@@ -1137,6 +1157,15 @@ export async function updateProductCollection(
 
   const { error } = await supabase.from("product_collections").update(patch).eq("id", collectionId)
   if (error) return { error: error.message }
+  const text = typeof patch.description === "string" ? patch.description : null
+  if (text) {
+    after(async () => {
+      const nl = await translateToDutch(text)
+      if (!nl) return
+      const { data: current } = await supabase.from("product_collections").select("translations").eq("id", collectionId).maybeSingle()
+      await supabase.from("product_collections").update({ translations: mergeTranslations(current?.translations, descriptionTranslations(text, nl) as Translations) }).eq("id", collectionId).eq("description", text)
+    })
+  }
 
   if (collection?.brand_id) revalidatePath(`/admin/brands/${collection.brand_id}`)
   return { ok: true }
@@ -1362,8 +1391,14 @@ export async function setProductCollectionCover(photoId: string): Promise<{ ok: 
   const { error: setError } = await supabase.from("product_collection_photos").update({ is_primary: true }).eq("id", photoId)
   if (setError) return { error: setError.message }
 
-  await syncCollectionCover(supabase, photo.collection_id)
+  // Meteen terug; het focuspunt van de nieuwe cover zoekt Claude na het
+  // antwoord (after), zodat de knop niet op die blik wacht.
+  await syncCollectionCover(supabase, photo.collection_id, { focus: false })
   await revalidateCollection(supabase, photo.collection_id)
+  after(async () => {
+    await ensureHeroFocus(supabase, photo.collection_id)
+    await revalidateCollection(supabase, photo.collection_id)
+  })
   return { ok: true }
 }
 

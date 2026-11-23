@@ -7096,6 +7096,15 @@ body.no-scroll {
   padding: 8px 0;
 }
 .layered-filter-back { display: none; }
+/* Drie lagen (groep › subgroep › soort): een derde kolom. */
+.layered-filter[data-levels="3"] { grid-template-columns: 200px 230px 230px; }
+.layered-filter-mid { border-right: 1px solid var(--arco-rule); }
+.layered-filter-kinds { overflow-y: auto; padding: 8px 0; }
+/* Elke kolom scrolt zelf binnen de hoogte van het menu (anders liep een
+   lange lijst onder de dropdown uit). */
+@media (min-width: 769px) {
+  .layered-filter > * { max-height: 420px; }
+}
 .layered-filter-rule {
   height: 1px;
   background: var(--arco-rule);
@@ -7116,7 +7125,12 @@ body.no-scroll {
   }
   .layered-filter-groups { border-right: none; }
   .layered-filter[data-stage="groups"] .layered-filter-children,
-  .layered-filter[data-stage="children"] .layered-filter-groups { display: none; }
+  .layered-filter[data-stage="groups"] .layered-filter-kinds,
+  .layered-filter[data-stage="children"] .layered-filter-groups,
+  .layered-filter[data-stage="children"] .layered-filter-kinds,
+  .layered-filter[data-stage="kinds"] .layered-filter-groups,
+  .layered-filter[data-stage="kinds"] .layered-filter-children { display: none; }
+  .layered-filter-mid { border-right: none; }
   .layered-filter-group[data-active="true"] { background: none; font-weight: 400; color: var(--text-secondary); }
   .layered-filter-group[data-checked="true"] { color: var(--arco-black); }
   /* Op een touchscherm groter raakvlak voor het openen. */
@@ -7822,6 +7836,9 @@ body.no-scroll {
 .product-gallery {
   columns: 3;
   column-gap: 6px;
+  /* De 6px onder de laatste foto's niet meetellen: zelfde 60px naar de
+     volgende sectie als elders. */
+  margin-bottom: -6px;
 }
 
 .product-gallery-item {

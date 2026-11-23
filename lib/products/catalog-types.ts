@@ -29,7 +29,11 @@ export type CatalogCollection = {
   slug: string
   name: string
   description: string | null
+  /** De Nederlandse beschrijving (translations.nl, migratie 330), anders null. */
+  descriptionNl?: string | null
   heroImageUrl: string | null
+  /** Focuspunt van die foto (migratie 326): de kaart snijdt bij zoals de hero. */
+  heroFocus?: { x: number; y: number } | null
   /** Een productfoto (op wit) van de collectie: voor de schijven op /products. */
   productImageUrl: string | null
   designer: string | null
@@ -51,6 +55,8 @@ export type CatalogBrand = {
   website: string | null
   logoUrl: string | null
   description: string | null
+  /** De Nederlandse beschrijving (translations.nl, migratie 330), anders null. */
+  descriptionNl?: string | null
   country: string | null
   foundedYear: number | null
   status: string
@@ -77,6 +83,8 @@ export type CatalogProduct = {
   /** De productpagina bij het merk (extern). */
   url: string | null
   imageUrl: string | null
+  /** Het beeld bij het merk waar imageUrl een kopie van is. */
+  sourceImageUrl?: string | null
   /** De Arco-categorie, het laatste niveau (migratie 327). */
   categoryId: string | null
 }

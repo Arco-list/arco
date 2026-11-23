@@ -159,26 +159,25 @@ async function buildNavMenus(locale: string): Promise<NavMenus> {
     return column(group.label, popular, links)
   })
 
-  // ── Producten: de zes hoofdgroepen, met de soorten eronder ──────────
-  // Rijen zijn soorten, geen merken of collecties: een collectienaam zegt niets
-  // zonder merk, en één merk zou een kolom vullen. Alleen soorten waar
-  // een collectie in staat; een lege groep rendert niet. De groepskop linkt
+  // ── Producten: de hoofdgroepen, met al hun subgroepen eronder ───────
+  // Rijen zijn subgroepen (tweede niveau), geen merken of collecties: een
+  // collectienaam zegt niets zonder merk. Alle actieve subgroepen, ook
+  // zonder collecties: het menu toont de hele indeling. De groepskop linkt
   // wél — de groepspagina (alle verlichting) is een ingang die mensen
   // zoeken, anders dan een dienstgroep.
   const tree = categoryTree(activeCategories(categories))
   const collectionsIn = (id: string) => {
     const ids = tree.subtreeIds(id)
-    return catalogCollections.filter((s) => s.categoryId && ids.has(s.categoryId)).length
+    return catalogCollections.filter((s) => (s.categoryId && ids.has(s.categoryId)) || s.kindIds.some((k) => ids.has(k))).length
   }
   const productColumns: NavMenuColumn[] = tree.roots
     .map((group) => {
-      const kinds = tree.children(group.id).map((k) => ({ k, n: collectionsIn(k.id) })).filter((x) => x.n > 0)
+      const kinds = tree.children(group.id).map((k) => ({ k, n: collectionsIn(k.id) }))
       const ordered = kinds.length > COLUMN_CAP ? kinds.slice().sort((a, b) => b.n - a.n) : kinds
       const links = ordered.map(({ k }) => ({ href: `/products/${k.slug}`, label: categoryLabel(k, locale) }))
       const label = categoryLabel(group, locale)
       return column(label, nl ? `Populair in ${label.toLowerCase()}` : `Popular in ${label.toLowerCase()}`, links, `/products/${group.slug}`)
     })
-    .filter((c) => c.links.length > 0)
 
   return {
     projects: {

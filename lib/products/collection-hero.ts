@@ -20,20 +20,22 @@ const landscape = (p: { width?: number | null; height?: number | null }): boolea
   p.width && p.height ? p.width / p.height >= LANDSCAPE_RATIO : null
 
 export function pickCollectionHero<T extends { url: string; isPrimary: boolean; kind?: string | null; width?: number | null; height?: number | null }>(photos: T[]): T | null {
-  // Ingedeeld (migratie 318): een sfeerbeeld. Liefst de omslag, maar alleen
-  // als die liggend is; anders het eerste liggende sfeerbeeld, want de hero
-  // is een breed vlak. Geen liggend sfeerbeeld: toch de omslag (of het
-  // eerste sfeerbeeld). Zonder sfeerbeelden de oude regel hieronder.
+  // Ingedeeld (migratie 318): een sfeerbeeld. Is de omslag een sfeerbeeld,
+  // dan die — ook staand, want de hero snijdt bij rond het focuspunt
+  // (migratie 326) en een gekozen cover moet bovenaan staan. Anders het
+  // eerste liggende sfeerbeeld, of het eerste. Zonder sfeerbeelden de oude
+  // regel hieronder.
   const ambiance = photos.filter((p) => p.kind === "ambiance")
   if (ambiance.length > 0) {
-    const preferred = ambiance.find((p) => p.isPrimary) ?? ambiance[0]
-    if (landscape(preferred) !== false) return preferred
-    return ambiance.find((p) => landscape(p) === true) ?? preferred
+    const primary = ambiance.find((p) => p.isPrimary)
+    if (primary) return primary
+    return ambiance.find((p) => landscape(p) === true) ?? ambiance[0]
   }
-  // Nog niet ingedeeld: geen png (studiobeeld), en ook hier liefst liggend.
+  // Nog niet ingedeeld: de omslag als die geen png (studiobeeld) is;
+  // anders liefst een liggende foto.
   const cover = photos.find((p) => p.isPrimary) ?? photos[0] ?? null
   if (!cover) return null
-  if (!isCutout(cover.url) && landscape(cover) !== false) return cover
+  if (!isCutout(cover.url) && (cover.isPrimary || landscape(cover) !== false)) return cover
   return photos.find((p) => !isCutout(p.url) && landscape(p) === true)
     ?? (!isCutout(cover.url) ? cover : photos.find((p) => !isCutout(p.url)) ?? cover)
 }

@@ -107,7 +107,10 @@ export async function chooseCollectionCandidates(brandId: string, candidateIds: 
     const img = c.image_url ?? c.source_image_url
     if (img) {
       await sb.from("product_collection_photos").insert({ collection_id: col.id, url: img, source_url: c.source_image_url ?? img, is_primary: true, order_index: 0 })
-      await syncCollectionCover(sb, col.id)
+      // Zonder focuspunt: het ophalen hieronder kiest de sfeerbeelden en
+      // zoekt dan het punt voor de echte hero. Anders wacht de knop op
+      // een Claude-blik per collectie.
+      await syncCollectionCover(sb, col.id, { focus: false })
     }
     await sb.from("brand_collection_candidates").update({ status: "chosen", collection_id: col.id }).eq("id", c.id)
   }

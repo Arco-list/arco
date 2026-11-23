@@ -244,6 +244,7 @@ export type Database = {
           slug: string
           status: Database["public"]["Enums"]["brand_status"]
           street_address: string | null
+          translations: Json
           updated_at: string
           website: string | null
           x_url: string | null
@@ -273,6 +274,7 @@ export type Database = {
           slug: string
           status?: Database["public"]["Enums"]["brand_status"]
           street_address?: string | null
+          translations?: Json
           updated_at?: string
           website?: string | null
           x_url?: string | null
@@ -302,6 +304,7 @@ export type Database = {
           slug?: string
           status?: Database["public"]["Enums"]["brand_status"]
           street_address?: string | null
+          translations?: Json
           updated_at?: string
           website?: string | null
           x_url?: string | null
@@ -2536,12 +2539,15 @@ export type Database = {
           description: string | null
           designer: string | null
           enriched_at: string | null
+          finishes: string[]
           hero_image_url: string | null
           id: string
           is_featured: boolean
           launch_year: number | null
+          materials: string[]
           name: string
           slug: string
+          translations: Json
           updated_at: string
           url: string | null
         }
@@ -2552,12 +2558,15 @@ export type Database = {
           description?: string | null
           designer?: string | null
           enriched_at?: string | null
+          finishes?: string[]
           hero_image_url?: string | null
           id?: string
           is_featured?: boolean
           launch_year?: number | null
+          materials?: string[]
           name: string
           slug: string
+          translations?: Json
           updated_at?: string
           url?: string | null
         }
@@ -2568,12 +2577,15 @@ export type Database = {
           description?: string | null
           designer?: string | null
           enriched_at?: string | null
+          finishes?: string[]
           hero_image_url?: string | null
           id?: string
           is_featured?: boolean
           launch_year?: number | null
+          materials?: string[]
           name?: string
           slug?: string
+          translations?: Json
           updated_at?: string
           url?: string | null
         }
@@ -2594,6 +2606,41 @@ export type Database = {
           },
         ]
       }
+      product_photos: {
+        Row: {
+          created_at: string
+          id: string
+          position: number
+          product_id: string
+          source_url: string | null
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          position?: number
+          product_id: string
+          source_url?: string | null
+          url: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          position?: number
+          product_id?: string
+          source_url?: string | null
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_photos_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           brand_id: string
@@ -2608,6 +2655,7 @@ export type Database = {
           source_image_url: string | null
           updated_at: string
           url: string | null
+          variants: string | null
         }
         Insert: {
           brand_id: string
@@ -2622,6 +2670,7 @@ export type Database = {
           source_image_url?: string | null
           updated_at?: string
           url?: string | null
+          variants?: string | null
         }
         Update: {
           brand_id?: string
@@ -2636,6 +2685,7 @@ export type Database = {
           source_image_url?: string | null
           updated_at?: string
           url?: string | null
+          variants?: string | null
         }
         Relationships: [
           {

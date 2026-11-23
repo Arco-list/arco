@@ -4,13 +4,14 @@ import Anthropic from "@anthropic-ai/sdk"
 import { Firecrawl } from "@mendable/firecrawl-js"
 import { revalidatePath as nextRevalidate } from "next/cache"
 
+import { descriptionTranslations, mergeTranslations, type Translations } from "@/lib/collections/translate"
 import { logger } from "@/lib/logger"
 import { imageSize } from "@/lib/images/image-size"
 import { syncBrandCategoriesFromCollections } from "@/lib/products/brand-categories"
 import { fetchPage } from "@/lib/collections/fetch-page"
-import { absoluteHttpUrl, slugify, storeRemoteImage, stripWww, syncCollectionCover } from "@/lib/collections/shared"
+import { absoluteHttpUrl, pageMainImage, slugify, storeRemoteImage, stripWww, syncCollectionCover } from "@/lib/collections/shared"
 import {
-  MAX_OVERVIEW_PAGES, MAX_AMBIANCE_PHOTOS, MAX_PHOTO_CANDIDATES,
+  MAX_OVERVIEW_PAGES, MAX_AMBIANCE_PHOTOS, MAX_DETAIL_PHOTOS, MAX_PHOTO_CANDIDATES,
   pickPagesRequest, overviewRequest, collectionReadRequest, photoChoiceRequest,
   type BatchRequest, type CategoryLine, type CollectionRead, type OverviewCollection, type PhotoChoice,
 } from "@/lib/collections/prompts"
@@ -40,6 +41,9 @@ import {
 const TIME_BUDGET_MS = 230_000
 const MAX_MAP_URLS = 400
 const MAX_PRODUCT_IMAGES = 24
+/** Extra productbeelden (migratie 331) die per collectie worden opgeslagen;
+ *  daarboven bewaren we de bron-URL, een script kan ze later kopiëren. */
+const MAX_EXTRA_PRODUCT_IMAGES = 40
 
 type Job = {
   id: string
@@ -219,20 +223,28 @@ async function stepInventory(sb: any, job: Job, brand: Brand, deadline: number):
     if (job.stage === "reading_pages") {
       const all: Array<{ col: OverviewCollection; pageUrl: string }> = []
       let brandDescription: string | null = null
+      let brandDescriptionNl: string | null = null
       for (const id of st.batches as string[]) {
         const res = await readBatch(id)
         if (!res) return
         // Op volgorde van de pagina's: de eerste (meest complete) omschrijving wint.
         for (const [customId, data] of Array.from(res.entries()).sort(([a], [b]) => Number(a.slice(1)) - Number(b.slice(1)))) {
           const pageUrl = st.pageByRequest[customId] ?? origin
-          brandDescription = brandDescription ?? (typeof data?.brand_description === "string" && data.brand_description.trim() ? data.brand_description.trim() : null)
+          if (!brandDescription && typeof data?.brand_description === "string" && data.brand_description.trim()) {
+            brandDescription = data.brand_description.trim()
+            brandDescriptionNl = typeof data?.brand_description_nl === "string" && data.brand_description_nl.trim() ? data.brand_description_nl.trim() : null
+          }
           for (const col of ((data?.collections ?? []) as OverviewCollection[])) all.push({ col, pageUrl })
         }
       }
-      // De omschrijving van het merk, alleen als er nog geen staat: een
-      // handmatige tekst wint.
+      // De omschrijving van het merk, in het Engels en Nederlands (migratie
+      // 330). Alleen als er nog geen staat (een handmatige tekst wint), of
+      // als de taak om nieuwe teksten vraagt (refreshText).
       if (brandDescription) {
-        await sb.from("brands").update({ description: brandDescription.slice(0, 400) }).eq("id", brand.id).or("description.is.null,description.eq.")
+        const patch = { description: brandDescription.slice(0, 1200), translations: descriptionTranslations(brandDescription.slice(0, 1200), brandDescriptionNl?.slice(0, 1400) ?? null) }
+        let q = sb.from("brands").update(patch).eq("id", brand.id)
+        if (!st.refreshText) q = q.or("description.is.null,description.eq.")
+        await q
       }
       const added = await insertCandidates(sb, brand.id, all)
       const { count } = await sb.from("brand_collection_candidates").select("id", { count: "exact", head: true })
@@ -340,7 +352,9 @@ async function stepEnrich(sb: any, job: Job, brand: Brand, deadline: number): Pr
       if (Date.now() > deadline - 30_000) { unfinished = true; break }
       if (b.kind === "read" && item.step === "reading") {
         if (!data) { item.step = "done"; item.failed = true; continue }
-        const photos = await applyRead(sb, colId, brand.id, data as CollectionRead, cats)
+        const photos = await applyRead(sb, colId, brand.id, data as CollectionRead, cats, Boolean(st.refreshText))
+        // Alleen teksten vernieuwen: geen foto's opnieuw kiezen.
+        if (st.textOnly) { item.step = "done"; continue }
         const { data: cover } = await sb.from("product_collection_photos").select("source_url").eq("collection_id", colId).eq("is_primary", true).maybeSingle()
         const list = Array.from(new Set([cover?.source_url, ...photos].filter((u): u is string => Boolean(u)))).slice(0, MAX_PHOTO_CANDIDATES)
         if (list.length === 0) { item.step = "done"; continue }
@@ -395,12 +409,39 @@ async function stepEnrich(sb: any, job: Job, brand: Brand, deadline: number): Pr
 }
 
 /** Velden, soorten en producten uit de collectiepagina; geeft de kandidaatfoto's terug. */
-async function applyRead(sb: any, colId: string, brandId: string, data: CollectionRead, cats: Cats): Promise<string[]> {
-  const { data: col } = await sb.from("product_collections").select("url, description, designer, launch_year, category_id").eq("id", colId).maybeSingle()
+async function applyRead(sb: any, colId: string, brandId: string, data: CollectionRead, cats: Cats, refreshText = false): Promise<string[]> {
+  const { data: col } = await sb.from("product_collections").select("url, description, designer, launch_year, category_id, materials, finishes, translations").eq("id", colId).maybeSingle()
   if (!col) return []
   const base = col.url ?? undefined
   const patch: Record<string, unknown> = { enriched_at: new Date().toISOString() }
-  if (!col.description && data.description) patch.description = data.description.trim()
+  // Samengevoegd per taal: beschrijving en materialen overschrijven elkaar niet.
+  let translations: Translations = col.translations ?? {}
+  // De beschrijving (EN + NL, migratie 330): als er nog geen staat, als het
+  // nog de korte zin uit de inventarisatie is, of als de taak om nieuwe
+  // teksten vraagt. Een met de hand geschreven tekst blijft staan.
+  if (data.description?.trim()) {
+    const { data: cand } = await sb.from("brand_collection_candidates").select("description").eq("collection_id", colId).maybeSingle()
+    const current = col.description?.trim() ?? ""
+    if (!current || refreshText || current === (cand?.description?.trim() ?? "")) {
+      patch.description = data.description.trim()
+      const t = descriptionTranslations(data.description.trim(), data.description_nl?.trim() || null)
+      translations = mergeTranslations(translations, t as Translations)
+    }
+  }
+  // Materialen en afwerkingen (migratie 331): alleen als er nog geen staan,
+  // een handmatige lijst wint. Nederlands in translations.nl.
+  const clean = (xs: string[] | undefined, max: number) => Array.from(new Set((xs ?? []).map((x) => x.trim().toLowerCase()).filter(Boolean))).slice(0, max)
+  const materials = clean(data.materials, 6)
+  if (materials.length > 0 && !(col.materials?.length > 0)) {
+    patch.materials = materials
+    translations = mergeTranslations(translations, { nl: { materials: clean(data.materials_nl, 6) } })
+  }
+  const finishes = clean(data.finishes, 10)
+  if (finishes.length > 0 && !(col.finishes?.length > 0)) {
+    patch.finishes = finishes
+    translations = mergeTranslations(translations, { nl: { finishes: clean(data.finishes_nl, 10) } })
+  }
+  if (translations !== col.translations) patch.translations = translations
   if (!col.designer && data.designer) patch.designer = data.designer.trim()
   const thisYear = new Date().getFullYear()
   if (!col.launch_year && data.launch_year && data.launch_year >= 1800 && data.launch_year <= thisYear + 1) patch.launch_year = data.launch_year
@@ -420,6 +461,7 @@ async function applyRead(sb: any, colId: string, brandId: string, data: Collecti
   const slugs = new Set(((known ?? []) as Array<{ slug: string }>).map((p) => p.slug))
   const urls = new Set(((known ?? []) as Array<{ url: string | null }>).map((p) => p.url).filter(Boolean))
   let images = 0
+  let extraImages = 0
   for (const [i, p] of (data.products ?? []).slice(0, 40).entries()) {
     const name = cleanName(p.name ?? "")
     if (!name) continue
@@ -428,15 +470,32 @@ async function applyRead(sb: any, colId: string, brandId: string, data: Collecti
     if (url) { try { const u = new URL(url); u.search = ""; u.hash = ""; url = u.toString() } catch { url = null } }
     if (slugs.has(slug) || (url && urls.has(url))) continue
     slugs.add(slug)
-    const img = absoluteHttpUrl(p.image_url, base as any)
+    // Geen beeld op de collectiepagina maar wel een eigen pagina: het
+    // hoofdbeeld van die pagina.
+    const img = absoluteHttpUrl(p.image_url, base as any) ?? (url ? await pageMainImage(url) : null)
     const stored = img && images < MAX_PRODUCT_IMAGES ? await storeRemoteImage(sb, upsize(img), `product-families/${colId}/products`, slug) : null
     if (stored) images++
-    const { error } = await sb.from("products").insert({
+    const { data: inserted, error } = await sb.from("products").insert({
       brand_id: brandId, collection_id: colId, slug, name, url,
       category_id: p.kind_slug ? cats.idBySlug.get(p.kind_slug) ?? null : null,
       image_url: stored ?? img, source_image_url: img, position: i,
-    })
-    if (error) logger.warn("Product insert failed", { colId, product: name, error: error.message })
+      variants: p.variants?.trim().slice(0, 200) || null,
+    }).select("id").single()
+    if (error) { logger.warn("Product insert failed", { colId, product: name, error: error.message }); continue }
+
+    // Extra beelden van hetzelfde product (migratie 331): andere hoek of
+    // uitvoering, om later projectfoto's tegen te vergelijken.
+    const extras = Array.from(new Set((p.extra_image_urls ?? [])
+      .map((u) => absoluteHttpUrl(u, base as any))
+      .filter((u): u is string => Boolean(u))
+      .map(upsize)))
+      .filter((u) => u !== (img ? upsize(img) : null))
+      .slice(0, 2)
+    for (const [j, src] of extras.entries()) {
+      const copy = extraImages < MAX_EXTRA_PRODUCT_IMAGES ? await storeRemoteImage(sb, src, `product-families/${colId}/products`, `${slug}-${j + 2}`) : null
+      if (copy) extraImages++
+      await sb.from("product_photos").insert({ product_id: inserted.id, url: copy ?? src, source_url: src, position: j + 1 })
+    }
   }
 
   return Array.from(new Set((data.photos ?? []).map((u) => absoluteHttpUrl(u, base as any)).filter((u): u is string => Boolean(u)).map(upsize)))
@@ -451,6 +510,9 @@ async function applyPhotos(sb: any, colId: string, list: string[], choice: Photo
     ? Array.from(new Set(choice.ambiance.map(pick).filter((u): u is string => Boolean(u)))).slice(0, MAX_AMBIANCE_PHOTOS)
     : list.slice(0, 4)
   const product = choice ? pick(choice.product_shot) : null
+  const detail = choice
+    ? Array.from(new Set((choice.detail ?? []).map(pick).filter((u): u is string => Boolean(u) && !ambiance.includes(u as string) && u !== product))).slice(0, MAX_DETAIL_PHOTOS)
+    : []
 
   const { data: existing } = await sb.from("product_collection_photos").select("id, source_url, url, order_index").eq("collection_id", colId)
   const rows = (existing ?? []) as Array<{ id: string; source_url: string | null; url: string; order_index: number }>
@@ -477,9 +539,12 @@ async function applyPhotos(sb: any, colId: string, list: string[], choice: Photo
     ambianceIds.push(...ids.filter((x): x is string => Boolean(x)))
   }
   if (product && !ambiance.includes(product)) await store(product, "product")
+  for (let i = 0; i < detail.length; i += 5) await Promise.all(detail.slice(i, i + 5).map((u) => store(u, "detail")))
 
-  // Omslag: het eerste sfeerbeeld, anders blijft het overzichtsbeeld.
-  if (choice && ambianceIds.length > 0) {
+  // Omslag: het eerste sfeerbeeld, anders blijft het overzichtsbeeld. Is de
+  // omslag al een sfeerbeeld (bv. met de hand gekozen), dan blijft die.
+  const { data: currentCover } = await sb.from("product_collection_photos").select("kind").eq("collection_id", colId).eq("is_primary", true).maybeSingle()
+  if (choice && ambianceIds.length > 0 && currentCover?.kind !== "ambiance") {
     await sb.from("product_collection_photos").update({ is_primary: false }).eq("collection_id", colId)
     await sb.from("product_collection_photos").update({ is_primary: true }).eq("id", ambianceIds[0])
   }
@@ -498,7 +563,12 @@ async function applyPhotos(sb: any, colId: string, list: string[], choice: Photo
 
 // ── De ronde ───────────────────────────────────────────────────────────
 
-export async function tickCollectionJobs(sb: any): Promise<Array<{ id: string; kind: string; stage: string; error?: string }>> {
+/**
+ * `holder`: een vaste eigenaar (het lokale script). Die mag taken pakken
+ * die hij zelf vasthoudt en houdt ze na de ronde vast, zodat een cron met
+ * oudere code ze tussen twee rondes niet oppakt.
+ */
+export async function tickCollectionJobs(sb: any, options?: { holder?: string }): Promise<Array<{ id: string; kind: string; stage: string; error?: string }>> {
   const deadline = Date.now() + TIME_BUDGET_MS
   const { data: jobs } = await sb.from("brand_collection_jobs")
     .select("id, brand_id, kind, stage, progress_done, progress_total, state, firecrawl_credits")
@@ -510,11 +580,12 @@ export async function tickCollectionJobs(sb: any): Promise<Array<{ id: string; k
     if (Date.now() > deadline - 30_000) break
     // Claimen: een andere ronde die nog bezig is, laat deze taak met rust.
     const now = new Date().toISOString()
-    const { data: claimed } = await sb.from("brand_collection_jobs")
+    const held = options?.holder ? (job.state?.holder === options.holder) : false
+    let claimQ = sb.from("brand_collection_jobs")
       .update({ locked_until: new Date(Date.now() + 6 * 60_000).toISOString() })
       .eq("id", job.id)
-      .or(`locked_until.is.null,locked_until.lt.${now}`)
-      .select("id")
+    if (!held) claimQ = claimQ.or(`locked_until.is.null,locked_until.lt.${now}`)
+    const { data: claimed } = await claimQ.select("id")
     if (!claimed?.length) continue
     try {
       const { data: brand } = await sb.from("brands").select("id, name, domain, website").eq("id", job.brand_id).maybeSingle()
@@ -531,7 +602,14 @@ export async function tickCollectionJobs(sb: any): Promise<Array<{ id: string; k
       else await save(sb, job, { state: { ...job.state, attempts } })
       report.push({ id: job.id, kind: job.kind, stage: job.stage, error: message })
     } finally {
-      await sb.from("brand_collection_jobs").update({ locked_until: null }).eq("id", job.id)
+      if (options?.holder) {
+        // Vasthouden tot de volgende lokale ronde (die over 30 s komt).
+        await sb.from("brand_collection_jobs")
+          .update({ locked_until: new Date(Date.now() + 5 * 60_000).toISOString(), state: { ...job.state, holder: options.holder } })
+          .eq("id", job.id)
+      } else {
+        await sb.from("brand_collection_jobs").update({ locked_until: null }).eq("id", job.id)
+      }
     }
   }
   return report

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, type ReactNode } from "react"
+import { ChevronRight } from "lucide-react"
 
 /**
  * Het collectieraster van een merk, ingeklapt als er veel zijn: op
@@ -40,7 +41,11 @@ export function CollectionGrid({ cards, showAllLabel }: { cards: ReactNode[]; sh
       </div>
       {!expanded && (desktopCollapsible || mobileCollapsible) && (
         <div className={["collection-grid-more", desktopCollapsible ? "cg-more-d" : "", mobileCollapsible ? "cg-more-m" : ""].filter(Boolean).join(" ")}>
-          <button type="button" className="btn-secondary" onClick={() => setExpanded(true)}>{showAllLabel}</button>
+          {/* Zelfde knop als "Meer producten" en "Meer merken": tertiair met pijl. */}
+          <button type="button" className="btn-tertiary" onClick={() => setExpanded(true)}>
+            {showAllLabel}
+            <ChevronRight size={16} />
+          </button>
         </div>
       )}
     </>

@@ -83,6 +83,15 @@ export function MegaMenuPanel({ menu, onNavigate }: { menu: NavMenu | null; onNa
   const columns = menu?.columns ?? []
   const loading = columns.length === 0
   const row = "text-[14px] leading-[1.5] font-normal whitespace-nowrap"
+  const eyebrow = "text-[11px] font-medium uppercase tracking-wider text-[#a1a1a0] mb-3"
+  // Meer dan zes kolommen (Producten: negen hoofdgroepen) passen niet naast
+  // elkaar op een laptop. Dan, zoals Archiproducts, de eerste vijf als
+  // volle kolom en de rest als koppen onder elkaar in een zesde kolom.
+  const shown = columns.length > 6 ? columns.slice(0, 5) : columns
+  const rest = columns.length > 6 ? columns.slice(5) : []
+  // Elke kolom even hoog: acht rijen (COLUMN_CAP), of bij de verkorte
+  // weergave zoveel als de langste getoonde kolom.
+  const padTo = rest.length > 0 ? Math.max(...shown.map((c) => c.links.length)) : ROWS
   return (
     <div className="bg-white border-b border-border shadow-lg" aria-busy={loading || undefined}>
       <div className="wrap">
@@ -103,12 +112,12 @@ export function MegaMenuPanel({ menu, onNavigate }: { menu: NavMenu | null; onNa
               ))}
             </div>
           ) : (
-            <div className="grid gap-8" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(150px, max-content))` }}>
-              {columns.map((col) => (
+            <div className="grid gap-x-8" style={{ gridTemplateColumns: `repeat(${shown.length + (rest.length > 0 ? 1 : 0)}, minmax(150px, max-content))` }}>
+              {shown.map((col) => (
                 <div key={col.label}>
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-[#a1a1a0] mb-3">
+                  <p className={eyebrow}>
                     {col.href ? (
-                      <Link href={col.href} className="hover:text-primary transition-colors" onClick={onNavigate}>
+                      <Link href={col.href} className="no-underline hover:text-primary transition-colors" onClick={onNavigate}>
                         {col.label}
                       </Link>
                     ) : (
@@ -123,12 +132,29 @@ export function MegaMenuPanel({ menu, onNavigate }: { menu: NavMenu | null; onNa
                         </Link>
                       </li>
                     ))}
-                    {Array.from({ length: Math.max(0, ROWS - col.links.length) }, (_, i) => (
+                    {Array.from({ length: Math.max(0, padTo - col.links.length) }, (_, i) => (
                       <li key={`pad-${i}`} aria-hidden="true" className={`${row} invisible`}>·</li>
                     ))}
                   </ul>
                 </div>
               ))}
+              {rest.length > 0 && (
+                // De overige groepen alleen als kop, onder elkaar: hun
+                // groepspagina toont de subgroepen.
+                <ul className="flex flex-col gap-3">
+                  {rest.map((col) => (
+                    <li key={col.label} className={eyebrow.replace(" mb-3", "")}>
+                      {col.href ? (
+                        <Link href={col.href} className="no-underline hover:text-primary transition-colors" onClick={onNavigate}>
+                          {col.label}
+                        </Link>
+                      ) : (
+                        col.label
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
           {menu && !loading && (
@@ -160,7 +186,7 @@ export function MegaMenuMobileSections({ menu, onNavigate }: { menu: NavMenu | n
         <div key={col.label}>
           <div className="px-5 pt-3 pb-1 text-[11px] font-medium uppercase tracking-wider text-[#a1a1a0]">
             {col.href ? (
-              <Link href={col.href} className="hover:text-primary transition-colors" onClick={onNavigate}>
+              <Link href={col.href} className="no-underline hover:text-primary transition-colors" onClick={onNavigate}>
                 {col.label}
               </Link>
             ) : (

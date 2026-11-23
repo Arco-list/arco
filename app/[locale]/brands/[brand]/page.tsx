@@ -1,3 +1,4 @@
+import { BrandDealers } from "@/components/brand/brand-dealers"
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
@@ -81,7 +82,8 @@ export default async function BrandPage({ params }: { params: Params }) {
               ))}
             </p>
           )}
-          {brand.description && <p className="arco-body-text">{brand.description}</p>}
+          {/* In de taal van de pagina (migratie 330), anders de Engelse bron. */}
+          {(() => { const d = (nl && brand.descriptionNl) || brand.description; return d ? <p className="arco-body-text">{d}</p> : null })()}
         </section>
 
         {(facts.length > 0 || website) && (
@@ -150,27 +152,10 @@ export default async function BrandPage({ params }: { params: Params }) {
             <div className="section-header">
               <h2 className="arco-section-title">{nl ? "Verkooppunten" : "Where to buy"}</h2>
             </div>
-            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}>
-              {dealers.map((d) => (
-                <li key={d.companyId}>
-                  <Link href={`/professionals/${d.slug}`} style={{ display: "flex", alignItems: "center", gap: 14, border: "1px solid #e5e5e4", borderRadius: 6, padding: 12, textDecoration: "none", color: "inherit" }}>
-                    <div className="credit-icon" style={{ width: 56, height: 56, margin: 0, overflow: "hidden", flexShrink: 0 }}>
-                      {d.logoUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={d.logoUrl} alt={d.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                      ) : (
-                        <span className="credit-icon-initials" style={{ fontSize: 20 }}>{d.name.charAt(0).toUpperCase()}</span>
-                      )}
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <p className="arco-card-title" style={{ margin: 0, fontSize: 15 }}>{d.name}</p>
-                      <p className="arco-card-subtitle" style={{ margin: "2px 0 0" }}>{[d.service, d.city].filter(Boolean).join(" · ")}</p>
-                      {d.isOfficialDealer && <span className="arco-eyebrow" style={{ color: "var(--primary)", marginTop: 4, display: "inline-block" }}>{nl ? "Officieel dealer" : "Official dealer"}</span>}
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+            {/* Zelfde kaart als de vermelde professionals op een project:
+                categorie als eyebrow, logo op de grijze schijf, naam en
+                eronder de plaats. */}
+            <BrandDealers dealers={dealers} />
           </section>
         )}
 

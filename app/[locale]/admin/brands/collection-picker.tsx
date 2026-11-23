@@ -41,13 +41,16 @@ export function CollectionPicker({ brand, onClose, onDone }: { brand: { id: stri
   const added = (candidates ?? []).length - open.length
   const toggle = (id: string) => setSelected((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next })
 
-  const submit = async () => {
-    setSaving(true)
-    const res = await chooseCollectionCandidates(brand.id, Array.from(selected))
-    setSaving(false)
-    if ("error" in res) { toast.error(res.error); return }
-    toast.success(`${res.added} ${res.added === 1 ? "collection" : "collections"} added — details and photos are being fetched in the background`)
-    onDone()
+  // Meteen dicht: het toevoegen loopt door, de melding volgt.
+  const submit = () => {
+    const ids = Array.from(selected)
+    onClose()
+    const id = toast.loading(`Adding ${ids.length} ${ids.length === 1 ? "collection" : "collections"} to ${brand.name}…`)
+    void chooseCollectionCandidates(brand.id, ids).then((res) => {
+      if ("error" in res) { toast.error(res.error, { id }); return }
+      toast.success(`${res.added} ${res.added === 1 ? "collection" : "collections"} added — details and photos are being fetched in the background`, { id })
+      onDone()
+    })
   }
 
   return (

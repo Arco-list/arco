@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useLocale } from "next-intl"
+import { Link } from "@/i18n/navigation"
 import { Store, X } from "lucide-react"
 import { toast } from "sonner"
 
@@ -38,6 +39,7 @@ const COPY = {
     route: "Route plannen",
     call: "Bellen",
     close: "Sluiten",
+    owner: "Van",
   },
   en: {
     addPhoto: "Add photo",
@@ -51,11 +53,18 @@ const COPY = {
     route: "Get directions",
     call: "Call",
     close: "Close",
+    owner: "By",
   },
 }
 
+/** Van wie een showroom is, voor een overzicht over bedrijven en merken
+ *  heen (/showrooms): naam en logo op de kaart, link in de pop-up. */
+export type LocationOwner = { name: string; logoUrl: string | null; href: string }
+
 type Props = {
   locations: LocationRecord[]
+  /** Per vestiging-id de eigenaar; alleen op het overzicht. */
+  owners?: Record<string, LocationOwner>
   /** Logo van het bedrijf of merk, voor kaarten zonder foto. */
   fallbackLogoUrl?: string | null
   /** Taal van de labels; standaard de taal van de pagina. */
@@ -80,19 +89,21 @@ export function LocationCards(props: Props) {
             loc={loc}
             locale={locale}
             copy={c}
-            fallbackLogoUrl={props.fallbackLogoUrl ?? null}
+            owner={props.owners?.[loc.id] ?? null}
+            fallbackLogoUrl={props.owners?.[loc.id]?.logoUrl ?? props.fallbackLogoUrl ?? null}
             onClick={() => (props.mode === "edit" ? props.onEdit(loc) : setOpen(loc))}
             onUpload={props.mode === "edit" ? (file) => props.onUpload(loc, file) : undefined}
           />
         ))}
       </div>
-      {open && <LocationDetailPopup loc={open} locale={locale} copy={c} onClose={() => setOpen(null)} />}
+      {open && <LocationDetailPopup loc={open} owner={props.owners?.[open.id] ?? null} locale={locale} copy={c} onClose={() => setOpen(null)} />}
     </>
   )
 }
 
-function LocationCard({ loc, locale, copy, fallbackLogoUrl, onClick, onUpload }: {
+function LocationCard({ loc, owner, locale, copy, fallbackLogoUrl, onClick, onUpload }: {
   loc: LocationRecord
+  owner: LocationOwner | null
   locale: string
   copy: typeof COPY.nl
   fallbackLogoUrl: string | null
@@ -101,8 +112,12 @@ function LocationCard({ loc, locale, copy, fallbackLogoUrl, onClick, onUpload }:
 }) {
   const input = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
-  const title = loc.name ?? loc.city ?? loc.streetAddress ?? locationKindLabel(loc.kind, locale)
-  const sub = [locationKindLabel(loc.kind, locale), loc.city].filter(Boolean).join(" · ")
+  // Op het overzicht: de naam van de showroom of anders van de eigenaar,
+  // daaronder de eigenaar (als die nog niet de titel is) en de plaats.
+  const title = loc.name ?? owner?.name ?? loc.city ?? loc.streetAddress ?? locationKindLabel(loc.kind, locale)
+  const sub = owner
+    ? [owner.name !== title ? owner.name : locationKindLabel(loc.kind, locale), loc.city].filter(Boolean).join(" · ")
+    : [locationKindLabel(loc.kind, locale), loc.city].filter(Boolean).join(" · ")
 
   const upload = async (picked: File) => {
     if (!onUpload) return
@@ -191,13 +206,14 @@ function LocationCard({ loc, locale, copy, fallbackLogoUrl, onClick, onUpload }:
  * "Bellen", zodat ze ook op een klein scherm in beeld blijven; alleen
  * het midden scrolt.
  */
-function LocationDetailPopup({ loc, locale, copy, onClose }: {
+function LocationDetailPopup({ loc, owner, locale, copy, onClose }: {
   loc: LocationRecord
+  owner: LocationOwner | null
   locale: string
   copy: typeof COPY.nl
   onClose: () => void
 }) {
-  const title = loc.name ?? loc.city ?? locationKindLabel(loc.kind, locale)
+  const title = loc.name ?? owner?.name ?? loc.city ?? locationKindLabel(loc.kind, locale)
   const sub = [locationKindLabel(loc.kind, locale), loc.city].filter(Boolean).join(" · ")
   const street = loc.streetAddress ?? loc.address?.split(",")[0]?.trim() ?? null
   const cityLine = [loc.postalCode, loc.city].filter(Boolean).join(" ")
@@ -254,6 +270,12 @@ function LocationDetailPopup({ loc, locale, copy, onClose }: {
           </div>
 
           <dl className="showroom-popup-rows">
+            {owner && (
+              <div className="showroom-popup-row">
+                <dt className="arco-eyebrow">{copy.owner}</dt>
+                <dd><Link href={owner.href} className="text-link-plain no-underline">{owner.name} →</Link></dd>
+              </div>
+            )}
             {addressText && (
               <div className="showroom-popup-row">
                 <dt className="arco-eyebrow">{copy.address}</dt>

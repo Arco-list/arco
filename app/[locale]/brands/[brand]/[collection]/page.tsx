@@ -72,14 +72,20 @@ export default async function CollectionPage({ params }: { params: Params }) {
   // Het hoofdbeeld volgt dezelfde regel als de bewerkpagina; de galerij
   // toont de rest.
   const heroPhoto = pickCollectionHero(photos)
-  // Foto's: alleen sfeerbeelden. Productfoto's staan al onder Producten,
-  // materiaalstalen horen niet in een galerij (migratie 318). Een foto die
-  // nog niet is ingedeeld telt mee, zoals voorheen.
-  // De hero hoort er ook bij, vooraan: bovenaan is hij bijgesneden rond het
-  // product, hier staat hij heel.
+  // Foto's: alles, behalve een beeld dat al als producttegel staan (zelfde
+  // bron of zelfde bestand). De hero vooraan (bovenaan is hij bijgesneden,
+  // hier staat hij heel), dan sfeer, ongesorteerd, detail en productfoto's.
+  const usedByProducts = new Set(products.flatMap((p) => [p.imageUrl, p.sourceImageUrl]).filter((u): u is string => Boolean(u)))
+  const KIND_ORDER: Record<string, number> = { ambiance: 0, none: 1, detail: 2, product: 3 }
   const gallery = photos
-    .filter((p) => p.kind === "ambiance" || p.kind == null || p.id === heroPhoto?.id)
-    .sort((a, b) => (a.id === heroPhoto?.id ? -1 : b.id === heroPhoto?.id ? 1 : 0))
+    .filter((p) => p.id === heroPhoto?.id || !(usedByProducts.has(p.url) || (p.sourceUrl != null && usedByProducts.has(p.sourceUrl))))
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) => {
+      if (a.p.id === heroPhoto?.id) return -1
+      if (b.p.id === heroPhoto?.id) return 1
+      return (KIND_ORDER[a.p.kind ?? "none"] ?? 1) - (KIND_ORDER[b.p.kind ?? "none"] ?? 1) || a.i - b.i
+    })
+    .map(({ p }) => p)
 
   // De producten van de collectie, met een link naar hun pagina bij het
   // merk. Zelfde tegels als op collection edit: het raster van de foto's
@@ -116,7 +122,9 @@ export default async function CollectionPage({ params }: { params: Params }) {
   )
   const gallerySection = gallery.length > 0 && (
     <section id="photos" style={{ marginBottom: 60 }}>
-      <h2 className="arco-section-title" style={{ marginBottom: 24 }}>{nl ? "Foto's" : "Photos"}</h2>
+      <div className="section-header">
+        <h2 className="arco-section-title">{nl ? "Foto's" : "Photos"}</h2>
+      </div>
       <div className="product-gallery">
         {gallery.map((p, i) => (
           <div key={p.id} className="product-gallery-item">
@@ -170,7 +178,8 @@ export default async function CollectionPage({ params }: { params: Params }) {
                 ))
               : <Link href={`/brands/${collection.brand.slug}`} className="hover:text-primary transition-colors">{collection.brand.name}</Link>}
           </p>
-          {collection.description && collection.description.split("\n\n").map((para, i) => <p key={i} className="arco-body-text">{para}</p>)}
+          {/* In de taal van de pagina (migratie 330), anders de Engelse bron. */}
+          {((nl && collection.descriptionNl) || collection.description)?.split("\n\n").map((para, i) => <p key={i} className="arco-body-text">{para}</p>)}
         </section>
 
         <section className="specifications-bar" style={{ marginBottom: 60 }}>

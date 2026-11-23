@@ -44,11 +44,11 @@ export async function getCatalogCategories(): Promise<CatalogCategory[]> {
  *  halen en in code te filteren, en dat blijft lang zo. */
 export async function getCatalogCollections(): Promise<CatalogCollection[]> {
   const supabase = createServiceRoleSupabaseClient() as any
-  const [{ data: collections }, { data: links }, { data: kindRows }, { data: productShots }, { data: productRows }] = await Promise.all([
+  const [{ data: collections }, { data: links }, { data: kindRows }, { data: productShots }, { data: productRows }, { data: coverRows }] = await Promise.all([
     // In blokken: Supabase kapt elke query af op 1000 rijen.
     selectAll(() => supabase
       .from("product_collections")
-      .select("id, slug, name, description, hero_image_url, designer, launch_year, url, category_id, is_featured, brands(id, slug, name, logo_url, status)")
+      .select("id, slug, name, description, translations, hero_image_url, designer, launch_year, url, category_id, is_featured, brands(id, slug, name, logo_url, status)")
       .order("name")
       .order("id")),
     supabase.from("project_brands").select("collection_id, project_id").not("collection_id", "is", null),
@@ -56,7 +56,11 @@ export async function getCatalogCollections(): Promise<CatalogCollection[]> {
     // Productfoto's op wit (migratie 318), anders het beeld van het eerste product.
     selectAll(() => supabase.from("product_collection_photos").select("collection_id, url, order_index").eq("kind", "product").order("order_index").order("id")),
     selectAll(() => supabase.from("products").select("collection_id, image_url, position").not("image_url", "is", null).order("position").order("id")),
+    // Focuspunten van de covers: de kaart snijdt bij zoals de hero.
+    selectAll(() => supabase.from("product_collection_photos").select("collection_id, url, focus_x, focus_y").eq("is_primary", true).not("focus_x", "is", null).order("id")),
   ])
+  const focusByUrl = new Map<string, { x: number; y: number }>()
+  for (const r of (coverRows ?? []) as Array<{ url: string; focus_x: number; focus_y: number }>) focusByUrl.set(r.url, { x: r.focus_x, y: r.focus_y })
   const productImageByCollection = new Map<string, string>()
   for (const p of (productShots ?? []) as Array<{ collection_id: string; url: string }>) {
     if (!productImageByCollection.has(p.collection_id)) productImageByCollection.set(p.collection_id, p.url)
@@ -81,7 +85,9 @@ export async function getCatalogCollections(): Promise<CatalogCollection[]> {
       slug: f.slug,
       name: f.name,
       description: f.description ?? null,
+      descriptionNl: f.translations?.nl?.description?.trim() || null,
       heroImageUrl: f.hero_image_url ?? null,
+      heroFocus: f.hero_image_url ? focusByUrl.get(f.hero_image_url) ?? null : null,
       productImageUrl: productImageByCollection.get(f.id) ?? null,
       designer: f.designer ?? null,
       launchYear: f.launch_year ?? null,
@@ -99,7 +105,7 @@ export async function getCatalogBrands(): Promise<CatalogBrand[]> {
   const [{ data: brands }, { data: cats }, { data: collections }, { data: links }] = await Promise.all([
     selectAll(() => supabase
       .from("brands")
-      .select("id, slug, name, domain, website, logo_url, description, country, founded_year, status")
+      .select("id, slug, name, domain, website, logo_url, description, translations, country, founded_year, status")
       .order("name")
       .order("id")),
     selectAll(() => supabase.from("brand_categories").select("brand_id, category_id, position").order("position").order("brand_id").order("category_id")),
@@ -130,6 +136,7 @@ export async function getCatalogBrands(): Promise<CatalogBrand[]> {
       website: b.website ?? null,
       logoUrl: b.logo_url ?? null,
       description: b.description ?? null,
+      descriptionNl: b.translations?.nl?.description?.trim() || null,
       country: b.country ?? null,
       foundedYear: b.founded_year ?? null,
       status: b.status,
@@ -142,18 +149,23 @@ export async function getCatalogBrands(): Promise<CatalogBrand[]> {
 /** De producten van een collectie, in de volgorde van de pagina bij het merk. */
 export async function getCollectionProducts(collectionId: string): Promise<CatalogProduct[]> {
   const supabase = createServiceRoleSupabaseClient() as any
-  const { data } = await supabase.from("products").select("id, name, url, image_url, category_id").eq("collection_id", collectionId).order("position")
-  return ((data ?? []) as any[]).map((p) => ({ id: p.id, name: p.name, url: p.url ?? null, imageUrl: p.image_url ?? null, categoryId: p.category_id ?? null }))
+  const [{ data }, { data: shot }] = await Promise.all([
+    supabase.from("products").select("id, name, url, image_url, source_image_url, category_id").eq("collection_id", collectionId).order("position"),
+    // Terugval voor een product zonder eigen beeld: de productfoto van de collectie.
+    supabase.from("product_collection_photos").select("url").eq("collection_id", collectionId).eq("kind", "product").order("order_index").limit(1).maybeSingle(),
+  ])
+  const fallback: string | null = shot?.url ?? null
+  return ((data ?? []) as any[]).map((p) => ({ id: p.id, name: p.name, url: p.url ?? null, imageUrl: p.image_url ?? fallback, sourceImageUrl: p.source_image_url ?? null, categoryId: p.category_id ?? null }))
 }
 
-export async function getCollectionPhotos(collectionId: string): Promise<Array<{ id: string; url: string; alt: string | null; isPrimary: boolean; kind: string | null; width: number | null; height: number | null; focus: { x: number; y: number } | null }>> {
+export async function getCollectionPhotos(collectionId: string): Promise<Array<{ id: string; url: string; sourceUrl: string | null; alt: string | null; isPrimary: boolean; kind: string | null; width: number | null; height: number | null; focus: { x: number; y: number } | null }>> {
   const supabase = createServiceRoleSupabaseClient() as any
   const { data } = await supabase
     .from("product_collection_photos")
-    .select("id, url, alt_text, is_primary, order_index, kind, width, height, focus_x, focus_y")
+    .select("id, url, source_url, alt_text, is_primary, order_index, kind, width, height, focus_x, focus_y")
     .eq("collection_id", collectionId)
     .order("order_index")
-  return ((data ?? []) as any[]).map((p) => ({ id: p.id, url: p.url, alt: p.alt_text ?? null, isPrimary: Boolean(p.is_primary), kind: p.kind ?? null, width: p.width ?? null, height: p.height ?? null, focus: p.focus_x != null && p.focus_y != null ? { x: p.focus_x, y: p.focus_y } : null }))
+  return ((data ?? []) as any[]).map((p) => ({ id: p.id, url: p.url, sourceUrl: p.source_url ?? null, alt: p.alt_text ?? null, isPrimary: Boolean(p.is_primary), kind: p.kind ?? null, width: p.width ?? null, height: p.height ?? null, focus: p.focus_x != null && p.focus_y != null ? { x: p.focus_x, y: p.focus_y } : null }))
 }
 
 /** Projecten waarin een collectie of een merk is toegepast, als kaart —
@@ -267,4 +279,27 @@ export async function getBrandLocations(brandId: string): Promise<LocationRecord
   const supabase = createServiceRoleSupabaseClient() as any
   const { data } = await supabase.from("locations").select("*").eq("brand_id", brandId).order("position").order("created_at")
   return ((data ?? []) as Record<string, unknown>[]).map(locationFromRow)
+}
+
+/** Alle showrooms over bedrijven en merken heen, voor /showrooms: met de
+ *  eigenaar (naam, logo, pagina). Showrooms van bedrijven alleen als het
+ *  bedrijf zelf zichtbaar is (listed, prospected). Op plaats, dan naam. */
+export async function getAllShowrooms(): Promise<Array<{ location: LocationRecord; owner: { name: string; logoUrl: string | null; href: string } }>> {
+  const supabase = createServiceRoleSupabaseClient() as any
+  const { data } = await supabase
+    .from("locations")
+    .select("*, companies(slug, name, logo_url, status), brands(slug, name, logo_url)")
+    .eq("kind", "showroom")
+  return ((data ?? []) as any[])
+    .flatMap((r) => {
+      if (r.companies) {
+        if (!["listed", "prospected"].includes(r.companies.status)) return []
+        return [{ location: locationFromRow(r), owner: { name: r.companies.name as string, logoUrl: (r.companies.logo_url as string | null) ?? null, href: `/professionals/${r.companies.slug}` } }]
+      }
+      if (r.brands) {
+        return [{ location: locationFromRow(r), owner: { name: r.brands.name as string, logoUrl: (r.brands.logo_url as string | null) ?? null, href: `/brands/${r.brands.slug}` } }]
+      }
+      return []
+    })
+    .sort((a, b) => (a.location.city ?? "~").localeCompare(b.location.city ?? "~") || a.owner.name.localeCompare(b.owner.name))
 }

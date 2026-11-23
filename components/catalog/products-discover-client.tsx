@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import NextLink from "next/link"
 import { Link } from "@/i18n/navigation"
 import { QuickRow } from "@/components/quick-row"
 
@@ -10,6 +11,7 @@ import { CollectionCard } from "@/components/catalog/catalog-cards"
 import { LayeredFilterPanel, layeredPillLabel, nextLayeredSelection, type LayeredGroup } from "@/components/filters/layered-filter"
 import { ProductImage } from "@/components/catalog/product-image"
 import { BrandCardLogo } from "@/components/brand/brand-card-logo"
+import { LogoFill } from "@/components/brand/brand-logo"
 import { DrawerSection } from "@/components/filters/drawer-section"
 import { SortLinks } from "@/components/sort-links"
 import { productGroupIcon } from "@/lib/icons/product-groups"
@@ -144,7 +146,15 @@ export function ProductsDiscoverClient({ locale, collection, brands, categories,
   }
   const toggleBrand = (slug: string) => setParams(selectedBrands.includes(slug) ? selectedBrands.filter((s) => s !== slug) : [...selectedBrands, slug], selectedKinds)
   const toggleKind = (slug: string) => setParams(selectedBrands, selectedKinds.includes(slug) ? selectedKinds.filter((s) => s !== slug) : [...selectedKinds, slug])
-  const clearAll = () => setParams([], [])
+  // Op een soortpagina is de soort zelf ook een filter: alles wissen gaat
+  // terug naar /products.
+  const clearAll = () => (fixedKind ? router.push("/products") : setParams([], []))
+  // De soort van de pagina weghalen: naar /products, met het merk erbij.
+  const leaveFixedKind = () => {
+    const p = new URLSearchParams()
+    if (selectedBrands.length) p.set("brand", selectedBrands.join(","))
+    router.push(p.toString() ? `/products?${p.toString()}` : "/products")
+  }
   const browsing = !fixedKind && selectedBrands.length === 0 && selectedKinds.length === 0
 
   // ── Filteren ───────────────────────────────────────────────────────
@@ -156,7 +166,11 @@ export function ProductsDiscoverClient({ locale, collection, brands, categories,
     for (const r of roots) for (const id of tree.subtreeIds(r.id)) ids.add(id)
     return ids
   }, [fixedKind, selectedKinds, tree])
-  const inKind = (s: CatalogCollection) => !kindIds || (s.categoryId !== null && kindIds.has(s.categoryId))
+  // Een collectie hoort bij een soort via haar categorie of via haar soorten
+  // (kindIds): een collectie in "Binnenverlichting" met een vloerlamp telt
+  // mee bij Vloerlampen.
+  const inIds = (s: CatalogCollection, ids: Set<string>) => (s.categoryId !== null && ids.has(s.categoryId)) || s.kindIds.some((k) => ids.has(k))
+  const inKind = (s: CatalogCollection) => !kindIds || inIds(s, kindIds)
   const inBrand = (s: CatalogCollection) => selectedBrands.length === 0 || selectedBrands.includes(s.brand.slug)
   const byRelevance = (a: CatalogCollection, b: CatalogCollection) => b.projectCount - a.projectCount || a.name.localeCompare(b.name)
   const byName = (a: CatalogCollection, b: CatalogCollection) => a.name.localeCompare(b.name)
@@ -167,34 +181,47 @@ export function ProductsDiscoverClient({ locale, collection, brands, categories,
   for (const s of collection.filter(inKind)) brandCounts.set(s.brand.slug, (brandCounts.get(s.brand.slug) ?? 0) + 1)
   const kindCount = (c: CatalogCategory) => {
     const ids = tree.subtreeIds(c.id)
-    return collection.filter((s) => inBrand(s) && s.categoryId !== null && ids.has(s.categoryId)).length
+    return collection.filter((s) => inBrand(s) && inIds(s, ids)).length
   }
   const brandOptions = brands.filter((b) => (brandCounts.get(b.slug) ?? 0) > 0 || selectedBrands.includes(b.slug))
   // Wat de Soort-pill als gekozen toont: de versmalling, anders de soort
   // van de pagina zelf.
   const kindSelection = selectedKinds.length > 0 ? selectedKinds : fixedKind ? [fixedKind.slug] : []
-  // Soort: groep › subgroep (het menu toont twee lagen; een subgroep omvat
-  // zijn soorten). Alleen wat collecties heeft, of al gekozen is.
+  // Soort: groep › subgroep › soort (drie lagen). Alleen wat collecties
+  // heeft, of al gekozen is.
   const kindGroups: LayeredGroup[] = tree.roots
     .map((g) => ({
       id: g.slug,
       label: categoryLabel(g, locale),
       count: kindCount(g),
       children: tree.children(g.id)
-        .map((c) => ({ id: c.slug, label: categoryLabel(c, locale), count: kindCount(c) }))
-        .filter((c) => c.count > 0 || kindSelection.includes(c.id)),
+        .map((c) => ({
+          id: c.slug,
+          label: categoryLabel(c, locale),
+          count: kindCount(c),
+          children: tree.children(c.id)
+            .map((k) => ({ id: k.slug, label: categoryLabel(k, locale), count: kindCount(k) }))
+            .filter((k) => k.count > 0 || kindSelection.includes(k.id)),
+        }))
+        .filter((c) => c.count > 0 || kindSelection.includes(c.id) || c.children.length > 0),
     }))
     .filter((g) => g.count > 0 || kindSelection.includes(g.id) || g.children.length > 0)
 
+  // De tellers bepalen wat er in het menu staat, maar staan er zelf niet in.
+  const withoutCounts = (groups: LayeredGroup[]): LayeredGroup[] => groups.map((g) => ({
+    id: g.id, label: g.label,
+    children: g.children.map((c) => ({ id: c.id, label: c.label, children: c.children?.map((k) => ({ id: k.id, label: k.label })) })),
+  }))
+
   // ── De ingang (zonder keuze) ───────────────────────────────────────
-  // Hoofdgroep als schijf met een uitsnede, zoals de ruimtes op /projects:
-  // het eigen beeld van de groep (admin › categorieën), anders de
-  // productfoto (op wit) van de meest toegepaste collectie erin. Zonder
-  // collecties het lijnicoon van de groep, nooit een lege schijf.
+  // Hoofdgroep als schijf met een lijnillustratie (lib/icons/product-groups):
+  // geen productfoto's, dat geeft rust naast de merk- en collectiekaarten.
+  // Een eigen beeld van de groep (admin › categorieën) gaat voor; daar
+  // komen tzt de specifieke illustraties.
   const groups = tree.roots.map((group) => {
     const ids = tree.subtreeIds(group.id)
-    const inGroup = collection.filter((s) => s.categoryId !== null && ids.has(s.categoryId)).sort(byRelevance)
-    return { group, count: inGroup.length, imageUrl: group.imageUrl ?? inGroup.find((s) => s.productImageUrl)?.productImageUrl ?? null }
+    const inGroup = collection.filter((s) => inIds(s, ids)).sort(byRelevance)
+    return { group, count: inGroup.length, imageUrl: group.imageUrl ?? null }
   })
   // Merk: staande kaart met het beeld van zijn meest toegepaste collectie,
   // het logo erin, de naam eronder — de kaartvorm van home.
@@ -210,15 +237,28 @@ export function ProductsDiscoverClient({ locale, collection, brands, categories,
   // hoofdgroep), de merken binnen de soort als carrousel, dan de lijst.
   const groupView = Boolean(fixedKind) && selectedBrands.length === 0 && selectedKinds.length === 0
   const fixedIds = fixedKind ? tree.subtreeIds(fixedKind.id) : null
-  const inFixed = (s: CatalogCollection) => !fixedIds || (s.categoryId !== null && fixedIds.has(s.categoryId))
-  const subgroupDiscs = fixedKind && !fixedKind.parentId
-    ? tree.children(fixedKind.id)
-        .map((sub) => {
-          const ids = tree.subtreeIds(sub.id)
-          const inSub = collection.filter((s) => s.categoryId !== null && ids.has(s.categoryId)).sort(byRelevance)
-          return { group: sub, count: inSub.length, imageUrl: sub.imageUrl ?? inSub.find((s) => s.productImageUrl)?.productImageUrl ?? null }
-        })
+  const inFixed = (s: CatalogCollection) => !fixedIds || inIds(s, fixedIds)
+  // ── Schijven onder de kop, bij elke soort ──────────────────────────
+  // De soort waar je nu bent: één gekozen soort, anders die van de pagina.
+  // Heeft hij onderliggende soorten, dan die als schijven (alleen met
+  // collecties binnen de merkkeuze); op het laatste niveau de merken die
+  // hem maken, als schijf met logo — een klik filtert op dat merk.
+  const focusKind = selectedKinds.length === 1 ? tree.bySlug.get(selectedKinds[0]) ?? null : selectedKinds.length === 0 ? fixedKind : null
+  const focusIsLeaf = focusKind ? tree.children(focusKind.id).length === 0 : false
+  const childDiscs = focusKind && !focusIsLeaf
+    ? tree.children(focusKind.id)
+        .map((sub) => ({ group: sub, count: kindCount(sub), imageUrl: sub.imageUrl ?? null }))
         .filter((d) => d.count > 0)
+    : []
+  const leafBrands = focusKind && focusIsLeaf
+    ? (() => {
+        const ids = tree.subtreeIds(focusKind.id)
+        return brands
+          .map((b) => ({ brand: b, n: collection.filter((s) => s.brand.id === b.id && inIds(s, ids)).length }))
+          .filter((x) => x.n > 0)
+          .sort((a, b) => b.n - a.n || a.brand.name.localeCompare(b.brand.name))
+          .map((x) => x.brand)
+      })()
     : []
   const fixedBrandCards = brandCards
     .filter(({ brand }) => collection.some((s) => s.brand.id === brand.id && inFixed(s)))
@@ -251,7 +291,12 @@ export function ProductsDiscoverClient({ locale, collection, brands, categories,
 
   const chips: Array<{ key: string; label: string; remove: () => void }> = [
     ...selectedBrands.map((slug) => ({ key: `b-${slug}`, label: brands.find((b) => b.slug === slug)?.name ?? slug, remove: () => toggleBrand(slug) })),
-    ...selectedKinds.map((slug) => { const c = tree.bySlug.get(slug); return { key: `k-${slug}`, label: c ? tree.pathOf(c.id).map((p) => categoryLabel(p, locale)).join(" › ") : slug, remove: () => toggleKind(slug) } }),
+    // Alleen de soort zelf ("Hanglampen"): namen zijn uniek in de taxonomie,
+    // het pad staat al in de dropdown en de breadcrumb.
+    ...selectedKinds.map((slug) => { const c = tree.bySlug.get(slug); return { key: `k-${slug}`, label: c ? categoryLabel(c, locale) : slug, remove: () => toggleKind(slug) } }),
+    // De soort van de pagina (/products/binnenverlichting, via de header of
+    // een collectiepagina) als chip, zolang ?kind= hem niet versmalt.
+    ...(fixedKind && selectedKinds.length === 0 ? [{ key: `f-${fixedKind.slug}`, label: categoryLabel(fixedKind, locale), remove: leaveFixedKind }] : []),
   ]
 
   const path = fixedKind ? tree.pathOf(fixedKind.id) : []
@@ -278,7 +323,7 @@ export function ProductsDiscoverClient({ locale, collection, brands, categories,
         <div className="filter-checkbox">{checked && <CheckIcon />}</div>
         <span className="filter-dropdown-label" style={bold ? { fontWeight: 500 } : undefined}>{label}</span>
       </div>
-      <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{count}</span>
+      {/* Geen aantallen in de filters: rustiger, en de grid laat zien wat er is. */}
     </div>
   )
 
@@ -315,22 +360,52 @@ export function ProductsDiscoverClient({ locale, collection, brands, categories,
     </section>
   )
 
-  // Soorten als schijven met een uitsnede (of het icoon van de hoofdgroep).
-  const discRow = (items: Array<{ group: CatalogCategory; imageUrl: string | null }>, iconSlug: (c: CatalogCategory) => string) => items.length === 0 ? null : (
+  // Soorten als schijven met hun illustratie (of die van de hoofdgroep).
+  const brandQuery = selectedBrands.length ? `?brand=${selectedBrands.join(",")}` : ""
+  const discRow = (items: Array<{ group: CatalogCategory; imageUrl: string | null }>) => items.length === 0 ? null : (
     <div className="wrap" style={{ paddingTop: 0, paddingBottom: 48 }}>
       <QuickRow>
         {items.map(({ group, imageUrl }) => (
-          <Link key={group.id} href={`/products/${group.slug}`} className="credit-card service-quick-card quick-tile">
+          <Link key={group.id} href={`/products/${group.slug}${brandQuery}`} className="credit-card service-quick-card quick-tile">
             <div className="credit-icon" style={{ overflow: "hidden" }}>
               {imageUrl ? (
                 <ProductImage url={imageUrl} alt={categoryLabel(group, locale)} padding="14%" />
               ) : (
-                (() => { const Icon = productGroupIcon(iconSlug(group)); return <Icon className="credit-icon-service" strokeWidth={1} aria-hidden /> })()
+                (() => { const Icon = productGroupIcon(...tree.pathOf(group.id).map((c) => c.slug).reverse()); return <Icon className="credit-icon-service" strokeWidth={1} aria-hidden /> })()
               )}
             </div>
             <h3 className="quick-tile-label">{categoryLabel(group, locale)}</h3>
           </Link>
         ))}
+      </QuickRow>
+    </div>
+  )
+
+  // Merken als schijf met logo (laatste niveau): een klik zet het merkfilter.
+  const brandDiscRow = (items: CatalogBrand[]) => items.length === 0 ? null : (
+    <div className="wrap" style={{ paddingTop: 0, paddingBottom: 48 }}>
+      <QuickRow>
+        {items.map((b) => {
+          const p = new URLSearchParams(searchParams.toString())
+          p.set("brand", b.slug)
+          return (
+            <NextLink
+              key={b.id}
+              href={`${pathname}?${p.toString()}`}
+              replace
+              scroll={false}
+              className="credit-card service-quick-card quick-tile"
+              data-active={selectedBrands.includes(b.slug) || undefined}
+            >
+              <div className="credit-icon" style={{ overflow: "hidden" }}>
+                {b.logoUrl
+                  ? <LogoFill src={b.logoUrl} alt={b.name} />
+                  : <span className="arco-label">{b.name.slice(0, 1)}</span>}
+              </div>
+              <h3 className="quick-tile-label">{b.name}</h3>
+            </NextLink>
+          )
+        })}
       </QuickRow>
     </div>
   )
@@ -394,7 +469,7 @@ export function ProductsDiscoverClient({ locale, collection, brands, categories,
                 <div className="filter-dropdown" data-open={open === "kind" ? "true" : undefined}>
                   {open === "kind" && (
                     <LayeredFilterPanel
-                      groups={kindGroups}
+                      groups={withoutCounts(kindGroups)}
                       selected={kindSelection}
                       onChange={applyKinds}
                       locale={locale}
@@ -422,9 +497,9 @@ export function ProductsDiscoverClient({ locale, collection, brands, categories,
               <div className="drawer-option-list">
                 {kindGroups.map((g) => {
                   const groupChecked = kindSelection.includes(g.id)
-                  const childCount = g.children.filter((c) => kindSelection.includes(c.id)).length
+                  const childCount = g.children.reduce((n, c) => n + (kindSelection.includes(c.id) ? 1 : 0) + (c.children ?? []).filter((k) => kindSelection.includes(k.id)).length, 0)
                   const isExpanded = expandedKinds[g.id] ?? (childCount > 0 || groupChecked)
-                  const pick = (childId: string | null) => applyKinds(nextLayeredSelection(kindGroups, kindSelection, g.id, childId))
+                  const pick = (childId: string | null, kindId: string | null = null) => applyKinds(nextLayeredSelection(kindGroups, kindSelection, g.id, childId, false, kindId))
                   return (
                     <div key={g.id}>
                       <div className="drawer-option" data-checked={groupChecked}>
@@ -457,22 +532,62 @@ export function ProductsDiscoverClient({ locale, collection, brands, categories,
                       </div>
                       {isExpanded && g.children.map((c) => {
                         const checked = kindSelection.includes(c.id)
+                        const kinds = c.children ?? []
+                        const kindPicks = kinds.filter((k) => kindSelection.includes(k.id)).length
+                        // Soorten onder een subgroep klappen open met het pijltje, zoals
+                        // subgroepen onder een groep; open als er al een soort gekozen is.
+                        const subOpen = expandedKinds[c.id] ?? kindPicks > 0
                         return (
-                          <div
-                            key={c.id}
-                            role="option"
-                            aria-selected={checked}
-                            tabIndex={0}
-                            className="drawer-option"
-                            data-checked={checked}
-                            style={{ paddingLeft: 26 }}
-                            onClick={() => pick(c.id)}
-                            onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); pick(c.id) } }}
-                          >
-                            <div className="drawer-option-left">
-                              <div className="drawer-option-checkbox">{checked && <CheckIcon />}</div>
-                              <span className="drawer-option-label">{c.label}</span>
+                          <div key={c.id}>
+                            <div className="drawer-option" data-checked={checked} style={{ paddingLeft: 26 }}>
+                              <div
+                                className="drawer-option-left"
+                                role="option"
+                                aria-selected={checked}
+                                tabIndex={0}
+                                style={{ cursor: "pointer", flex: 1 }}
+                                onClick={() => pick(c.id)}
+                                onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); pick(c.id) } }}
+                              >
+                                <div className="drawer-option-checkbox">{checked && <CheckIcon />}</div>
+                                <span className="drawer-option-label">{c.label}</span>
+                                {kindPicks > 0 && <span className="filter-pill-badge">{kindPicks}</span>}
+                              </div>
+                              {kinds.length > 0 && (
+                                <button
+                                  type="button"
+                                  aria-expanded={subOpen}
+                                  aria-label={c.label}
+                                  onClick={() => setExpandedKinds((prev) => ({ ...prev, [c.id]: !subOpen }))}
+                                  className="drawer-option-expand"
+                                >
+                                  <svg width="7" height="11" viewBox="0 0 7 11" fill="none" aria-hidden style={{ transform: subOpen ? "rotate(90deg)" : "rotate(0)", transition: "transform 0.2s" }}>
+                                    <path d="M1.5 1.5l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
+                                </button>
+                              )}
                             </div>
+                            {subOpen && kinds.map((k) => {
+                              const kChecked = kindSelection.includes(k.id)
+                              return (
+                                <div
+                                  key={k.id}
+                                  role="option"
+                                  aria-selected={kChecked}
+                                  tabIndex={0}
+                                  className="drawer-option"
+                                  data-checked={kChecked}
+                                  style={{ paddingLeft: 52 }}
+                                  onClick={() => pick(c.id, k.id)}
+                                  onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); pick(c.id, k.id) } }}
+                                >
+                                  <div className="drawer-option-left">
+                                    <div className="drawer-option-checkbox">{kChecked && <CheckIcon />}</div>
+                                    <span className="drawer-option-label">{k.label}</span>
+                                  </div>
+                                </div>
+                              )
+                            })}
                           </div>
                         )
                       })}
@@ -548,7 +663,7 @@ export function ProductsDiscoverClient({ locale, collection, brands, categories,
           </div>
 
           {/* ── Hoofdgroepen als schijven ─────────────────────────── */}
-          {discRow(groups, (g) => g.slug)}
+          {discRow(groups)}
 
           {/* ── Merken: staande kaarten ───────────────────────────── */}
           {brandCarousel(brandCards, "/brands")}
@@ -587,13 +702,12 @@ export function ProductsDiscoverClient({ locale, collection, brands, categories,
             </div>
           </div>
 
-          {/* Soortpagina zonder verdere keuze: dezelfde opbouw als /products. */}
-          {groupView && fixedKind && (
-            <>
-              {discRow(subgroupDiscs, () => (tree.rootOf(fixedKind.id) ?? fixedKind).slug)}
-              {brandCarousel(fixedBrandCards, `/brands?kind=${fixedKind.slug}`)}
-            </>
-          )}
+          {/* Onderliggende soorten als schijven, op het laatste niveau de merken. */}
+          {focusIsLeaf ? brandDiscRow(leafBrands) : discRow(childDiscs)}
+
+          {/* Soortpagina zonder verdere keuze: merken als kaarten, zoals op
+              /products — niet op het laatste niveau, daar staan ze al als schijf. */}
+          {groupView && fixedKind && !focusIsLeaf && brandCarousel(fixedBrandCards, `/brands?kind=${fixedKind.slug}`)}
 
           <div className="discover-results">
             <div className="wrap">

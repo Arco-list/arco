@@ -10,7 +10,8 @@ import "server-only"
 export const PIPELINE_MODEL = "claude-sonnet-5-5"
 export const MAX_OVERVIEW_PAGES = 8
 export const MAX_AMBIANCE_PHOTOS = 10
-export const MAX_PHOTO_CANDIDATES = 20
+export const MAX_DETAIL_PHOTOS = 6
+export const MAX_PHOTO_CANDIDATES = 24
 
 export type BatchRequest = { custom_id: string; params: Record<string, unknown> }
 
@@ -61,6 +62,7 @@ export const OVERVIEW_SCHEMA = {
   type: "object",
   properties: {
     brand_description: { type: ["string", "null"] },
+    brand_description_nl: { type: ["string", "null"] },
     collections: {
       type: "array",
       items: {
@@ -77,7 +79,7 @@ export const OVERVIEW_SCHEMA = {
       },
     },
   },
-  required: ["brand_description", "collections"],
+  required: ["brand_description", "brand_description_nl", "collections"],
   additionalProperties: false,
 } as const
 
@@ -107,7 +109,7 @@ For each collection:
 
 Keep the page order. At most 80.
 
-Also give brand_description: one or two editorial sentences in English on what the brand makes and what it is known for, max 240 characters, based on this page; null if the page says nothing usable about the brand.
+Also give brand_description: three or four editorial sentences in English (60–100 words) on the brand — where it comes from, what it makes, its design language and what it is known for — based on this page, factual and without marketing superlatives; null if the page says nothing usable about the brand. And brand_description_nl: the same text in natural, editorial Dutch (as a Dutch design magazine would write it), or null.
 
 Page URL: ${pageUrl}
 
@@ -125,33 +127,50 @@ ${images.slice(0, 300).join("\n")}`,
 
 export type CollectionRead = {
   description: string | null
+  description_nl?: string | null
   designer: string | null
   launch_year: number | null
   category_slug: string | null
   kind_slugs: string[]
-  products: Array<{ name: string; url: string | null; image_url: string | null; kind_slug?: string | null }>
+  materials?: string[]
+  materials_nl?: string[]
+  finishes?: string[]
+  finishes_nl?: string[]
+  products: Array<{ name: string; url: string | null; image_url: string | null; extra_image_urls?: string[]; variants?: string | null; kind_slug?: string | null }>
   photos: string[]
 }
 export const COLLECTION_READ_SCHEMA = {
   type: "object",
   properties: {
     description: { type: ["string", "null"] },
+    description_nl: { type: ["string", "null"] },
     designer: { type: ["string", "null"] },
     launch_year: { type: ["integer", "null"] },
     category_slug: { type: ["string", "null"] },
     kind_slugs: { type: "array", items: { type: "string" } },
+    materials: { type: "array", items: { type: "string" } },
+    materials_nl: { type: "array", items: { type: "string" } },
+    finishes: { type: "array", items: { type: "string" } },
+    finishes_nl: { type: "array", items: { type: "string" } },
     products: {
       type: "array",
       items: {
         type: "object",
-        properties: { name: { type: "string" }, url: { type: ["string", "null"] }, image_url: { type: ["string", "null"] }, kind_slug: { type: ["string", "null"] } },
-        required: ["name", "url", "image_url", "kind_slug"],
+        properties: {
+          name: { type: "string" },
+          url: { type: ["string", "null"] },
+          image_url: { type: ["string", "null"] },
+          extra_image_urls: { type: "array", items: { type: "string" } },
+          variants: { type: ["string", "null"] },
+          kind_slug: { type: ["string", "null"] },
+        },
+        required: ["name", "url", "image_url", "extra_image_urls", "variants", "kind_slug"],
         additionalProperties: false,
       },
     },
     photos: { type: "array", items: { type: "string" } },
   },
-  required: ["description", "designer", "launch_year", "category_slug", "kind_slugs", "products", "photos"],
+  required: ["description", "description_nl", "designer", "launch_year", "category_slug", "kind_slugs", "materials", "materials_nl", "finishes", "finishes_nl", "products", "photos"],
   additionalProperties: false,
 } as const
 
@@ -160,7 +179,7 @@ export function collectionReadRequest(customId: string, collectionName: string, 
     custom_id: customId,
     params: {
       model: PIPELINE_MODEL,
-      max_tokens: 6000,
+      max_tokens: 8000,
       output_config: { effort: "low", format: { type: "json_schema", schema: COLLECTION_READ_SCHEMA } },
       system: [{ type: "text", text: `Product categories (slug — group › subgroup › kind):\n${categoryMenu(cats)}`, cache_control: { type: "ephemeral" } }],
       messages: [{
@@ -168,12 +187,15 @@ export function collectionReadRequest(customId: string, collectionName: string, 
         content: `This is the page of the collection "${collectionName}" by the brand "${brandName}" (text with [links](...) and ![images](...)), followed by the image URLs found on it. It is being catalogued for an editorial directory of interior and architecture products.
 
 Give:
-- description: one or two sentences in English on what defines this collection, taken from the page; null if nothing usable.
+- description: three or four sentences in English (60–100 words) on what defines this collection — its form and idea, materials and finishes, where and how it is used, the designer's intent — taken from the page, factual and without marketing superlatives; null if nothing usable.
+- description_nl: the same description in natural, editorial Dutch (as a Dutch design magazine would write it), or null.
 - designer: the person or studio named as its designer, or null.
 - launch_year: the year it was introduced, or null.
 - category_slug: the most specific slug from the category list that covers the WHOLE collection; a collection spanning several kinds gets their common subgroup. Null if nothing fits.
 - kind_slugs: the specific kinds of product it contains, as kind slugs from the list (a lounge chair, a dining table, a treadmill), most important first, at most 8. Outdoor products take the outdoor kinds.
-- products: the individual products of THIS collection the page lists (not colour or finish variants, not other collections, accessories or navigation): name in normal capitalisation without the brand name; url of its own page or null; image_url from the image list or null; kind_slug: the most specific kind slug from the category list for this one product (a lounge chair, a footstool), or null. Page order, at most 40.
+- materials: the main materials the page names for this collection, short lowercase English nouns ("glass", "brass", "oak", "bouclé fabric"), at most 6; empty if the page names none. materials_nl: the same list in Dutch ("glas", "messing", "eiken", "bouclé stof"), same order.
+- finishes: the finishes and colours it comes in, short lowercase English ("matt white", "black", "gold leaf", "natural oak"), at most 10; empty if none are named. finishes_nl: the same list in Dutch, same order.
+- products: the individual products of THIS collection the page lists (not colour, finish or size variants, not other collections, accessories or navigation). Sizes and versions of the same piece (Moon 60 / Moon 80 / Moon 120, a table in 200 and 240 cm, a lamp with a marble or a travertine base) are ONE product; when the whole collection is one piece in several sizes, return that one product under the collection's name: name in normal capitalisation without the brand name; url of its own page or null; image_url from the image list or null; extra_image_urls: up to 2 more images from the list that show THIS product from another angle or in another finish (not ambiance shots, not other products), else empty; variants: the sizes or versions folded into this product, as one short line ("Ø 60, 80, 120 cm", "2- and 3-seater", "marble or travertine base"), or null; kind_slug: the most specific kind slug from the category list for this one product (a lounge chair, a footstool), or null. Page order, at most 40.
 - photos: the image URLs from the list that show THIS collection — interiors or settings with it in place, studio shots and details — excluding logos, icons, badges, people portraits, PDF thumbnails and images of other collections ("related", "you may also like"). Put interiors and real settings first. At most ${MAX_PHOTO_CANDIDATES}, copied exactly from the list.
 
 Page URL: ${pageUrl}
@@ -190,14 +212,15 @@ ${images.slice(0, 200).join("\n")}`,
 
 // ── 4. Sfeerbeelden kiezen (met beeld) ─────────────────────────────────
 
-export type PhotoChoice = { ambiance: number[]; product_shot: number | null }
+export type PhotoChoice = { ambiance: number[]; detail?: number[]; product_shot: number | null }
 export const PHOTO_CHOICE_SCHEMA = {
   type: "object",
   properties: {
     ambiance: { type: "array", items: { type: "integer" } },
+    detail: { type: "array", items: { type: "integer" } },
     product_shot: { type: ["integer", "null"] },
   },
-  required: ["ambiance", "product_shot"],
+  required: ["ambiance", "detail", "product_shot"],
   additionalProperties: false,
 } as const
 
@@ -207,6 +230,7 @@ export function photoChoiceRequest(customId: string, collectionName: string, bra
     text: `These are numbered photos from the page of the collection "${collectionName}" by "${brandName}".
 
 - ambiance: the numbers of the photos that show this collection in a real or styled setting — a room, terrace, garden, pool, with surroundings visible. Not studio cut-outs on a plain background, not close-ups of materials, not photos where the collection is not the subject. Choose at most ${MAX_AMBIANCE_PHOTOS}, best first, and make them varied: different rooms, angles and set-ups rather than near-duplicates of one scene.
+- detail: the numbers of the photos that show this collection close up — a zoomed-in view of the piece, a joint, a shade, a material or finish — that are worth showing in a gallery. Not the photos already chosen as ambiance, not the product_shot, not near-duplicates. At most ${MAX_DETAIL_PHOTOS}, best first.
 - product_shot: the number of the single best studio photo of the product on a plain background, or null if there is none.`,
   }]
   imageUrls.forEach((url, i) => {

@@ -47,9 +47,14 @@ export function Footer() {
                 <h4 className="arco-eyebrow footer-heading mb-1.5">{t("discover")}</h4>
                 <Link href="/projects" className="footer-link">{tn("projects")}</Link>
                 <Link href="/professionals" className="footer-link">{tn("professionals")}</Link>
-                {/* Merken: alleen voor admins zolang de merkenlaag niet publiek is. */}
+                {/* Producten, merken en showrooms: alleen voor admins zolang
+                    de productlaag niet publiek is. */}
                 {hasAdminRole && (
-                  <Link href="/brands" className="footer-link">{tn("admin_brands")}</Link>
+                  <>
+                    <Link href="/products" className="footer-link">{tn("products")}</Link>
+                    <Link href="/brands" className="footer-link">{tn("admin_brands")}</Link>
+                    <Link href="/showrooms" className="footer-link">{tn("showrooms")}</Link>
+                  </>
                 )}
               </div>
 

@@ -21,7 +21,8 @@ async function main() {
   const { tickCollectionJobs } = await import("../lib/collections/pipeline")
   const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
   for (let round = 1; round <= 240; round++) {
-    const report = await tickCollectionJobs(sb)
+    // Vasthouden: een cron met oudere code pakt deze taken dan niet op.
+    const report = await tickCollectionJobs(sb, { holder: "local" })
     const { data: jobs } = await sb.from("brand_collection_jobs").select("id, kind, stage, progress_done, progress_total, error, firecrawl_credits").not("stage", "in", "(done,error)")
     console.log(new Date().toISOString().slice(11, 19), `round ${round}`, JSON.stringify(report), `| open: ${jobs?.length ?? 0}`, (jobs ?? []).map((j: any) => `${j.kind}:${j.stage} ${j.progress_done}/${j.progress_total}`).join(", "))
     if (!jobs?.length) break
