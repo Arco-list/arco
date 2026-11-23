@@ -153,8 +153,10 @@ function siteUrls(links: Array<{ url: string; title?: string }>, origin: string)
 
 /** De links op een pagina, met de linktekst als titel. Gratis. Voor de
  *  homepage als de map van Firecrawl (bijna) niets oplevert (minotti.com),
- *  en voor de categoriepagina's onder een gekozen index (edra.com). */
-async function pageLinks(pageUrl: string): Promise<Array<{ url: string; title?: string }>> {
+ *  en voor de categoriepagina's onder een gekozen index (edra.com). Een
+ *  <link rel="next"> (oneindig scrollen, henge07.com) komt mee als rel "next". */
+type PageLink = { url: string; title?: string; rel?: "next" }
+async function pageLinks(pageUrl: string): Promise<PageLink[]> {
   try {
     const res = await fetch(pageUrl, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; ArcoBot/1.0)", Accept: "text/html" },
@@ -164,12 +166,18 @@ async function pageLinks(pageUrl: string): Promise<Array<{ url: string; title?: 
     if (!res.ok) return []
     const html = await res.text()
     const base = res.url || pageUrl
-    const out: Array<{ url: string; title?: string }> = []
+    const out: PageLink[] = []
     for (const m of html.matchAll(/<a\b[^>]*\bhref\s*=\s*["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
       let url: string
       try { url = new URL(m[1], base).toString() } catch { continue }
       const title = m[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 80)
       out.push({ url, title: title || undefined })
+    }
+    for (const m of html.matchAll(/<link\b[^>]*>/gi)) {
+      if (!/\brel\s*=\s*["']next["']/i.test(m[0])) continue
+      const href = m[0].match(/\bhref\s*=\s*["']([^"']+)["']/i)?.[1]
+      if (!href) continue
+      try { out.push({ url: new URL(href, base).toString(), rel: "next" }) } catch { /* ongeldig */ }
     }
     return out
   } catch {
@@ -182,21 +190,74 @@ async function pageLinks(pageUrl: string): Promise<Array<{ url: string; title?: 
  *  de sitemap staan. De pagina's direct onder een gekozen pagina komen erbij,
  *  maar alleen als het er een handvol is: tientallen zijn productpagina's. */
 const PRODUCT_SEGMENT = /\/(products?|prodotti|produkte?|producten|item|p)\//i
-async function subPages(picked: string[], origin: string): Promise<string[]> {
-  const out: string[] = []
+const PAGINATION = /\/page\/(\d+)\/?$/i
+const MAX_PAGINATION = 5
+
+/** De gekozen pagina's, aangevuld met (1) de categoriepagina's eronder en
+ *  (2) de volgende pagina's van een lijst die doorbladert (henge07.com:
+ *  /products/tables/page/2/). Alleen HTML ophalen, gratis. */
+async function expandPages(picked: string[], origin: string): Promise<string[]> {
+  const cache = new Map<string, PageLink[]>()
+  const linksOf = async (u: string) => {
+    if (!cache.has(u)) cache.set(u, await pageLinks(u))
+    return cache.get(u)!
+  }
+
+  // 1. Categoriepagina's direct onder een gekozen index. Alleen als het er
+  //    een handvol is: tientallen zijn productpagina's.
+  const subs: string[] = []
   for (const page of picked.slice(0, 3)) {
     let base: URL
     try { base = new URL(page) } catch { continue }
     const prefix = base.pathname.replace(/\/$/, "") + "/"
     if (prefix === "/" || prefix.split("/").length > 5) continue
     const depth = prefix.split("/").length
-    const subs = siteUrls(await pageLinks(page), origin)
+    const found = siteUrls(await linksOf(page), origin)
       .map((l) => l.url)
       .filter((u) => {
         const p = new URL(u).pathname
-        return p.startsWith(prefix) && p.length > prefix.length && p.split("/").length <= depth + 2 && !PRODUCT_SEGMENT.test(p.slice(prefix.length - 1))
+        return p.startsWith(prefix) && p.length > prefix.length && p.split("/").length <= depth + 2
+          && !PRODUCT_SEGMENT.test(p.slice(prefix.length - 1)) && !PAGINATION.test(p)
       })
-    if (subs.length >= 2 && subs.length <= 20) out.push(...subs)
+    if (found.length >= 2 && found.length <= 20) subs.push(...found)
+  }
+
+  // 2. Doorbladeren: /page/N/ of ?page=N op dezelfde lijst, tot pagina 5.
+  const out: string[] = []
+  for (const page of [...picked, ...subs]) {
+    out.push(page)
+    let base: URL
+    try { base = new URL(page) } catch { continue }
+    const path = base.pathname.replace(/\/$/, "")
+    let last = 1
+    let style: "path" | "query" | null = null
+    for (const l of await linksOf(page)) {
+      let u: URL
+      try { u = new URL(l.url) } catch { continue }
+      if (stripWww(u.hostname) !== stripWww(base.hostname)) continue
+      const m = u.pathname.match(PAGINATION)
+      if (m && u.pathname.slice(0, m.index).replace(/\/$/, "") === path) { last = Math.max(last, Number(m[1])); style = "path"; continue }
+      const q = u.searchParams.get("page") ?? u.searchParams.get("p")
+      if (q && /^\d+$/.test(q) && u.pathname.replace(/\/$/, "") === path) { last = Math.max(last, Number(q)); style = style ?? "query" }
+    }
+    const norm = (u: string) => u.replace(/\/$/, "")
+    const visited = new Set([norm(page)])
+    let cur = page
+    let count = 1
+    for (let n = 2; n <= Math.min(last, MAX_PAGINATION); n++) {
+      let next: string
+      if (style === "path") next = `${base.origin}${path}/page/${n}/`
+      else { const u = new URL(page); u.searchParams.set("page", String(n)); next = u.toString() }
+      out.push(next); visited.add(norm(next)); cur = next; count++
+    }
+    // Daarna (of zonder zichtbare paginalinks) de keten van <link rel="next">
+    // volgen: een lijst toont vaak alleen een link naar de volgende pagina.
+    while (count < MAX_PAGINATION) {
+      const next = (await linksOf(cur)).find((l) => l.rel === "next")?.url
+      if (!next || visited.has(norm(next))) break
+      try { if (stripWww(new URL(next).hostname) !== stripWww(base.hostname)) break } catch { break }
+      out.push(next); visited.add(norm(next)); cur = next; count++
+    }
   }
   return out
 }
@@ -243,12 +304,12 @@ async function stepInventory(sb: any, job: Job, brand: Brand, deadline: number):
         .map((u) => (origin ? absoluteHttpUrl(u, origin) : null))
         .filter((u): u is string => Boolean(u))
       const unique = Array.from(new Set(picked))
-      // Categoriepagina's onder een gekozen index komen erachter; dubbelingen
-      // (ook met of zonder slash) eruit.
+      // Categoriepagina's onder een gekozen index en volgende pagina's van
+      // een lijst komen erbij; dubbelingen (ook met of zonder slash) eruit.
       const key = (u: string) => u.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "").toLowerCase()
-      const seen = new Set(unique.map(key))
-      const extra = origin && unique.length ? (await subPages(unique, origin)).filter((u) => !seen.has(key(u)) && (seen.add(key(u)), true)) : []
-      st.pages = [...unique, ...extra].slice(0, MAX_OVERVIEW_PAGES)
+      const seen = new Set<string>()
+      const expanded = origin && unique.length ? await expandPages(unique, origin) : unique
+      st.pages = expanded.filter((u) => !seen.has(key(u)) && (seen.add(key(u)), true)).slice(0, MAX_OVERVIEW_PAGES)
       if (st.pages.length === 0 && origin) st.pages = [origin]
       st.fetched = 0; st.batches = []; st.pageByRequest = {}
       await save(sb, job, { stage: "fetching_pages", state: st, progress_done: 0, progress_total: st.pages.length })

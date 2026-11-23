@@ -8270,23 +8270,25 @@ body.no-scroll {
   color: var(--text-secondary);
 }
 
+/* minmax(0, 1fr): kolommen even breed, ook als een regel onder een kaart
+   niet afbreekt (de soort · designer van een collectie kort af met …). */
 .discover-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--grid-gap);
   margin-bottom: 48px;
 }
 
 @media (max-width: 1024px) {
   .discover-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     margin-bottom: 32px;
   }
 }
 
 @media (max-width: 768px) {
   .discover-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

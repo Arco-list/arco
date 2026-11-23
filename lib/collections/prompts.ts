@@ -8,7 +8,7 @@ import "server-only"
  */
 
 export const PIPELINE_MODEL = "claude-sonnet-5-5"
-export const MAX_OVERVIEW_PAGES = 12
+export const MAX_OVERVIEW_PAGES = 30
 export const MAX_AMBIANCE_PHOTOS = 10
 export const MAX_DETAIL_PHOTOS = 6
 export const MAX_PHOTO_CANDIDATES = 24
@@ -44,7 +44,7 @@ Pick the pages that together show the brand's whole range as an overview: collec
 - when one index page clearly lists the whole range ("all products", "view all"), return only that page;
 - when the list has category pages (sofas, tables, lamps, outdoor, …), the range is split over them: return all of them. An index next to category pages often shows only the first category, so add the index but never rely on it alone;
 - one language version only — English if the site has it — never the same page in two languages.
-Do NOT pick individual product pages, blog/news, about, contact, dealers, downloads or legal pages.
+Do NOT pick individual product pages, seasonal or yearly presentations (a "collections" page that shows launches like "#12" or "2025" rather than product lines), blog/news, about, contact, dealers, downloads or legal pages.
 
 Return at most ${MAX_OVERVIEW_PAGES} URLs, the most complete first, copied exactly from the list. Return an empty list if none fit.
 
@@ -98,7 +98,7 @@ export function overviewRequest(customId: string, brandName: string, pageUrl: st
 
 Below is one page of the brand's website (text with [links](...) and ![images](...)), followed by every image URL found on the page. List the brand's COLLECTIONS on this page: the named product lines, series or families the brand itself uses ("Mito", "Sento", "b3", "Bart"). When the brand names each product individually instead of grouping them into lines (a fitness brand with a treadmill "IRENA" and a rowing machine "VARTA"), each named product counts as a collection.
 
-Do NOT include: sizes, colours or variants of one line; generic categories ("Pendant lights", "Sofas", "Outdoor"); navigation and utility pages; seasonal groupings ("Novelties 2026"); accessories, spare parts, gift cards; other brands.
+Do NOT include: sizes, colours or variants of one line; generic categories ("Pendant lights", "Sofas", "Outdoor"); navigation and utility pages; seasonal groupings, yearly launches and presentations, also when named by a number or code ("Novelties 2026", "Collection #12", "S34/1"); accessories, spare parts, gift cards; other brands.
 
 For each collection:
 - name: as the brand writes it, normal capitalisation, without the brand name or trademark signs;
