@@ -151,18 +151,19 @@ function siteUrls(links: Array<{ url: string; title?: string }>, origin: string)
     .map(({ url, title }) => ({ url, title }))
 }
 
-/** Als de map van Firecrawl (bijna) niets oplevert, zoals bij minotti.com:
- *  de links op de homepage zelf, met de linktekst als titel. Gratis. */
-async function homepageLinks(origin: string): Promise<Array<{ url: string; title?: string }>> {
+/** De links op een pagina, met de linktekst als titel. Gratis. Voor de
+ *  homepage als de map van Firecrawl (bijna) niets oplevert (minotti.com),
+ *  en voor de categoriepagina's onder een gekozen index (edra.com). */
+async function pageLinks(pageUrl: string): Promise<Array<{ url: string; title?: string }>> {
   try {
-    const res = await fetch(origin, {
+    const res = await fetch(pageUrl, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; ArcoBot/1.0)", Accept: "text/html" },
       redirect: "follow",
       signal: AbortSignal.timeout(15_000),
     })
     if (!res.ok) return []
     const html = await res.text()
-    const base = res.url || origin
+    const base = res.url || pageUrl
     const out: Array<{ url: string; title?: string }> = []
     for (const m of html.matchAll(/<a\b[^>]*\bhref\s*=\s*["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
       let url: string
@@ -174,6 +175,30 @@ async function homepageLinks(origin: string): Promise<Array<{ url: string; title
   } catch {
     return []
   }
+}
+
+/** Een index toont vaak alleen de eerste categorie (edra.com/en/collection:
+ *  alleen banken), terwijl de andere categorieën eronder hangen en niet in
+ *  de sitemap staan. De pagina's direct onder een gekozen pagina komen erbij,
+ *  maar alleen als het er een handvol is: tientallen zijn productpagina's. */
+const PRODUCT_SEGMENT = /\/(products?|prodotti|produkte?|producten|item|p)\//i
+async function subPages(picked: string[], origin: string): Promise<string[]> {
+  const out: string[] = []
+  for (const page of picked.slice(0, 3)) {
+    let base: URL
+    try { base = new URL(page) } catch { continue }
+    const prefix = base.pathname.replace(/\/$/, "") + "/"
+    if (prefix === "/" || prefix.split("/").length > 5) continue
+    const depth = prefix.split("/").length
+    const subs = siteUrls(await pageLinks(page), origin)
+      .map((l) => l.url)
+      .filter((u) => {
+        const p = new URL(u).pathname
+        return p.startsWith(prefix) && p.length > prefix.length && p.split("/").length <= depth + 2 && !PRODUCT_SEGMENT.test(p.slice(prefix.length - 1))
+      })
+    if (subs.length >= 2 && subs.length <= 20) out.push(...subs)
+  }
+  return out
 }
 
 // ── Inventariseren ─────────────────────────────────────────────────────
@@ -196,7 +221,7 @@ async function stepInventory(sb: any, job: Job, brand: Brand, deadline: number):
           urls = siteUrls((map?.links ?? []) as Array<{ url: string; title?: string }>, origin)
         }
         if (urls.length <= 3) {
-          const fromHome = siteUrls(await homepageLinks(origin), origin)
+          const fromHome = siteUrls(await pageLinks(origin), origin)
           if (fromHome.length > urls.length) urls = fromHome
         }
         if (urls.length > 3) {
@@ -217,7 +242,13 @@ async function stepInventory(sb: any, job: Job, brand: Brand, deadline: number):
       const picked = ((res.get("pick")?.pages ?? []) as string[])
         .map((u) => (origin ? absoluteHttpUrl(u, origin) : null))
         .filter((u): u is string => Boolean(u))
-      st.pages = Array.from(new Set(picked)).slice(0, MAX_OVERVIEW_PAGES)
+      const unique = Array.from(new Set(picked))
+      // Categoriepagina's onder een gekozen index komen erachter; dubbelingen
+      // (ook met of zonder slash) eruit.
+      const key = (u: string) => u.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "").toLowerCase()
+      const seen = new Set(unique.map(key))
+      const extra = origin && unique.length ? (await subPages(unique, origin)).filter((u) => !seen.has(key(u)) && (seen.add(key(u)), true)) : []
+      st.pages = [...unique, ...extra].slice(0, MAX_OVERVIEW_PAGES)
       if (st.pages.length === 0 && origin) st.pages = [origin]
       st.fetched = 0; st.batches = []; st.pageByRequest = {}
       await save(sb, job, { stage: "fetching_pages", state: st, progress_done: 0, progress_total: st.pages.length })

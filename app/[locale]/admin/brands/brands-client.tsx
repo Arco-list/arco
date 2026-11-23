@@ -889,17 +889,31 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
                     })()}
                   </td>
                   <td style={{ textAlign: "right" }}>
-                    <div>{b.collection_count || dash}</div>
                     {(() => {
+                      // Eén rij: aantal collecties (of de voortgang van de
+                      // pijplijn) · Add X zolang er gevonden collecties wachten.
                       const j = b.collection_job
-                      if (j && JOB_ACTIVE(j)) return <div className="arco-table-secondary" style={{ color: "#016D75", whiteSpace: "nowrap" }}>{jobLabel(j)}</div>
-                      if (j?.stage === "error") return <div className="arco-table-secondary" style={{ color: "#c0392b", whiteSpace: "nowrap" }} title={j.error ?? undefined}>{j.kind === "inventory" ? "Inventory failed" : "Fetch failed"}</div>
-                      if (b.candidates_found > 0) return (
-                        <button type="button" className="arco-table-secondary hover:underline" style={{ color: "#016D75", background: "none", border: 0, padding: 0, cursor: "pointer", whiteSpace: "nowrap" }} onClick={() => setPickerBrand({ id: b.id, name: b.name })}>
-                          {b.candidates_found} found · Choose
-                        </button>
+                      const active = Boolean(j && JOB_ACTIVE(j))
+                      const status = active
+                        ? <span style={{ color: "#016D75" }}>{jobLabel(j!)}</span>
+                        : j?.stage === "error"
+                          ? <span style={{ color: "#c0392b" }} title={j.error ?? undefined}>{j.kind === "inventory" ? "Inventory failed" : "Fetch failed"}</span>
+                          : <span>{b.collection_count || dash}</span>
+                      // Tijdens het inventariseren is de lijst nog niet af.
+                      const canAdd = b.candidates_found > 0 && !(active && j!.kind === "inventory")
+                      return (
+                        <div className="inline-flex items-center justify-end gap-1.5" style={{ whiteSpace: "nowrap" }}>
+                          {status}
+                          {canAdd && (
+                            <>
+                              <span className="text-[#a1a1a0]">·</span>
+                              <button type="button" className="hover:underline" style={{ color: "#016D75", background: "none", border: 0, padding: 0, cursor: "pointer", font: "inherit" }} onClick={() => setPickerBrand({ id: b.id, name: b.name })}>
+                                Add {b.candidates_found}
+                              </button>
+                            </>
+                          )}
+                        </div>
                       )
-                      return null
                     })()}
                   </td>
                   <td style={{ textAlign: "right" }}>

@@ -8,7 +8,7 @@ import "server-only"
  */
 
 export const PIPELINE_MODEL = "claude-sonnet-5-5"
-export const MAX_OVERVIEW_PAGES = 8
+export const MAX_OVERVIEW_PAGES = 12
 export const MAX_AMBIANCE_PHOTOS = 10
 export const MAX_DETAIL_PHOTOS = 6
 export const MAX_PHOTO_CANDIDATES = 24
@@ -41,8 +41,8 @@ export function pickPagesRequest(customId: string, brandName: string, origin: st
         content: `Below are pages from the website of the brand "${brandName}" (${origin}). We want to list the brand's COLLECTIONS: its named product lines, series or families (for a lighting brand "Mito" or "Sento", for a furniture brand "Bart" or "Monster"; for a brand that names each product, like a fitness brand with a treadmill "IRENA", the named products).
 
 Pick the pages that together show the brand's whole range as an overview: collection or series overview pages, product category pages that list products, a "products" or "collections" index. Each page costs money to read, so pick as few as cover the range:
-- when one index page lists the whole range ("all products", "collections"), return only that page;
-- use category pages only when the range is split over them;
+- when one index page clearly lists the whole range ("all products", "view all"), return only that page;
+- when the list has category pages (sofas, tables, lamps, outdoor, …), the range is split over them: return all of them. An index next to category pages often shows only the first category, so add the index but never rely on it alone;
 - one language version only — English if the site has it — never the same page in two languages.
 Do NOT pick individual product pages, blog/news, about, contact, dealers, downloads or legal pages.
 
