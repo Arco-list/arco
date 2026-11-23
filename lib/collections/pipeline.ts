@@ -151,6 +151,31 @@ function siteUrls(links: Array<{ url: string; title?: string }>, origin: string)
     .map(({ url, title }) => ({ url, title }))
 }
 
+/** Als de map van Firecrawl (bijna) niets oplevert, zoals bij minotti.com:
+ *  de links op de homepage zelf, met de linktekst als titel. Gratis. */
+async function homepageLinks(origin: string): Promise<Array<{ url: string; title?: string }>> {
+  try {
+    const res = await fetch(origin, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; ArcoBot/1.0)", Accept: "text/html" },
+      redirect: "follow",
+      signal: AbortSignal.timeout(15_000),
+    })
+    if (!res.ok) return []
+    const html = await res.text()
+    const base = res.url || origin
+    const out: Array<{ url: string; title?: string }> = []
+    for (const m of html.matchAll(/<a\b[^>]*\bhref\s*=\s*["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+      let url: string
+      try { url = new URL(m[1], base).toString() } catch { continue }
+      const title = m[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 80)
+      out.push({ url, title: title || undefined })
+    }
+    return out
+  } catch {
+    return []
+  }
+}
+
 // ── Inventariseren ─────────────────────────────────────────────────────
 
 async function stepInventory(sb: any, job: Job, brand: Brand, deadline: number): Promise<void> {
@@ -169,6 +194,10 @@ async function stepInventory(sb: any, job: Job, brand: Brand, deadline: number):
           const map = await new Firecrawl({ apiKey: key }).map(origin, { limit: 3000, sitemap: "include", ignoreQueryParameters: true })
           job.firecrawl_credits += 1
           urls = siteUrls((map?.links ?? []) as Array<{ url: string; title?: string }>, origin)
+        }
+        if (urls.length <= 3) {
+          const fromHome = siteUrls(await homepageLinks(origin), origin)
+          if (fromHome.length > urls.length) urls = fromHome
         }
         if (urls.length > 3) {
           st.batch = await submitBatch([pickPagesRequest("pick", brand.name, origin, urls)])
