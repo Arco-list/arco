@@ -57,10 +57,15 @@ export async function getCatalogCollections(): Promise<CatalogCollection[]> {
     selectAll(() => supabase.from("product_collection_photos").select("collection_id, url, order_index").eq("kind", "product").order("order_index").order("id")),
     selectAll(() => supabase.from("products").select("collection_id, image_url, position").not("image_url", "is", null).order("position").order("id")),
     // Focuspunten van de covers: de kaart snijdt bij zoals de hero.
-    selectAll(() => supabase.from("product_collection_photos").select("collection_id, url, focus_x, focus_y").eq("is_primary", true).not("focus_x", "is", null).order("id")),
+    selectAll(() => supabase.from("product_collection_photos").select("collection_id, url, focus_x, focus_y, width, height").eq("is_primary", true).not("focus_x", "is", null).order("id")),
   ])
   const focusByUrl = new Map<string, { x: number; y: number }>()
-  for (const r of (coverRows ?? []) as Array<{ url: string; focus_x: number; focus_y: number }>) focusByUrl.set(r.url, { x: r.focus_x, y: r.focus_y })
+  // De maat erbij, zodat de kaart het punt kan centreren (focusPositionIn).
+  const sizeByUrl = new Map<string, { width: number; height: number }>()
+  for (const r of (coverRows ?? []) as Array<{ url: string; focus_x: number; focus_y: number; width: number | null; height: number | null }>) {
+    focusByUrl.set(r.url, { x: r.focus_x, y: r.focus_y })
+    if (r.width && r.height) sizeByUrl.set(r.url, { width: r.width, height: r.height })
+  }
   const productImageByCollection = new Map<string, string>()
   for (const p of (productShots ?? []) as Array<{ collection_id: string; url: string }>) {
     if (!productImageByCollection.has(p.collection_id)) productImageByCollection.set(p.collection_id, p.url)
@@ -88,6 +93,7 @@ export async function getCatalogCollections(): Promise<CatalogCollection[]> {
       descriptionNl: f.translations?.nl?.description?.trim() || null,
       heroImageUrl: f.hero_image_url ?? null,
       heroFocus: f.hero_image_url ? focusByUrl.get(f.hero_image_url) ?? null : null,
+      heroSize: f.hero_image_url ? sizeByUrl.get(f.hero_image_url) ?? null : null,
       productImageUrl: productImageByCollection.get(f.id) ?? null,
       designer: f.designer ?? null,
       launchYear: f.launch_year ?? null,

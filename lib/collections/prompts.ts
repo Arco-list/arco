@@ -88,7 +88,7 @@ export function overviewRequest(customId: string, brandName: string, pageUrl: st
     custom_id: customId,
     params: {
       model: PIPELINE_MODEL,
-      max_tokens: 16000,
+      max_tokens: 32000,
       output_config: { effort: "low", format: { type: "json_schema", schema: OVERVIEW_SCHEMA } },
       // De categorielijst is voor elk verzoek gelijk: cachebaar.
       system: [{ type: "text", text: `Product categories (slug — group › subgroup › kind):\n${categoryMenu(cats)}`, cache_control: { type: "ephemeral" } }],
@@ -107,7 +107,7 @@ For each collection:
 - description: one short sentence from the page, or null;
 - category_slug: what kind of product it is, as the most specific slug from the category list that covers the whole collection (a kind if it is one kind of product, else its subgroup); null if nothing fits.
 
-Keep the page order. At most 80.
+Keep the page order. At most 150.
 
 Also give brand_description: three or four editorial sentences in English (60–100 words) on the brand — where it comes from, what it makes, its design language and what it is known for — based on this page, factual and without marketing superlatives; null if the page says nothing usable about the brand. And brand_description_nl: the same text in natural, editorial Dutch (as a Dutch design magazine would write it), or null.
 

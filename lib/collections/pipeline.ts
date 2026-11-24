@@ -113,9 +113,14 @@ function brandOrigin(b: Brand): string | null {
   try { const u = new URL(raw); return `${u.protocol}//${u.host}/` } catch { return null }
 }
 
-/** Shopify-beelden in een grotere maat (…_720x.jpg → …_1600x.jpg). */
-function upsize(url: string): string {
+/** Beelden in een grotere maat of zonder opvulling:
+ *  - Shopify: …_720x.jpg → …_1600x.jpg;
+ *  - de beeldschaler van edra.com (ridimensiona.html/rem/B/H/vlag__/): vlag
+ *    030 vult op tot B×H met zwarte balken, 100 snijdt bij; 000 geeft het
+ *    beeld in zijn eigen verhouding, tot 1920. */
+export function upsize(url: string): string {
   if (/\/cdn\/shop\/|cdn\.shopify\.com/.test(url)) return url.replace(/_(\d+x\d*|\d*x\d+)(?=\.(jpe?g|png|webp)(\?|$))/i, "_1600x")
+  if (/\/ridimensiona\.html\/rem\/\d+\/\d+\/\d{3}__\//i.test(url)) return url.replace(/\/ridimensiona\.html\/rem\/\d+\/\d+\/\d{3}__\//i, "/ridimensiona.html/rem/1920/1920/000__/")
   return url
 }
 
@@ -275,16 +280,20 @@ async function stepInventory(sb: any, job: Job, brand: Brand, deadline: number):
       } else {
         if (!origin) return save(sb, job, { stage: "error", error: "This brand has no website.", finished_at: new Date().toISOString() })
         const key = process.env.FIRECRAWL_API_KEY
-        let urls: Array<{ url: string; title: string | null }> = []
+        // De links op de homepage altijd vooraan, met hun linktekst als
+        // titel: daar staat het menu met de categorieën ("Sofas", "Beds").
+        // De map van Firecrawl vult aan, maar geeft vaak een willekeurige
+        // greep productpagina's zonder titel (minotti.com), en de keuze
+        // ziet dan niet welke pagina een categorie is. Dubbelingen houden
+        // de eerste, dus de titel van de homepage.
+        const homeLinks = await pageLinks(origin)
+        let mapLinks: Array<{ url: string; title?: string }> = []
         if (key) {
           const map = await new Firecrawl({ apiKey: key }).map(origin, { limit: 3000, sitemap: "include", ignoreQueryParameters: true })
           job.firecrawl_credits += 1
-          urls = siteUrls((map?.links ?? []) as Array<{ url: string; title?: string }>, origin)
+          mapLinks = (map?.links ?? []) as Array<{ url: string; title?: string }>
         }
-        if (urls.length <= 3) {
-          const fromHome = siteUrls(await pageLinks(origin), origin)
-          if (fromHome.length > urls.length) urls = fromHome
-        }
+        const urls = siteUrls([...homeLinks.filter((l) => !l.rel), ...mapLinks], origin)
         if (urls.length > 3) {
           st.batch = await submitBatch([pickPagesRequest("pick", brand.name, origin, urls)])
           await save(sb, job, { stage: "picking_pages", state: st, firecrawl_credits: job.firecrawl_credits, progress_done: 0, progress_total: 0 })
@@ -321,7 +330,9 @@ async function stepInventory(sb: any, job: Job, brand: Brand, deadline: number):
       const requests: BatchRequest[] = []
       while (st.fetched < st.pages.length && Date.now() < deadline - 30_000) {
         const i = st.fetched
-        const page = await fetchPage(st.pages[i], { maxChars: 150_000 })
+        // state.render: elke pagina via Firecrawl (gerenderd), voor sites
+        // die hun overzicht met JavaScript inladen.
+        const page = await fetchPage(st.pages[i], { maxChars: 150_000, render: Boolean(st.render) })
         if (page?.via === "firecrawl") job.firecrawl_credits += 1
         if (page) {
           const id = `o${i}`

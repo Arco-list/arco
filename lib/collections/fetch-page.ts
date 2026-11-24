@@ -198,10 +198,10 @@ const isShopify = (html: string) => /cdn\.shopify\.com|\/cdn\/shop\/|Shopify\.th
 
 export async function fetchPage(
   url: string,
-  opts: { maxChars: number; mainContentOnly?: boolean; firecrawlKey?: string },
+  opts: { maxChars: number; mainContentOnly?: boolean; firecrawlKey?: string; /** Meteen Firecrawl: sites die hun raster pas in de browser laden terwijl de HTML vol genoeg lijkt (minotti.com). */ render?: boolean },
 ): Promise<FetchedPage | null> {
   // 1. Gratis, met elke identificatie één keer.
-  for (const ua of USER_AGENTS) {
+  for (const ua of opts.render ? [] : USER_AGENTS) {
     try {
       const res = await fetch(url, {
         headers: { "User-Agent": ua, Accept: "text/html,application/xhtml+xml", "Accept-Language": "en,nl;q=0.8" },

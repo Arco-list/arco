@@ -68,9 +68,15 @@ export default async function AdminBrandDetailPage({ params }: { params: Promise
   // worden alleen daar aangepast; de kaart toont ze zoals de publieke kaart:
   // soorten · designer (zonder eigen soorten de ene soort of groep).
   const collectionIds = ((collections ?? []) as Array<{ id: string }>).map((c) => c.id)
-  const { data: kindRows } = collectionIds.length > 0
-    ? await supabase.from("product_collection_kinds").select("collection_id, category_id, position").in("collection_id", collectionIds).order("position")
-    : { data: [] as Array<{ collection_id: string; category_id: string }> }
+  const [{ data: kindRows }, { data: coverRows }] = collectionIds.length > 0
+    ? await Promise.all([
+        supabase.from("product_collection_kinds").select("collection_id, category_id, position").in("collection_id", collectionIds).order("position"),
+        // Focuspunt en maat van de omslag: de kaart snijdt bij zoals de
+        // publieke kaart (focusPositionIn).
+        supabase.from("product_collection_photos").select("collection_id, url, focus_x, focus_y, width, height").in("collection_id", collectionIds).eq("is_primary", true),
+      ])
+    : [{ data: [] as Array<{ collection_id: string; category_id: string }> }, { data: [] as any[] }]
+  const coverOf = new Map(((coverRows ?? []) as any[]).map((r) => [r.collection_id as string, r]))
   const kindName = new Map(((categories ?? []) as any[]).map((c) => [c.id as string, (c.name_nl ?? c.name) as string]))
   const kindsOf = new Map<string, string[]>()
   for (const k of (kindRows ?? []) as Array<{ collection_id: string; category_id: string }>) {
@@ -79,7 +85,14 @@ export default async function AdminBrandDetailPage({ params }: { params: Promise
   const collectionRows = ((collections ?? []) as any[]).map((c) => {
     const names = (kindsOf.get(c.id) ?? (c.category_id ? [c.category_id] : [])).map((id) => kindName.get(id)).filter((n): n is string => Boolean(n))
     const kinds_label = names.length === 0 ? null : names.length > 2 ? `${names.slice(0, 2).join(" · ")} +${names.length - 2}` : names.join(" · ")
-    return { ...c, kinds_label }
+    const cover = coverOf.get(c.id)
+    const sameImage = cover && cover.url === c.hero_image_url
+    return {
+      ...c,
+      kinds_label,
+      hero_focus: sameImage && cover.focus_x != null && cover.focus_y != null ? { x: cover.focus_x, y: cover.focus_y } : null,
+      hero_size: sameImage && cover.width && cover.height ? { width: cover.width, height: cover.height } : null,
+    }
   })
   // Zodra een collectie soorten of een groep heeft, volgen de categorieën van
   // het merk de collecties (lib/products/brand-categories) en is de keuzelijst weg.

@@ -34,6 +34,8 @@ export type CatalogCollection = {
   heroImageUrl: string | null
   /** Focuspunt van die foto (migratie 326): de kaart snijdt bij zoals de hero. */
   heroFocus?: { x: number; y: number } | null
+  /** Maat van die foto: om het focuspunt in het midden van de kaart te zetten. */
+  heroSize?: { width: number; height: number } | null
   /** Een productfoto (op wit) van de collectie: voor de schijven op /products. */
   productImageUrl: string | null
   designer: string | null

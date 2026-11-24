@@ -28,6 +28,7 @@ import { locationKindLabel, type LocationRecord } from "@/lib/locations/types"
 import { ALL_STATUSES, STATUS_DESC, STATUS_DOT, STATUS_LABEL, type BrandStatus } from "../status"
 import { BrandLogo } from "@/components/brand/brand-logo"
 import { CollectionSub } from "@/components/catalog/collection-sub"
+import { focusPositionIn } from "@/lib/images/focus"
 
 /**
  * Merkpagina voor admins, gebouwd als de bedrijfspagina
@@ -65,6 +66,9 @@ export type BrandEditCollection = {
   url: string | null
   /** Soorten van de collectie (Fauteuils · Banken …), alleen te wijzigen op de collectiepagina. */
   kinds_label: string | null
+  /** Focuspunt en maat van de omslag, om bij te snijden zoals de publieke kaart. */
+  hero_focus?: { x: number; y: number } | null
+  hero_size?: { width: number; height: number } | null
 }
 
 export type BrandEditCategory = {
@@ -218,7 +222,7 @@ function CollectionCard({
         <div className="discover-card-image-layer">
           {collection.hero_image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={collection.hero_image_url} alt={collection.name} />
+            <img src={collection.hero_image_url} alt={collection.name} style={collection.hero_focus ? { objectPosition: focusPositionIn(collection.hero_focus, collection.hero_size, 4 / 3) } : undefined} />
           ) : (
             <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#c8c8c6", background: "var(--arco-surface)" }}>
               <ImageIcon size={32} />

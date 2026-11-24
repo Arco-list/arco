@@ -1,4 +1,4 @@
-import { focusPosition } from "@/lib/images/focus"
+import { focusPositionIn } from "@/lib/images/focus"
 import { Link } from "@/i18n/navigation"
 
 import type { CatalogProject, CatalogCollection } from "@/lib/products/catalog-types"
@@ -31,7 +31,7 @@ export function CollectionCard({ collection, locale, showBrand = true, kind = nu
         <div className="discover-card-image-layer">
           {collection.heroImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={collection.heroImageUrl} alt={collection.name} width={600} height={450} loading="lazy" decoding="async" style={collection.heroFocus ? { objectPosition: focusPosition(collection.heroFocus) } : undefined} />
+            <img src={collection.heroImageUrl} alt={collection.name} width={600} height={450} loading="lazy" decoding="async" style={collection.heroFocus ? { objectPosition: focusPositionIn(collection.heroFocus, collection.heroSize, 4 / 3) } : undefined} />
           ) : (
             <div style={{ width: "100%", height: "100%", background: "#f0f0ee" }} />
           )}

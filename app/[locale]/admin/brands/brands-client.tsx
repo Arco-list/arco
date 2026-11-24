@@ -125,6 +125,15 @@ function jobLabel(j: NonNullable<AdminBrandRow["collection_job"]>): string {
   }
 }
 
+/** Sorteerbare kolommen van de merkentabel. */
+type SortKey = "collections" | "projects" | "updated" | "created"
+const SORT_VALUE: Record<SortKey, (b: AdminBrandRow) => number> = {
+  collections: (b) => b.collection_count ?? 0,
+  projects: (b) => b.project_count ?? 0,
+  updated: (b) => new Date(b.updated_at ?? b.created_at).getTime(),
+  created: (b) => new Date(b.created_at).getTime(),
+}
+
 /** Landnamen uit Apollo lopen soms uiteen; voor het filter één naam. */
 const COUNTRY_ALIAS: Record<string, string> = { "Czech Republic": "Czechia", "Macedonia (FYROM)": "North Macedonia" }
 const countryOf = (b: { country: string | null }) => (b.country ? COUNTRY_ALIAS[b.country] ?? b.country : null)
@@ -233,10 +242,24 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialBrands, searchTerm, categoryFilter, subtreeOf, segmentFilter, countryFilter, segmentOverrides])
 
-  const rows = useMemo(
-    () => (statusFilter.length === 0 ? funnelData : funnelData.filter((b) => statusFilter.includes(b.status as BrandStatus))),
-    [funnelData, statusFilter],
-  )
+  // Sorteren op de kolommen met een getal of datum; standaard de laatst
+  // gewijzigde bovenaan. Een merk zonder wijziging telt met zijn
+  // aanmaakdatum.
+  const [sortKey, setSortKey] = useState<SortKey>("updated")
+  const [sortAsc, setSortAsc] = useState(false)
+  const onSort = (key: SortKey) => {
+    if (key === sortKey) { setSortAsc((v) => !v); return }
+    setSortKey(key)
+    setSortAsc(false)
+  }
+  const rows = useMemo(() => {
+    const list = statusFilter.length === 0 ? funnelData : funnelData.filter((b) => statusFilter.includes(b.status as BrandStatus))
+    const value = SORT_VALUE[sortKey]
+    return [...list].sort((a, b) => {
+      const d = value(a) - value(b)
+      return (sortAsc ? d : -d) || a.name.localeCompare(b.name)
+    })
+  }, [funnelData, statusFilter, sortKey, sortAsc])
 
   // ── Funnel ───────────────────────────────────────────────────────────
   const countAt = (s: BrandStatus) => funnelData.filter((b) => b.status === s).length
@@ -777,11 +800,30 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
                 <th>Domain</th>
                 <th>Status</th>
                 <th>Segment</th>
-                <th style={{ textAlign: "right" }}>Collection</th>
-                <th style={{ textAlign: "right" }}>Projects</th>
-                <th>Owner</th>
-                <th>Last change</th>
-                <th>Added</th>
+                {([
+                  ["collections", "Collection", "right"],
+                  ["projects", "Projects", "right"],
+                  null,
+                  ["updated", "Last change", "left"],
+                  ["created", "Added", "left"],
+                ] as Array<[SortKey, string, "left" | "right"] | null>).map((c) => {
+                  if (!c) return <th key="owner">Owner</th>
+                  const [key, label, align] = c
+                  const active = sortKey === key
+                  return (
+                    <th key={key} style={{ textAlign: align }} aria-sort={active ? (sortAsc ? "ascending" : "descending") : "none"}>
+                      <button
+                        type="button"
+                        onClick={() => onSort(key)}
+                        className="inline-flex items-center gap-1 hover:text-[#1c1c1a] transition-colors"
+                        style={{ color: active ? "var(--arco-black)" : undefined, background: "none", border: 0, padding: 0, font: "inherit", cursor: "pointer" }}
+                      >
+                        {label}
+                        <span aria-hidden className="text-[8px]" style={{ opacity: active ? 1 : 0 }}>{sortAsc ? "▲" : "▼"}</span>
+                      </button>
+                    </th>
+                  )
+                })}
                 <th style={{ width: 40 }} />
               </tr>
             </thead>

@@ -1,6 +1,7 @@
 import "server-only"
 
 import { logger } from "@/lib/logger"
+import { imageSize } from "@/lib/images/image-size"
 
 /**
  * Gedeeld door de merkacties in admin en de achtergrondtaken voor
@@ -145,13 +146,17 @@ export async function storeRemoteImage(supabase: any, remoteUrl: string, folder:
 export async function syncCollectionCover(supabase: any, collectionId: string, options?: { focus?: boolean }): Promise<void> {
   const { data: primary } = await supabase
     .from("product_collection_photos")
-    .select("url")
+    .select("id, url, width, height")
     .eq("collection_id", collectionId)
     .order("is_primary", { ascending: false })
     .order("order_index", { ascending: true })
     .limit(1)
     .maybeSingle()
   await supabase.from("product_collections").update({ hero_image_url: primary?.url ?? null }).eq("id", collectionId)
+  // De maat van de omslag: de kaart heeft die nodig om het focuspunt in het
+  // midden te zetten (focusPositionIn). Overzichtsbeelden uit de
+  // inventarisatie komen zonder maat binnen.
+  if (primary && !primary.width) await storePhotoSize(supabase, primary.id, primary.url)
   // De hero snijdt bij rond het product: een nieuwe hero krijgt een
   // focuspunt (één Claude-blik, alleen als er nog geen is).
   if (options?.focus === false) return
@@ -161,6 +166,16 @@ export async function syncCollectionCover(supabase: any, collectionId: string, o
   } catch (err) {
     logger.warn("Hero focus skipped", { collectionId, error: String(err) })
   }
+}
+
+/** Breedte en hoogte van een opgeslagen collectiefoto invullen. */
+export async function storePhotoSize(supabase: any, photoId: string, url: string): Promise<void> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(15_000) })
+    if (!res.ok) return
+    const size = imageSize(new Uint8Array(await res.arrayBuffer()))
+    if (size) await supabase.from("product_collection_photos").update({ width: size.width, height: size.height }).eq("id", photoId)
+  } catch { /* geen maat, geen ramp */ }
 }
 
 /**

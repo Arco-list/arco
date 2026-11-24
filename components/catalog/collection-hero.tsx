@@ -1,6 +1,8 @@
 "use client"
 
-import { focusFromClick, focusPosition } from "@/lib/images/focus"
+import { useCallback, useEffect, useRef, useState } from "react"
+
+import { centeredFocus, focusFromClick, focusPosition, type Focus } from "@/lib/images/focus"
 
 /**
  * Het grote beeld bovenaan een collectie, zoals de hero van een project:
@@ -20,11 +22,32 @@ export function CollectionHero({ src, alt, style, cutout = false, focus, onPickF
   focus?: { x: number; y: number } | null
   onPickFocus?: (focus: { x: number; y: number }) => void
 }) {
-  const position = focusPosition(focus)
+  // Het focuspunt in het midden van het vlak (centeredFocus). Dat hangt af
+  // van de maat van de foto en van het vlak, dus pas na het laden en bij
+  // elke andere breedte; daarvoor (en op de server) het punt zelf.
+  const imgRef = useRef<HTMLImageElement>(null)
+  const [applied, setApplied] = useState<Focus | null>(focus ?? null)
+  const measure = useCallback(() => {
+    const img = imgRef.current
+    if (!img || !focus) { setApplied(focus ?? null); return }
+    const box = img.getBoundingClientRect()
+    if (!img.naturalWidth || !img.naturalHeight || !box.width || !box.height) { setApplied(focus); return }
+    setApplied(centeredFocus(focus, img.naturalWidth / img.naturalHeight, box.width / box.height))
+  }, [focus])
+  useEffect(() => {
+    measure()
+    const img = imgRef.current
+    if (!img || typeof ResizeObserver === "undefined") return
+    const ro = new ResizeObserver(measure)
+    ro.observe(img)
+    return () => ro.disconnect()
+  }, [measure, src])
+  const position = focusPosition(applied)
 
   const pick = (e: React.MouseEvent<HTMLImageElement>) => {
     if (!onPickFocus || cutout) return
-    const f = focusFromClick(e, focus)
+    // Terugrekenen met de positie die nu op het beeld staat.
+    const f = focusFromClick(e, applied)
     if (f) onPickFocus(f)
   }
 
@@ -32,6 +55,8 @@ export function CollectionHero({ src, alt, style, cutout = false, focus, onPickF
     <section className="collection-hero" data-fit={cutout ? "contain" : "cover"} style={style}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
+        ref={imgRef}
+        onLoad={measure}
         src={src}
         alt={alt}
         style={cutout ? undefined : { objectPosition: position, cursor: onPickFocus ? "crosshair" : undefined }}

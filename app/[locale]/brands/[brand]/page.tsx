@@ -51,7 +51,7 @@ export default async function BrandPage({ params }: { params: Params }) {
   // De secties van de subnavigatie: alleen wat er ook staat.
   const sections = [
     { id: "details", label: "Details" },
-    { id: "collections", label: nl ? "Collecties" : "Collections" },
+    ...(collections.length > 0 ? [{ id: "collections", label: nl ? "Collecties" : "Collections" }] : []),
     ...(projects.length > 0 ? [{ id: "projects", label: nl ? "Projecten" : "Projects" }] : []),
     ...(dealers.length > 0 || locations.length > 0 ? [{ id: "dealers", label: nl ? "Verkooppunten" : "Where to buy" }] : []),
   ]
@@ -100,10 +100,12 @@ export default async function BrandPage({ params }: { params: Params }) {
                 <div className="arco-card-title">{brand.foundedYear}</div>
               </div>
             )}
-            <div className="spec-item">
-              <span className="arco-eyebrow">{nl ? "Collecties" : "Collections"}</span>
-              <div className="arco-card-title">{collections.length}</div>
-            </div>
+            {collections.length > 0 && (
+              <div className="spec-item">
+                <span className="arco-eyebrow">{nl ? "Collecties" : "Collections"}</span>
+                <div className="arco-card-title">{collections.length}</div>
+              </div>
+            )}
             <div className="spec-item">
               <span className="arco-eyebrow">{nl ? "In projecten" : "In projects"}</span>
               <div className="arco-card-title">{projects.length}</div>
@@ -119,19 +121,19 @@ export default async function BrandPage({ params }: { params: Params }) {
           </section>
         )}
 
-        <section id="collections" style={{ marginBottom: 60 }}>
-          <div className="section-header">
-            <h2 className="arco-section-title">{nl ? "Collecties" : "Collections"}</h2>
-          </div>
-          {collections.length === 0 ? (
-            <p className="arco-body-text" style={{ color: "#a1a1a0" }}>{nl ? "Nog geen collecties." : "No collections yet."}</p>
-          ) : (
+        {/* Zonder collecties geen lege sectie: het merk staat er dan met
+            zijn tekst, projecten en verkooppunten. */}
+        {collections.length > 0 && (
+          <section id="collections" style={{ marginBottom: 60 }}>
+            <div className="section-header">
+              <h2 className="arco-section-title">{nl ? "Collecties" : "Collections"}</h2>
+            </div>
             <CollectionGrid
               cards={collections.map((s) => <CollectionCard key={s.id} collection={s} locale={locale} showBrand={false} kind={kindOf(s)} />)}
               showAllLabel={nl ? `Toon alle ${collections.length} collecties` : `Show all ${collections.length} collections`}
             />
-          )}
-        </section>
+          </section>
+        )}
 
         {projects.length > 0 && (
           <section id="projects" style={{ marginBottom: 60 }}>
