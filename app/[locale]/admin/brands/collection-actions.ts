@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache"
 import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
-import { freeSlug, syncCollectionCover } from "@/lib/collections/shared"
+import { freeSlug, slugify, storeRemoteImage, syncCollectionCover } from "@/lib/collections/shared"
+import { regroupCandidates, type FamilyProduct } from "@/lib/collections/families"
 import { syncBrandCategoriesFromCollections } from "@/lib/products/brand-categories"
 
 /**
@@ -52,6 +53,8 @@ export type CollectionCandidate = {
   category: string | null
   description: string | null
   status: "found" | "chosen"
+  /** Varianten die bij deze familie horen (migratie 339); worden de producten. */
+  productCount: number
 }
 
 export async function listCollectionCandidates(brandId: string): Promise<{ candidates: CollectionCandidate[] } | { error: string }> {
@@ -59,10 +62,17 @@ export async function listCollectionCandidates(brandId: string): Promise<{ candi
   if ("error" in guard) return guard
   const sb = createServiceRoleSupabaseClient() as any
   const [{ data: rows }, { data: cats }] = await Promise.all([
-    sb.from("brand_collection_candidates").select("id, name, url, image_url, source_image_url, category_id, description, status").eq("brand_id", brandId).order("name"),
+    sb.from("brand_collection_candidates").select("id, name, url, image_url, source_image_url, category_id, description, status, products, collection_id").eq("brand_id", brandId).order("name"),
     sb.from("product_categories").select("id, name"),
   ])
   const catName = new Map(((cats ?? []) as Array<{ id: string; name: string }>).map((c) => [c.id, c.name]))
+  // Toegevoegde collecties: het aantal producten dat ze nu hebben.
+  const colIds = ((rows ?? []) as any[]).map((r) => r.collection_id).filter(Boolean)
+  const productsPerCollection = new Map<string, number>()
+  if (colIds.length) {
+    const { data: prods } = await sb.from("products").select("collection_id").in("collection_id", colIds)
+    for (const p of (prods ?? []) as Array<{ collection_id: string }>) productsPerCollection.set(p.collection_id, (productsPerCollection.get(p.collection_id) ?? 0) + 1)
+  }
   return {
     candidates: ((rows ?? []) as any[]).map((r) => ({
       id: r.id, name: r.name, url: r.url ?? null,
@@ -70,6 +80,7 @@ export async function listCollectionCandidates(brandId: string): Promise<{ candi
       category: r.category_id ? catName.get(r.category_id) ?? null : null,
       description: r.description ?? null,
       status: r.status,
+      productCount: r.collection_id ? productsPerCollection.get(r.collection_id) ?? 0 : Array.isArray(r.products) ? r.products.length : 0,
     })),
   }
 }
@@ -112,6 +123,25 @@ export async function chooseCollectionCandidates(brandId: string, candidateIds: 
       // een Claude-blik per collectie.
       await syncCollectionCover(sb, col.id, { focus: false })
     }
+    // Een familie van losse producten (migratie 339): de varianten worden
+    // de producten van de collectie. Het ophalen vult daarna aan.
+    const variants = (Array.isArray(c.products) ? c.products : []) as FamilyProduct[]
+    if (variants.length > 0) {
+      const seen = new Set<string>()
+      const rows = await Promise.all(variants.slice(0, 40).map(async (p, position) => {
+        const pslug = slugify(p.name)
+        if (!pslug || seen.has(pslug)) return null
+        seen.add(pslug)
+        const src = p.source_image_url ?? p.image_url
+        const stored = p.image_url ?? (src ? await storeRemoteImage(sb, src, `product-families/${col.id}/products`, pslug) : null)
+        return { brand_id: brandId, collection_id: col.id, slug: pslug, name: p.name, url: p.url, image_url: stored ?? src, source_image_url: src, position, category_id: c.category_id }
+      }))
+      const products = rows.filter(Boolean)
+      if (products.length) {
+        const { error: perr } = await sb.from("products").insert(products)
+        if (perr) console.error("Family products insert failed", perr.message)
+      }
+    }
     await sb.from("brand_collection_candidates").update({ status: "chosen", collection_id: col.id }).eq("id", c.id)
   }
 
@@ -127,4 +157,16 @@ export async function chooseCollectionCandidates(brandId: string, candidateIds: 
   revalidatePath(`/admin/brands/${brandId}`)
   revalidatePath("/products")
   return { added: created.length }
+}
+
+/** Gevonden kandidaten opnieuw groeperen tot productfamilies, zonder de site opnieuw te lezen. */
+export async function regroupCollectionCandidates(brandId: string): Promise<{ families: number; merged: number; addedToCollections: number } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+  const sb = createServiceRoleSupabaseClient() as any
+  const { data: brand } = await sb.from("brands").select("name").eq("id", brandId).maybeSingle()
+  if (!brand) return { error: "Brand not found." }
+  const res = await regroupCandidates(sb, brandId, brand.name)
+  revalidatePath("/admin/brands")
+  return res
 }

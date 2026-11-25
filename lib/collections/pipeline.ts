@@ -10,6 +10,7 @@ import { imageSize } from "@/lib/images/image-size"
 import { syncBrandCategoriesFromCollections } from "@/lib/products/brand-categories"
 import { fetchPage } from "@/lib/collections/fetch-page"
 import { absoluteHttpUrl, pageMainImage, slugify, storeRemoteImage, stripWww, syncCollectionCover } from "@/lib/collections/shared"
+import { regroupCandidates } from "@/lib/collections/families"
 import {
   MAX_OVERVIEW_PAGES, MAX_AMBIANCE_PHOTOS, MAX_DETAIL_PHOTOS, MAX_PHOTO_CANDIDATES,
   pickPagesRequest, overviewRequest, collectionReadRequest, photoChoiceRequest,
@@ -379,6 +380,9 @@ async function stepInventory(sb: any, job: Job, brand: Brand, deadline: number):
         await q
       }
       const added = await insertCandidates(sb, brand.id, all)
+      // Sites met losse producten en varianten (Flos: "2097/18", "2097/30"):
+      // groeperen tot families, één kandidaat per familie (migratie 339).
+      await regroupCandidates(sb, brand.id, brand.name)
       const { count } = await sb.from("brand_collection_candidates").select("id", { count: "exact", head: true })
         .eq("brand_id", brand.id).is("image_url", null).not("source_image_url", "is", null)
       st.found = added; st.failedImages = []

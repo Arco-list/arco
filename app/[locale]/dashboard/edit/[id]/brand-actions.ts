@@ -80,7 +80,7 @@ export async function loadProjectBrandsEditorAction(
   if ("error" in guard) return guard
   const supabase: AnyClient = createServiceRoleSupabaseClient()
   const [brandsRes, collectionsRes, spacesRes, linksRes, brandCatsRes, catsRes] = await Promise.all([
-    selectAll(() => supabase.from("brands").select("id, name, slug, logo_url, status").neq("status", "deactivated").order("name").order("id")),
+    selectAll(() => supabase.from("brands").select("id, name, slug, logo_url, status").neq("status", "deactivated").eq("is_curated", true).order("name").order("id")),
     supabase.from("product_collections").select("id, brand_id, name, slug").order("name"),
     supabase.from("spaces").select("id, slug").order("name"),
     supabase.from("project_brands").select(LINK_SELECT).eq("project_id", projectId).order("created_at", { ascending: true }),

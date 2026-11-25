@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState, useTransition } from "react"
+import { Plus } from "lucide-react"
 import { BrandPickerPopup, BrandTileList } from "@/components/brand/brand-picker"
 import { useRouter } from "next/navigation"
 import { BrandCategoryPills, useBrandCategoryPills } from "@/components/brand/brand-category-pills"
@@ -163,7 +164,9 @@ export function CompanyBrandsSection({ companyId, brands: initial, options, filt
             <h2 className="arco-section-title">{c.title}</h2>
             <p className="arco-body-text" style={{ color: "#8c8c8a", marginTop: 6, marginBottom: 0, maxWidth: 600 }}>{c.intro}</p>
           </div>
-          <button type="button" className="btn-primary" style={{ fontSize: 13, padding: "8px 18px" }} onClick={() => setOpen(true)}>
+          {/* Zelfde knop als "+ Professional toevoegen" in de projecteditor. */}
+          <button type="button" className="btn-primary shrink-0 gap-1.5" onClick={() => setOpen(true)}>
+            <Plus size={14} />
             {c.add}
           </button>
         </div>

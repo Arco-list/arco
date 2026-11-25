@@ -112,7 +112,11 @@ export function CollectionPicker({ brand, onClose, onDone }: { brand: { id: stri
                       {isAdded && <span className="text-[10px]" style={{ position: "absolute", bottom: 8, left: 8, background: "#fff", padding: "2px 6px", borderRadius: 3 }}>Added</span>}
                     </div>
                     <div className="text-xs" style={{ marginTop: 6, fontWeight: 500, color: "#1c1c1a" }}>{c.name}</div>
-                    {c.category && <div className="text-[11px] text-[#a1a1a0]">{c.category}</div>}
+                    {(c.category || c.productCount > 0) && (
+                      <div className="text-[11px] text-[#a1a1a0]">
+                        {[c.category, c.productCount > 0 ? `${c.productCount} ${c.productCount === 1 ? "product" : "products"}` : null].filter(Boolean).join(" · ")}
+                      </div>
+                    )}
                   </button>
                 )
               })}

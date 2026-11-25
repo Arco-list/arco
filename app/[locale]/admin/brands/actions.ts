@@ -848,6 +848,20 @@ export async function updateBrandSegment(brandId: string, segment: string | null
   return { ok: true }
 }
 
+/**
+ * De ster: het merk in de selectie (migratie 338). Zonder ster is het niet
+ * te kiezen in projecten en doet het niet mee bij productherkenning.
+ */
+export async function setBrandCurated(brandId: string, curated: boolean): Promise<{ ok: true } | { error: string }> {
+  const guard = await requireAdmin()
+  if ("error" in guard) return guard
+  const supabase = createServiceRoleSupabaseClient() as any
+  const { error } = await supabase.from("brands").update({ is_curated: curated }).eq("id", brandId)
+  if (error) return { error: error.message }
+  revalidatePath("/admin/brands")
+  return { ok: true }
+}
+
 export async function updateBrandStatus(brandId: string, status: string): Promise<{ ok: true } | { error: string }> {
   const guard = await requireAdmin()
   if ("error" in guard) return guard

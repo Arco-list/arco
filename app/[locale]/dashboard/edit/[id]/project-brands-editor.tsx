@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState, useTransition } from "react"
+import { Plus } from "lucide-react"
 import { useLocale } from "next-intl"
 import { BrandPickerPopup, BrandTileList, type BrandPickCategory, type BrandPickOption } from "@/components/brand/brand-picker"
 
@@ -122,7 +123,9 @@ export function ProjectBrandsEditor({ projectId }: { projectId: string }) {
             {nl ? "Welke merken zijn in dit project toegepast?" : "Which brands were used in this project?"}
           </p>
         </div>
-        <button type="button" className="btn-primary" style={{ fontSize: 13, padding: "8px 18px" }} onClick={() => setOpen(true)} disabled={!loaded}>
+        {/* Zelfde knop als "+ Professional toevoegen" hieronder. */}
+        <button type="button" className="btn-primary shrink-0 gap-1.5" onClick={() => setOpen(true)} disabled={!loaded}>
+          <Plus size={14} />
           {nl ? "Merk toevoegen" : "Add brand"}
         </button>
       </div>

@@ -101,6 +101,12 @@ export type AdminProjectRow = {
   /** "new_build" | "renovation" | "interior_design", "space:<slug>" voor een ruimteproject, of null. */
   scopeKey: string | null
   imageCount: number
+  /**
+   * Productherkenning (migratie 341): stippen (zonder verborgen), gekoppeld,
+   * te beoordelen, wachtend op de catalogus, onbekend, en of het nog loopt.
+   * null: nog niet herkend.
+   */
+  products: { dots: number; linked: number; open: number; waiting: number; unknown: number; busy: boolean } | null
   isFeatured: boolean
   location: string | null
   createdAt: string | null
@@ -720,6 +726,34 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
         return count > 0
           ? <span className="arco-table-primary">{count}</span>
           : <span className="arco-table-secondary">—</span>
+      },
+    },
+    {
+      id: "products",
+      accessorFn: (r) => r.products?.linked ?? -1,
+      header: "Products",
+      cell: ({ row }) => {
+        const p = row.original.products
+        if (!p) return <span className="arco-table-secondary">—</span>
+        const detail = [
+          p.waiting ? `${p.waiting} waiting for catalogue` : null,
+          p.unknown ? `${p.unknown} unknown` : null,
+        ].filter(Boolean).join(" · ")
+        return (
+          <div className="flex flex-col gap-0.5" title={[`${p.linked} linked of ${p.dots} dots`, detail].filter(Boolean).join(" · ")}>
+            <span className="arco-table-nowrap">
+              <span className="arco-table-primary">{p.linked}</span>
+              <span className="arco-table-secondary"> / {p.dots}</span>
+            </span>
+            {p.busy ? (
+              <span className="arco-table-secondary">analysing…</span>
+            ) : p.open > 0 ? (
+              <span className="arco-table-secondary" style={{ color: "#d98a1c" }}>{p.open} open</span>
+            ) : p.dots > 0 ? (
+              <span className="arco-table-secondary">all reviewed</span>
+            ) : null}
+          </div>
+        )
       },
     },
     {

@@ -38,6 +38,8 @@ export type AdminBrandRow = {
   /** Segment: luxury, premium of mid; null = nog niet beoordeeld (migratie 324). */
   market_segment: "luxury" | "premium" | "mid" | null
   is_featured: boolean
+  /** In de selectie (ster; migratie 338). */
+  is_curated: boolean
   /** Aantal collection (product_collections). */
   collection_count: number
   /** Aantal projecten waarin het merk is getagd (project_brands, distinct). */
@@ -63,7 +65,7 @@ export default async function AdminBrandsPage() {
     // Alle merken: zonder blokken kapt Supabase af op 1000.
     selectAll(() => supabase
       .from("brands")
-      .select("id, slug, name, domain, website, logo_url, city, country, status, market_segment, is_featured, owner_user_id, created_at, updated_at")
+      .select("id, slug, name, domain, website, logo_url, city, country, status, market_segment, is_featured, is_curated, owner_user_id, created_at, updated_at")
       .order("created_at", { ascending: false })
       .order("id")),
     supabase.from("product_collections").select("brand_id"),
@@ -138,6 +140,7 @@ export default async function AdminBrandsPage() {
     status: b.status,
     market_segment: b.market_segment ?? null,
     is_featured: Boolean(b.is_featured),
+    is_curated: b.is_curated !== false,
     collection_count: collectionByBrand.get(b.id) ?? 0,
     project_count: projectsByBrand.get(b.id)?.size ?? 0,
     pinned_count: pinnedByBrand.get(b.id)?.size ?? 0,

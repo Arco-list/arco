@@ -24,7 +24,7 @@ async function loadAdminProjectsData() {
       .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
       .join(" ")
 
-  const [projectsResult, categoriesResult, taxonomyResult, projectProfessionalsResult] = await Promise.all([
+  const [projectsResult, categoriesResult, taxonomyResult, projectProfessionalsResult, detectionCountsResult] = await Promise.all([
     serviceSupabase
       .from("projects")
       .select(
@@ -38,6 +38,8 @@ async function loadAdminProjectsData() {
       .from("project_professionals")
       .select("project_id, status, is_project_owner, company:companies(id, name, slug, status, primary_service:categories!companies_primary_service_id_fkey(slug))")
       .not("company_id", "is", null),
+    // Productherkenning per project (migratie 341): de kolom Producten.
+    (serviceSupabase as any).from("project_detection_counts").select("project_id, dots, linked, open, waiting, unknown, busy"),
   ])
 
   if (projectsResult.error) {
@@ -150,6 +152,11 @@ async function loadAdminProjectsData() {
   }
 
   // Build project rows
+  const productsByProject = new Map<string, NonNullable<AdminProjectRow["products"]>>()
+  for (const r of (detectionCountsResult.data ?? []) as Array<{ project_id: string; dots: number; linked: number; open: number; waiting: number; unknown: number; busy: boolean }>) {
+    productsByProject.set(r.project_id, { dots: Number(r.dots), linked: Number(r.linked), open: Number(r.open), waiting: Number(r.waiting), unknown: Number(r.unknown), busy: Boolean(r.busy) })
+  }
+
   const projects: AdminProjectRow[] = (projectsResult.data ?? []).map((project: any) => {
     const id = project.id ?? ""
     const location = project.address_city ?? project.location ?? null
@@ -186,6 +193,7 @@ async function loadAdminProjectsData() {
         ? ((project as any).primary_space?.slug ? `space:${(project as any).primary_space.slug}` : null)
         : canonicalizeScope(project.project_type),
       imageCount,
+      products: productsByProject.get(id) ?? null,
       isFeatured: project.is_featured ?? false,
       location,
       createdAt: project.created_at ?? null,

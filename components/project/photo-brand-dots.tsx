@@ -22,7 +22,7 @@ import type { PhotoBrandTag } from "@/lib/projects/photo-brand-tags"
  */
 type Fit = "contain" | "cover"
 
-export function PhotoBrandDots({ tags, src, width, height, fit = "contain", focus }: {
+export function PhotoBrandDots({ tags, src, width, height, fit = "contain", focus, onSelect }: {
   tags: PhotoBrandTag[]
   src: string
   width?: number | null
@@ -30,6 +30,8 @@ export function PhotoBrandDots({ tags, src, width, height, fit = "contain", focu
   fit?: Fit
   /** Focuspunt bij cover (object-position); zonder punt het midden. */
   focus?: { x: number; y: number } | null
+  /** In plaats van de kaart: zelf iets doen met de stip (de beoordeling openen). */
+  onSelect?: (id: string) => void
 }) {
   const boxRef = useRef<HTMLDivElement>(null)
   const [ratio, setRatio] = useState<number | null>(width && height ? width / height : null)
@@ -106,12 +108,17 @@ export function PhotoBrandDots({ tags, src, width, height, fit = "contain", focu
             key={t.id}
             type="button"
             className="photo-dot"
-            style={{ left, top }}
+            style={{ left, top, ...(t.color ? { background: t.color } : {}) }}
             aria-label={t.subtitle ? `${t.title}, ${t.subtitle}` : t.title}
             aria-expanded={isOpen}
+            // Een stip op een versleepbare tegel: geen drag beginnen.
+            onPointerDown={onSelect ? (e) => e.stopPropagation() : undefined}
+            onMouseDown={onSelect ? (e) => e.stopPropagation() : undefined}
+            onTouchStart={onSelect ? (e) => e.stopPropagation() : undefined}
             onClick={(e) => {
               e.stopPropagation()
               e.preventDefault()
+              if (onSelect) { onSelect(t.id); return }
               setOpen(isOpen ? null : { id: t.id, anchor: e.currentTarget.getBoundingClientRect() })
             }}
           />
@@ -127,7 +134,9 @@ export function PhotoBrandDots({ tags, src, width, height, fit = "contain", focu
 
 function DotCard({ tag, anchor }: { tag: PhotoBrandTag; anchor: DOMRect }) {
   const cardW = 240
-  const cardH = 196
+  // Zonder beeld is de kaart alleen tekst (een herkend product).
+  const bare = !tag.imageUrl && !tag.logoUrl
+  const cardH = bare ? 96 : 196
   const cx = anchor.left + anchor.width / 2
   const above = anchor.top > cardH + 24
   const left = Math.min(Math.max(cx - cardW / 2, 8), window.innerWidth - cardW - 8)
@@ -137,7 +146,8 @@ function DotCard({ tag, anchor }: { tag: PhotoBrandTag; anchor: DOMRect }) {
   return (
     <div className="photo-dot-card map-card-wrapper" style={style} onClick={(e) => e.stopPropagation()}>
       <CardLink tag={tag}>
-        <div style={{ position: "relative", width: "100%", height: 140, overflow: "hidden", background: "#f5f5f4", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {/* Zonder beeld en logo (een herkend product zonder koppeling) geen leeg vlak. */}
+        {(tag.imageUrl || tag.logoUrl) && <div style={{ position: "relative", width: "100%", height: 140, overflow: "hidden", background: "#f5f5f4", display: "flex", alignItems: "center", justifyContent: "center" }}>
           {tag.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={tag.imageUrl} alt={tag.title} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
@@ -145,7 +155,7 @@ function DotCard({ tag, anchor }: { tag: PhotoBrandTag; anchor: DOMRect }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={tag.logoUrl} alt={tag.title} style={{ maxWidth: "50%", maxHeight: "50%", objectFit: "contain", mixBlendMode: "multiply" }} />
           ) : null}
-        </div>
+        </div>}
         <div style={{ padding: "10px 12px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {tag.logoUrl ? (
@@ -159,7 +169,7 @@ function DotCard({ tag, anchor }: { tag: PhotoBrandTag; anchor: DOMRect }) {
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 500, color: "#1a1a19", lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tag.title}</div>
               {tag.subtitle && (
-                <div style={{ fontSize: 12, fontWeight: 300, color: "#6b6b68", lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tag.subtitle}</div>
+                <div style={{ fontSize: 12, fontWeight: 300, color: "#6b6b68", lineHeight: 1.3, ...(bare ? { marginTop: 2 } : { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }) }}>{tag.subtitle}</div>
               )}
             </div>
           </div>

@@ -144,6 +144,10 @@ import { PhotographerSpecCell } from "./photographer-spec-cell"
 import { SpecClearButton } from "@/components/project/spec-clear-button"
 import { ALL_SCOPES, resolveScopeSlugs } from "@/lib/publish-scope"
 import { ProjectBrandsEditor } from "./project-brands-editor"
+import { getPhotoDetections, requestPhotoDetections, type DetectionStatus, type PhotoDetection } from "./detection-actions"
+import { DetectionReview, STATE_STYLE, detectionState } from "./detection-review"
+import { PhotoBrandDots } from "@/components/project/photo-brand-dots"
+import type { PhotoBrandTag } from "@/lib/projects/photo-brand-tags"
 import { isAdminUser } from "@/lib/auth-utils"
 import { trackProjectPublished, trackProfessionalInvited } from "@/lib/tracking"
 import {
@@ -151,7 +155,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu"
-import { Info, MailPlus, Pencil, XCircle } from "lucide-react"
+import { Info, MailPlus, Pencil, ScanSearch, XCircle } from "lucide-react"
 import { REJECTION_REASON_EMAIL_COPY, REJECTION_REASON_OPTIONS } from "@/lib/rejection-reasons"
 
 type ProjectStatus = Enums<"project_status">
@@ -640,6 +644,78 @@ export default function ListingEditorPage() {
     () => (Array.isArray(rawProjectId) ? rawProjectId[0] : (rawProjectId as string | undefined) ?? null),
     [rawProjectId],
   )
+
+  // ── Productherkenning (migratie 332), alleen admins ─────────────────
+  // De herkende producten als stippen op de fototegels. Zolang er foto's
+  // in de wachtrij of bij Claude staan, elke 30 seconden opnieuw kijken.
+  const showDetections = (isAdmin || viewerIsAdmin) && Boolean(projectId)
+  const [detections, setDetections] = useState<PhotoDetection[]>([])
+  const [detectionStatus, setDetectionStatus] = useState<DetectionStatus | null>(null)
+  const [isRequestingDetections, setIsRequestingDetections] = useState(false)
+  const loadDetections = useCallback(async () => {
+    if (!projectId) return
+    const res = await getPhotoDetections(projectId)
+    if ("error" in res) return
+    setDetections(res.detections)
+    setDetectionStatus(res.status)
+  }, [projectId])
+  useEffect(() => { if (showDetections) void loadDetections() }, [showDetections, loadDetections])
+  // Voortgang in twee helften: foto's analyseren en producten koppelen.
+  // Foto's die nog nooit in de wachtrij stonden (later toegevoegd) zijn
+  // "unstarted": dan is de knop weer "Producten herkennen".
+  const detectionProgress = useMemo(() => {
+    if (!detectionStatus) return null
+    const s = detectionStatus
+    const analysed = s.done + s.failed
+    const unstarted = Math.max(0, s.total - analysed - s.pending)
+    const ai = detections.filter((d) => d.source === "ai")
+    const unmatched = ai.filter((d) => d.matchStatus === null || d.matchStatus === "submitted").length
+    const busy = s.pending > 0 || unmatched > 0
+    const queued = s.total - unstarted
+    const photoPart = queued ? analysed / queued : 1
+    const matchPart = s.pending > 0 && ai.length === 0 ? 0 : ai.length ? (ai.length - unmatched) / ai.length : 1
+    return { busy, unstarted, pct: Math.min(99, Math.floor(50 * photoPart + 50 * matchPart)) }
+  }, [detectionStatus, detections])
+  useEffect(() => {
+    if (!showDetections || !detectionProgress?.busy) return
+    const timer = setInterval(() => void loadDetections(), 15_000)
+    return () => clearInterval(timer)
+  }, [showDetections, detectionProgress?.busy, loadDetections])
+  // Stippen op de tegels: kleur naar de toestand (te beoordelen, goedgekeurd,
+  // …); een klik opent de beoordeling op dat product. Verborgen: geen stip.
+  const detectionTagsByPhoto = useMemo(() => {
+    const byPhoto = new Map<string, PhotoBrandTag[]>()
+    for (const d of detections) {
+      const state = detectionState(d)
+      if (state === "hidden") continue
+      const s = d.suggestion
+      const tag: PhotoBrandTag = {
+        id: d.id, x: d.x, y: d.y,
+        title: `${d.rank}. ${s ? s.productName ?? s.collectionName ?? s.brandName : d.kindName ?? d.label}`,
+        subtitle: STATE_STYLE[state].label,
+        logoUrl: null, imageUrl: null, href: null, external: false,
+        color: STATE_STYLE[state].color,
+      }
+      byPhoto.set(d.photoId, [...(byPhoto.get(d.photoId) ?? []), tag])
+    }
+    return byPhoto
+  }, [detections])
+  const [reviewAt, setReviewAt] = useState<{ photoId: string; detectionId?: string | null } | null>(null)
+  const openReview = useCallback((detectionId?: string) => {
+    const d = detectionId
+      ? detections.find((x) => x.id === detectionId)
+      : detections.find((x) => { const s = detectionState(x); return s === "review" || s === "open" }) ?? detections[0]
+    if (d) setReviewAt({ photoId: d.photoId, detectionId: d.id })
+  }, [detections])
+  const requestDetections = async (force: boolean) => {
+    if (!projectId) return
+    setIsRequestingDetections(true)
+    const res = await requestPhotoDetections(projectId, force)
+    setIsRequestingDetections(false)
+    if ("error" in res) { toast.error(res.error); return }
+    toast.success(res.queued ? `${res.queued} foto's in de wachtrij` : "Alle foto's zijn al geanalyseerd")
+    void loadDetections()
+  }
 
   const {
     categoryOptions,
@@ -4726,6 +4802,12 @@ export default function ListingEditorPage() {
                   style={{ cursor: "pointer" }}
                 />
 
+                {/* Herkende producten (admins): stippen op het midden van
+                    elk kader; een klik toont soort en beschrijving. */}
+                {showDetections && detectionTagsByPhoto.has(photo.id) && (
+                  <PhotoBrandDots tags={detectionTagsByPhoto.get(photo.id)!} src={photo.url} width={photo.width} height={photo.height} fit="cover" onSelect={(id) => openReview(id)} />
+                )}
+
                 {/* Select — top left, opposite the delete icon.
                     Shift-click takes the range from the last tile you
                     picked, because a grid this long is mostly runs. */}
@@ -6256,11 +6338,46 @@ export default function ListingEditorPage() {
 
         {/* ── Photos ────────────────────────────────────────────────── */}
         <section id="photos" data-tour="project-photos" className="wrap" style={{ paddingTop: 72, paddingBottom: 0 }}>
-          <div style={{ marginBottom: 28 }}>
-            <h2 className="arco-section-title">{tPhoto("title")}</h2>
-            <p className="arco-body-text" style={{ marginTop: 6 }}>{tPhoto("description")}</p>
+          <div style={{ marginBottom: 28, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+            <div>
+              <h2 className="arco-section-title">{tPhoto("title")}</h2>
+              <p className="arco-body-text" style={{ marginTop: 6 }}>{tPhoto("description")}</p>
+            </div>
+            {/* Productherkenning, alleen admins: één knop die meegroeit met
+                de stand — starten, voortgang, beoordelen, bekijken. */}
+            {showDetections && detectionProgress && (
+              detectionProgress.busy ? (
+                <button type="button" className="btn-primary shrink-0" disabled style={{ fontVariantNumeric: "tabular-nums" }}>
+                  {detectionProgress.pct}% geanalyseerd
+                </button>
+              ) : detectionProgress.unstarted > 0 ? (
+                <button type="button" className="btn-primary shrink-0 gap-1.5" disabled={isRequestingDetections} onClick={() => void requestDetections(false)}>
+                  <ScanSearch size={14} />
+                  Producten herkennen
+                </button>
+              ) : detectionStatus!.toReview > 0 ? (
+                <button type="button" className="btn-primary shrink-0 gap-1.5" onClick={() => openReview()}>
+                  <ScanSearch size={14} />
+                  {detectionStatus!.toReview} beoordelen
+                </button>
+              ) : detections.length > 0 ? (
+                <button type="button" className="btn-tertiary shrink-0" onClick={() => openReview()}>
+                  Producten bekijken
+                </button>
+              ) : null
+            )}
           </div>
           {renderPhotoTourSection()}
+          {showDetections && reviewAt && (
+            <DetectionReview
+              photos={uploadedPhotos}
+              detections={detections}
+              initial={reviewAt}
+              onClose={() => setReviewAt(null)}
+              onChanged={loadDetections}
+              onRedetect={() => { setReviewAt(null); void requestDetections(true) }}
+            />
+          )}
         </section>
 
         {/* ── Professionals ─────────────────────────────────────────── */}

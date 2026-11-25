@@ -23,6 +23,8 @@ export type PhotoBrandTag = {
   /** Pad binnen Arco (zonder taal), of een externe url. */
   href: string | null
   external: boolean
+  /** Kleur van de stip (productherkenning: de toestand); zonder de huisstijl. */
+  color?: string
 }
 
 export async function getPhotoBrandTags(photoIds: string[], viewerIsAdmin: boolean): Promise<Map<string, PhotoBrandTag[]>> {

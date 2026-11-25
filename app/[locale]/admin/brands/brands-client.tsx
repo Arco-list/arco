@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { AlertTriangle, Check, ExternalLink, MoreHorizontal, X } from "lucide-react"
+import { AlertTriangle, Check, ExternalLink, MoreHorizontal, Star, X } from "lucide-react"
 import { toast } from "sonner"
 import { format } from "date-fns"
 
@@ -19,7 +19,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { addBrandFromSite, deleteBrand, importBrandsFromApollo, updateBrandSegment, discoverBrandCollections, fetchCollectionFromBrandPage, updateBrandDomain, updateBrandStatus, uploadBrandLogo } from "./actions"
+import { addBrandFromSite, deleteBrand, importBrandsFromApollo, setBrandCurated, updateBrandSegment, discoverBrandCollections, fetchCollectionFromBrandPage, updateBrandDomain, updateBrandStatus, uploadBrandLogo } from "./actions"
 import type { AdminBrandCategory, AdminBrandRow } from "./page"
 import { startCollectionInventory } from "./collection-actions"
 import { CollectionPicker } from "./collection-picker"
@@ -155,6 +155,17 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
   const toggleCountry = (c: string) => setCountryFilter((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]))
   // Segment direct bijgewerkt in de tabel, zonder op de refresh te wachten.
   const [segmentOverrides, setSegmentOverrides] = useState<Record<string, Segment | null>>({})
+  // De ster (selectie, migratie 338): meteen omzetten, daarna opslaan.
+  const [curatedOverrides, setCuratedOverrides] = useState<Record<string, boolean>>({})
+  const curatedOf = (b: AdminBrandRow) => curatedOverrides[b.id] ?? b.is_curated
+  /** Filter op de ster: alle merken, alleen de selectie, of alleen zonder ster. */
+  const [curatedFilter, setCuratedFilter] = useState<"all" | "in" | "out">("all")
+  const toggleCurated = async (b: AdminBrandRow) => {
+    const next = !curatedOf(b)
+    setCuratedOverrides((o) => ({ ...o, [b.id]: next }))
+    const res = await setBrandCurated(b.id, next)
+    if ("error" in res) { setCuratedOverrides((o) => ({ ...o, [b.id]: !next })); toast.error(res.error) }
+  }
   // Keuze-pop-up na een inventarisatie, en verversen zolang er iets loopt.
   const [pickerBrand, setPickerBrand] = useState<{ id: string; name: string } | null>(null)
   // Logo's van de website: per merk kiezen, of alle ontbrekende in één keer.
@@ -236,11 +247,12 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
       if (categoryFilter.length > 0 && !categoryFilter.some((id) => brandInCategory(b, id))) return false
       if (segmentFilter.length > 0 && !segmentFilter.includes(segmentOf(b) ?? "none")) return false
       if (countryFilter.length > 0 && !countryFilter.includes(countryOf(b) ?? "—")) return false
+      if (curatedFilter !== "all" && curatedOf(b) !== (curatedFilter === "in")) return false
       if (!q) return true
       return [b.name, b.domain ?? "", b.category ?? "", b.city ?? "", b.country ?? "", b.owner_name ?? ""].join(" ").toLowerCase().includes(q)
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialBrands, searchTerm, categoryFilter, subtreeOf, segmentFilter, countryFilter, segmentOverrides])
+  }, [initialBrands, searchTerm, categoryFilter, subtreeOf, segmentFilter, countryFilter, segmentOverrides, curatedFilter, curatedOverrides])
 
   // Sorteren op de kolommen met een getal of datum; standaard de laatst
   // gewijzigde bovenaan. Een merk zonder wijziging telt met zijn
@@ -591,6 +603,30 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
               </DropdownMenuContent>
             </DropdownMenu>
 
+            {/* Selectie — de ster: alle merken, alleen de selectie, of zonder ster. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={`w-[140px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 shrink-0 ${curatedFilter !== "all" ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"}`}
+                >
+                  <span className={`truncate flex items-center gap-1.5 ${curatedFilter === "all" ? "text-[#6b6b68]" : ""}`}>
+                    <Star size={12} className={curatedFilter === "out" ? "text-[#a1a1a0]" : "fill-amber-400 text-amber-400"} />
+                    {curatedFilter === "all" ? "All brands" : curatedFilter === "in" ? "In selection" : "Not in selection"}
+                  </span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]"><path d="M6 9l6 6 6-6" /></svg>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-[200px] z-[120]">
+                {([["all", "All brands"], ["in", "In selection"], ["out", "Not in selection"]] as const).map(([value, label]) => (
+                  <DropdownMenuCheckboxItem key={value} checked={curatedFilter === value} onCheckedChange={() => setCuratedFilter(value)} className="text-xs">
+                    <span className="flex-1">{label}</span>
+                    <span className="ml-3 tabular-nums text-[#a1a1a0]">{value === "all" ? initialBrands.length : initialBrands.filter((b) => curatedOf(b) === (value === "in")).length}</span>
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             {/* Segment — luxury, premium, mid, of nog niet beoordeeld. */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -845,6 +881,19 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
                 >
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {/* De ster: in de selectie (high-end). Zonder ster niet te
+                          kiezen in projecten en niet mee bij productherkenning. */}
+                      <button
+                        type="button"
+                        onClick={() => void toggleCurated(b)}
+                        title={curatedOf(b) ? "In selection — remove star to exclude from projects and recognition" : "Not in selection — star to include"}
+                        aria-label={curatedOf(b) ? `${b.name} uit de selectie halen` : `${b.name} in de selectie zetten`}
+                        aria-pressed={curatedOf(b)}
+                        className="shrink-0 transition-colors"
+                        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex" }}
+                      >
+                        <Star size={14} className={curatedOf(b) ? "fill-amber-400 text-amber-400" : "text-[#c4c4c2] hover:text-[#a1a1a0]"} />
+                      </button>
                       <button
                         type="button"
                         onClick={() => pickLogo(b)}
