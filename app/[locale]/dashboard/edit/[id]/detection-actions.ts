@@ -3,6 +3,7 @@
 import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
 import { queueProjectPhotos } from "@/lib/recognition/photo-detections"
+import { OWNER_REVIEW_ENABLED } from "@/lib/recognition/flags"
 import { groupDetections, parseVector } from "@/lib/recognition/grouping"
 import { pickCollectionHero } from "@/lib/products/collection-hero"
 import { allBrands, autoInventoryBrands, brandIdsByName } from "@/lib/recognition/matching"
@@ -111,6 +112,51 @@ export type DetectionStatus = {
   toReview: number
 }
 
+type Reviewer = { userId: string; role: "admin" | "owner" }
+
+/**
+ * Mag deze gebruiker de stippen van dit project beoordelen? Admins altijd;
+ * de eigenaar van het project (de maker, of iemand van het bedrijf dat
+ * eigenaar is — dezelfde regel als de editor) pas als OWNER_REVIEW_ENABLED.
+ */
+async function requireProjectAccess(projectId: string): Promise<Reviewer | { error: string }> {
+  const supabase = await createServerActionSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "Je moet ingelogd zijn." }
+  const { data: profile } = await supabase.from("profiles").select("user_types, admin_role").eq("id", user.id).maybeSingle()
+  if (isAdminUser(profile?.user_types, profile?.admin_role)) return { userId: user.id, role: "admin" }
+  if (!OWNER_REVIEW_ENABLED) return { error: "Alleen voor admins." }
+  const sb = createServiceRoleSupabaseClient() as any
+  const { data: project } = await sb.from("projects").select("client_id").eq("id", projectId).maybeSingle()
+  if (!project) return { error: "Project niet gevonden." }
+  if (project.client_id === user.id) return { userId: user.id, role: "owner" }
+  const [{ data: pros }, { data: owned }, { data: contacts }] = await Promise.all([
+    sb.from("professionals").select("company_id").eq("user_id", user.id),
+    sb.from("companies").select("id").eq("owner_id", user.id),
+    sb.from("company_contacts").select("company_id, person:persons!inner(auth_user_id)").eq("person.auth_user_id", user.id).in("role", ["owner", "admin", "member"]).eq("status", "active"),
+  ])
+  const companyIds = Array.from(new Set([
+    ...((pros ?? []) as any[]).map((r) => r.company_id),
+    ...((owned ?? []) as any[]).map((r) => r.id),
+    ...((contacts ?? []) as any[]).map((r) => r.company_id),
+  ].filter(Boolean)))
+  if (companyIds.length) {
+    const { data: link } = await sb.from("project_professionals").select("id").eq("project_id", projectId).in("company_id", companyIds).eq("is_project_owner", true).limit(1)
+    if (link?.length) return { userId: user.id, role: "owner" }
+  }
+  return { error: "Geen toegang tot dit project." }
+}
+
+/** Zoeken in de catalogus (merken, collecties): admins, en eigenaren zodra het aan staat. */
+async function requireReviewer(): Promise<Reviewer | { error: string }> {
+  const supabase = await createServerActionSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "Je moet ingelogd zijn." }
+  const { data: profile } = await supabase.from("profiles").select("user_types, admin_role").eq("id", user.id).maybeSingle()
+  if (isAdminUser(profile?.user_types, profile?.admin_role)) return { userId: user.id, role: "admin" }
+  return OWNER_REVIEW_ENABLED ? { userId: user.id, role: "owner" } : { error: "Alleen voor admins." }
+}
+
 async function requireAdmin(): Promise<{ userId: string } | { error: string }> {
   const supabase = await createServerActionSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -135,7 +181,7 @@ const toCandidate = (m: any): DetectionCandidate | null => {
 
 /** De detecties en de voortgang van een project. */
 export async function getPhotoDetections(projectId: string): Promise<{ detections: PhotoDetection[]; status: DetectionStatus } | { error: string }> {
-  const guard = await requireAdmin()
+  const guard = await requireProjectAccess(projectId)
   if ("error" in guard) return guard
   const sb = createServiceRoleSupabaseClient() as any
   const [{ data: rows }, { data: analyses }, { count: total }] = await Promise.all([
@@ -314,10 +360,10 @@ async function snapshot(sb: any, detectionId: string) {
 }
 
 /** Elke beoordeling in het logboek (migratie 336); het oordeel in de detectie zelf wordt overschreven. */
-async function logReview(sb: any, entry: { detectionId: string; projectId: string; photoId: string; action: string; payload: Record<string, unknown>; before: unknown; after: unknown; userId: string }) {
+async function logReview(sb: any, entry: { detectionId: string; projectId: string; photoId: string; action: string; payload: Record<string, unknown>; before: unknown; after: unknown; userId: string; role?: "admin" | "owner" }) {
   const { error } = await sb.from("project_photo_detection_reviews").insert({
     detection_id: entry.action === "delete" ? null : entry.detectionId, project_id: entry.projectId, photo_id: entry.photoId,
-    action: entry.action, payload: { ...entry.payload, detectionId: entry.detectionId }, before: entry.before, after: entry.after, reviewed_by: entry.userId,
+    action: entry.action, payload: { ...entry.payload, detectionId: entry.detectionId, role: entry.role ?? "admin" }, before: entry.before, after: entry.after, reviewed_by: entry.userId,
   })
   if (error) console.error("Review log failed", error.message)
 }
@@ -331,17 +377,17 @@ const GROUP_ACTIONS = new Set<ReviewAction["type"]>(["approve", "pick", "reject"
  * alleen als ze nog niet beoordeeld zijn: een eerder oordeel blijft staan.
  */
 export async function reviewDetection(detectionId: string, action: ReviewAction, alsoIds: string[] = []): Promise<{ ok: true; applied: number } | { error: string }> {
-  const guard = await requireAdmin()
-  if ("error" in guard) return guard
   const sb = createServiceRoleSupabaseClient() as any
   const cols = "id, project_id, photo_id, source, review_status, box_x0, box_y0, box_x1, box_y1"
   const { data: det } = await sb.from("project_photo_detections").select(cols).eq("id", detectionId).maybeSingle()
   if (!det) return { error: "Product niet gevonden." }
+  const guard = await requireProjectAccess(det.project_id)
+  if ("error" in guard) return guard
   const before = await snapshot(sb, detectionId)
   const result = await applyReview(sb, det, detectionId, action, guard.userId)
   if ("error" in result) return result
   const { type, ...payload } = action
-  await logReview(sb, { detectionId, projectId: det.project_id, photoId: det.photo_id, action: type, payload, before, after: type === "delete" ? null : await snapshot(sb, detectionId), userId: guard.userId })
+  await logReview(sb, { detectionId, projectId: det.project_id, photoId: det.photo_id, action: type, payload, before, after: type === "delete" ? null : await snapshot(sb, detectionId), userId: guard.userId, role: guard.role })
 
   let applied = 1
   const others = Array.from(new Set(alsoIds.filter((id) => id !== detectionId)))
@@ -374,7 +420,7 @@ export async function reviewDetection(detectionId: string, action: ReviewAction,
       if ("error" in r) continue
       applied++
       const { type: sibType, ...sibPayload } = sibAction
-      await logReview(sb, { detectionId: sib.id, projectId: sib.project_id, photoId: sib.photo_id, action: sibType, payload: { ...sibPayload, via: detectionId }, before: sibBefore, after: await snapshot(sb, sib.id), userId: guard.userId })
+      await logReview(sb, { detectionId: sib.id, projectId: sib.project_id, photoId: sib.photo_id, action: sibType, payload: { ...sibPayload, via: detectionId }, before: sibBefore, after: await snapshot(sb, sib.id), userId: guard.userId, role: guard.role })
     }
   }
   return { ok: true, applied }
@@ -461,6 +507,8 @@ async function applyReview(sb: any, det: any, detectionId: string, action: Revie
       await matches().update({ status: "candidate", reviewed_by: null, reviewed_at: null }).eq("detection_id", detectionId).is("reason", null)
       await matches().update({ status: "suggested", reviewed_by: null, reviewed_at: null }).eq("detection_id", detectionId).not("reason", "is", null)
       await setDetection({ review_status: null, missing_brand: null, missing_name: null, missing_brand_id: null, reviewed_by: null, reviewed_at: null })
+      // Automatisch verborgen en nooit gekoppeld: nu alsnog koppelen (cron).
+      await sb.from("project_photo_detections").update({ match_status: null, match_batch_id: null, match_error: null }).eq("id", detectionId).like("match_error", "auto-hidden%")
       return { ok: true }
     }
     case "level": {
@@ -489,11 +537,11 @@ async function applyReview(sb: any, det: any, detectionId: string, action: Revie
 
 /** Zelf een product op de foto zetten: een getekend kader (0–1); daarna kiezen wat het is. */
 export async function addDetection(photoId: string, box: { x0: number; y0: number; x1: number; y1: number }): Promise<{ id: string } | { error: string }> {
-  const guard = await requireAdmin()
-  if ("error" in guard) return guard
   const sb = createServiceRoleSupabaseClient() as any
   const { data: photo } = await sb.from("project_photos").select("id, project_id").eq("id", photoId).maybeSingle()
   if (!photo) return { error: "Foto niet gevonden." }
+  const guard = await requireProjectAccess(photo.project_id)
+  if ("error" in guard) return guard
   const x0 = clamp01(Math.min(box.x0, box.x1)), x1 = clamp01(Math.max(box.x0, box.x1))
   const y0 = clamp01(Math.min(box.y0, box.y1)), y1 = clamp01(Math.max(box.y0, box.y1))
   if (x1 - x0 < 0.01 || y1 - y0 < 0.01) return { error: "Het kader is te klein." }
@@ -505,7 +553,7 @@ export async function addDetection(photoId: string, box: { x0: number; y0: numbe
     source: "manual", match_status: "done",
   }).select("id").single()
   if (error) return { error: error.message }
-  await logReview(sb, { detectionId: data.id, projectId: photo.project_id, photoId, action: "add", payload: { box: { x0, y0, x1, y1 } }, before: null, after: await snapshot(sb, data.id), userId: guard.userId })
+  await logReview(sb, { detectionId: data.id, projectId: photo.project_id, photoId, action: "add", payload: { box: { x0, y0, x1, y1 } }, before: null, after: await snapshot(sb, data.id), userId: guard.userId, role: guard.role })
   return { id: data.id }
 }
 
@@ -518,7 +566,7 @@ export type CatalogHit = { kind: MatchLevel; id: string; title: string; subtitle
  * zoekterm ("edra on the rocks"), dan zoeken we binnen dat merk op de rest.
  */
 export async function searchCatalog(query: string): Promise<{ hits: CatalogHit[] } | { error: string }> {
-  const guard = await requireAdmin()
+  const guard = await requireReviewer()
   if ("error" in guard) return guard
   const q = query.toLowerCase().replace(/[%_\\]/g, " ").replace(/\s+/g, " ").trim()
   if (q.length < 2) return { hits: [] }
@@ -553,7 +601,7 @@ export async function searchCatalog(query: string): Promise<{ hits: CatalogHit[]
  * collecties (opnieuw) inventariseren; anders eerst het merk toevoegen vanaf
  * zijn site. De stip wacht daarna op de catalogus (requeueAwaitingCatalog).
  */
-export async function inventoryRecognizedBrand(brandName: string, website: string | null): Promise<{ brandId: string; created: boolean; started: boolean } | { error: string }> {
+export async function inventoryRecognizedBrand(brandName: string, website: string | null): Promise<{ brandId: string; brandName: string; logoUrl: string | null; created: boolean; started: boolean } | { error: string }> {
   const guard = await requireAdmin()
   if ("error" in guard) return guard
   const sb = createServiceRoleSupabaseClient() as any
@@ -561,7 +609,8 @@ export async function inventoryRecognizedBrand(brandName: string, website: strin
   let created = false
   if (!brandId) {
     if (!website) return { error: "Vul de website van het merk in." }
-    const added = await addBrandFromSite(website)
+    const url = /^https?:\/\//i.test(website.trim()) ? website.trim() : `https://${website.trim()}`
+    const added = await addBrandFromSite(url)
     if ("error" in added) return { error: added.error }
     brandId = added.brandId
     created = added.created
@@ -570,7 +619,8 @@ export async function inventoryRecognizedBrand(brandName: string, website: strin
   await sb.from("brands").update({ is_curated: true }).eq("id", brandId).eq("is_curated", false)
   const started = await startCollectionInventory([brandId])
   if ("error" in started) return { error: started.error }
-  return { brandId: brandId as string, created, started: started.started > 0 }
+  const { data: b } = await sb.from("brands").select("name, logo_url").eq("id", brandId).maybeSingle()
+  return { brandId: brandId as string, brandName: b?.name ?? brandName, logoUrl: b?.logo_url ?? null, created, started: started.started > 0 }
 }
 
 // ── Zelf koppelen: merk en collectie kiezen ─────────────────────────────
@@ -579,11 +629,11 @@ export type BrandHit = { id: string; name: string; logoUrl: string | null }
 export type BrandCollection = { id: string; name: string; imageUrl: string | null; /** Van de soort van de stip (of eronder/erboven). */ fits: boolean }
 
 /** Merken uit de selectie (ster) op naam, voor het koppelveld in de kaart. */
-export async function searchCuratedBrands(query: string): Promise<{ brands: BrandHit[] } | { error: string }> {
-  const guard = await requireAdmin()
+export async function searchCuratedBrands(query: string): Promise<{ brands: BrandHit[]; /** Bestaat wel, maar zonder ster. */ outsideSelection: BrandHit | null } | { error: string }> {
+  const guard = await requireReviewer()
   if ("error" in guard) return guard
   const q = query.trim().toLowerCase()
-  if (q.length < 1) return { brands: [] }
+  if (q.length < 1) return { brands: [], outsideSelection: null }
   const sb = createServiceRoleSupabaseClient() as any
   const all = await allBrands(sb)
   const { data: out } = await sb.from("brands").select("id").eq("is_curated", false)
@@ -593,7 +643,11 @@ export async function searchCuratedBrands(query: string): Promise<{ brands: Bran
     // Begint met de zoekterm eerst, daarna korte namen.
     .sort((a, b) => Number(!a.name.toLowerCase().startsWith(q)) - Number(!b.name.toLowerCase().startsWith(q)) || a.name.length - b.name.length)
     .slice(0, 6)
-  return { brands: hits.map((b) => ({ id: b.id, name: b.name, logoUrl: b.logo_url })) }
+  const outside = hits.length ? null : all.find((b) => excluded.has(b.id) && b.name.toLowerCase().includes(q)) ?? null
+  return {
+    brands: hits.map((b) => ({ id: b.id, name: b.name, logoUrl: b.logo_url })),
+    outsideSelection: outside ? { id: outside.id, name: outside.name, logoUrl: outside.logo_url } : null,
+  }
 }
 
 /**
@@ -602,7 +656,7 @@ export async function searchCuratedBrands(query: string): Promise<{ brands: Bran
  * erboven) staan bovenaan.
  */
 export async function listBrandCollections(brandId: string, kindSlug: string | null): Promise<{ collections: BrandCollection[] } | { error: string }> {
-  const guard = await requireAdmin()
+  const guard = await requireReviewer()
   if ("error" in guard) return guard
   const sb = createServiceRoleSupabaseClient() as any
   const [{ data: cols }, { data: cats }] = await Promise.all([

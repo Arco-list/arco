@@ -146,6 +146,7 @@ import { ALL_SCOPES, resolveScopeSlugs } from "@/lib/publish-scope"
 import { ProjectBrandsEditor } from "./project-brands-editor"
 import { getPhotoDetections, requestPhotoDetections, type DetectionStatus, type PhotoDetection } from "./detection-actions"
 import { DetectionReview, STATE_STYLE, detectionState } from "./detection-review"
+import { OWNER_REVIEW_ENABLED } from "@/lib/recognition/flags"
 import { PhotoBrandDots } from "@/components/project/photo-brand-dots"
 import type { PhotoBrandTag } from "@/lib/projects/photo-brand-tags"
 import { isAdminUser } from "@/lib/auth-utils"
@@ -648,7 +649,10 @@ export default function ListingEditorPage() {
   // ── Productherkenning (migratie 332), alleen admins ─────────────────
   // De herkende producten als stippen op de fototegels. Zolang er foto's
   // in de wachtrij of bij Claude staan, elke 30 seconden opnieuw kijken.
-  const showDetections = (isAdmin || viewerIsAdmin) && Boolean(projectId)
+  const [hasProjectAccess, setHasProjectAccess] = useState(false)
+  // Admins altijd; eigenaren zodra OWNER_REVIEW_ENABLED aan staat.
+  const reviewerIsAdmin = isAdmin || viewerIsAdmin
+  const showDetections = (reviewerIsAdmin || (OWNER_REVIEW_ENABLED && hasProjectAccess)) && Boolean(projectId)
   const [detections, setDetections] = useState<PhotoDetection[]>([])
   const [detectionStatus, setDetectionStatus] = useState<DetectionStatus | null>(null)
   const [isRequestingDetections, setIsRequestingDetections] = useState(false)
@@ -737,7 +741,6 @@ export default function ListingEditorPage() {
   const [detailsOpenDropdown, setDetailsOpenDropdown] = useState<ProjectDetailsSelectField | null>(null)
   const [detailsLastSavedAt, setDetailsLastSavedAt] = useState<Date | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
-  const [hasProjectAccess, setHasProjectAccess] = useState(false)
   const [locationSaving, setLocationSaving] = useState(false)
   const [isSubmittingForReview, setIsSubmittingForReview] = useState(false)
   const [generatingDesc, setGeneratingDesc] = useState(false)
@@ -6350,7 +6353,7 @@ export default function ListingEditorPage() {
                 <button type="button" className="btn-primary shrink-0" disabled style={{ fontVariantNumeric: "tabular-nums" }}>
                   {detectionProgress.pct}% geanalyseerd
                 </button>
-              ) : detectionProgress.unstarted > 0 ? (
+              ) : detectionProgress.unstarted > 0 && reviewerIsAdmin ? (
                 <button type="button" className="btn-primary shrink-0 gap-1.5" disabled={isRequestingDetections} onClick={() => void requestDetections(false)}>
                   <ScanSearch size={14} />
                   Producten herkennen
@@ -6376,6 +6379,7 @@ export default function ListingEditorPage() {
               onClose={() => setReviewAt(null)}
               onChanged={loadDetections}
               onRedetect={() => { setReviewAt(null); void requestDetections(true) }}
+              viewerIsAdmin={reviewerIsAdmin}
             />
           )}
         </section>

@@ -44,7 +44,7 @@ export async function getCatalogCategories(): Promise<CatalogCategory[]> {
  *  halen en in code te filteren, en dat blijft lang zo. */
 export async function getCatalogCollections(): Promise<CatalogCollection[]> {
   const supabase = createServiceRoleSupabaseClient() as any
-  const [{ data: collections }, { data: links }, { data: kindRows }, { data: productShots }, { data: productRows }, { data: coverRows }] = await Promise.all([
+  const [{ data: collections }, { data: links }, { data: kindRows }, { data: productShots }, { data: productRows }, { data: coverRows }, { data: detLinks }] = await Promise.all([
     // In blokken: Supabase kapt elke query af op 1000 rijen.
     selectAll(() => supabase
       .from("product_collections")
@@ -58,6 +58,8 @@ export async function getCatalogCollections(): Promise<CatalogCollection[]> {
     selectAll(() => supabase.from("products").select("collection_id, image_url, position").not("image_url", "is", null).order("position").order("id")),
     // Focuspunten van de covers: de kaart snijdt bij zoals de hero.
     selectAll(() => supabase.from("product_collection_photos").select("collection_id, url, focus_x, focus_y, width, height").eq("is_primary", true).not("focus_x", "is", null).order("id")),
+    // Goedgekeurde productherkenning telt ook (migratie 343).
+    selectAll(() => supabase.from("project_detection_links").select("collection_id, project_id").not("collection_id", "is", null).order("detection_id")),
   ])
   const focusByUrl = new Map<string, { x: number; y: number }>()
   // De maat erbij, zodat de kaart het punt kan centreren (focusPositionIn).
@@ -78,7 +80,7 @@ export async function getCatalogCollections(): Promise<CatalogCollection[]> {
     kindsByCollection.set(k.collection_id, [...(kindsByCollection.get(k.collection_id) ?? []), k.category_id])
   }
   const projectsByCollection = new Map<string, Set<string>>()
-  for (const l of (links ?? []) as Array<{ collection_id: string; project_id: string }>) {
+  for (const l of [...(links ?? []), ...(detLinks ?? [])] as Array<{ collection_id: string; project_id: string }>) {
     const set = projectsByCollection.get(l.collection_id) ?? new Set<string>()
     set.add(l.project_id)
     projectsByCollection.set(l.collection_id, set)
@@ -108,7 +110,7 @@ export async function getCatalogCollections(): Promise<CatalogCollection[]> {
 
 export async function getCatalogBrands(): Promise<CatalogBrand[]> {
   const supabase = createServiceRoleSupabaseClient() as any
-  const [{ data: brands }, { data: cats }, { data: collections }, { data: links }] = await Promise.all([
+  const [{ data: brands }, { data: cats }, { data: collections }, { data: links }, { data: detLinks }] = await Promise.all([
     selectAll(() => supabase
       .from("brands")
       .select("id, slug, name, domain, website, logo_url, description, translations, country, founded_year, status")
@@ -117,6 +119,8 @@ export async function getCatalogBrands(): Promise<CatalogBrand[]> {
     selectAll(() => supabase.from("brand_categories").select("brand_id, category_id, position").order("position").order("brand_id").order("category_id")),
     supabase.from("product_collections").select("id, brand_id"),
     supabase.from("project_brands").select("brand_id, project_id"),
+    // Goedgekeurde productherkenning telt ook (migratie 343).
+    selectAll(() => supabase.from("project_detection_links").select("brand_id, project_id").order("detection_id")),
   ])
   const catsByBrand = new Map<string, string[]>()
   for (const r of (cats ?? []) as Array<{ brand_id: string; category_id: string }>) {
@@ -127,7 +131,7 @@ export async function getCatalogBrands(): Promise<CatalogBrand[]> {
   const collectionByBrand = new Map<string, number>()
   for (const f of (collections ?? []) as Array<{ brand_id: string }>) collectionByBrand.set(f.brand_id, (collectionByBrand.get(f.brand_id) ?? 0) + 1)
   const projectsByBrand = new Map<string, Set<string>>()
-  for (const l of (links ?? []) as Array<{ brand_id: string; project_id: string }>) {
+  for (const l of [...(links ?? []), ...(detLinks ?? [])] as Array<{ brand_id: string; project_id: string }>) {
     const set = projectsByBrand.get(l.brand_id) ?? new Set<string>()
     set.add(l.project_id)
     projectsByBrand.set(l.brand_id, set)
@@ -185,14 +189,26 @@ export async function getCollectionPhotos(collectionId: string): Promise<Array<{
  *  (requireProductsAdmin); zet het uit als de laag publiek gaat. */
 async function projectsFor(column: "collection_id" | "brand_id", id: string, options?: { includeInReview?: boolean }): Promise<CatalogProject[]> {
   const supabase = createServiceRoleSupabaseClient() as any
-  const [{ data: links }, { data: tagRows }] = await Promise.all([
+  const [{ data: links }, { data: tagRows }, { data: detRows }] = await Promise.all([
     supabase.from("project_brands").select("project_id").eq(column, id),
     supabase.from("project_photo_brand_tags").select("photo_id, created_at, photo:project_photos!inner(id, project_id, url, width, height)").eq(column, id).order("created_at"),
+    // Goedgekeurde stippen van de productherkenning (migratie 343).
+    supabase.from("project_detection_links").select("photo_id, project_id, created_at").eq(column, id).order("created_at"),
   ])
-  // Per project de eerste foto met een stip voor dit merk of deze collectie.
+  // Per project de eerste foto met een stip voor dit merk of deze collectie:
+  // eerst de handmatige tags, dan de herkende.
   const taggedByProject = new Map<string, { id: string; url: string; width: number | null; height: number | null }>()
   for (const r of (tagRows ?? []) as Array<{ photo: { id: string; project_id: string; url: string; width: number | null; height: number | null } | null }>) {
     if (r.photo && !taggedByProject.has(r.photo.project_id)) taggedByProject.set(r.photo.project_id, r.photo)
+  }
+  const detPhotoIds = ((detRows ?? []) as Array<{ photo_id: string; project_id: string }>).filter((r) => !taggedByProject.has(r.project_id)).map((r) => r.photo_id)
+  if (detPhotoIds.length > 0) {
+    const { data: detPhotos } = await supabase.from("project_photos").select("id, project_id, url, width, height").in("id", Array.from(new Set(detPhotoIds)))
+    const photoById = new Map(((detPhotos ?? []) as Array<{ id: string; project_id: string; url: string; width: number | null; height: number | null }>).map((p) => [p.id, p]))
+    for (const r of (detRows ?? []) as Array<{ photo_id: string; project_id: string }>) {
+      const photo = photoById.get(r.photo_id)
+      if (photo && !taggedByProject.has(r.project_id)) taggedByProject.set(r.project_id, photo)
+    }
   }
   const ids = Array.from(new Set([
     ...((links ?? []) as Array<{ project_id: string }>).map((l) => l.project_id),

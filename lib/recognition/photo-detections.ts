@@ -76,7 +76,9 @@ const PROMPT = `This is a photo from an interior or architecture project on Arco
 
 Give:
 - room: the room or space the photo shows, from the list.
-- products: the MAIN design products visible — the pieces a visitor would want to know the brand of (a sofa, a pendant light, a dining table, a kitchen, a bathtub). At most 3, most prominent first. Skip small decoration, plants, books, built-in walls and structural elements unless they are clearly a designed product (a fireplace, a kitchen, a staircase). For each:
+- products: the MAIN design products visible — the pieces from a brand's collection that a visitor would want to know the maker of: furniture (a sofa, a chair, a dining table, a bed), lighting (a pendant, a floor lamp), appliances and fittings (an oven, a hob, a tap, a boiling-water tap, a bathtub, a basin). At most 3, most prominent first.
+  Do NOT include bespoke joinery and fixed finishes, even when they dominate the photo: custom kitchens and kitchen islands, cabinetry, wardrobes and shelving built into the room, worktops and countertops, splashbacks, wall and floor finishes (stone cladding, parquet, tiles), built-in mirrors, stairs and walls. Only include a kitchen when it is a recognisable product system of a kitchen brand (e.g. Bulthaup, Boffi). Also skip small decoration, tableware and glassware, plants, books and rugs that are not a designed product. Use the free places for real products instead — a tap, a stool or an oven in a kitchen photo matters more than the island it stands on.
+  For each:
   - kind_slug: the most specific slug from the category list, or null if none fits;
   - label: a short name ("Pendant light");
   - box: the bounding box as fractions of the image width and height (0 = left/top, 1 = right/bottom): x0, y0, x1, y1;
@@ -149,10 +151,28 @@ async function imageBlock(photo: { url: string; file_size: number | null }): Pro
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, Number.isFinite(n) ? n : 0))
 
+/** Een soort wordt automatisch verborgen na zoveel oordelen van een admin… */
+const AUTO_HIDE_MIN_REVIEWS = 8
+/** …waarvan minstens dit deel verwijderen was (migratie 342). */
+const AUTO_HIDE_SHARE = 0.9
+export const AUTO_HIDDEN = "auto-hidden"
+
+/**
+ * Soorten die admins bijna altijd verwijderen (maatwerk, afwerking): nieuwe
+ * stippen daarvan worden meteen verborgen en niet gekoppeld. Alleen
+ * oordelen van admins tellen; een paar keer goedkeuren zet de soort weer aan.
+ */
+export async function autoHiddenKinds(sb: any): Promise<Set<string>> {
+  const { data } = await sb.from("detection_kind_review_stats").select("kind_slug, reviewed, hidden")
+  return new Set(((data ?? []) as Array<{ kind_slug: string; reviewed: number; hidden: number }>)
+    .filter((k) => Number(k.reviewed) >= AUTO_HIDE_MIN_REVIEWS && Number(k.hidden) / Number(k.reviewed) >= AUTO_HIDE_SHARE)
+    .map((k) => k.kind_slug))
+}
+
 /** De instellingen die met een detectie worden opgeslagen (migratie 336). */
 export const detectPipeline = () => ({ step: "detect", model: DETECTION_MODEL, maxDetections: MAX_DETECTIONS, prompt: promptHash(PROMPT, JSON.stringify(SCHEMA)) })
 
-async function storeResult(sb: any, photo: { photo_id: string; project_id: string }, batchId: string, data: Detection, idBySlug: Map<string, string>): Promise<boolean> {
+async function storeResult(sb: any, photo: { photo_id: string; project_id: string }, batchId: string, data: Detection, idBySlug: Map<string, string>, hiddenKinds: Set<string>): Promise<boolean> {
   // Eerst claimen: alleen als de foto nog in deze batch zit. Zo verwerken
   // twee overlappende rondes dezelfde uitkomst niet allebei.
   const { data: claimed } = await sb.from("project_photo_analyses")
@@ -183,6 +203,13 @@ async function storeResult(sb: any, photo: { photo_id: string; project_id: strin
       description: p.description?.trim().slice(0, 300) || null,
       brand_cues: p.brand_cues?.trim().slice(0, 200) || null,
       pipeline: detectPipeline(),
+      // Een soort die admins bijna altijd verwijderen: meteen verborgen en
+      // niet gekoppeld (scheelt het oordeel van Claude). Terug te zetten via
+      // "Ook beoordeelde tonen"; dan wordt hij alsnog gekoppeld.
+      ...(slug && hiddenKinds.has(slug) ? {
+        review_status: "hidden", reviewed_at: new Date().toISOString(),
+        match_status: "done", match_error: `${AUTO_HIDDEN}: ${slug} wordt bijna altijd verwijderd`,
+      } : {}),
     }
   })
   if (rows.length) {
@@ -194,6 +221,39 @@ async function storeResult(sb: any, photo: { photo_id: string; project_id: strin
   return true
 }
 
+/**
+ * Automatisch herkennen: projecten die live gaan (published_at, gezet door
+ * trg_set_project_published_at, langs welke weg ook), vanaf deze datum.
+ * Afgekeurde projecten kosten zo niets. Eerder gepubliceerde projecten
+ * (backfill) gaan via "Producten herkennen" of een aparte ronde.
+ */
+export const AUTO_RECOGNIZE_SINCE = "2026-11-25T00:00:00Z"
+
+/** Foto's van live projecten (sinds AUTO_RECOGNIZE_SINCE) die nog niet herkend zijn, in de wachtrij. */
+export async function queuePublishedProjects(sb: any): Promise<number> {
+  const { data: projects } = await sb.from("projects").select("id")
+    .eq("status", "published").gte("published_at", AUTO_RECOGNIZE_SINCE).limit(500)
+  const projectIds = ((projects ?? []) as Array<{ id: string }>).map((p) => p.id)
+  if (projectIds.length === 0) return 0
+  const { data: photos } = await sb.from("project_photos").select("id, project_id").in("project_id", projectIds).limit(10000)
+  const all = (photos ?? []) as Array<{ id: string; project_id: string }>
+  if (all.length === 0) return 0
+  const have = new Set<string>()
+  for (let i = 0; i < all.length; i += 500) {
+    const { data } = await sb.from("project_photo_analyses").select("photo_id").in("photo_id", all.slice(i, i + 500).map((p) => p.id))
+    for (const r of (data ?? []) as Array<{ photo_id: string }>) have.add(r.photo_id)
+  }
+  const todo = all.filter((p) => !have.has(p.id))
+  if (todo.length === 0) return 0
+  const now = new Date().toISOString()
+  const { error } = await sb.from("project_photo_analyses").upsert(
+    todo.map((p) => ({ photo_id: p.id, project_id: p.project_id, status: "queued", batch_id: null, error: null, updated_at: now })),
+    { onConflict: "photo_id", ignoreDuplicates: true },
+  )
+  if (error) { logger.warn("Auto-queue of published projects failed", { error: error.message }); return 0 }
+  return todo.length
+}
+
 /** Placeholder-batch tijdens het indienen; een ronde die halverwege stopt, laat hem achter. */
 const CLAIM_PREFIX = "claim:"
 const CLAIM_TTL_MS = 10 * 60_000
@@ -203,6 +263,9 @@ export async function tickPhotoDetections(sb: any) {
   const deadline = Date.now() + TIME_BUDGET_MS
   const client = anthropic()
   const cats = await loadCategories(sb)
+  const hiddenKinds = await autoHiddenKinds(sb)
+  // Live gegane projecten: hun foto's in de wachtrij.
+  await queuePublishedProjects(sb)
   let processed = 0
   let submitted = 0
 
@@ -237,7 +300,7 @@ export async function tickPhotoDetections(sb: any) {
       if (msg.stop_reason === "refusal" || msg.stop_reason === "max_tokens") { await fail(msg.stop_reason); continue }
       const text = msg.content.filter((b: any) => b.type === "text").map((b: any) => b.text).join("")
       try {
-        if (await storeResult(sb, photo, batchId, JSON.parse(text) as Detection, cats.idBySlug)) processed++
+        if (await storeResult(sb, photo, batchId, JSON.parse(text) as Detection, cats.idBySlug, hiddenKinds)) processed++
       } catch (err) {
         await fail(String(err))
       }

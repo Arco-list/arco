@@ -11,6 +11,12 @@ import { pickCollectionHero } from "@/lib/products/collection-hero"
  * die is admin-only, dus een admin gaat naar de merk- of collectiepagina
  * op Arco, een bezoeker naar de site van het merk (de collectiepagina
  * daar als we die kennen, anders de homepage).
+ *
+ * Naast de handmatige tags ook de goedgekeurde stippen van de
+ * productherkenning (migraties 332–334): de stip in het midden van het
+ * kader, met de goedgekeurde collectie of alleen het merk. Draait iemand de
+ * goedkeuring terug, dan is de stip hier ook weg. Een handmatige tag voor
+ * dezelfde collectie (of hetzelfde merk) op dezelfde foto gaat voor.
  */
 export type PhotoBrandTag = {
   id: string
@@ -35,11 +41,37 @@ export async function getPhotoBrandTags(photoIds: string[], viewerIsAdmin: boole
     .from("project_photo_brand_tags")
     .select("id, photo_id, x, y, brand:brands(id, name, slug, logo_url, website), collection:product_collections(id, name, slug, url)")
     .in("photo_id", photoIds)
-  const tags = (rows ?? []) as Array<{
+  type Row = {
     id: string; photo_id: string; x: number; y: number
     brand: { id: string; name: string; slug: string; logo_url: string | null; website: string | null } | null
     collection: { id: string; name: string; slug: string; url: string | null } | null
-  }>
+  }
+  const tags = (rows ?? []) as Row[]
+
+  // Goedgekeurde stippen uit de productherkenning.
+  const { data: approved } = await sr
+    .from("project_photo_detections")
+    .select("id, photo_id, box_x0, box_y0, box_x1, box_y1")
+    .in("photo_id", photoIds).eq("review_status", "approved")
+  const detections = (approved ?? []) as Array<{ id: string; photo_id: string; box_x0: number; box_y0: number; box_x1: number; box_y1: number }>
+  if (detections.length > 0) {
+    const { data: matches } = await sr
+      .from("project_photo_detection_matches")
+      .select("detection_id, level, brand:brands(id, name, slug, logo_url, website), collection:product_collections(id, name, slug, url)")
+      .in("detection_id", detections.map((d) => d.id)).eq("status", "approved")
+    const matchOf = new Map(((matches ?? []) as any[]).map((m) => [m.detection_id, m]))
+    const key = (photoId: string, brandId: string, collectionId: string | null) => `${photoId}:${brandId}:${collectionId ?? ""}`
+    const manual = new Set(tags.map((t) => t.brand ? key(t.photo_id, t.brand.id, t.collection?.id ?? null) : ""))
+    for (const d of detections) {
+      const m = matchOf.get(d.id)
+      if (!m?.brand) continue
+      const collection = m.level === "brand" ? null : m.collection ?? null
+      const k = key(d.photo_id, m.brand.id, collection?.id ?? null)
+      if (manual.has(k)) continue
+      manual.add(k)
+      tags.push({ id: `det:${d.id}`, photo_id: d.photo_id, x: (d.box_x0 + d.box_x1) / 2, y: (d.box_y0 + d.box_y1) / 2, brand: m.brand, collection })
+    }
+  }
   if (tags.length === 0) return out
 
   const collectionIds = Array.from(new Set(tags.map((t) => t.collection?.id).filter((id): id is string => Boolean(id))))

@@ -61,7 +61,7 @@ export type AdminBrandCategory = { id: string; name: string; parentId: string | 
 export default async function AdminBrandsPage() {
   const supabase = createServiceRoleSupabaseClient() as any
 
-  const [{ data: brands }, { data: collections }, { data: links }, { data: brandCats }, { data: productCats }] = await Promise.all([
+  const [{ data: brands }, { data: collections }, { data: links }, { data: detLinks }, { data: brandCats }, { data: productCats }] = await Promise.all([
     // Alle merken: zonder blokken kapt Supabase af op 1000.
     selectAll(() => supabase
       .from("brands")
@@ -70,6 +70,8 @@ export default async function AdminBrandsPage() {
       .order("id")),
     supabase.from("product_collections").select("brand_id"),
     supabase.from("project_brands").select("brand_id, project_id, photo_id"),
+    // Goedgekeurde productherkenning telt mee als project (migratie 343).
+    selectAll(() => supabase.from("project_detection_links").select("brand_id, project_id").order("detection_id")),
     selectAll(() => supabase.from("brand_categories").select("brand_id, category_id, position").order("position").order("brand_id").order("category_id")),
     supabase.from("product_categories").select("id, name, parent_id, order_index"),
   ])
@@ -112,6 +114,11 @@ export default async function AdminBrandsPage() {
       p.add(l.project_id)
       pinnedByBrand.set(l.brand_id, p)
     }
+  }
+  // Goedgekeurde stippen: een project met dit merk, op een foto aangewezen.
+  for (const l of (detLinks ?? []) as Array<{ brand_id: string; project_id: string }>) {
+    projectsByBrand.set(l.brand_id, (projectsByBrand.get(l.brand_id) ?? new Set<string>()).add(l.project_id))
+    pinnedByBrand.set(l.brand_id, (pinnedByBrand.get(l.brand_id) ?? new Set<string>()).add(l.project_id))
   }
 
   // Eigenaarnaam voor geclaimde merken — één vraag voor alle rijen.

@@ -64,7 +64,7 @@ const CARD_W = 240
 type Stop = { photoId: string; detectionId: string | null }
 type CardAction = "approve" | "reject" | "remove" | "unknown"
 
-export function DetectionReview({ photos, detections, initial, onClose, onChanged, onRedetect }: {
+export function DetectionReview({ photos, detections, initial, onClose, onChanged, onRedetect, viewerIsAdmin = true }: {
   photos: Photo[]
   detections: PhotoDetection[]
   initial: { photoId: string; detectionId?: string | null }
@@ -73,7 +73,13 @@ export function DetectionReview({ photos, detections, initial, onClose, onChange
   onChanged: () => Promise<void> | void
   /** Alle foto's opnieuw laten herkennen (beoordeelde producten blijven staan). */
   onRedetect?: () => void
+  /** Admin: volledige versie, met "Bekijk als eigenaar" om de eigenarenversie te zien. */
+  viewerIsAdmin?: boolean
 }) {
+  // Eigenarenversie: zonder admin-gereedschap (opnieuw herkennen, merk in de
+  // selectie zetten) en met een kortere uitleg. Admins kunnen hem bekijken.
+  const [asOwner, setAsOwner] = useState(false)
+  const admin = viewerIsAdmin && !asOwner
   const [cursor, setCursor] = useState<Stop>({ photoId: initial.photoId, detectionId: initial.detectionId ?? null })
   const [busy, setBusy] = useState(false)
   const [natural, setNatural] = useState<Map<string, Size>>(new Map())
@@ -85,7 +91,8 @@ export function DetectionReview({ photos, detections, initial, onClose, onChange
   const byPhoto = useMemo(() => {
     const m = new Map<string, PhotoDetection[]>()
     for (const d of detections) {
-      if (d.reviewStatus === "hidden") continue
+      // Verborgen stippen alleen bij "Ook beoordeelde tonen" (om terug te zetten).
+      if (d.reviewStatus === "hidden" && !showAll && d.id !== cursor.detectionId) continue
       if (!showAll && !isOpenState(detectionState(d)) && d.id !== cursor.detectionId) continue
       m.set(d.photoId, [...(m.get(d.photoId) ?? []), d])
     }
@@ -156,22 +163,30 @@ export function DetectionReview({ photos, detections, initial, onClose, onChange
     if (open) return open
     const i = stops.findIndex((s) => s.detectionId === d.id)
     const after = [...stops.slice(i + 1), ...stops.slice(0, Math.max(i, 0))]
-    return after.find((s) => !s.detectionId || !skip.has(s.detectionId)) ?? { photoId: d.photoId, detectionId: null }
-  }, [nextOpenAfter, stops])
+    const other = after.find((s) => !s.detectionId || !skip.has(s.detectionId))
+    if (other) return other
+    // Dit was de laatste open stip: door naar de volgende foto.
+    const pi = photos.findIndex((p) => p.id === d.photoId)
+    const nextPhoto = photos[(pi + 1) % photos.length] ?? photos[pi]
+    return { photoId: nextPhoto.id, detectionId: null }
+  }, [nextOpenAfter, stops, photos])
 
   const run = useCallback(async (d: PhotoDetection, action: ReviewAction, key?: CardAction) => {
     const toGroup = action.type === "approve" || action.type === "pick" || action.type === "reject" || action.type === "missing" || action.type === "hide" || action.type === "unknown"
     const also = toGroup ? siblingsOf(d).filter((x) => !x.reviewStatus).map((x) => x.id) : []
     const advance = action.type !== "reset" && action.type !== "level" && action.type !== "move"
     const next = advance ? nextAfter(d, new Set([d.id, ...also])) : null
-    // De knop staat meteen aan; na een korte tel (en het antwoord) door naar de volgende.
+    // De knop staat meteen aan; na een korte tel door naar de volgende, ook
+    // als het opslaan nog loopt (dat gaat op de achtergrond door).
     if (key) setFlash({ id: d.id, key })
     setBusy(true)
-    const [res] = await Promise.all([reviewDetection(d.id, action, also), new Promise((r) => setTimeout(r, key ? 380 : 0))])
-    setBusy(false)
-    if ("error" in res) { setFlash(null); toast.error(res.error); return }
+    const request = reviewDetection(d.id, action, also)
+    if (key) await new Promise((r) => setTimeout(r, 380))
     if (next) setCursor(next)
     setFlash(null)
+    setBusy(false)
+    const res = await request
+    if ("error" in res) toast.error(res.error)
     void onChanged()
   }, [siblingsOf, nextAfter, onChanged])
 
@@ -195,27 +210,14 @@ export function DetectionReview({ photos, detections, initial, onClose, onChange
     if (rec?.brand || rec?.product) void run(d, { type: "missing", brand: rec.brand ?? "", name: rec.product ?? "" }, "approve")
   }, [run])
 
-  /** Het herkende merk in de catalogus brengen (toevoegen vanaf zijn site, of collecties bijwerken). */
-  const inventory = useCallback(async (d: PhotoDetection) => {
-    const rec = d.recognized
-    if (!rec?.brand) return
-    let website = rec.website
-    if (!rec.brandId) {
-      website = window.prompt(`Website van ${rec.brand}`, rec.website ?? "https://")
-      if (!website) return
-    }
-    setBusy(true)
-    const res = await inventoryRecognizedBrand(rec.brand, website)
-    setBusy(false)
-    if ("error" in res) { toast.error(res.error); return }
-    void onChanged()
-  }, [onChanged])
   const reject = useCallback((d: PhotoDetection) => {
     if (d.reviewStatus === "rejected") void run(d, { type: "reset" })
     else void run(d, { type: "reject" }, "reject")
   }, [run])
   const remove = useCallback((d: PhotoDetection) => {
-    void run(d, d.source === "manual" ? { type: "delete" } : { type: "hide" }, "remove")
+    // Verborgen (ook automatisch): nog eens op de prullenbak zet hem terug.
+    if (d.reviewStatus === "hidden") void run(d, { type: "reset" })
+    else void run(d, d.source === "manual" ? { type: "delete" } : { type: "hide" }, "remove")
   }, [run])
 
   // Toetsenbord: ← → door de stippen, Enter/A klopt, X/R klopt niet, Delete verwijderen, Esc sluiten.
@@ -257,7 +259,13 @@ export function DetectionReview({ photos, detections, initial, onClose, onChange
           Ook beoordeelde tonen
         </label>
         <span style={{ flex: 1 }} />
-        {onRedetect && (
+        {viewerIsAdmin && (
+          <label style={{ display: "flex", alignItems: "center", gap: 6, color: "#9b9b97", cursor: "pointer" }}>
+            <input type="checkbox" checked={asOwner} onChange={(e) => setAsOwner(e.target.checked)} />
+            Bekijk als eigenaar
+          </label>
+        )}
+        {admin && onRedetect && (
           <button type="button" style={{ ...plainBtn, color: "#9b9b97", textDecoration: "underline", textUnderlineOffset: 3 }}
             onClick={() => { if (window.confirm("Alle foto's opnieuw laten herkennen? Beoordeelde en zelf toegevoegde producten blijven staan; de rest wordt vervangen.")) onRedetect() }}>
             Opnieuw herkennen
@@ -269,12 +277,12 @@ export function DetectionReview({ photos, detections, initial, onClose, onChange
       <Stage
         key={photo.id}
         photo={photo} size={size} detections={photoDetections} selected={selected} busy={busy}
-        siblings={selected ? siblingsOf(selected) : []} photos={photos}
+        siblings={selected ? siblingsOf(selected) : []} photos={photos} admin={admin}
         flash={flash && flash.id === selected?.id ? flash.key : null}
         onSelect={(d) => setCursor({ photoId: d.photoId, detectionId: d.id })}
         onDeselect={() => setCursor({ photoId: photo.id, detectionId: null })}
         onDraw={(box) => void add(box)}
-        onApprove={approve} onReject={reject} onRemove={remove} onInventory={(d) => void inventory(d)}
+        onApprove={approve} onReject={reject} onRemove={remove}
         onLink={(d, action) => void run(d, action, action.type === "unknown" ? "unknown" : action.type === "reset" ? undefined : "approve")}
       />
 
@@ -287,7 +295,7 @@ export function DetectionReview({ photos, detections, initial, onClose, onChange
         <button type="button" onClick={() => go(1)} aria-label="Volgende" style={roundBtn}><ChevronRight size={20} /></button>
       </div>
       <div style={{ position: "absolute", left: 18, bottom: 20, fontSize: 12, color: "#77776f", pointerEvents: "none" }}>
-        Sleep een kader om een product toe te voegen · ← → · Enter klopt · X klopt niet · Delete verwijderen
+        {admin ? "Sleep een kader om een product toe te voegen · ← → · Enter klopt · X klopt niet · Delete verwijderen" : "Sleep een kader om een product toe te voegen"}
       </div>
     </div>,
     document.body,
@@ -295,7 +303,7 @@ export function DetectionReview({ photos, detections, initial, onClose, onChange
 }
 
 // ── De foto, de stippen, het kader dat je trekt en de productkaart ──
-function Stage({ photo, size, detections, selected, busy, siblings, photos, flash, onSelect, onDeselect, onDraw, onApprove, onReject, onRemove, onInventory, onLink }: {
+function Stage({ photo, size, detections, selected, busy, siblings, photos, admin, flash, onSelect, onDeselect, onDraw, onApprove, onReject, onRemove, onLink }: {
   photo: Photo
   size: Size | null
   detections: PhotoDetection[]
@@ -303,6 +311,7 @@ function Stage({ photo, size, detections, selected, busy, siblings, photos, flas
   busy: boolean
   siblings: PhotoDetection[]
   photos: Photo[]
+  admin: boolean
   flash: CardAction | null
   onSelect: (d: PhotoDetection) => void
   onDeselect: () => void
@@ -310,7 +319,6 @@ function Stage({ photo, size, detections, selected, busy, siblings, photos, flas
   onApprove: (d: PhotoDetection) => void
   onReject: (d: PhotoDetection) => void
   onRemove: (d: PhotoDetection) => void
-  onInventory: (d: PhotoDetection) => void
   onLink: (d: PhotoDetection, action: ReviewAction) => void
 }) {
   const boxRef = useRef<HTMLDivElement>(null)
@@ -399,8 +407,8 @@ function Stage({ photo, size, detections, selected, busy, siblings, photos, flas
         </div>
       )}
       {selected && rect && typeof document !== "undefined" && createPortal(
-        <ReviewCard key={selected.id} d={selected} photo={photo} size={size} rect={rect} busy={busy} siblings={siblings} photos={photos} flash={flash} onSelect={onSelect}
-          onApprove={() => onApprove(selected)} onReject={() => onReject(selected)} onRemove={() => onRemove(selected)} onInventory={() => onInventory(selected)} onLink={(action) => onLink(selected, action)} />,
+        <ReviewCard key={selected.id} d={selected} photo={photo} size={size} rect={rect} busy={busy} siblings={siblings} photos={photos} admin={admin} flash={flash} onSelect={onSelect}
+          onApprove={() => onApprove(selected)} onReject={() => onReject(selected)} onRemove={() => onRemove(selected)} onLink={(action) => onLink(selected, action)} />,
         document.body,
       )}
     </div>
@@ -408,7 +416,7 @@ function Stage({ photo, size, detections, selected, busy, siblings, photos, flas
 }
 
 // ── De productkaart bij de stip: zoals op een gewone foto, met drie knoppen ──
-function ReviewCard({ d, photo, size, rect, busy, siblings, photos, flash, onSelect, onApprove, onReject, onRemove, onInventory, onLink }: {
+function ReviewCard({ d, photo, size, rect, busy, siblings, photos, admin, flash, onSelect, onApprove, onReject, onRemove, onLink }: {
   d: PhotoDetection
   photo: Photo
   size: Size | null
@@ -416,13 +424,13 @@ function ReviewCard({ d, photo, size, rect, busy, siblings, photos, flash, onSel
   busy: boolean
   siblings: PhotoDetection[]
   photos: Photo[]
+  admin: boolean
   /** Net ingedrukt: die knop staat aan tot het doorgaat naar de volgende. */
   flash: CardAction | null
   onSelect: (d: PhotoDetection) => void
   onApprove: () => void
   onReject: () => void
   onRemove: () => void
-  onInventory: () => void
   /** Zelf koppelen: een collectie of merk kiezen, of "staat er niet in". */
   onLink: (action: ReviewAction) => void
 }) {
@@ -440,7 +448,7 @@ function ReviewCard({ d, photo, size, rect, busy, siblings, photos, flash, onSel
   const subtitle = shown
     // Goedgekeurd of niet zegt de vink al; hier alleen het merk.
     ? (shown.brandName !== title ? shown.brandName : shown.level === "brand" ? "Merk" : "")
-    : rec ? [rec.product ? rec.brand : null, !rec.brandCurated ? "niet in de selectie" : d.reviewStatus === "missing" ? "wacht op de catalogus" : "niet in de catalogus"].filter(Boolean).join(" · ")
+    : rec ? (rec.product ? rec.brand ?? "" : d.kindName ?? "")
     : STATE_STYLE[state].label
   const logoUrl = shown?.brandLogoUrl ?? rec?.brandLogoUrl ?? null
   const openSiblings = siblings.filter((x) => !x.reviewStatus).length
@@ -479,10 +487,10 @@ function ReviewCard({ d, photo, size, rect, busy, siblings, photos, flash, onSel
 
   // color: tint en hover; dark: aan (gekozen, of net ingedrukt).
   const buttons: Array<{ key: CardAction | "link"; label: string; color: string; dark: string; active: boolean; disabled: boolean; onClick: () => void; icon: React.ReactNode }> = [
-    { key: "remove", label: "Verwijderen", color: "#6b6b68", dark: "#3d3d3b", active: flash === "remove", disabled: busy, onClick: onRemove, icon: <Trash2 size={16} /> },
+    { key: "remove", label: d.reviewStatus === "hidden" ? (d.matchNote?.startsWith("auto-hidden") ? "Automatisch verborgen · terugzetten" : "Verborgen · terugzetten") : "Verwijderen", color: "#6b6b68", dark: "#3d3d3b", active: flash === "remove" || (!flash && d.reviewStatus === "hidden"), disabled: busy, onClick: onRemove, icon: <Trash2 size={16} /> },
     { key: "link", label: "Ander product koppelen", color: "#2f6690", dark: "#1f4766", active: false, disabled: busy, onClick: () => setLinking(true), icon: <ArrowLeftRight size={16} /> },
     { key: "reject", label: d.reviewStatus === "rejected" ? "Klopt niet · nog eens: terug" : `Klopt niet${groupLabel}`, color: "#c0392b", dark: "#9b2a1f", active: flash === "reject" || (!flash && d.reviewStatus === "rejected"), disabled: busy, onClick: onReject, icon: <X size={18} /> },
-    { key: "approve", label: d.reviewStatus === "approved" || d.reviewStatus === "missing" ? "Klopt · nog eens: terug" : shown ? `Klopt${groupLabel}` : rec ? (rec.brandCurated ? `Klopt · wacht op de catalogus${groupLabel}` : "Merk staat niet in de selectie") : "Kies eerst een product", color: "#2e7d4f", dark: "#1b5432", active: flash === "approve" || (!flash && (d.reviewStatus === "approved" || d.reviewStatus === "missing")), disabled: busy || (!shown && (!rec || !rec.brandCurated) && d.reviewStatus !== "approved" && d.reviewStatus !== "missing"), onClick: onApprove, icon: <Check size={18} /> },
+    { key: "approve", label: d.reviewStatus === "approved" || d.reviewStatus === "missing" ? "Klopt · nog eens: terug" : shown || rec ? `Klopt${groupLabel}` : "Kies eerst een product", color: "#2e7d4f", dark: "#1b5432", active: flash === "approve" || (!flash && (d.reviewStatus === "approved" || d.reviewStatus === "missing")), disabled: busy || (!shown && !rec && d.reviewStatus !== "approved" && d.reviewStatus !== "missing"), onClick: onApprove, icon: <Check size={18} /> },
   ]
   const visibleButtons = showLinker
     ? [
@@ -493,9 +501,17 @@ function ReviewCard({ d, photo, size, rect, busy, siblings, photos, flash, onSel
           onClick: () => onLink(d.reviewStatus === "unknown" ? { type: "reset" } : { type: "unknown" }), icon: <HelpCircle size={17} />,
         },
         {
-          key: "approve" as const, label: linkBrand ? `Alleen ${linkBrand.name} koppelen${groupLabel}` : "Kies eerst een merk", color: "#2e7d4f", dark: "#1b5432",
+          key: "approve" as const,
+          label: !linkBrand ? "Kies eerst een merk" : linkBrand.id ? `Alleen ${linkBrand.name} koppelen${groupLabel}` : `${linkBrand.name} voorstellen · wacht op de catalogus${groupLabel}`,
+          color: "#2e7d4f", dark: "#1b5432",
           active: flash === "approve", disabled: busy || !linkBrand,
-          onClick: () => { if (linkBrand) onLink({ type: "pick", target: { kind: "brand", id: linkBrand.id } }) }, icon: <Check size={18} />,
+          // Een voorgesteld merk (nog niet bij ons): de stip wacht erop; het
+          // merk toevoegen gebeurt aan de achterkant, de cron vindt het op naam.
+          onClick: () => {
+            if (!linkBrand) return
+            onLink(linkBrand.id ? { type: "pick", target: { kind: "brand", id: linkBrand.id } } : { type: "missing", brand: linkBrand.name, name: "" })
+          },
+          icon: <Check size={18} />,
         },
       ]
     : buttons
@@ -554,20 +570,7 @@ function ReviewCard({ d, photo, size, rect, busy, siblings, photos, flash, onSel
           </div>
         )}
         {showLinker && (
-          <LinkPicker d={d} busy={busy} brand={linkBrand} setBrand={setLinkBrand} onLink={onLink} onCancel={needsLink ? null : () => { setLinking(false); setLinkBrand(null) }} />
-        )}
-        {/* Herkend merk: in de catalogus brengen. Daarna koppelt de stip
-            vanzelf opnieuw zodra er beelden van dat merk zijn. */}
-        {rec?.brand && !showLinker && (
-          <div style={{ padding: "0 8px 6px" }}>
-            <button type="button" onClick={onInventory} disabled={busy || rec.inventoryRunning}
-              style={{ width: "100%", height: 34, borderRadius: 4, border: `1px solid ${LINE}`, background: "#fff", color: rec.inventoryRunning ? MUTED : INK, fontSize: 12, cursor: busy || rec.inventoryRunning ? "default" : "pointer" }}>
-              {rec.inventoryRunning ? `${rec.brandName ?? rec.brand} wordt geïnventariseerd…`
-                : rec.brandId && !rec.brandCurated ? `${rec.brandName ?? rec.brand} in de selectie zetten`
-                : rec.brandId ? `Collecties van ${rec.brandName ?? rec.brand} bijwerken`
-                : `${rec.brand} inventariseren`}
-            </button>
-          </div>
+          <LinkPicker d={d} busy={busy} admin={admin} brand={linkBrand} setBrand={setLinkBrand} onLink={onLink} onCancel={needsLink ? null : () => { setLinking(false); setLinkBrand(null) }} />
         )}
         <div style={{ display: "flex", gap: 6, padding: "0 8px 8px" }}>
           {visibleButtons.map((b) => (
@@ -601,9 +604,11 @@ function ReviewCard({ d, photo, size, rect, busy, siblings, photos, flash, onSel
  * "collectie staat er niet in" (wacht op de catalogus; het merk wordt
  * geïnventariseerd).
  */
-function LinkPicker({ d, busy, brand, setBrand, onLink, onCancel }: {
+function LinkPicker({ d, busy, admin, brand, setBrand, onLink, onCancel }: {
   d: PhotoDetection
   busy: boolean
+  /** Alleen een admin zet een merk in de selectie; een eigenaar stelt het voor. */
+  admin: boolean
   brand: BrandHit | null
   setBrand: (b: BrandHit | null) => void
   onLink: (action: ReviewAction) => void
@@ -611,21 +616,27 @@ function LinkPicker({ d, busy, brand, setBrand, onLink, onCancel }: {
 }) {
   const [q, setQ] = useState("")
   const [brands, setBrands] = useState<BrandHit[]>([])
+  /** De zoekterm waarvoor de resultaten gelden (om "niets gevonden" pas dan te tonen). */
+  const [searched, setSearched] = useState("")
+  const [outside, setOutside] = useState<BrandHit | null>(null)
+  const [adding, setAdding] = useState(false)
   const [collections, setCollections] = useState<BrandCollection[] | null>(null)
 
   useEffect(() => {
     if (brand) return
     const term = q.trim()
-    if (!term) { setBrands([]); return }
+    if (!term) { setBrands([]); setSearched(""); setOutside(null); return }
     let alive = true
     const t = setTimeout(async () => {
       const res = await searchCuratedBrands(term)
-      if (alive && !("error" in res)) setBrands(res.brands)
+      if (alive && !("error" in res)) { setBrands(res.brands); setOutside(res.outsideSelection); setSearched(term) }
     }, 180)
     return () => { alive = false; clearTimeout(t) }
   }, [q, brand])
   useEffect(() => {
     if (!brand) { setCollections(null); return }
+    // Voorgesteld merk (nog niet bij ons): geen collecties.
+    if (!brand.id) { setCollections([]); return }
     let alive = true
     void listBrandCollections(brand.id, d.kindSlug).then((res) => { if (alive) setCollections("error" in res ? [] : res.collections) })
     return () => { alive = false }
@@ -648,6 +659,26 @@ function LinkPicker({ d, busy, brand, setBrand, onLink, onCancel }: {
               <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.name}</span>
             </button>
           ))}
+          {/* Niets gevonden: het merk staat buiten de selectie, of nog niet bij ons. */}
+          {searched && searched === q.trim() && brands.length === 0 && (
+            outside && admin ? (
+              <button type="button" disabled={busy || adding} style={linkBtn}
+                onClick={async () => {
+                  setAdding(true)
+                  const res = await inventoryRecognizedBrand(outside.name, null)
+                  setAdding(false)
+                  if ("error" in res) { toast.error(res.error); return }
+                  setBrand({ id: res.brandId, name: res.brandName, logoUrl: res.logoUrl }); setQ("")
+                }}>
+                {adding ? "Bezig…" : <>{outside.name} staat niet in de selectie · in de selectie zetten</>}
+              </button>
+            ) : (
+              <button type="button" disabled={busy} style={linkBtn}
+                onClick={() => { const name = q.trim(); setBrand({ id: "", name: name.charAt(0).toUpperCase() + name.slice(1), logoUrl: null }); setQ("") }}>
+                &ldquo;{q.trim()}&rdquo; voorstellen als merk
+              </button>
+            )
+          )}
         </>
       ) : (
         <>
