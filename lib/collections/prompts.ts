@@ -232,7 +232,10 @@ export const PHOTO_CHOICE_SCHEMA = {
   additionalProperties: false,
 } as const
 
-export function photoChoiceRequest(customId: string, collectionName: string, brandName: string, imageUrls: string[]): BatchRequest {
+/** Een adres, of een omgezet beeld als base64 (AVIF, zie visionImage). */
+export type PhotoSource = string | { base64: string; mediaType: string }
+
+export function photoChoiceRequest(customId: string, collectionName: string, brandName: string, imageUrls: PhotoSource[]): BatchRequest {
   const content: Array<Record<string, unknown>> = [{
     type: "text",
     text: `These are numbered photos from the page of the collection "${collectionName}" by "${brandName}".
@@ -243,7 +246,7 @@ export function photoChoiceRequest(customId: string, collectionName: string, bra
   }]
   imageUrls.forEach((url, i) => {
     content.push({ type: "text", text: `Photo ${i + 1}:` })
-    content.push({ type: "image", source: { type: "url", url } })
+    content.push({ type: "image", source: typeof url === "string" ? { type: "url", url } : { type: "base64", media_type: url.mediaType, data: url.base64 } })
   })
   return {
     custom_id: customId,

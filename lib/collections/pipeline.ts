@@ -10,7 +10,7 @@ import { imageSize } from "@/lib/images/image-size"
 import { syncBrandCategoriesFromCollections } from "@/lib/products/brand-categories"
 import { categoryLevels, syncCollectionSubgroups, type CategoryLevels, type CategoryRow } from "@/lib/products/collection-subgroups"
 import { fetchPage } from "@/lib/collections/fetch-page"
-import { absoluteHttpUrl, pageMainImage, slugify, storeRemoteImage, stripWww, syncCollectionCover } from "@/lib/collections/shared"
+import { absoluteHttpUrl, pageMainImage, slugify, storeRemoteImage, stripWww, syncCollectionCover, visionImage, type VisionImage } from "@/lib/collections/shared"
 import { regroupCandidates } from "@/lib/collections/families"
 import {
   MAX_OVERVIEW_PAGES, MAX_AMBIANCE_PHOTOS, MAX_DETAIL_PHOTOS, MAX_PHOTO_CANDIDATES,
@@ -497,10 +497,15 @@ async function stepEnrich(sb: any, job: Job, brand: Brand, deadline: number): Pr
         // Alleen teksten vernieuwen: geen foto's opnieuw kiezen.
         if (st.textOnly) { item.step = "done"; continue }
         const { data: cover } = await sb.from("product_collection_photos").select("source_url").eq("collection_id", colId).eq("is_primary", true).maybeSingle()
-        const list = Array.from(new Set([cover?.source_url, ...photos].filter((u): u is string => Boolean(u)))).slice(0, MAX_PHOTO_CANDIDATES)
+        const candidates = Array.from(new Set([cover?.source_url, ...photos].filter((u): u is string => Boolean(u)))).slice(0, MAX_PHOTO_CANDIDATES)
+        // AVIF leest Claude niet: die gaan omgezet mee; wat niet lukt valt af,
+        // zodat de nummers in het antwoord bij de lijst blijven horen.
+        const sources = await Promise.all(candidates.map((u) => visionImage(u)))
+        const list = candidates.filter((_, i) => sources[i])
+        const images = sources.filter((x): x is VisionImage => Boolean(x)).map((x) => ("url" in x ? x.url : x))
         if (list.length === 0) { item.step = "done"; continue }
         const { data: col } = await sb.from("product_collections").select("name").eq("id", colId).maybeSingle()
-        photoRequests.push(photoChoiceRequest(`p_${colId}`, col?.name ?? "", brand.name, list))
+        photoRequests.push(photoChoiceRequest(`p_${colId}`, col?.name ?? "", brand.name, images))
         item.photos = list
         item.step = "photos"
       } else if (b.kind === "photos" && item.step === "photos") {

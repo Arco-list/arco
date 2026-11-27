@@ -98,6 +98,56 @@ export async function pageMainImage(pageUrl: string): Promise<string | null> {
   return null
 }
 
+/** Wat de bucket company-assets aanneemt; de rest zetten we om naar JPEG. */
+const BUCKET_TYPES = new Set(["image/jpeg", "image/png", "image/svg+xml"])
+/** Langste zijde na omzetten: groot genoeg voor een hero, onder de 5 MB van de bucket. */
+const CONVERT_MAX_SIDE = 2400
+
+/**
+ * AVIF, WebP, GIF of HEIC naar JPEG (sharp, zoals de og-afbeeldingen). De
+ * bucket weigert die formaten, en Claude en Voyage lezen geen AVIF: Brokis
+ * levert alles als AVIF, en zonder dit kwam er geen enkele foto mee.
+ */
+export async function toJpeg(bytes: Buffer, maxSide = CONVERT_MAX_SIDE, quality = 85): Promise<Buffer | null> {
+  try {
+    const { default: sharp } = await import("sharp")
+    return await sharp(bytes).rotate().resize({ width: maxSide, height: maxSide, fit: "inside", withoutEnlargement: true }).jpeg({ quality }).toBuffer()
+  } catch (err) {
+    logger.warn("Image conversion to JPEG failed", { error: err instanceof Error ? err.message : String(err) })
+    return null
+  }
+}
+
+/** Het beeldtype uit de eerste bytes, als de server geen (bruikbaar) type stuurt. */
+function sniffImageType(bytes: Buffer): string | null {
+  const head = bytes.subarray(0, 12)
+  if (head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47) return "image/png"
+  if (head[0] === 0xff && head[1] === 0xd8) return "image/jpeg"
+  if (head.subarray(0, 4).toString("ascii") === "RIFF" && head.subarray(8, 12).toString("ascii") === "WEBP") return "image/webp"
+  if (head.subarray(0, 3).toString("ascii") === "GIF") return "image/gif"
+  const brand = head.subarray(4, 12).toString("ascii")
+  if (brand.startsWith("ftypavi")) return "image/avif"
+  if (brand.startsWith("ftyphei") || brand.startsWith("ftypmif")) return "image/heic"
+  if (bytes.subarray(0, 300).toString("utf8").includes("<svg")) return "image/svg+xml"
+  return null
+}
+
+/**
+ * Een beeld zoals Claude het kan lezen: het adres, of voor AVIF en HEIC
+ * (die Claude niet leest) een verkleinde JPEG als base64. null als dat
+ * niet lukt.
+ */
+export type VisionImage = { url: string } | { base64: string; mediaType: "image/jpeg" }
+export async function visionImage(remoteUrl: string): Promise<VisionImage | null> {
+  if (!/\.(avif|heic|heif)(\?|#|$)/i.test(remoteUrl)) return { url: remoteUrl }
+  const res = await fetchImage(remoteUrl)
+  if (!res) return null
+  const bytes = Buffer.from(await res.arrayBuffer())
+  if (bytes.byteLength === 0 || bytes.byteLength > REMOTE_IMAGE_MAX_BYTES) return null
+  const jpeg = await toJpeg(bytes, 1200, 80)
+  return jpeg ? { base64: jpeg.toString("base64"), mediaType: "image/jpeg" } : null
+}
+
 export async function storeRemoteImage(supabase: any, remoteUrl: string, folder: string, name?: string): Promise<string | null> {
   try {
     const res = await fetchImage(remoteUrl)
@@ -108,20 +158,20 @@ export async function storeRemoteImage(supabase: any, remoteUrl: string, folder:
     let type = (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase()
     const declared = Number(res.headers.get("content-length") ?? 0)
     if (declared > REMOTE_IMAGE_MAX_BYTES) return null
-    const bytes = Buffer.from(await res.arrayBuffer())
+    let bytes = Buffer.from(await res.arrayBuffer())
     if (bytes.byteLength === 0 || bytes.byteLength > REMOTE_IMAGE_MAX_BYTES) return null
-    // Sommige bronnen (Apollo's S3) sturen geen Content-Type: het type
-    // dan uit de eerste bytes lezen.
-    if (!IMAGE_EXT[type]) {
-      const head = bytes.subarray(0, 12)
-      if (head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47) type = "image/png"
-      else if (head[0] === 0xff && head[1] === 0xd8) type = "image/jpeg"
-      else if (head.subarray(0, 4).toString("ascii") === "RIFF" && head.subarray(8, 12).toString("ascii") === "WEBP") type = "image/webp"
-      else if (head.subarray(0, 3).toString("ascii") === "GIF") type = "image/gif"
-      else if (bytes.subarray(0, 300).toString("utf8").includes("<svg")) type = "image/svg+xml"
+    // Sommige bronnen (Apollo's S3) sturen geen of een algemeen Content-Type:
+    // het type dan uit de eerste bytes lezen.
+    if (!IMAGE_EXT[type] || type === "application/octet-stream") type = sniffImageType(bytes) ?? type
+    // Wat de bucket niet aanneemt (AVIF, WebP, GIF, HEIC): als JPEG bewaren.
+    if (!BUCKET_TYPES.has(type) && (IMAGE_EXT[type] || type === "image/heic")) {
+      const jpeg = await toJpeg(bytes)
+      if (!jpeg) return null
+      bytes = jpeg
+      type = "image/jpeg"
     }
     const ext = IMAGE_EXT[type]
-    if (!ext) return null
+    if (!ext || !BUCKET_TYPES.has(type)) return null
 
     const file = name ? `${name}.${ext}` : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`
     const path = `${folder}/${file}`

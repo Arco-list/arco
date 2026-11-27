@@ -53,6 +53,7 @@
     "react-dom": "^19",
     "resend": "^6.9.4",
     "server-only": "latest",
+    "sharp": "0.33.5",
     "sonner": "latest",
     "standardwebhooks": "^1.0.0",
     "tailwind-merge": "^2.5.5",
