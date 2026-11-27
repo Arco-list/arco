@@ -194,6 +194,21 @@ async function shopifyFeed(pageUrl: string, ua: string): Promise<{ text: string;
   }
 }
 
+/**
+ * Een galerij of raster dat pas in de browser wordt gevuld: lege
+ * plaatshouders (placeholder.svg, lege data:-beelden) of een bron die het
+ * script zelf ophaalt (data-json-source). Brokis Double: 40 <img>-tags in de
+ * HTML, waarvan 12 plaatshouders; gerenderd 50 collectiebeelden en vijf
+ * producten in plaats van twee. Dan Firecrawl, ook als de tekst vol lijkt.
+ */
+function clientRendered(html: string): boolean {
+  // Alleen plaatshouders zonder echt beeld erachter: een lazy-load-thema met
+  // het beeld in data-src of srcset lezen we zelf al (imageSrc).
+  const placeholders = (html.match(/<img\b[^>]*>/gi) ?? []).filter((tag) =>
+    /\ssrc="(?:[^"]*placeholder[^"]*|data:image\/[^"]*)"/i.test(tag) && !/\s(?:data-src|data-srcset|srcset|data-lazy-src|data-original)="[^"]+"/i.test(tag)).length
+  return placeholders >= 3 || /\sdata-json-source="/i.test(html)
+}
+
 const isShopify = (html: string) => /cdn\.shopify\.com|\/cdn\/shop\/|Shopify\.theme|shopify-section/.test(html)
 
 export async function fetchPage(
@@ -221,7 +236,7 @@ export async function fetchPage(
             return { url: res.url || url, text: (page.text + feed.text).slice(0, opts.maxChars + 40_000), images, links: page.links, via: "fetch" }
           }
         }
-        if (usable(page)) return { url: res.url || url, text: page.text, images: page.images, links: page.links, via: "fetch" }
+        if (usable(page) && !clientRendered(html)) return { url: res.url || url, text: page.text, images: page.images, links: page.links, via: "fetch" }
       }
     } catch {
       // volgende identificatie, anders Firecrawl

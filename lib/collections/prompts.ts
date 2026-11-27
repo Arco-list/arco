@@ -136,7 +136,11 @@ export type CollectionRead = {
   materials_nl?: string[]
   finishes?: string[]
   finishes_nl?: string[]
-  products: Array<{ name: string; url: string | null; image_url: string | null; extra_image_urls?: string[]; variants?: string | null; kind_slug?: string | null }>
+  products: Array<{
+    name: string; url: string | null; image_url: string | null; extra_image_urls?: string[]; variants?: string | null; kind_slug?: string | null
+    /** Prijs zoals op de pagina (migratie 374); alle vier null als er geen staat. */
+    price_type?: "fixed" | "from" | "on_request" | null; price_amount?: number | null; price_currency?: string | null; price_country?: string | null
+  }>
   photos: string[]
 }
 export const COLLECTION_READ_SCHEMA = {
@@ -163,8 +167,12 @@ export const COLLECTION_READ_SCHEMA = {
           extra_image_urls: { type: "array", items: { type: "string" } },
           variants: { type: ["string", "null"] },
           kind_slug: { type: ["string", "null"] },
+          price_type: { type: ["string", "null"] },
+          price_amount: { type: ["number", "null"] },
+          price_currency: { type: ["string", "null"] },
+          price_country: { type: ["string", "null"] },
         },
-        required: ["name", "url", "image_url", "extra_image_urls", "variants", "kind_slug"],
+        required: ["name", "url", "image_url", "extra_image_urls", "variants", "kind_slug", "price_type", "price_amount", "price_currency", "price_country"],
         additionalProperties: false,
       },
     },
@@ -195,7 +203,7 @@ Give:
 - kind_slugs: the specific kinds of product it contains, as kind slugs from the list (a lounge chair, a dining table, a treadmill), most important first, at most 8. Outdoor products take the outdoor kinds.
 - materials: the main materials the page names for this collection, short lowercase English nouns ("glass", "brass", "oak", "bouclé fabric"), at most 6; empty if the page names none. materials_nl: the same list in Dutch ("glas", "messing", "eiken", "bouclé stof"), same order.
 - finishes: the finishes and colours it comes in, short lowercase English ("matt white", "black", "gold leaf", "natural oak"), at most 10; empty if none are named. finishes_nl: the same list in Dutch, same order.
-- products: the individual products of THIS collection the page lists (not colour, finish or size variants, not other collections, accessories or navigation). Sizes and versions of the same piece (Moon 60 / Moon 80 / Moon 120, a table in 200 and 240 cm, a lamp with a marble or a travertine base) are ONE product; when the whole collection is one piece in several sizes, return that one product under the collection's name: name in normal capitalisation without the brand name; url of its own page or null; image_url from the image list or null; extra_image_urls: up to 2 more images from the list that show THIS product from another angle or in another finish (not ambiance shots, not other products), else empty; variants: the sizes or versions folded into this product, as one short line ("Ø 60, 80, 120 cm", "2- and 3-seater", "marble or travertine base"), or null; kind_slug: the most specific kind slug from the category list for this one product (a lounge chair, a footstool), or null. Page order, at most 40.
+- products: the individual products of THIS collection the page lists (not colour, finish or size variants, not other collections, accessories or navigation). Sizes and versions of the same piece (Moon 60 / Moon 80 / Moon 120, a table in 200 and 240 cm, a lamp with a marble or a travertine base) are ONE product; when the whole collection is one piece in several sizes, return that one product under the collection's name: name in normal capitalisation without the brand name; url of its own page or null; image_url from the image list or null; extra_image_urls: up to 2 more images from the list that show THIS product from another angle or in another finish (not ambiance shots, not other products), else empty; variants: the sizes or versions folded into this product, as one short line ("Ø 60, 80, 120 cm", "2- and 3-seater", "marble or travertine base"), or null; kind_slug: the most specific kind slug from the category list for this one product (a lounge chair, a footstool), or null; price_type, price_amount, price_currency, price_country: the price the page shows for THIS product — price_type "fixed" for one price, "from" for a starting price ("from €2,400", or the lowest of several sizes or versions), "on_request" when the page says the price is on request or asks to contact a dealer for it (then price_amount null); price_amount as a plain number without thousands separators or currency sign (2400, 1295.5); price_currency as an ISO 4217 code (EUR, GBP, USD, DKK, CHF); price_country as an ISO 3166-1 alpha-2 code only when the page makes clear which country the price is for (a country selector, a local shop, a "prices for the Netherlands" note), else null. All four null when the page shows no price for the product — never guess or convert one. Page order, at most 40.
 - photos: the image URLs from the list that show THIS collection — interiors or settings with it in place, studio shots and details — excluding logos, icons, badges, people portraits, PDF thumbnails and images of other collections ("related", "you may also like"). Put interiors and real settings first. At most ${MAX_PHOTO_CANDIDATES}, copied exactly from the list.
 
 Page URL: ${pageUrl}

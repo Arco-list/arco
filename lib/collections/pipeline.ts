@@ -549,6 +549,24 @@ async function stepEnrich(sb: any, job: Job, brand: Brand, deadline: number): Pr
   }
 }
 
+/**
+ * De prijs van een product zoals de collectiepagina hem toont (migratie 374),
+ * als kolommen voor products; null als er geen (bruikbare) prijs stond.
+ * Een bedrag zonder valuta of een onbekend type gooien we weg: liever geen
+ * prijs dan een verkeerde.
+ */
+function readPrice(p: CollectionRead["products"][number], pageUrl: string | null, observedAt: string): Record<string, unknown> | null {
+  const type = p.price_type === "fixed" || p.price_type === "from" || p.price_type === "on_request" ? p.price_type : null
+  if (!type) return null
+  const source = { price_source_url: pageUrl, price_observed_at: observedAt }
+  if (type === "on_request") return { price_type: type, price_amount: null, price_currency: null, price_country: null, ...source }
+  const amount = typeof p.price_amount === "number" && Number.isFinite(p.price_amount) && p.price_amount > 0 && p.price_amount < 1e9 ? Math.round(p.price_amount * 100) / 100 : null
+  const currency = p.price_currency?.trim().toUpperCase() ?? ""
+  if (amount == null || !/^[A-Z]{3}$/.test(currency)) return null
+  const country = p.price_country?.trim().toUpperCase() ?? ""
+  return { price_type: type, price_amount: amount, price_currency: currency, price_country: /^[A-Z]{2}$/.test(country) ? country : null, ...source }
+}
+
 /** Velden, soorten en producten uit de collectiepagina; geeft de kandidaatfoto's terug. */
 async function applyRead(sb: any, colId: string, brandId: string, data: CollectionRead, cats: Cats, refreshText = false): Promise<string[]> {
   const { data: col } = await sb.from("product_collections").select("url, description, designer, launch_year, category_id, materials, finishes, translations").eq("id", colId).maybeSingle()
@@ -597,10 +615,13 @@ async function applyRead(sb: any, colId: string, brandId: string, data: Collecti
     if (!count) await sb.from("product_collection_kinds").insert(kindIds.map((category_id, position) => ({ collection_id: colId, category_id, position })))
   }
 
-  // Producten: alleen nieuwe, herkend op naam en op productpagina.
-  const { data: known } = await sb.from("products").select("slug, url").eq("collection_id", colId)
-  const slugs = new Set(((known ?? []) as Array<{ slug: string }>).map((p) => p.slug))
-  const urls = new Set(((known ?? []) as Array<{ url: string | null }>).map((p) => p.url).filter(Boolean))
+  // Producten: alleen nieuwe, herkend op naam en op productpagina. Van een
+  // bekend product werken we alleen de prijs bij (migratie 374).
+  const { data: known } = await sb.from("products").select("id, slug, url").eq("collection_id", colId)
+  const knownRows = (known ?? []) as Array<{ id: string; slug: string; url: string | null }>
+  const slugs = new Set(knownRows.map((p) => p.slug))
+  const urls = new Set(knownRows.map((p) => p.url).filter(Boolean))
+  const observedAt = new Date().toISOString()
   let images = 0
   let extraImages = 0
   for (const [i, p] of (data.products ?? []).slice(0, 40).entries()) {
@@ -609,7 +630,12 @@ async function applyRead(sb: any, colId: string, brandId: string, data: Collecti
     const slug = slugify(name)
     let url = absoluteHttpUrl(p.url, base as any)
     if (url) { try { const u = new URL(url); u.search = ""; u.hash = ""; url = u.toString() } catch { url = null } }
-    if (slugs.has(slug) || (url && urls.has(url))) continue
+    const price = readPrice(p, base ?? null, observedAt)
+    if (slugs.has(slug) || (url && urls.has(url))) {
+      const existing = knownRows.find((k) => k.slug === slug || (url && k.url === url))
+      if (existing && price) await sb.from("products").update(price).eq("id", existing.id)
+      continue
+    }
     slugs.add(slug)
     // Geen beeld op de collectiepagina maar wel een eigen pagina: het
     // hoofdbeeld van die pagina.
@@ -622,6 +648,7 @@ async function applyRead(sb: any, colId: string, brandId: string, data: Collecti
       category_id: p.kind_slug && cats.levels.isLeaf(cats.idBySlug.get(p.kind_slug)) ? cats.idBySlug.get(p.kind_slug)! : null,
       image_url: stored ?? img, source_image_url: img, position: i,
       variants: p.variants?.trim().slice(0, 200) || null,
+      ...(price ?? {}),
     }).select("id").single()
     if (error) { logger.warn("Product insert failed", { colId, product: name, error: error.message }); continue }
 

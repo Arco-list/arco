@@ -102,7 +102,24 @@ export type CollectionEditApplied = {
 }
 
 /** category_id: de Arco-categorie, het laatste niveau (migratie 327). */
-export type CollectionEditProduct = { id: string; name: string; url: string | null; image_url: string | null; category_id?: string | null }
+export type CollectionEditProduct = {
+  id: string; name: string; url: string | null; image_url: string | null; category_id?: string | null
+  /** Prijs van de merkpagina (migratie 374), alleen ter controle. */
+  price_type?: "fixed" | "from" | "on_request" | null; price_amount?: number | null; price_currency?: string | null; price_country?: string | null
+}
+
+/** "€ 2.400", "From € 2.400 · NL", "Price on request"; null zonder prijs. */
+function priceLabel(p: CollectionEditProduct): string | null {
+  if (p.price_type === "on_request") return "Price on request"
+  if (!p.price_type || p.price_amount == null || !p.price_currency) return null
+  let amount: string
+  try {
+    amount = new Intl.NumberFormat("nl-NL", { style: "currency", currency: p.price_currency, maximumFractionDigits: Number(p.price_amount) % 1 ? 2 : 0 }).format(Number(p.price_amount))
+  } catch {
+    amount = `${p.price_currency} ${p.price_amount}`
+  }
+  return `${p.price_type === "from" ? "From " : ""}${amount}${p.price_country ? ` · ${p.price_country}` : ""}`
+}
 
 type Props = { brand: CollectionEditBrand; collection: CollectionEditCollection; photos: CollectionEditPhoto[]; applied: CollectionEditApplied[]; categories: CollectionEditCategory[]; kindIds: string[]; products: CollectionEditProduct[] }
 
@@ -639,6 +656,8 @@ export function CollectionEditClient({ brand, collection, photos, applied, categ
               <p className="discover-card-sub" style={p.category_id ? undefined : { color: "#b0b0ae" }}>
                 {(() => { const c = p.category_id ? categories.find((x) => x.id === p.category_id) : null; return c ? categoryName(c) : "No category" })()}
               </p>
+              {/* De prijs van de merkpagina, alleen hier ter controle. */}
+              {priceLabel(p) && <p className="discover-card-sub" style={{ fontVariantNumeric: "tabular-nums" }}>{priceLabel(p)}</p>}
             </div>
           ))}
         </div>

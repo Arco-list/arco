@@ -47,12 +47,15 @@ export const HIDE_REASON_OPTIONS: Array<{ key: HideReason; label: string; hint: 
   { key: "bespoke", label: "Maatwerk", hint: "Keuken, kast, werkblad, gevel, raam" },
   { key: "duplicate", label: "Dubbel", hint: "Staat al als andere stip op deze foto" },
   { key: "not_high_end", label: "Geen high-end merk", hint: "Wel een product, maar geen merk voor Arco" },
+  // Telt mee voor de soort: blijft hij zo verwijderd, dan wordt hij vanzelf
+  // verborgen (Auto verborgen); zet hem dan uit in admin › categorieën.
+  { key: "not_carried", label: "Geen actieve categorie", hint: "Een soort die we niet voeren, zoals gordijnen" },
   { key: "other", label: "Anders", hint: "Een andere reden" },
 ]
 /** Ook de redenen die niet meer te kiezen zijn, voor wat al zo verwijderd is. */
 const HIDE_REASON_LABEL: Record<HideReason, string> = {
   not_prominent: "Niet prominent", bespoke: "Maatwerk", duplicate: "Dubbel", not_high_end: "Geen high-end merk",
-  other: "Anders", not_carried: "Voeren we niet", wrong_box: "Verkeerd kader",
+  other: "Anders", not_carried: "Geen actieve categorie", wrong_box: "Verkeerd kader",
 }
 
 export const STATE_STYLE: Record<DetectionState, { color: string; label: string }> = {

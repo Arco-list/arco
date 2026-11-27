@@ -60,7 +60,7 @@ export default async function AdminCollectionDetailPage({ params }: { params: Pa
   ])
   const { data: productRows } = await supabase
     .from("products")
-    .select("id, name, url, image_url, position, category_id")
+    .select("id, name, url, image_url, position, category_id, price_type, price_amount, price_currency, price_country")
     .eq("collection_id", collectionId)
     .order("position")
   const { data: kindRows } = await supabase
