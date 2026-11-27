@@ -18,7 +18,7 @@ import { useLoginModal } from "@/contexts/login-modal-context";
 // CompanySwitcher functionality is now integrated into the dropdown menu
 import { getUserCompaniesAction, switchCompanyAction } from "@/app/dashboard/company/actions";
 import { HeaderLanguageSwitcher } from "@/components/header-language-switcher";
-import { MegaMenuPanel, MegaMenuMobileSections, useNavMenus, type MegaKey } from "@/components/header-mega-menu";
+import { MegaMenuPanel, MegaMenuMobileSections, menuRows, useNavMenus, type MegaKey } from "@/components/header-mega-menu";
 
 export interface NavLink {
   href: string;
@@ -400,6 +400,21 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
   }
 
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  // Lichte (doorzichtige) header boven de hero op home: alleen zolang er
+  // niet gescrold is én geen uitklapmenu open staat — met een open menu
+  // wordt hij wit, zodat header en paneel één wit vlak zijn.
+  const isLightHeader = transparent && !isScrolled && !openGroup;
+  // Openen of sluiten van een menu: de header wisselt in één keer van kleur,
+  // tegelijk met het paneel (dat meteen verschijnt). Alleen bij scrollen de
+  // zachte overgang. Na het sluiten nog even zonder overgang, anders vervaagt
+  // de header terwijl het paneel al weg is.
+  const [menuColors, setMenuColors] = useState(false);
+  useEffect(() => {
+    if (openGroup) { setMenuColors(true); return; }
+    const t = setTimeout(() => setMenuColors(false), 250);
+    return () => clearTimeout(t);
+  }, [openGroup]);
+  const instantColors = menuColors || Boolean(openGroup);
   // De menu-inhoud wordt pas opgehaald zodra iemand hem voor het eerst
   // wil zien. Een bezoeker die nooit uitklapt betaalt er niets voor.
   const [megaWanted, setMegaWanted] = useState(false);
@@ -522,8 +537,8 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
   // a transparent border that becomes visible — same box model in both
   // states, only the colours animate.
   const headerClasses = transparent
-    ? `fixed top-0 left-0 right-0 z-[300] py-3 md:py-4 border-b transition-colors duration-200 ${
-        isScrolled
+    ? `fixed top-0 left-0 right-0 z-[300] py-3 md:py-4 border-b ${instantColors ? "" : "transition-colors duration-200"} ${
+        !isLightHeader
           ? "bg-white border-[#e5e5e4]"
           : "bg-transparent border-transparent"
       }`
@@ -532,7 +547,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
 
   return (
     <>
-      <header className={headerClasses} onMouseLeave={closeMega}>
+      <header className={headerClasses} onMouseLeave={closeMega} data-instant-colors={transparent && instantColors ? "true" : undefined}>
         {/* UPDATED: Use .wrap class */}
         <div className="wrap">
           <div className="relative flex items-center justify-between">
@@ -541,14 +556,14 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
               {/* Mobile hamburger — only on mobile */}
               <button
                 className={`flex flex-col gap-1 p-1 md:hidden transition-opacity hover:opacity-70 ${
-                  transparent && !isScrolled ? "text-white" : "text-black"
+                  isLightHeader ? "text-white" : "text-black"
                 }`}
                 onClick={() => { setMegaWanted(true); setOpenMobileMega(null); setIsMobileMenuOpen(!isMobileMenuOpen) }}
                 aria-label="Navigation"
               >
-                <span className={`block w-[18px] h-[1.5px] ${transparent && !isScrolled ? "bg-white" : "bg-black"}`} />
-                <span className={`block w-[18px] h-[1.5px] ${transparent && !isScrolled ? "bg-white" : "bg-black"}`} />
-                <span className={`block w-[18px] h-[1.5px] ${transparent && !isScrolled ? "bg-white" : "bg-black"}`} />
+                <span className={`block w-[18px] h-[1.5px] ${isLightHeader ? "bg-white" : "bg-black"}`} />
+                <span className={`block w-[18px] h-[1.5px] ${isLightHeader ? "bg-white" : "bg-black"}`} />
+                <span className={`block w-[18px] h-[1.5px] ${isLightHeader ? "bg-white" : "bg-black"}`} />
               </button>
 
               {/* Mobile nav dropdown */}
@@ -674,14 +689,14 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
               <Link href="/">
                 <img
                   src={
-                    transparent && !isScrolled
+                    isLightHeader
                       ? "/images/arco-logo-white.svg"
                       : "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Arco%20Logo%20Large%20%281%29-DDrzilvIhjI3lRfCVwKO1XpAs6LDc6.svg"
                   }
                   alt="Arco"
                   className="h-auto w-[48px] transition-all"
                   style={{
-                    filter: transparent && !isScrolled ? 'brightness(0) invert(1)' : 'brightness(0)'
+                    filter: isLightHeader ? 'brightness(0) invert(1)' : 'brightness(0)'
                   }}
                 />
               </Link>
@@ -723,8 +738,8 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                           onClick={() => setOpenGroup(isOpen ? null : item.label)}
                           className={`header-rule flex items-center h-8 gap-1 text-sm font-normal whitespace-nowrap transition-colors ${
                             isActive || isOpen
-                              ? (transparent && !isScrolled ? "text-white" : "text-primary")
-                              : transparent && !isScrolled ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
+                              ? (isLightHeader ? "text-white" : "text-primary")
+                              : isLightHeader ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
                           }`}
                         >
                           {item.label}
@@ -804,8 +819,8 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                             // primaire groen is voor de witte header;
                             // op een donkere hero las het als een fout.
                             isActive || megaOpen
-                              ? (transparent && !isScrolled ? "text-white" : "text-primary")
-                              : transparent && !isScrolled ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
+                              ? (isLightHeader ? "text-white" : "text-primary")
+                              : isLightHeader ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
                           }`}
                         >
                           {item.label}
@@ -825,7 +840,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                       className={`header-rule inline-flex items-center h-8 text-sm font-normal whitespace-nowrap transition-colors ${
                         isActive
                           ? "text-primary"
-                          : transparent && !isScrolled ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
+                          : isLightHeader ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
                       }`}
                     >
                       {item.label}
@@ -845,19 +860,19 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                 <Link
                   href="/businesses/architects"
                   className={`header-rule hidden md:inline-flex items-center h-8 text-sm font-normal whitespace-nowrap transition-colors ${
-                    transparent && !isScrolled ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
+                    isLightHeader ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
                   }`}
                 >
                   {t("list_with_us")}
                 </Link>
               )}
               {/* Language Switcher */}
-              <HeaderLanguageSwitcher isLight={transparent && !isScrolled} />
+              <HeaderLanguageSwitcher isLight={isLightHeader} />
               {/* Search Icon */}
               <button
                 onClick={toggleSearch}
                 className={`header-rule flex items-center justify-center h-8 transition-colors ${
-                  transparent && !isScrolled ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
+                  isLightHeader ? "text-white/80 hover:text-white" : "text-[#1c1c1a] hover:text-primary"
                 }`}
                 aria-label="Search"
               >
@@ -874,7 +889,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                     type="button"
                     onClick={() => setIsAccountMenuOpen((o) => !o)}
                     className={`flex items-center gap-2 h-8 rounded-full border pr-3 pl-0.5 transition-colors ${
-                      transparent && !isScrolled
+                      isLightHeader
                         ? "border-white/30 text-white hover:bg-white/10"
                         : "border-[#e5e5e4] text-[#1c1c1a] hover:bg-[#f5f5f4]"
                     }`}
@@ -882,7 +897,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                     {avatarUrl ? (
                       <img src={avatarUrl} alt="" className="w-7 h-7 rounded-full object-cover" referrerPolicy="no-referrer" />
                     ) : (
-                      <span className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: transparent && !isScrolled ? "rgba(255,255,255,.2)" : "#1c1c1a", color: "#fff" }}>
+                      <span className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: isLightHeader ? "rgba(255,255,255,.2)" : "#1c1c1a", color: "#fff" }}>
                         <PersonIcon size={20} strokeWidth={1.2} />
                       </span>
                     )}
@@ -896,7 +911,7 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
                     type="button"
                     onClick={() => setIsAccountMenuOpen((o) => !o)}
                     className={`flex items-center gap-2 h-8 rounded-full border pr-3 pl-3 transition-colors ${
-                      transparent && !isScrolled
+                      isLightHeader
                         ? "border-white/30 text-white hover:bg-white/10"
                         : "border-[#e5e5e4] text-[#1c1c1a] hover:bg-[#f5f5f4]"
                     }`}
@@ -1225,7 +1240,12 @@ export function Header({ transparent = false, maxWidth = "max-w-[1800px]", navLi
           // rand heen — en over de hover-lijn van de link, die precies op
           // die rand getekend wordt. Eén pixel lager laat allebei staan.
           <div data-nav-group className="absolute left-0 right-0 top-[calc(100%+1px)] z-50 hidden md:block">
-            <MegaMenuPanel menu={navMenus ? navMenus[openMega.mega] : null} onNavigate={() => setOpenGroup(null)} />
+            <MegaMenuPanel
+              menu={navMenus ? navMenus[openMega.mega] : null}
+              // Alle drie even hoog: aanvullen tot het langste van de drie.
+              rows={navMenus ? Math.max(menuRows(navMenus.projects), menuRows(navMenus.professionals), menuRows(navMenus.products)) : undefined}
+              onNavigate={() => setOpenGroup(null)}
+            />
           </div>
         )}
       </header>

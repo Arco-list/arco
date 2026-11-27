@@ -1,5 +1,6 @@
 "use server"
 
+import { loadCategoryLevels, syncCollectionSubgroups } from "@/lib/products/collection-subgroups"
 import { revalidatePath } from "next/cache"
 import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { isAdminUser } from "@/lib/auth-utils"
@@ -102,13 +103,16 @@ export async function chooseCollectionCandidates(brandId: string, candidateIds: 
     sb.from("product_collections").select("slug").eq("brand_id", brandId),
   ])
   const taken = new Set(((cols ?? []) as Array<{ slug: string }>).map((c) => c.slug))
+  // Migratie 351: de collectie hangt aan de subgroep, haar producten aan de
+  // eindcategorie (alleen als de kandidaat die al noemt).
+  const levels = await loadCategoryLevels(sb)
   const created: string[] = []
   const toFetch: string[] = []
 
   for (const c of (cands ?? []) as any[]) {
     const slug = freeSlug(c.slug, taken)
     const { data: col, error } = await sb.from("product_collections")
-      .insert({ brand_id: brandId, slug, name: c.name, url: c.url, description: c.description, category_id: c.category_id })
+      .insert({ brand_id: brandId, slug, name: c.name, url: c.url, description: c.description, category_id: levels.subgroupOf(c.category_id) })
       .select("id").single()
     if (error || !col) continue
     taken.add(slug)
@@ -134,7 +138,7 @@ export async function chooseCollectionCandidates(brandId: string, candidateIds: 
         seen.add(pslug)
         const src = p.source_image_url ?? p.image_url
         const stored = p.image_url ?? (src ? await storeRemoteImage(sb, src, `product-families/${col.id}/products`, pslug) : null)
-        return { brand_id: brandId, collection_id: col.id, slug: pslug, name: p.name, url: p.url, image_url: stored ?? src, source_image_url: src, position, category_id: c.category_id }
+        return { brand_id: brandId, collection_id: col.id, slug: pslug, name: p.name, url: p.url, image_url: stored ?? src, source_image_url: src, position, category_id: levels.isLeaf(c.category_id) ? c.category_id : null }
       }))
       const products = rows.filter(Boolean)
       if (products.length) {
@@ -142,6 +146,7 @@ export async function chooseCollectionCandidates(brandId: string, candidateIds: 
         if (perr) console.error("Family products insert failed", perr.message)
       }
     }
+    await syncCollectionSubgroups(sb, col.id, levels)
     await sb.from("brand_collection_candidates").update({ status: "chosen", collection_id: col.id }).eq("id", c.id)
   }
 

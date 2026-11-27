@@ -69,6 +69,10 @@ export function useNavMenus(locale: string, enabled: boolean): { menus: NavMenus
  *  Professionals heeft er hooguit vier per kolom, Projecten acht. */
 const ROWS = 8
 
+/** Zoveel kolommen naast elkaar; Producten heeft er zeven (migratie 351).
+ *  Meer dan dat: de rest als koppen in de laatste kolom. */
+const MAX_COLUMNS = 7
+
 /**
  * Het brede paneel onder de header (desktop): de hele breedte, de kolommen
  * uitgelijnd op .wrap zodat ze onder het logo en de links beginnen.
@@ -79,19 +83,36 @@ const ROWS = 8
  * footer: 14px, regelhoogte 1.5, 8px ertussen. Tot de vraag binnen is een
  * skelet van dezelfde hoogte, zodat het niet onder de muis vandaan springt.
  */
-export function MegaMenuPanel({ menu, onNavigate }: { menu: NavMenu | null; onNavigate: () => void }) {
+/**
+ * Hoeveel rijen een paneel nodig heeft: de langste getoonde kolom, en
+ * zonder verkorte weergave minstens ROWS. Het header geeft het maximum over
+ * de drie menu's mee aan elk paneel, zodat Projecten, Professionals en
+ * Producten op desktop even hoog zijn.
+ */
+export function menuRows(menu: NavMenu | null | undefined): number {
+  const columns = menu?.columns ?? []
+  if (columns.length === 0) return ROWS
+  const shown = columns.length > MAX_COLUMNS ? columns.slice(0, MAX_COLUMNS - 1) : columns
+  const longest = Math.max(0, ...shown.map((c) => c.links.length))
+  return columns.length > MAX_COLUMNS ? longest : Math.max(ROWS, longest)
+}
+
+export function MegaMenuPanel({ menu, onNavigate, rows }: { menu: NavMenu | null; onNavigate: () => void; /** Rijen om tot aan te vullen (het maximum van de drie menu's). */ rows?: number }) {
   const columns = menu?.columns ?? []
   const loading = columns.length === 0
   const row = "text-[14px] leading-[1.5] font-normal whitespace-nowrap"
   const eyebrow = "text-[11px] font-medium uppercase tracking-wider text-[#a1a1a0] mb-3"
-  // Meer dan zes kolommen (Producten: negen hoofdgroepen) passen niet naast
-  // elkaar op een laptop. Dan, zoals Archiproducts, de eerste vijf als
-  // volle kolom en de rest als koppen onder elkaar in een zesde kolom.
-  const shown = columns.length > 6 ? columns.slice(0, 5) : columns
-  const rest = columns.length > 6 ? columns.slice(5) : []
-  // Elke kolom even hoog: acht rijen (COLUMN_CAP), of bij de verkorte
-  // weergave zoveel als de langste getoonde kolom.
-  const padTo = rest.length > 0 ? Math.max(...shown.map((c) => c.links.length)) : ROWS
+  // Meer dan zeven kolommen passen niet naast elkaar op een laptop. Dan de
+  // eerste zes als volle kolom en de rest als koppen in een zevende.
+  const shown = columns.length > MAX_COLUMNS ? columns.slice(0, MAX_COLUMNS - 1) : columns
+  const rest = columns.length > MAX_COLUMNS ? columns.slice(MAX_COLUMNS - 1) : []
+  const count = shown.length + (rest.length > 0 ? 1 : 0)
+  // Elke kolom zo breed als zijn langste rij (minstens 150px), met dezelfde
+  // tussenruimte in alle drie de menu's.
+  const template = `repeat(${count}, minmax(150px, max-content))`
+  // Elke kolom even hoog, en elk paneel even hoog als de andere twee: tot
+  // het grootste aantal rijen van de drie menu's.
+  const padTo = Math.max(menuRows(menu), rows ?? 0)
   return (
     <div className="bg-white border-b border-border shadow-lg" aria-busy={loading || undefined}>
       <div className="wrap">
@@ -102,7 +123,7 @@ export function MegaMenuPanel({ menu, onNavigate }: { menu: NavMenu | null; onNa
                 <div key={c}>
                   <div className="h-[11px] w-20 bg-[#f0efed] mb-3" />
                   <div className="flex flex-col gap-2">
-                    {Array.from({ length: ROWS }, (_, r) => (
+                    {Array.from({ length: Math.max(ROWS, rows ?? 0) }, (_, r) => (
                       <div key={r} className="flex h-[21px] items-center">
                         <div className="h-[11px] w-28 bg-[#f6f5f3]" />
                       </div>
@@ -112,7 +133,7 @@ export function MegaMenuPanel({ menu, onNavigate }: { menu: NavMenu | null; onNa
               ))}
             </div>
           ) : (
-            <div className="grid gap-x-8" style={{ gridTemplateColumns: `repeat(${shown.length + (rest.length > 0 ? 1 : 0)}, minmax(150px, max-content))` }}>
+            <div className="grid gap-x-8" style={{ gridTemplateColumns: template }}>
               {shown.map((col) => (
                 <div key={col.label}>
                   <p className={eyebrow}>

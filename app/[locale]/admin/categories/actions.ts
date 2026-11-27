@@ -1,6 +1,6 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
+import { revalidatePath, revalidateTag } from "next/cache"
 import { z } from "zod"
 
 import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
@@ -858,6 +858,8 @@ export async function setProductCategoryActiveAction(
   revalidatePath("/admin/categories")
   revalidatePath("/products")
   revalidatePath("/brands")
+  // Het Producten-menu in de header (lib/nav-menu, vijf minuten gecachet).
+  revalidateTag("nav-menus")
   return createSuccessResponse({ success: true as const })
 }
 

@@ -1,5 +1,6 @@
 "use server"
 
+import { categoryLevels, loadCategoryLevels, syncCollectionSubgroups } from "@/lib/products/collection-subgroups"
 import { after } from "next/server"
 import { ensureHeroFocus } from "@/lib/collections/hero-focus"
 import { descriptionTranslations, mergeTranslations, translateToDutch, type Translations } from "@/lib/collections/translate"
@@ -394,8 +395,10 @@ async function enrichCollection(supabase: any, collection: EnrichableCollection,
 
   // De soorten als keuzelijst voor Claude: slug plus het pad erheen
   // (Verlichting › Hanglampen), zodat de keuze leesbaar is.
-  const { data: cats } = await supabase.from("product_categories").select("id, slug, name, parent_id")
-  const catRows = (cats ?? []) as Array<{ id: string; slug: string; name: string; parent_id: string | null }>
+  const { data: cats } = await supabase.from("product_categories").select("id, slug, name, parent_id, is_active, order_index")
+  const levels = categoryLevels((cats ?? []) as any[])
+  // Alleen actieve categorieën (migratie 351).
+  const catRows = ((cats ?? []) as Array<{ id: string; slug: string; name: string; parent_id: string | null }>).filter((c) => levels.isLive(c.id))
   const catById = new Map(catRows.map((c) => [c.id, c]))
   const pathOf = (c: { name: string; parent_id: string | null }): string => {
     const parts: string[] = []
@@ -408,8 +411,9 @@ async function enrichCollection(supabase: any, collection: EnrichableCollection,
 
   const patch: Record<string, unknown> = { enriched_at: new Date().toISOString() }
   if (!collection.category_id && page.category_slug) {
-    const cat = catRows.find((c) => c.slug === page.category_slug)
-    if (cat) patch.category_id = cat.id
+    // Een collectie hangt aan een subgroep, ook als Claude een soort noemt.
+    const cat = levels.subgroupOf(catRows.find((c) => c.slug === page.category_slug)?.id)
+    if (cat) patch.category_id = cat
   }
   if (!collection.description && page.description) patch.description = page.description
   if (!collection.designer && page.designer) patch.designer = page.designer
@@ -425,7 +429,7 @@ async function enrichCollection(supabase: any, collection: EnrichableCollection,
     if (!kindCount) {
       const kindIds: string[] = []
       for (const slug of page.kind_slugs) {
-        const id = catRows.find((c) => c.slug === slug)?.id
+        const id = levels.subgroupOf(catRows.find((c) => c.slug === slug)?.id)
         if (id && !kindIds.includes(id)) kindIds.push(id)
       }
       if (kindIds.length > 0) {
@@ -433,6 +437,7 @@ async function enrichCollection(supabase: any, collection: EnrichableCollection,
       }
     }
   }
+  await syncCollectionSubgroups(supabase, collection.id, levels)
   // De categorieën van het merk volgen zijn collecties.
   await syncBrandCategoriesFromCollections(supabase, collection.brand_id)
 
@@ -791,6 +796,12 @@ export async function updateBrandDomain(brandId: string, raw: string): Promise<{
     return { error: error.message }
   }
   if (!data) return { error: "Brand not found." }
+  // Een voorgesteld merk (migratie 347) met een domein is gecatalogiseerd:
+  // Added, en in de selectie, zodat de stippen die erop wachten gekoppeld
+  // worden zodra de collecties binnen zijn.
+  if (domain) {
+    await supabase.from("brands").update({ status: "unclaimed" }).eq("id", brandId).eq("status", "suggested")
+  }
 
   revalidatePath("/admin/brands")
   revalidatePath(`/admin/brands/${brandId}`)
@@ -849,16 +860,19 @@ export async function updateBrandSegment(brandId: string, segment: string | null
 }
 
 /**
- * De ster: het merk in de selectie (migratie 338). Zonder ster is het niet
- * te kiezen in projecten en doet het niet mee bij productherkenning.
+ * De ster: het merk uitgelicht, vooraan in de weergave (merkoverzicht en
+ * carrousels), zoals bij projecten en professionals. "Niet premium" is sinds
+ * migratie 354 de status Passed; die zet is_curated.
  */
-export async function setBrandCurated(brandId: string, curated: boolean): Promise<{ ok: true } | { error: string }> {
+export async function setBrandFeatured(brandId: string, featured: boolean): Promise<{ ok: true } | { error: string }> {
   const guard = await requireAdmin()
   if ("error" in guard) return guard
   const supabase = createServiceRoleSupabaseClient() as any
-  const { error } = await supabase.from("brands").update({ is_curated: curated }).eq("id", brandId)
+  const { error } = await supabase.from("brands").update({ is_featured: featured }).eq("id", brandId)
   if (error) return { error: error.message }
   revalidatePath("/admin/brands")
+  revalidatePath("/products")
+  revalidatePath("/brands")
   return { ok: true }
 }
 
@@ -866,7 +880,9 @@ export async function updateBrandStatus(brandId: string, status: string): Promis
   const guard = await requireAdmin()
   if ("error" in guard) return guard
 
-  const validStatuses = ["unclaimed", "prospected", "unlisted", "listed", "deactivated"]
+  // Catalogued zet de database zelf bij de eerste collectie (migratie 354),
+  // maar met de hand kan ook. Passed = niet premium.
+  const validStatuses = ["unclaimed", "catalogued", "passed", "prospected", "unlisted", "listed", "deactivated"]
   if (!validStatuses.includes(status)) return { error: "Invalid status." }
 
   const supabase = createServiceRoleSupabaseClient() as any
@@ -978,6 +994,8 @@ export async function createProduct(collectionId: string, formData: FormData): P
     .select("id")
     .single()
   if (error) return { error: error.message }
+  // De subgroepen van de collectie volgen haar producten (migratie 351).
+  await syncCollectionSubgroups(supabase, collectionId)
 
   revalidatePath(`/admin/brands/${collection.brand_id}/collections/${collectionId}`)
   return { id: data.id }
@@ -1010,6 +1028,7 @@ export async function updateProduct(productId: string, formData: FormData): Prom
   const { error } = await supabase.from("products").update(patch).eq("id", productId)
   if (error) return { error: error.message }
   if (oldImage) await supabase.storage.from("company-assets").remove([oldImage])
+  if (product.collection_id) await syncCollectionSubgroups(supabase, product.collection_id)
 
   revalidatePath(`/admin/brands/${product.brand_id}/collections/${product.collection_id}`)
   return { ok: true }
@@ -1027,6 +1046,7 @@ export async function deleteProduct(productId: string): Promise<{ ok: true } | {
   if (error) return { error: error.message }
   const path = ownStoragePath(product.image_url)
   if (path) await supabase.storage.from("company-assets").remove([path])
+  if (product.collection_id) await syncCollectionSubgroups(supabase, product.collection_id)
 
   revalidatePath(`/admin/brands/${product.brand_id}/collections/${product.collection_id}`)
   return { ok: true }
@@ -1046,27 +1066,20 @@ export async function updateProductCollectionKinds(collectionId: string, categor
   const { data: collection } = await supabase.from("product_collections").select("brand_id").eq("id", collectionId).maybeSingle()
   if (!collection) return { error: "Collection not found." }
 
+  // Migratie 351: alleen subgroepen, en een keuze met de hand zet ze vast
+  // (is_manual). De eerste is de hoofdsubgroep. Niets gekozen: weer automatisch,
+  // uit de producten.
+  const levels = await loadCategoryLevels(supabase)
+  const groups = ids.filter((id) => levels.isSubgroup(id))
   const { error: clearError } = await supabase.from("product_collection_kinds").delete().eq("collection_id", collectionId)
   if (clearError) return { error: clearError.message }
-  if (ids.length > 0) {
+  if (groups.length > 0) {
     const { error } = await supabase
       .from("product_collection_kinds")
-      .insert(ids.map((category_id, position) => ({ collection_id: collectionId, category_id, position })))
+      .insert(groups.map((category_id, position) => ({ collection_id: collectionId, category_id, position, is_manual: true })))
     if (error) return { error: error.message }
   }
-
-  // De groep waaronder de collectie in het Producten-menu hangt (category_id)
-  // volgt de soorten: bij één soort die soort, bij meer de laagste groep
-  // die ze allemaal omvat (Fauteuils en Banken → Zitmeubels). Zonder
-  // soorten blijft staan wat er was.
-  if (ids.length > 0) {
-    const { data: cats } = await supabase.from("product_categories").select("id, parent_id")
-    const parentOf = new Map(((cats ?? []) as Array<{ id: string; parent_id: string | null }>).map((c) => [c.id, c.parent_id]))
-    const chain = (id: string): string[] => { const out: string[] = []; for (let cur: string | null | undefined = id; cur; cur = parentOf.get(cur)) out.push(cur); return out }
-    let common = chain(ids[0])
-    for (const id of ids.slice(1)) { const own = new Set(chain(id)); common = common.filter((c) => own.has(c)) }
-    await supabase.from("product_collections").update({ category_id: common[0] ?? null }).eq("id", collectionId)
-  }
+  await syncCollectionSubgroups(supabase, collectionId, levels)
 
   await syncBrandCategoriesFromCollections(supabase, collection.brand_id)
   revalidatePath(`/admin/brands/${collection.brand_id}/collections/${collectionId}`)
@@ -1685,8 +1698,10 @@ export async function importBrandsFromApollo(listName = "Brands", page = 1): Pro
   const totalPages = json.pagination?.total_pages ?? page
   const nextPage = accounts.length > 0 && page < totalPages ? page + 1 : null
 
-  const { data: catRows } = await supabase.from("product_categories").select("id, slug, name, parent_id")
-  const categories = (catRows ?? []) as Array<{ id: string; slug: string; name: string; parent_id: string | null }>
+  const { data: catRows } = await supabase.from("product_categories").select("id, slug, name, parent_id, is_active, order_index")
+  // Alleen actieve categorieën voorstellen (migratie 351).
+  const catLevels = categoryLevels((catRows ?? []) as any[])
+  const categories = ((catRows ?? []) as Array<{ id: string; slug: string; name: string; parent_id: string | null }>).filter((c) => catLevels.isLive(c.id))
 
   let created = 0, updated = 0, unchanged = 0, skipped = 0, categorised = 0
   const names: string[] = []

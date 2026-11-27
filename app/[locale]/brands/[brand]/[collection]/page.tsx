@@ -7,7 +7,7 @@ import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { Link } from "@/i18n/navigation"
 import { requireProductsAdmin } from "@/lib/products-gate"
-import { categoryLabel, categoryTree, collectionKindsLabel, getCatalogCategories, getCatalogCollections, getCollectionPhotos, getCollectionProducts, getCollectionProjects } from "@/lib/products/catalog"
+import { activeCategories, categoryLabel, categoryTree, collectionKindsLabel, getCatalogCategories, getCatalogCollections, getCollectionPhotos, getCollectionProducts, getCollectionProjects } from "@/lib/products/catalog"
 import { ProjectCard, CollectionCard } from "@/components/catalog/catalog-cards"
 import { CollectionHero } from "@/components/catalog/collection-hero"
 import { isCutoutPhoto, pickCollectionHero } from "@/lib/products/collection-hero"
@@ -39,7 +39,8 @@ export default async function CollectionPage({ params }: { params: Params }) {
   const [allCollections, categories] = await Promise.all([getCatalogCollections(), getCatalogCategories()])
   const collection = allCollections.find((s) => s.brand.slug === brandSlug && s.slug === collectionSlug)
   if (!collection) notFound()
-  const tree = categoryTree(categories)
+  // Alleen actieve categorieën: geparkeerde (migratie 351) niet als label of link.
+  const tree = categoryTree(activeCategories(categories))
   const [photos, projects, products] = await Promise.all([getCollectionPhotos(collection.id), getCollectionProjects(collection.id, { includeInReview: true }), getCollectionProducts(collection.id)])
   const cover = photos.find((p) => p.isPrimary) ?? photos[0] ?? null
   const category = collection.categoryId ? tree.byId.get(collection.categoryId) : undefined
@@ -159,27 +160,32 @@ export default async function CollectionPage({ params }: { params: Params }) {
         copiedLabel={nl ? "Link gekopieerd" : "Link copied"}
         shareTitle={`${collection.name} — ${collection.brand.name}`}
       />
-      {heroPhoto && <CollectionHero src={heroPhoto.url} alt={heroPhoto.alt ?? collection.name} cutout={isCutoutPhoto(heroPhoto)} focus={heroPhoto.focus} />}
-      <main className="wrap" style={{ paddingTop: heroPhoto ? 56 : 120, paddingBottom: 80 }}>
-        <section id="details" className="professional-header">
-          <Link href={`/brands/${collection.brand.slug}`} className="company-icon" aria-label={collection.brand.name} style={{ textDecoration: "none" }}>
-            <BrandLogo logoUrl={collection.brand.logoUrl} name={collection.brand.name} />
-          </Link>
-          <h1 className="arco-page-title">{collection.name}</h1>
-          {/* Onder de naam: wat de collectie maakt (Fauteuils · Banken · Ligbedden),
-              elk een link naar de soortpagina. Zonder soorten het merk. */}
-          <p className="professional-badge">
-            {shownKinds.length > 0
-              ? shownKinds.map((c, i) => (
-                  <span key={c.id}>
-                    {i > 0 && " · "}
-                    <Link href={`/products/${c.slug}`} className="hover:text-primary transition-colors">{categoryLabel(c, locale)}</Link>
-                  </span>
-                ))
-              : <Link href={`/brands/${collection.brand.slug}`} className="hover:text-primary transition-colors">{collection.brand.name}</Link>}
-          </p>
-          {/* In de taal van de pagina (migratie 330), anders de Engelse bron. */}
-          {((nl && collection.descriptionNl) || collection.description)?.split("\n\n").map((para, i) => <p key={i} className="arco-body-text">{para}</p>)}
+      <main className="wrap" style={{ paddingTop: 120, paddingBottom: 80 }}>
+        {/* Het beeld 4:3 links, logo, naam, soort en tekst rechts (desktop);
+            op kleinere schermen onder elkaar, gecentreerd. Zonder beeld de
+            gecentreerde kop. */}
+        <section id="details" className={heroPhoto ? "collection-intro" : undefined}>
+          {heroPhoto && <CollectionHero layout="intro" src={heroPhoto.url} alt={heroPhoto.alt ?? collection.name} cutout={isCutoutPhoto(heroPhoto)} focus={heroPhoto.focus} />}
+          <div className="professional-header">
+            <Link href={`/brands/${collection.brand.slug}`} className="company-icon" aria-label={collection.brand.name} style={{ textDecoration: "none" }}>
+              <BrandLogo logoUrl={collection.brand.logoUrl} name={collection.brand.name} />
+            </Link>
+            <h1 className="arco-page-title">{collection.name}</h1>
+            {/* Onder de naam: wat de collectie maakt (Fauteuils · Banken · Ligbedden),
+                elk een link naar de soortpagina. Zonder soorten het merk. */}
+            <p className="professional-badge">
+              {shownKinds.length > 0
+                ? shownKinds.map((c, i) => (
+                    <span key={c.id}>
+                      {i > 0 && " · "}
+                      <Link href={`/products/${c.slug}`} className="hover:text-primary transition-colors">{categoryLabel(c, locale)}</Link>
+                    </span>
+                  ))
+                : <Link href={`/brands/${collection.brand.slug}`} className="hover:text-primary transition-colors">{collection.brand.name}</Link>}
+            </p>
+            {/* In de taal van de pagina (migratie 330), anders de Engelse bron. */}
+            {((nl && collection.descriptionNl) || collection.description)?.split("\n\n").map((para, i) => <p key={i} className="arco-body-text">{para}</p>)}
+          </div>
         </section>
 
         <section className="specifications-bar" style={{ marginBottom: 60 }}>

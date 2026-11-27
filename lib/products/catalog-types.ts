@@ -42,8 +42,10 @@ export type CatalogCollection = {
   launchYear: number | null
   url: string | null
   categoryId: string | null
-  /** De soorten die de collectie maakt (stoel, bank, tafel), belangrijkste eerst. */
+  /** De subgroepen van de collectie (Banken, Hanglampen…), hoofdsubgroep eerst (migratie 351). */
   kindIds: string[]
+  /** De categorieën van haar producten (het diepste niveau): voor filteren op een soort. */
+  productCategoryIds?: string[]
   isFeatured: boolean
   brand: { id: string; slug: string; name: string; logoUrl: string | null }
   projectCount: number
@@ -62,6 +64,8 @@ export type CatalogBrand = {
   country: string | null
   foundedYear: number | null
   status: string
+  /** De ster in admin: vooraan in merkoverzichten en carrousels. */
+  isFeatured?: boolean
   categoryIds: string[]
   collectionCount: number
   projectCount: number
@@ -123,10 +127,12 @@ export function categoryLabel(c: CatalogCategory, locale: string): string {
  * soorten, dan de ene soort of groep waaronder ze hangt.
  */
 export function collectionKindsLabel(collection: CatalogCollection, byId: Map<string, CatalogCategory>, locale: string, max = 2, showMore = true): string | null {
-  const names = collection.kindIds.map((id) => byId.get(id)).filter((c): c is CatalogCategory => Boolean(c)).map((c) => categoryLabel(c, locale))
+  // Geparkeerde categorieën (en wat eronder hangt) niet noemen.
+  const live = (c: CatalogCategory | undefined): c is CatalogCategory => Boolean(c && c.isActive && (!c.parentId || live(byId.get(c.parentId))))
+  const names = collection.kindIds.map((id) => byId.get(id)).filter(live).map((c) => categoryLabel(c, locale))
   if (names.length === 0) {
     const c = collection.categoryId ? byId.get(collection.categoryId) : undefined
-    return c ? categoryLabel(c, locale) : null
+    return live(c) ? categoryLabel(c, locale) : null
   }
   if (names.length <= max) return names.join(" · ")
   const shown = names.slice(0, max).join(" · ")

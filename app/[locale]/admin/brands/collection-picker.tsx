@@ -41,14 +41,20 @@ export function CollectionPicker({ brand, onClose, onDone }: { brand: { id: stri
   const added = (candidates ?? []).length - open.length
   const toggle = (id: string) => setSelected((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next })
 
-  // Meteen dicht: het toevoegen loopt door, de melding volgt.
+  // Meteen dicht: het toevoegen loopt op de achtergrond door. Eerst een
+  // gewone melding die vanzelf verdwijnt (geen draaiende melding die blijft
+  // staan); als het klaar is volgt een tweede.
   const submit = () => {
     const ids = Array.from(selected)
     onClose()
-    const id = toast.loading(`Adding ${ids.length} ${ids.length === 1 ? "collection" : "collections"} to ${brand.name}…`)
+    toast(`Adding ${ids.length} ${ids.length === 1 ? "collection" : "collections"} to ${brand.name}`, {
+      description: "This runs in the background — you can keep working.",
+    })
     void chooseCollectionCandidates(brand.id, ids).then((res) => {
-      if ("error" in res) { toast.error(res.error, { id }); return }
-      toast.success(`${res.added} ${res.added === 1 ? "collection" : "collections"} added — details and photos are being fetched in the background`, { id })
+      if ("error" in res) { toast.error(`${brand.name}: ${res.error}`); return }
+      toast.success(`${res.added} ${res.added === 1 ? "collection" : "collections"} added to ${brand.name}`, {
+        description: "Details and photos are being fetched in the background.",
+      })
       onDone()
     })
   }

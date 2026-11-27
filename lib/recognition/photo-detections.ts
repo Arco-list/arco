@@ -54,10 +54,16 @@ const SCHEMA = {
             required: ["x0", "y0", "x1", "y1"],
             additionalProperties: false,
           },
+          point: {
+            type: "object",
+            properties: { x: { type: "number" }, y: { type: "number" } },
+            required: ["x", "y"],
+            additionalProperties: false,
+          },
           description: { type: "string" },
           brand_cues: { type: ["string", "null"] },
         },
-        required: ["kind_slug", "label", "box", "description", "brand_cues"],
+        required: ["kind_slug", "label", "box", "point", "description", "brand_cues"],
         additionalProperties: false,
       },
     },
@@ -68,7 +74,7 @@ const SCHEMA = {
 
 type Detection = {
   room: string
-  products: Array<{ kind_slug: string | null; label: string; box: { x0: number; y0: number; x1: number; y1: number }; description: string; brand_cues: string | null }>
+  products: Array<{ kind_slug: string | null; label: string; box: { x0: number; y0: number; x1: number; y1: number }; point?: { x: number; y: number }; description: string; brand_cues: string | null }>
 }
 
 // Dezelfde vraag als de proef (scripts/test-product-detection.ts).
@@ -77,11 +83,14 @@ const PROMPT = `This is a photo from an interior or architecture project on Arco
 Give:
 - room: the room or space the photo shows, from the list.
 - products: the MAIN design products visible — the pieces from a brand's collection that a visitor would want to know the maker of: furniture (a sofa, a chair, a dining table, a bed), lighting (a pendant, a floor lamp), appliances and fittings (an oven, a hob, a tap, a boiling-water tap, a bathtub, a basin). At most 3, most prominent first.
-  Do NOT include bespoke joinery and fixed finishes, even when they dominate the photo: custom kitchens and kitchen islands, cabinetry, wardrobes and shelving built into the room, worktops and countertops, splashbacks, wall and floor finishes (stone cladding, parquet, tiles), built-in mirrors, stairs and walls. Only include a kitchen when it is a recognisable product system of a kitchen brand (e.g. Bulthaup, Boffi). Also skip small decoration, tableware and glassware, plants, books and rugs that are not a designed product. Use the free places for real products instead — a tap, a stool or an oven in a kitchen photo matters more than the island it stands on.
+  Do NOT include bespoke joinery and fixed finishes, even when they dominate the photo: custom kitchens and kitchen islands, cabinetry, wardrobes and shelving built into the room, worktops and countertops, splashbacks, wall and floor finishes (stone cladding, parquet, tiles), built-in mirrors, stairs and walls. Only include a kitchen when it is a recognisable product system of a kitchen brand (e.g. Bulthaup, Boffi). Also skip small decoration, tableware and glassware, plants, books and rugs that are not a designed product, and soft furnishings: cushions, pillows, throws, blankets and other loose textiles. Use the free places for real products instead — a tap, a stool or an oven in a kitchen photo matters more than the island it stands on.
+  Only include a product that is PROMINENT in the photo: large and clear enough that a visitor would notice it and could recognise the design. Skip anything small, far away, in the background, mostly hidden or cut off — such as garden furniture or bollard lights seen across a lawn in a photo of a house, or a wall light far down a corridor. An exterior or overview shot often has no prominent product at all: then return an empty list rather than filling the places.
+  Only include a product that fits one of the product categories in the list — those are the products Arco carries. Skip anything else, however prominent: bicycles, cars, artwork, electronics, toys.
   For each:
-  - kind_slug: the most specific slug from the category list, or null if none fits;
+  - kind_slug: one slug from the category list (every entry is an end category), exactly as written there;
   - label: a short name ("Pendant light");
   - box: the bounding box as fractions of the image width and height (0 = left/top, 1 = right/bottom): x0, y0, x1, y1;
+  - point: where a marker should sit on the product, as fractions like the box: on a clearly visible, unobstructed part of the product itself — the table top, the seat or backrest of a chair, the shade of a lamp, the spout of a tap — never on something in front of it (a chair before a table) or on the background showing through it;
   - description: a short visual description that would help find the exact product ("large white disc pendant, thin wire suspension");
   - brand_cues: any visible brand or design cue that points to a maker, or null.`
 
@@ -89,20 +98,29 @@ function anthropic() {
   return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 }
 
-/** De producttaxonomie als "slug — Groep › Subgroep › Soort"; gelijk voor elk verzoek, dus cachebaar. */
+/**
+ * De producttaxonomie als "slug — Groep › Subgroep › Soort"; gelijk voor elk
+ * verzoek, dus cachebaar. Alleen eindcategorieën (migratie 351): een soort, of
+ * een subgroep zonder soorten zoals Hanglampen — een stip hangt altijd aan het
+ * diepste niveau. Geparkeerde categorieën en alles eronder vallen weg.
+ */
 async function loadCategories(sb: any): Promise<{ menu: string; idBySlug: Map<string, string> }> {
-  const { data } = await sb.from("product_categories").select("id, slug, name, parent_id").eq("is_active", true)
-  const rows = (data ?? []) as Array<{ id: string; slug: string; name: string; parent_id: string | null }>
-  const byId = new Map(rows.map((r) => [r.id, r]))
+  const { data } = await sb.from("product_categories").select("id, slug, name, parent_id, is_active")
+  const all = (data ?? []) as Array<{ id: string; slug: string; name: string; parent_id: string | null; is_active: boolean }>
+  const byId = new Map(all.map((r) => [r.id, r]))
+  const live = (r: (typeof all)[number] | undefined): boolean => Boolean(r && r.is_active && (!r.parent_id || live(byId.get(r.parent_id))))
+  const rows = all.filter((r) => live(r))
+  const hasChildren = new Set(rows.map((r) => r.parent_id).filter((x): x is string => Boolean(x)))
+  const leaves = rows.filter((r) => !hasChildren.has(r.id))
   const pathOf = (r: { name: string; parent_id: string | null }): string => {
     const parts: string[] = []
-    let cur: typeof r | undefined = r
+    let cur: { name: string; parent_id: string | null } | undefined = r
     for (let i = 0; cur && i < 6; i++) { parts.unshift(cur.name); cur = cur.parent_id ? byId.get(cur.parent_id) : undefined }
     return parts.join(" › ")
   }
   return {
-    menu: rows.map((r) => `${r.slug} — ${pathOf(r)}`).sort().join("\n"),
-    idBySlug: new Map(rows.map((r) => [r.slug, r.id])),
+    menu: leaves.map((r) => `${r.slug} — ${pathOf(r)}`).sort().join("\n"),
+    idBySlug: new Map(leaves.map((r) => [r.slug, r.id])),
   }
 }
 
@@ -151,26 +169,70 @@ async function imageBlock(photo: { url: string; file_size: number | null }): Pro
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, Number.isFinite(n) ? n : 0))
 
-/** Een soort wordt automatisch verborgen na zoveel oordelen van een admin… */
-const AUTO_HIDE_MIN_REVIEWS = 8
-/** …waarvan minstens dit deel verwijderen was (migratie 342). */
-const AUTO_HIDE_SHARE = 0.9
+/**
+ * Alleen producten die prominent in beeld zijn: de langste zijde van het
+ * kader minstens 10% van de foto en het oppervlak minstens 0,5%. Kleiner
+ * (tuinmeubels achter een gazon, een paaltje, een kraan in de verte) wordt
+ * niet opgeslagen en dus ook niet gekoppeld. Geen enkele goedgekeurde stip
+ * was kleiner (november 2026).
+ */
+/** Soorten die nooit een stip krijgen: kussens, plaids en ander los textiel. */
+const SKIPPED_KINDS = new Set(["cushions", "throws", "textiles", "kitchen-textiles"])
+
+const MIN_BOX_SIDE = 0.1
+// November 2026: van 0,5% naar 1% van de foto. Van de bewaarde (gekoppelde of
+// goedgekeurde) stippen was 4 op 101 kleiner; van de om "niet prominent"
+// verwijderde 15 op 39. Hoger (2%) kost 15% van wat we bewaren.
+const MIN_BOX_AREA = 0.01
+export const prominentBox = (b: { x0: number; y0: number; x1: number; y1: number }) => {
+  const w = Math.abs(b.x1 - b.x0), h = Math.abs(b.y1 - b.y0)
+  return Math.max(w, h) >= MIN_BOX_SIDE && w * h >= MIN_BOX_AREA
+}
+
+/**
+ * Een soort wordt automatisch verborgen na zoveel oordelen van een admin…
+ * (november 2026: van 8 naar 6 en van 90% naar 85%, na de analyse van 275
+ * verwijderde tegen 267 bewaarde stippen: maatwerk en bouwdelen worden
+ * vrijwel altijd verwijderd, de grootte van het kader zegt veel minder.)
+ */
+const AUTO_HIDE_MIN_REVIEWS = 6
+/** …waarvan minstens dit deel verwijderen was (migraties 342, 349). */
+const AUTO_HIDE_SHARE = 0.85
+/**
+ * Nooit automatisch verbergen: producten die Arco voert en die vooral om
+ * de stip zelf verwijderd worden (te ver weg op een buitenfoto), niet om de
+ * soort — een loungeset van Dedon op het terras.
+ */
+const AUTO_HIDE_PROTECTED_GROUPS = new Set(["furniture", "lighting", "outdoor"])
 export const AUTO_HIDDEN = "auto-hidden"
 
 /**
- * Soorten die admins bijna altijd verwijderen (maatwerk, afwerking): nieuwe
- * stippen daarvan worden meteen verborgen en niet gekoppeld. Alleen
- * oordelen van admins tellen; een paar keer goedkeuren zet de soort weer aan.
+ * Soorten die admins bijna altijd verwijderen (maatwerk, afwerking,
+ * bouwdelen): nieuwe stippen daarvan worden meteen verborgen en niet
+ * gekoppeld. Alleen oordelen van admins tellen, en alleen redenen die over
+ * de soort gaan (migratie 349); een paar keer goedkeuren zet de soort weer aan.
  */
 export async function autoHiddenKinds(sb: any): Promise<Set<string>> {
-  const { data } = await sb.from("detection_kind_review_stats").select("kind_slug, reviewed, hidden")
+  const [{ data }, { data: cats }] = await Promise.all([
+    sb.from("detection_kind_review_stats").select("kind_slug, reviewed, hidden"),
+    sb.from("product_categories").select("id, slug, parent_id"),
+  ])
+  const rows = (cats ?? []) as Array<{ id: string; slug: string; parent_id: string | null }>
+  const byId = new Map(rows.map((c) => [c.id, c]))
+  const bySlug = new Map(rows.map((c) => [c.slug, c]))
+  const topOf = (slug: string) => {
+    let cur = bySlug.get(slug)
+    for (let i = 0; cur?.parent_id && i < 6; i++) cur = byId.get(cur.parent_id)
+    return cur?.slug ?? null
+  }
   return new Set(((data ?? []) as Array<{ kind_slug: string; reviewed: number; hidden: number }>)
     .filter((k) => Number(k.reviewed) >= AUTO_HIDE_MIN_REVIEWS && Number(k.hidden) / Number(k.reviewed) >= AUTO_HIDE_SHARE)
+    .filter((k) => !AUTO_HIDE_PROTECTED_GROUPS.has(topOf(k.kind_slug) ?? ""))
     .map((k) => k.kind_slug))
 }
 
 /** De instellingen die met een detectie worden opgeslagen (migratie 336). */
-export const detectPipeline = () => ({ step: "detect", model: DETECTION_MODEL, maxDetections: MAX_DETECTIONS, prompt: promptHash(PROMPT, JSON.stringify(SCHEMA)) })
+export const detectPipeline = () => ({ step: "detect", model: DETECTION_MODEL, maxDetections: MAX_DETECTIONS, minBox: { side: MIN_BOX_SIDE, area: MIN_BOX_AREA }, prompt:promptHash(PROMPT, JSON.stringify(SCHEMA)) })
 
 async function storeResult(sb: any, photo: { photo_id: string; project_id: string }, batchId: string, data: Detection, idBySlug: Map<string, string>, hiddenKinds: Set<string>): Promise<boolean> {
   // Eerst claimen: alleen als de foto nog in deze batch zit. Zo verwerken
@@ -189,17 +251,29 @@ async function storeResult(sb: any, photo: { photo_id: string; project_id: strin
   const firstRank = keptRows.reduce((m, k) => Math.max(m, k.rank), 0) + 1
   const covered = (cx: number, cy: number) => keptRows.some((k) => cx >= k.box_x0 && cx <= k.box_x1 && cy >= k.box_y0 && cy <= k.box_y1)
   const rows = (data.products ?? []).slice(0, MAX_DETECTIONS).filter((p) => {
+    if (!prominentBox(p.box)) return false
+    // Alleen de soorten die Arco voert (de producttaxonomie): geen fiets,
+    // auto of kunstwerk, ook niet als Claude er toch een stip voor geeft.
+    const slug = p.kind_slug?.trim()
+    if (!slug || !idBySlug.has(slug)) return false
+    // Kussens en los textiel taggen we niet (geen collecties, zelden een merk).
+    if (SKIPPED_KINDS.has(slug)) return false
     const cx = (p.box.x0 + p.box.x1) / 2, cy = (p.box.y0 + p.box.y1) / 2
     return !covered(cx, cy)
   }).map((p, i) => {
     const x0 = clamp01(Math.min(p.box.x0, p.box.x1)), x1 = clamp01(Math.max(p.box.x0, p.box.x1))
     const y0 = clamp01(Math.min(p.box.y0, p.box.y1)), y1 = clamp01(Math.max(p.box.y0, p.box.y1))
     const slug = p.kind_slug?.trim() || null
+    // De stip op het product (binnen het kader); zonder punt het midden.
+    const dot = p.point && Number.isFinite(p.point.x) && Number.isFinite(p.point.y)
+      ? { x: Math.min(x1, Math.max(x0, p.point.x)), y: Math.min(y1, Math.max(y0, p.point.y)) }
+      : null
     return {
       photo_id: photo.photo_id, project_id: photo.project_id, rank: firstRank + i,
       category_id: slug ? idBySlug.get(slug) ?? null : null, kind_slug: slug,
       label: (p.label ?? "").trim().slice(0, 80) || "Product",
       box_x0: x0, box_y0: y0, box_x1: x1, box_y1: y1,
+      dot_x: dot?.x ?? null, dot_y: dot?.y ?? null,
       description: p.description?.trim().slice(0, 300) || null,
       brand_cues: p.brand_cues?.trim().slice(0, 200) || null,
       pipeline: detectPipeline(),
@@ -340,7 +414,7 @@ export async function tickPhotoDetections(sb: any) {
         params: {
           model: DETECTION_MODEL,
           max_tokens: 4000,
-          system: [{ type: "text", text: `Product categories (slug — group › subgroup › kind):\n${cats.menu}`, cache_control: { type: "ephemeral" } }],
+          system: [{ type: "text", text: `Product categories (slug — group › subgroup, › kind where a subgroup has kinds):\n${cats.menu}`, cache_control: { type: "ephemeral" } }],
           messages: [{ role: "user", content: [block, { type: "text", text: PROMPT }] }],
           output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
         },

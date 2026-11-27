@@ -4,7 +4,9 @@ import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } fro
 import { isAdminUser } from "@/lib/auth-utils"
 import { queueProjectPhotos } from "@/lib/recognition/photo-detections"
 import { OWNER_REVIEW_ENABLED } from "@/lib/recognition/flags"
-import { groupDetections, parseVector } from "@/lib/recognition/grouping"
+import { cosine, groupDetections, MAYBE_SAME_SIMILARITY, parseVector } from "@/lib/recognition/grouping"
+import { randomUUID } from "node:crypto"
+import { createSuggestedBrand } from "@/lib/brands/suggested"
 import { pickCollectionHero } from "@/lib/products/collection-hero"
 import { allBrands, autoInventoryBrands, brandIdsByName } from "@/lib/recognition/matching"
 import { addBrandFromSite } from "@/app/admin/brands/actions"
@@ -47,7 +49,7 @@ export type PhotoDetection = {
   id: string
   photoId: string
   rank: number
-  /** Midden van het kader (0–1): de plek van de stip. */
+  /** De plek van de stip (0–1): op het product (migratie 346), anders het midden van het kader. */
   x: number
   y: number
   box: { x0: number; y0: number; x1: number; y1: number }
@@ -82,6 +84,12 @@ export type PhotoDetection = {
   matchNote: string | null
   /** Hetzelfde product op meerdere foto's: stippen met hetzelfde groupId (lib/recognition/grouping). */
   groupId: string
+  /** Zelf gekoppeld als hetzelfde product (migratie 345); los te koppelen. */
+  linked: boolean
+  /** Waarom verwijderd, als een admin dat aangaf (migratie 348). */
+  hiddenReason: HideReason | null
+  /** Misschien hetzelfde product: stippen op andere foto's die er redelijk op lijken, beste eerst. */
+  maybeSame: string[]
   /**
    * Wat Claude herkent, ook als het niet in de catalogus staat (migratie 337):
    * merk, product, de site van het merk, en het merk in de catalogus als het
@@ -186,7 +194,7 @@ export async function getPhotoDetections(projectId: string): Promise<{ detection
   const sb = createServiceRoleSupabaseClient() as any
   const [{ data: rows }, { data: analyses }, { count: total }] = await Promise.all([
     sb.from("project_photo_detections")
-      .select("id, photo_id, rank, label, kind_slug, description, brand_cues, box_x0, box_y0, box_x1, box_y1, match_status, match_error, source, review_status, missing_brand, missing_name, missing_brand_id, recognized_brand, recognized_product, recognized_website, recognized_brand_id, category_id, embedding, product_categories(name, name_nl)")
+      .select("id, photo_id, rank, label, kind_slug, description, brand_cues, box_x0, box_y0, box_x1, box_y1, match_status, match_error, source, review_status, missing_brand, missing_name, missing_brand_id, recognized_brand, recognized_product, recognized_website, recognized_brand_id, category_id, embedding, same_product_key, dot_x, dot_y, hidden_reason, product_categories(name, name_nl)")
       .eq("project_id", projectId).order("rank"),
     sb.from("project_photo_analyses").select("status").eq("project_id", projectId),
     sb.from("project_photos").select("id", { count: "exact", head: true }).eq("project_id", projectId),
@@ -222,7 +230,7 @@ export async function getPhotoDetections(projectId: string): Promise<{ detection
   // Hetzelfde product op meerdere foto's.
   const targetKey = (c: DetectionCandidate | undefined) => !c ? null
     : c.level === "brand" ? `brand:${c.brandId}` : c.collectionId ? `collection:${c.collectionId}` : c.productId ? `product:${c.productId}` : `brand:${c.brandId}`
-  const groupOf = groupDetections(((rows ?? []) as any[]).map((r) => {
+  const groupInputs = ((rows ?? []) as any[]).map((r) => {
     const cands = candidatesOf.get(r.id) ?? []
     const approved = cands.find((c) => c.status === "approved")
     const target = r.review_status ? targetKey(approved) : targetKey(cands.find((c) => c.status === "suggested"))
@@ -230,8 +238,26 @@ export async function getPhotoDetections(projectId: string): Promise<{ detection
       : r.review_status === "approved" ? `approved:${target}`
       : r.review_status === "missing" ? `missing:${(r.missing_brand ?? "").toLowerCase()}:${(r.missing_name ?? "").toLowerCase()}`
       : r.review_status
-    return { id: r.id, kind: r.category_id ?? r.kind_slug ?? null, reviewed: Boolean(r.review_status), target, outcome, vector: parseVector(r.embedding) }
-  }))
+    return { id: r.id, kind: r.category_id ?? r.kind_slug ?? null, reviewed: Boolean(r.review_status), target, outcome, vector: parseVector(r.embedding), key: r.same_product_key ?? null }
+  })
+  const groupOf = groupDetections(groupInputs)
+  // Misschien hetzelfde product (zelf te bevestigen): op een andere foto, niet
+  // al in de groep, niet verborgen, dezelfde soort, en redelijk gelijkend.
+  const photoOf = new Map(((rows ?? []) as any[]).map((r) => [r.id, r.photo_id]))
+  const hiddenIds = new Set(((rows ?? []) as any[]).filter((r) => r.review_status === "hidden").map((r) => r.id))
+  const maybeSameOf = new Map<string, string[]>()
+  for (const a of groupInputs) {
+    if (!a.vector || hiddenIds.has(a.id)) continue
+    const hits: Array<{ id: string; sim: number }> = []
+    for (const b of groupInputs) {
+      if (b.id === a.id || !b.vector || hiddenIds.has(b.id)) continue
+      if (photoOf.get(b.id) === photoOf.get(a.id) || groupOf.get(b.id) === groupOf.get(a.id)) continue
+      if (a.kind && b.kind && a.kind !== b.kind) continue
+      const sim = cosine(a.vector, b.vector)
+      if (sim >= MAYBE_SAME_SIMILARITY) hits.push({ id: b.id, sim })
+    }
+    if (hits.length) maybeSameOf.set(a.id, hits.sort((x, y) => y.sim - x.sim).slice(0, 4).map((h) => h.id))
+  }
   // Herkende merken (of het merk waarop een stip wacht) en hun inventarisatie.
   const recBrandIds = Array.from(new Set(((rows ?? []) as any[]).flatMap((r) => [r.recognized_brand_id, r.missing_brand_id]).filter(Boolean))) as string[]
   const [{ data: recBrands }, { data: recJobs }] = recBrandIds.length
@@ -251,8 +277,9 @@ export async function getPhotoDetections(projectId: string): Promise<{ detection
       id: r.id,
       photoId: r.photo_id,
       rank: r.rank,
-      x: (r.box_x0 + r.box_x1) / 2,
-      y: (r.box_y0 + r.box_y1) / 2,
+      // De plek die Claude op het product koos (migratie 346), anders het midden.
+      x: r.dot_x ?? (r.box_x0 + r.box_x1) / 2,
+      y: r.dot_y ?? (r.box_y0 + r.box_y1) / 2,
       box: { x0: r.box_x0, y0: r.box_y0, x1: r.box_x1, y1: r.box_y1 },
       label: r.label,
       kindSlug: r.kind_slug,
@@ -266,6 +293,9 @@ export async function getPhotoDetections(projectId: string): Promise<{ detection
       matchStatus: r.match_status ?? null,
       matchNote: r.match_error ? String(r.match_error).replace(/^no match:\s*/, "") : null,
       groupId: groupOf.get(r.id) ?? r.id,
+      linked: Boolean(r.same_product_key),
+      hiddenReason: r.hidden_reason ?? null,
+      maybeSame: maybeSameOf.get(r.id) ?? [],
       recognized: r.recognized_brand || r.recognized_product || r.missing_brand ? {
         brand: r.missing_brand ?? r.recognized_brand ?? null,
         product: r.missing_name ?? r.recognized_product ?? null,
@@ -317,6 +347,10 @@ export async function requestPhotoDetections(projectId: string, force = false): 
 
 export type CatalogTarget = { kind: MatchLevel; id: string }
 
+/** Waarom een stip weg moet (migratie 348); de keuzes in de kaart, alleen voor admins. */
+export type HideReason = "not_prominent" | "bespoke" | "not_carried" | "duplicate" | "wrong_box" | "other"
+const HIDE_REASONS = new Set<HideReason>(["not_prominent", "bespoke", "not_carried", "duplicate", "wrong_box", "other"])
+
 export type ReviewAction =
   /** Deze kandidaat klopt (eventueel op een ander niveau). */
   | { type: "approve"; matchId: string; level?: MatchLevel }
@@ -326,7 +360,8 @@ export type ReviewAction =
   | { type: "reject" }
   /** Staat (nog) niet in de catalogus. */
   | { type: "missing"; brand: string; name: string }
-  | { type: "hide" }
+  /** Verwijderen (verbergen); een admin kan zeggen waarom (migratie 348). */
+  | { type: "hide"; reason?: HideReason | null }
   /** Wel een product, maar niet duidelijk welk (migratie 340). */
   | { type: "unknown" }
   /** Terug naar "te beoordelen". */
@@ -383,6 +418,10 @@ export async function reviewDetection(detectionId: string, action: ReviewAction,
   if (!det) return { error: "Product niet gevonden." }
   const guard = await requireProjectAccess(det.project_id)
   if ("error" in guard) return guard
+  // Een reden bij verwijderen geeft alleen een admin; een onbekende telt niet.
+  if (action.type === "hide") {
+    action = { type: "hide", reason: guard.role === "admin" && action.reason && HIDE_REASONS.has(action.reason) ? action.reason : null }
+  }
   const before = await snapshot(sb, detectionId)
   const result = await applyReview(sb, det, detectionId, action, guard.userId)
   if ("error" in result) return result
@@ -404,14 +443,7 @@ export async function reviewDetection(detectionId: string, action: ReviewAction,
     for (const sib of (sibs ?? []) as any[]) {
       let sibAction: ReviewAction = action
       if (target) {
-        const { data: rows } = await sb.from("project_photo_detection_matches").select("id, brand_id, collection_id, product_id").eq("detection_id", sib.id)
-        const same = ((rows ?? []) as any[]).find((r) => target!.level === "product" ? r.product_id === target!.product_id
-          : target!.level === "collection" ? r.collection_id === target!.collection_id
-          : r.brand_id === target!.brand_id && !r.collection_id)
-          ?? (target.level === "brand" ? ((rows ?? []) as any[]).find((r) => r.brand_id === target!.brand_id) : null)
-        sibAction = same
-          ? { type: "approve", matchId: same.id, level: target.level }
-          : { type: "pick", target: { kind: target.level, id: (target.level === "product" ? target.product_id : target.level === "collection" ? target.collection_id : target.brand_id)! } }
+        sibAction = await sameTargetAction(sb, sib.id, target)
       } else if (type === "approve" || type === "pick") {
         continue
       }
@@ -424,6 +456,108 @@ export async function reviewDetection(detectionId: string, action: ReviewAction,
     }
   }
   return { ok: true, applied }
+}
+
+type MatchTarget = { level: MatchLevel; brand_id: string; collection_id: string | null; product_id: string | null }
+
+/**
+ * Goedkeuren van hetzelfde merk, dezelfde collectie of hetzelfde product bij
+ * een andere stip: zijn eigen kandidaatrij als die er is, anders als zelf gekozen.
+ */
+async function sameTargetAction(sb: any, receiverId: string, target: MatchTarget): Promise<ReviewAction> {
+  const { data: rows } = await sb.from("project_photo_detection_matches").select("id, brand_id, collection_id, product_id").eq("detection_id", receiverId)
+  const list = (rows ?? []) as any[]
+  const same = list.find((r) => target.level === "product" ? r.product_id === target.product_id
+    : target.level === "collection" ? r.collection_id === target.collection_id
+    : r.brand_id === target.brand_id && !r.collection_id)
+    ?? (target.level === "brand" ? list.find((r) => r.brand_id === target.brand_id) : null)
+  return same
+    ? { type: "approve", matchId: same.id, level: target.level }
+    : { type: "pick", target: { kind: target.level, id: (target.level === "product" ? target.product_id : target.level === "collection" ? target.collection_id : target.brand_id)! } }
+}
+
+/** Het oordeel van een stip als actie voor een andere stip; null als hij nog open staat. */
+async function outcomeAction(sb: any, from: { id: string; review_status: string | null; missing_brand: string | null; missing_name: string | null }, receiverId: string): Promise<ReviewAction | null> {
+  switch (from.review_status) {
+    case "approved": {
+      const { data: m } = await sb.from("project_photo_detection_matches").select("level, brand_id, collection_id, product_id").eq("detection_id", from.id).eq("status", "approved").maybeSingle()
+      return m?.level ? sameTargetAction(sb, receiverId, m) : null
+    }
+    case "missing": return { type: "missing", brand: from.missing_brand ?? "", name: from.missing_name ?? "" }
+    case "rejected": return { type: "reject" }
+    case "hidden": return { type: "hide" }
+    case "unknown": return { type: "unknown" }
+    default: return null
+  }
+}
+
+// ── Zelf koppelen: hetzelfde product op een andere foto ─────────────────
+
+/**
+ * "Zelfde als…": deze stip is hetzelfde product als `targetId` (een stip op
+ * een andere foto van het project). Ze krijgen dezelfde sleutel (migratie
+ * 345) en vormen voortaan één groep. Is de gekozen stip beoordeeld, dan
+ * neemt deze stip (met de open stippen die er al aan vastzitten) dat oordeel
+ * over; anders gaat het oordeel van deze stip naar de open stippen van de
+ * gekozen kant. Twee open stippen: alleen de groep.
+ */
+export async function linkSameProduct(detectionId: string, targetId: string): Promise<{ ok: true; applied: number } | { error: string }> {
+  if (detectionId === targetId) return { error: "Kies een andere stip." }
+  const sb = createServiceRoleSupabaseClient() as any
+  const cols = "id, project_id, photo_id, source, review_status, missing_brand, missing_name, same_product_key, box_x0, box_y0, box_y1, box_x1"
+  const { data: pair } = await sb.from("project_photo_detections").select(cols).in("id", [detectionId, targetId])
+  const d = ((pair ?? []) as any[]).find((x) => x.id === detectionId)
+  const t = ((pair ?? []) as any[]).find((x) => x.id === targetId)
+  if (!d || !t) return { error: "Product niet gevonden." }
+  if (d.project_id !== t.project_id) return { error: "Alleen binnen hetzelfde project." }
+  const guard = await requireProjectAccess(d.project_id)
+  if ("error" in guard) return guard
+  const table = () => sb.from("project_photo_detections")
+
+  // De sleutel: die van de gekozen stip, anders die van deze, anders nieuw.
+  // Twee verschillende sleutels: de groep van deze stip schuift erbij.
+  const key: string = t.same_product_key ?? d.same_product_key ?? randomUUID()
+  if (d.same_product_key && t.same_product_key && d.same_product_key !== t.same_product_key) {
+    await table().update({ same_product_key: key }).eq("project_id", d.project_id).eq("same_product_key", d.same_product_key)
+  }
+  await table().update({ same_product_key: key }).in("id", [detectionId, targetId])
+  await logReview(sb, { detectionId, projectId: d.project_id, photoId: d.photo_id, action: "link", payload: { targetId, key }, before: null, after: null, userId: guard.userId, role: guard.role })
+
+  // Het oordeel overnemen: van de gekozen stip als die beoordeeld is (ook
+  // over een eerder oordeel van deze stip heen), anders van deze stip naar
+  // de open stippen aan de andere kant.
+  const from = t.review_status ? t : d.review_status ? d : null
+  if (!from) return { ok: true, applied: 0 }
+  const { data: mates } = await table().select(cols).eq("project_id", d.project_id).eq("same_product_key", key).neq("id", from.id)
+  const receivers = ((mates ?? []) as any[]).filter((x) => !x.review_status || (from === t && x.id === detectionId))
+  let applied = 0
+  for (const r of receivers) {
+    const action = await outcomeAction(sb, from, r.id)
+    if (!action) continue
+    const before = await snapshot(sb, r.id)
+    const res = await applyReview(sb, r, r.id, action, guard.userId)
+    if ("error" in res) continue
+    applied++
+    const { type, ...payload } = action
+    await logReview(sb, { detectionId: r.id, projectId: r.project_id, photoId: r.photo_id, action: type, payload: { ...payload, via: from.id, link: true }, before, after: await snapshot(sb, r.id), userId: guard.userId, role: guard.role })
+  }
+  return { ok: true, applied }
+}
+
+/** Een zelf gekoppelde stip weer los: het oordeel blijft staan. */
+export async function unlinkSameProduct(detectionId: string): Promise<{ ok: true } | { error: string }> {
+  const sb = createServiceRoleSupabaseClient() as any
+  const { data: d } = await sb.from("project_photo_detections").select("id, project_id, photo_id, same_product_key").eq("id", detectionId).maybeSingle()
+  if (!d) return { error: "Product niet gevonden." }
+  const guard = await requireProjectAccess(d.project_id)
+  if ("error" in guard) return guard
+  if (!d.same_product_key) return { ok: true }
+  await sb.from("project_photo_detections").update({ same_product_key: null }).eq("id", detectionId)
+  // Blijft er één stip met de sleutel over, dan is er niets meer gekoppeld.
+  const { data: rest } = await sb.from("project_photo_detections").select("id").eq("project_id", d.project_id).eq("same_product_key", d.same_product_key)
+  if ((rest ?? []).length === 1) await sb.from("project_photo_detections").update({ same_product_key: null }).eq("id", rest[0].id)
+  await logReview(sb, { detectionId, projectId: d.project_id, photoId: d.photo_id, action: "unlink", payload: { key: d.same_product_key }, before: null, after: null, userId: guard.userId, role: guard.role })
+  return { ok: true }
 }
 
 async function applyReview(sb: any, det: any, detectionId: string, action: ReviewAction, userId: string): Promise<{ ok: true } | { error: string }> {
@@ -448,7 +582,7 @@ async function applyReview(sb: any, det: any, detectionId: string, action: Revie
       await rejectOthers(m.id)
       await matches().delete().eq("detection_id", detectionId).eq("source", "manual").neq("id", m.id)
       await matches().update({ status: "approved", level, ...reviewed }).eq("id", m.id)
-      await setDetection({ review_status: "approved", missing_brand: null, missing_name: null, missing_brand_id: null, ...reviewed })
+      await setDetection({ review_status: "approved", missing_brand: null, missing_name: null, missing_brand_id: null, hidden_reason: null, ...reviewed })
       return { ok: true }
     }
     case "pick": {
@@ -469,13 +603,13 @@ async function applyReview(sb: any, det: any, detectionId: string, action: Revie
       await matches().delete().eq("detection_id", detectionId).eq("source", "manual")
       const { error } = await matches().insert({ detection_id: detectionId, rank: 0, ...row, status: "approved", level: t.kind, source: "manual", ...reviewed })
       if (error) return { error: error.message }
-      await setDetection({ review_status: "approved", missing_brand: null, missing_name: null, missing_brand_id: null, ...reviewed })
+      await setDetection({ review_status: "approved", missing_brand: null, missing_name: null, missing_brand_id: null, hidden_reason: null, ...reviewed })
       return { ok: true }
     }
     case "reject": {
       await rejectOthers()
       await matches().delete().eq("detection_id", detectionId).eq("source", "manual")
-      await setDetection({ review_status: "rejected", missing_brand: null, missing_name: null, missing_brand_id: null, ...reviewed })
+      await setDetection({ review_status: "rejected", missing_brand: null, missing_name: null, missing_brand_id: null, hidden_reason: null, ...reviewed })
       return { ok: true }
     }
     case "missing": {
@@ -483,21 +617,23 @@ async function applyReview(sb: any, det: any, detectionId: string, action: Revie
       if (!brand && !name) return { error: "Vul een merk of naam in." }
       await rejectOthers()
       await matches().delete().eq("detection_id", detectionId).eq("source", "manual")
-      // Het merk vastleggen als het al in de catalogus staat; anders later op naam.
+      // Het merk vastleggen als het al in de catalogus staat; anders als
+      // voorgesteld merk aanmaken (status Suggested, migratie 347), zodat het
+      // in /admin/brands staat en met een domein te inventariseren is.
       const brandOf = await brandIdsByName(sb)
-      const missingBrandId = brandOf(brand)
-      await setDetection({ review_status: "missing", missing_brand: brand || null, missing_name: name || null, missing_brand_id: missingBrandId, ...reviewed })
+      const missingBrandId = brandOf(brand) ?? (brand ? await createSuggestedBrand(sb, brand) : null)
+      await setDetection({ review_status: "missing", missing_brand: brand || null, missing_name: name || null, missing_brand_id: missingBrandId, hidden_reason: null, ...reviewed })
       // Bevestigd: dit product van dit merk hoort in de catalogus. Merk in de
       // selectie → de collecties inventariseren (hooguit eens per 30 dagen).
       if (missingBrandId) await autoInventoryBrands(sb, [missingBrandId])
       return { ok: true }
     }
     case "hide": {
-      await setDetection({ review_status: "hidden", ...reviewed })
+      await setDetection({ review_status: "hidden", hidden_reason: action.reason ?? null, ...reviewed })
       return { ok: true }
     }
     case "unknown": {
-      await setDetection({ review_status: "unknown", ...reviewed })
+      await setDetection({ review_status: "unknown", hidden_reason: null, ...reviewed })
       return { ok: true }
     }
     case "reset": {
@@ -506,7 +642,7 @@ async function applyReview(sb: any, det: any, detectionId: string, action: Revie
       await matches().delete().eq("detection_id", detectionId).eq("source", "manual")
       await matches().update({ status: "candidate", reviewed_by: null, reviewed_at: null }).eq("detection_id", detectionId).is("reason", null)
       await matches().update({ status: "suggested", reviewed_by: null, reviewed_at: null }).eq("detection_id", detectionId).not("reason", "is", null)
-      await setDetection({ review_status: null, missing_brand: null, missing_name: null, missing_brand_id: null, reviewed_by: null, reviewed_at: null })
+      await setDetection({ review_status: null, missing_brand: null, missing_name: null, missing_brand_id: null, hidden_reason: null, reviewed_by: null, reviewed_at: null })
       // Automatisch verborgen en nooit gekoppeld: nu alsnog koppelen (cron).
       await sb.from("project_photo_detections").update({ match_status: null, match_batch_id: null, match_error: null }).eq("id", detectionId).like("match_error", "auto-hidden%")
       return { ok: true }
@@ -520,11 +656,8 @@ async function applyReview(sb: any, det: any, detectionId: string, action: Revie
       return { ok: true }
     }
     case "move": {
-      // Het kader schuift mee, zodat het midden onder de stip blijft.
-      const w = det.box_x1 - det.box_x0, h = det.box_y1 - det.box_y0
-      const cx = clamp01(action.x), cy = clamp01(action.y)
-      const x0 = clamp01(Math.min(cx - w / 2, 1 - w)), y0 = clamp01(Math.min(cy - h / 2, 1 - h))
-      await setDetection({ box_x0: x0, box_y0: y0, box_x1: x0 + w, box_y1: y0 + h })
+      // Alleen de stip verplaatsen (migratie 346); het kader is het product.
+      await setDetection({ dot_x: clamp01(action.x), dot_y: clamp01(action.y) })
       return { ok: true }
     }
     case "delete": {

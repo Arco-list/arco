@@ -6,7 +6,8 @@
     "build": "next build",
     "build:check": "NEXT_DIST_DIR=.next-verify next build",
     "test": "node --test 'lib/**/*.test.ts'",
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
+    "dev:webpack": "next dev",
     "lint": "next lint",
     "start": "next start",
     "check:titles": "node scripts/check-titles.mjs"

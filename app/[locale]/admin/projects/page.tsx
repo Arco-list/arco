@@ -39,7 +39,7 @@ async function loadAdminProjectsData() {
       .select("project_id, status, is_project_owner, company:companies(id, name, slug, status, primary_service:categories!companies_primary_service_id_fkey(slug))")
       .not("company_id", "is", null),
     // Productherkenning per project (migratie 341): de kolom Producten.
-    (serviceSupabase as any).from("project_detection_counts").select("project_id, dots, linked, open, waiting, unknown, busy"),
+    (serviceSupabase as any).from("project_detection_counts").select("project_id, dots, linked, open, waiting, unknown, busy, reviewed"),
   ])
 
   if (projectsResult.error) {
@@ -153,8 +153,8 @@ async function loadAdminProjectsData() {
 
   // Build project rows
   const productsByProject = new Map<string, NonNullable<AdminProjectRow["products"]>>()
-  for (const r of (detectionCountsResult.data ?? []) as Array<{ project_id: string; dots: number; linked: number; open: number; waiting: number; unknown: number; busy: boolean }>) {
-    productsByProject.set(r.project_id, { dots: Number(r.dots), linked: Number(r.linked), open: Number(r.open), waiting: Number(r.waiting), unknown: Number(r.unknown), busy: Boolean(r.busy) })
+  for (const r of (detectionCountsResult.data ?? []) as Array<{ project_id: string; dots: number; linked: number; open: number; waiting: number; unknown: number; busy: boolean; reviewed: number }>) {
+    productsByProject.set(r.project_id, { dots: Number(r.dots), linked: Number(r.linked), open: Number(r.open), waiting: Number(r.waiting), unknown: Number(r.unknown), busy: Boolean(r.busy), reviewed: Number(r.reviewed ?? 0) })
   }
 
   const projects: AdminProjectRow[] = (projectsResult.data ?? []).map((project: any) => {

@@ -51,9 +51,9 @@ export async function getPhotoBrandTags(photoIds: string[], viewerIsAdmin: boole
   // Goedgekeurde stippen uit de productherkenning.
   const { data: approved } = await sr
     .from("project_photo_detections")
-    .select("id, photo_id, box_x0, box_y0, box_x1, box_y1")
+    .select("id, photo_id, box_x0, box_y0, box_x1, box_y1, dot_x, dot_y")
     .in("photo_id", photoIds).eq("review_status", "approved")
-  const detections = (approved ?? []) as Array<{ id: string; photo_id: string; box_x0: number; box_y0: number; box_x1: number; box_y1: number }>
+  const detections = (approved ?? []) as Array<{ id: string; photo_id: string; box_x0: number; box_y0: number; box_x1: number; box_y1: number; dot_x: number | null; dot_y: number | null }>
   if (detections.length > 0) {
     const { data: matches } = await sr
       .from("project_photo_detection_matches")
@@ -69,7 +69,8 @@ export async function getPhotoBrandTags(photoIds: string[], viewerIsAdmin: boole
       const k = key(d.photo_id, m.brand.id, collection?.id ?? null)
       if (manual.has(k)) continue
       manual.add(k)
-      tags.push({ id: `det:${d.id}`, photo_id: d.photo_id, x: (d.box_x0 + d.box_x1) / 2, y: (d.box_y0 + d.box_y1) / 2, brand: m.brand, collection })
+      // De stip op het product (migratie 346), anders het midden van het kader.
+      tags.push({ id: `det:${d.id}`, photo_id: d.photo_id, x: d.dot_x ?? (d.box_x0 + d.box_x1) / 2, y: d.dot_y ?? (d.box_y0 + d.box_y1) / 2, brand: m.brand, collection })
     }
   }
   if (tags.length === 0) return out

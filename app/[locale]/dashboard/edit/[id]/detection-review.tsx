@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { ArrowLeftRight, Check, ChevronLeft, ChevronRight, HelpCircle, Trash2, X } from "lucide-react"
+import { ArrowLeftRight, Check, ChevronLeft, ChevronRight, HelpCircle, Link2, Plus, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 import { Link } from "@/i18n/navigation"
 
 import {
-  addDetection, inventoryRecognizedBrand, listBrandCollections, reviewDetection, searchCatalog, searchCuratedBrands,
-  type BrandCollection, type BrandHit, type CatalogHit, type DetectionCandidate, type PhotoDetection, type ReviewAction,
+  addDetection, inventoryRecognizedBrand, linkSameProduct, listBrandCollections, reviewDetection, searchCatalog, searchCuratedBrands, unlinkSameProduct,
+  type BrandCollection, type BrandHit, type CatalogHit, type DetectionCandidate, type HideReason, type PhotoDetection, type ReviewAction,
 } from "./detection-actions"
 
 /**
@@ -40,6 +40,16 @@ export function detectionState(d: PhotoDetection): DetectionState {
   if (d.matchStatus === null || d.matchStatus === "submitted") return "matching"
   return d.suggestion ? "review" : "open"
 }
+
+/** Waarom verwijderen (alleen admins, migratie 348); de cijfers zijn de sneltoetsen. */
+export const HIDE_REASON_OPTIONS: Array<{ key: HideReason; label: string; hint: string }> = [
+  { key: "not_prominent", label: "Niet prominent", hint: "Te klein, te ver weg of half in beeld" },
+  { key: "bespoke", label: "Maatwerk of vast", hint: "Keuken, kast, werkblad, gevel, raam" },
+  { key: "not_carried", label: "Voeren we niet", hint: "Geen product uit onze categorieën" },
+  { key: "duplicate", label: "Dubbel", hint: "Staat al als andere stip op deze foto" },
+  { key: "wrong_box", label: "Verkeerd kader", hint: "Kader of plek klopt niet" },
+  { key: "other", label: "Anders", hint: "Een andere reden" },
+]
 
 export const STATE_STYLE: Record<DetectionState, { color: string; label: string }> = {
   approved: { color: "#2e7d4f", label: "Goedgekeurd" },
@@ -118,7 +128,21 @@ export function DetectionReview({ photos, detections, initial, onClose, onChange
   const photoDetections = byPhoto.get(photo?.id ?? "") ?? []
   const selected = stop?.detectionId ? detections.find((d) => d.id === stop.detectionId) ?? null : null
   const photoNumber = photos.findIndex((p) => p.id === photo?.id) + 1
-  const toReview = new Set(detections.filter((d) => isOpenState(detectionState(d))).map((d) => d.groupId)).size
+  // Tellen per product (een groep stippen over de foto's heen); verwijderde
+  // stippen tellen niet mee. De volgorde is die van de eerste stip op de foto's.
+  const productOrder = useMemo(() => {
+    const order: string[] = []
+    const seen = new Set<string>()
+    for (const p of photos) {
+      const own = detections.filter((d) => d.photoId === p.id && d.reviewStatus !== "hidden").sort((a, b) => a.rank - b.rank)
+      for (const d of own) if (!seen.has(d.groupId)) { seen.add(d.groupId); order.push(d.groupId) }
+    }
+    return order
+  }, [photos, detections])
+  const totalProducts = productOrder.length
+  const openProducts = new Set(detections.filter((d) => d.reviewStatus !== "hidden" && isOpenState(detectionState(d))).map((d) => d.groupId)).size
+  const reviewedProducts = totalProducts - openProducts
+  const reviewedPct = totalProducts ? Math.round((reviewedProducts / totalProducts) * 100) : 100
   const siblingsOf = useCallback((d: PhotoDetection) => detections.filter((x) => x.groupId === d.groupId && x.id !== d.id && x.reviewStatus !== "hidden"), [detections])
 
   const go = useCallback((delta: number) => {
@@ -190,6 +214,22 @@ export function DetectionReview({ photos, detections, initial, onClose, onChange
     void onChanged()
   }, [siblingsOf, nextAfter, onChanged])
 
+  /** "Zelfde als…": deze stip is hetzelfde product als een stip op een andere foto. */
+  const linkSame = useCallback(async (d: PhotoDetection, target: PhotoDetection) => {
+    setBusy(true)
+    const res = await linkSameProduct(d.id, target.id)
+    if ("error" in res) toast.error(res.error)
+    await onChanged()
+    setBusy(false)
+  }, [onChanged])
+  const unlinkSame = useCallback(async (x: PhotoDetection) => {
+    setBusy(true)
+    const res = await unlinkSameProduct(x.id)
+    if ("error" in res) toast.error(res.error)
+    await onChanged()
+    setBusy(false)
+  }, [onChanged])
+
   const add = useCallback(async (box: Box) => {
     if (!photo) return
     setBusy(true)
@@ -214,11 +254,18 @@ export function DetectionReview({ photos, detections, initial, onClose, onChange
     if (d.reviewStatus === "rejected") void run(d, { type: "reset" })
     else void run(d, { type: "reject" }, "reject")
   }, [run])
-  const remove = useCallback((d: PhotoDetection) => {
+  // Waarom verwijderen (alleen admins, migratie 348): de prullenbak opent
+  // eerst de redenen in de kaart; een reden kiezen (of overslaan) verwijdert.
+  const [askReason, setAskReason] = useState<string | null>(null)
+  useEffect(() => { setAskReason(null) }, [cursor.detectionId])
+  const remove = useCallback((d: PhotoDetection, reason?: HideReason | null) => {
     // Verborgen (ook automatisch): nog eens op de prullenbak zet hem terug.
-    if (d.reviewStatus === "hidden") void run(d, { type: "reset" })
-    else void run(d, d.source === "manual" ? { type: "delete" } : { type: "hide" }, "remove")
-  }, [run])
+    if (d.reviewStatus === "hidden") return void run(d, { type: "reset" })
+    if (d.source === "manual") return void run(d, { type: "delete" }, "remove")
+    if (admin && reason === undefined) { setAskReason((cur) => (cur === d.id ? null : d.id)); return }
+    setAskReason(null)
+    void run(d, { type: "hide", reason: reason ?? null }, "remove")
+  }, [run, admin])
 
   // Toetsenbord: ← → door de stippen, Enter/A klopt, X/R klopt niet, Delete verwijderen, Esc sluiten.
   useEffect(() => {
@@ -229,6 +276,13 @@ export function DetectionReview({ photos, detections, initial, onClose, onChange
         return
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return
+      // Redenen open: 1–6 kiest, 0 of Enter zonder reden, Esc sluit alleen de redenen.
+      if (askReason && selected?.id === askReason) {
+        if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setAskReason(null); return }
+        const i = Number(e.key)
+        if (e.key >= "1" && e.key <= String(HIDE_REASON_OPTIONS.length)) { e.preventDefault(); remove(selected, HIDE_REASON_OPTIONS[i - 1].key); return }
+        if (e.key === "0" || e.key === "Enter") { e.preventDefault(); remove(selected, null); return }
+      }
       if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(); return }
       if (busy) return
       switch (e.key) {
@@ -241,48 +295,52 @@ export function DetectionReview({ photos, detections, initial, onClose, onChange
     }
     window.addEventListener("keydown", onKey, true)
     return () => window.removeEventListener("keydown", onKey, true)
-  }, [busy, selected, go, approve, reject, remove, onClose])
+  }, [busy, selected, go, approve, reject, remove, onClose, askReason])
 
   if (!photo || typeof document === "undefined") return null
 
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label="Producten beoordelen"
       style={{ position: "fixed", inset: 0, zIndex: 1000, background: "#151514", display: "flex", flexDirection: "column", color: "#e8e8e6" }}>
-      {/* Boven: waar je bent, hoeveel er nog open staan, sluiten */}
-      <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", fontSize: 13 }}>
+      {/* Boven: waar je bent · hoeveel er beoordeeld is · gereedschap en sluiten */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 14, padding: "12px 18px", fontSize: 13 }}>
         <span style={{ fontVariantNumeric: "tabular-nums" }}>Foto {photoNumber} van {photos.length}</span>
-        <span style={{ color: "#9b9b97" }}>
-          {toReview > 0 ? `${toReview} ${toReview === 1 ? "product" : "producten"} te beoordelen` : "Alles beoordeeld"}
-        </span>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, color: "#9b9b97", cursor: "pointer" }}>
-          <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
-          Ook beoordeelde tonen
-        </label>
-        <span style={{ flex: 1 }} />
-        {viewerIsAdmin && (
-          <label style={{ display: "flex", alignItems: "center", gap: 6, color: "#9b9b97", cursor: "pointer" }}>
-            <input type="checkbox" checked={asOwner} onChange={(e) => setAsOwner(e.target.checked)} />
-            Bekijk als eigenaar
-          </label>
-        )}
-        {admin && onRedetect && (
-          <button type="button" style={{ ...plainBtn, color: "#9b9b97", textDecoration: "underline", textUnderlineOffset: 3 }}
-            onClick={() => { if (window.confirm("Alle foto's opnieuw laten herkennen? Beoordeelde en zelf toegevoegde producten blijven staan; de rest wordt vervangen.")) onRedetect() }}>
-            Opnieuw herkennen
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontVariantNumeric: "tabular-nums" }}>
+            {reviewedProducts} van de {totalProducts} beoordeeld <span style={{ color: "#9b9b97" }}>({reviewedPct}%)</span>
+          </span>
+          <button type="button" aria-pressed={showAll} onClick={() => setShowAll((v) => !v)} style={pill(showAll)}>
+            Beoordeelde tonen
           </button>
-        )}
-        <button type="button" onClick={onClose} aria-label="Sluiten" style={{ ...plainBtn, fontSize: 24, lineHeight: 1, padding: 4 }}>×</button>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+          {viewerIsAdmin && (
+            <button type="button" aria-pressed={asOwner} onClick={() => setAsOwner((v) => !v)} style={pill(asOwner)}>
+              Bekijk als eigenaar
+            </button>
+          )}
+          {admin && onRedetect && (
+            <button type="button" style={pill(false)}
+              onClick={() => { if (window.confirm("Alle foto's opnieuw laten herkennen? Beoordeelde en zelf toegevoegde producten blijven staan; de rest wordt vervangen.")) onRedetect() }}>
+              Opnieuw herkennen
+            </button>
+          )}
+          <button type="button" onClick={onClose} aria-label="Sluiten" style={{ ...plainBtn, fontSize: 24, lineHeight: 1, padding: 4, marginLeft: 6 }}>×</button>
+        </div>
       </div>
 
       <Stage
         key={photo.id}
         photo={photo} size={size} detections={photoDetections} selected={selected} busy={busy}
-        siblings={selected ? siblingsOf(selected) : []} photos={photos} admin={admin}
+        siblings={selected ? siblingsOf(selected) : []} photos={photos} admin={admin} all={detections}
+        onLinkSame={(d, target) => void linkSame(d, target)} onUnlinkSame={(x) => void unlinkSame(x)}
+        onMove={(d, at) => void run(d, { type: "move", x: at.x, y: at.y })}
         flash={flash && flash.id === selected?.id ? flash.key : null}
         onSelect={(d) => setCursor({ photoId: d.photoId, detectionId: d.id })}
         onDeselect={() => setCursor({ photoId: photo.id, detectionId: null })}
         onDraw={(box) => void add(box)}
         onApprove={approve} onReject={reject} onRemove={remove}
+        askReason={askReason} onCancelReason={() => setAskReason(null)}
         onLink={(d, action) => void run(d, action, action.type === "unknown" ? "unknown" : action.type === "reset" ? undefined : "approve")}
       />
 
@@ -290,12 +348,14 @@ export function DetectionReview({ photos, detections, initial, onClose, onChange
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, padding: "12px 18px 16px", fontSize: 13 }}>
         <button type="button" onClick={() => go(-1)} aria-label="Vorige" style={roundBtn}><ChevronLeft size={20} /></button>
         <span style={{ minWidth: 150, textAlign: "center", color: "#9b9b97", fontVariantNumeric: "tabular-nums" }}>
-          {selected ? `Product ${photoDetections.findIndex((d) => d.id === selected.id) + 1} van ${photoDetections.length}` : photoDetections.length ? `${photoDetections.length} producten` : "Geen producten"}
+          {/* Over het hele project, net als de telling bovenin. */}
+          {selected
+            ? selected.reviewStatus === "hidden"
+              ? "Verwijderd"
+              : `Product ${productOrder.indexOf(selected.groupId) + 1} van ${totalProducts}`
+            : photoDetections.length ? `${photoDetections.length} ${photoDetections.length === 1 ? "product" : "producten"} op deze foto` : "Geen producten op deze foto"}
         </span>
         <button type="button" onClick={() => go(1)} aria-label="Volgende" style={roundBtn}><ChevronRight size={20} /></button>
-      </div>
-      <div style={{ position: "absolute", left: 18, bottom: 20, fontSize: 12, color: "#77776f", pointerEvents: "none" }}>
-        {admin ? "Sleep een kader om een product toe te voegen · ← → · Enter klopt · X klopt niet · Delete verwijderen" : "Sleep een kader om een product toe te voegen"}
       </div>
     </div>,
     document.body,
@@ -303,7 +363,9 @@ export function DetectionReview({ photos, detections, initial, onClose, onChange
 }
 
 // ── De foto, de stippen, het kader dat je trekt en de productkaart ──
-function Stage({ photo, size, detections, selected, busy, siblings, photos, admin, flash, onSelect, onDeselect, onDraw, onApprove, onReject, onRemove, onLink }: {
+function Stage({ photo, size, detections, selected, busy, siblings, photos, admin, all, onLinkSame, onUnlinkSame, onMove, flash, onSelect, onDeselect, onDraw, onApprove, onReject, onRemove, onLink, askReason, onCancelReason }: {
+  /** De gekozen stip naar een andere plek gesleept. */
+  onMove: (d: PhotoDetection, at: { x: number; y: number }) => void
   photo: Photo
   size: Size | null
   detections: PhotoDetection[]
@@ -312,13 +374,20 @@ function Stage({ photo, size, detections, selected, busy, siblings, photos, admi
   siblings: PhotoDetection[]
   photos: Photo[]
   admin: boolean
+  /** Alle stippen van het project, voor "Zelfde als…". */
+  all: PhotoDetection[]
+  onLinkSame: (d: PhotoDetection, target: PhotoDetection) => void
+  onUnlinkSame: (x: PhotoDetection) => void
   flash: CardAction | null
   onSelect: (d: PhotoDetection) => void
   onDeselect: () => void
   onDraw: (box: Box) => void
   onApprove: (d: PhotoDetection) => void
   onReject: (d: PhotoDetection) => void
-  onRemove: (d: PhotoDetection) => void
+  onRemove: (d: PhotoDetection, reason?: HideReason | null) => void
+  /** De stip waarvoor de redenen van verwijderen open staan. */
+  askReason: string | null
+  onCancelReason: () => void
   onLink: (d: PhotoDetection, action: ReviewAction) => void
 }) {
   const boxRef = useRef<HTMLDivElement>(null)
@@ -327,6 +396,10 @@ function Stage({ photo, size, detections, selected, busy, siblings, photos, admi
   const [rect, setRect] = useState<DOMRect | null>(null)
   const [draft, setDraft] = useState<Box | null>(null)
   const drawing = useRef<{ x: number; y: number; moved: boolean } | null>(null)
+  // De stip verslepen: de plek tijdens het slepen, en na het loslaten
+  // (tot de detecties opnieuw geladen zijn).
+  const [dragDot, setDragDot] = useState<{ id: string; x: number; y: number; moved: boolean } | null>(null)
+  const [placed, setPlaced] = useState<Record<string, { x: number; y: number }>>({})
 
   useLayoutEffect(() => {
     const el = boxRef.current
@@ -394,21 +467,47 @@ function Stage({ photo, size, detections, selected, busy, siblings, photos, admi
 
           {detections.map((d) => {
             const state = detectionState(d)
+            const isSelected = selected?.id === d.id
+            // De gekozen stip is te verslepen naar een betere plek op het product.
+            const pos = dragDot?.id === d.id ? dragDot : placed[d.id] ?? { x: d.x, y: d.y }
             return (
               <button key={d.id} type="button" className="photo-dot"
-                aria-label={`${d.rank}. ${d.kindName ?? d.label}, ${STATE_STYLE[state].label}`}
-                aria-expanded={selected?.id === d.id}
-                onPointerDown={(e) => e.stopPropagation()}
-                onPointerUp={(e) => e.stopPropagation()}
-                onClick={(e) => { e.stopPropagation(); onSelect(d) }}
-                style={{ left: `${d.x * 100}%`, top: `${d.y * 100}%`, background: STATE_STYLE[state].color, opacity: state === "rejected" ? 0.7 : 1 }} />
+                aria-label={`${d.rank}. ${d.kindName ?? d.label}, ${STATE_STYLE[state].label}${isSelected ? " · sleep om te verplaatsen" : ""}`}
+                aria-expanded={isSelected}
+                title={isSelected ? "Sleep om de stip te verplaatsen" : undefined}
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                  if (!isSelected || busy || e.button !== 0) return
+                  e.currentTarget.setPointerCapture(e.pointerId)
+                  setDragDot({ id: d.id, x: pos.x, y: pos.y, moved: false })
+                }}
+                onPointerMove={(e) => {
+                  if (dragDot?.id !== d.id) return
+                  const p = posIn(e)
+                  const moved = dragDot.moved || Math.hypot(p.x - d.x, p.y - d.y) > 0.01
+                  setDragDot({ id: d.id, x: p.x, y: p.y, moved })
+                }}
+                onPointerUp={(e) => {
+                  e.stopPropagation()
+                  if (dragDot?.id !== d.id) return
+                  const drop = dragDot
+                  setDragDot(null)
+                  if (drop.moved) {
+                    setPlaced((m) => ({ ...m, [d.id]: { x: drop.x, y: drop.y } }))
+                    onMove(d, { x: drop.x, y: drop.y })
+                  }
+                }}
+                onClick={(e) => { e.stopPropagation(); if (!isSelected) onSelect(d) }}
+                style={{ left: `${pos.x * 100}%`, top: `${pos.y * 100}%`, background: STATE_STYLE[state].color, opacity: state === "rejected" ? 0.7 : 1, cursor: isSelected ? (dragDot?.id === d.id ? "grabbing" : "grab") : "pointer", touchAction: "none" }} />
             )
           })}
         </div>
       )}
       {selected && rect && typeof document !== "undefined" && createPortal(
         <ReviewCard key={selected.id} d={selected} photo={photo} size={size} rect={rect} busy={busy} siblings={siblings} photos={photos} admin={admin} flash={flash} onSelect={onSelect}
-          onApprove={() => onApprove(selected)} onReject={() => onReject(selected)} onRemove={() => onRemove(selected)} onLink={(action) => onLink(selected, action)} />,
+          all={all} onLinkSame={(target) => onLinkSame(selected, target)} onUnlinkSame={onUnlinkSame}
+          onApprove={() => onApprove(selected)} onReject={() => onReject(selected)} onRemove={(reason) => onRemove(selected, reason)} onLink={(action) => onLink(selected, action)}
+          askingReason={askReason === selected.id} onCancelReason={onCancelReason} />,
         document.body,
       )}
     </div>
@@ -416,7 +515,10 @@ function Stage({ photo, size, detections, selected, busy, siblings, photos, admi
 }
 
 // ── De productkaart bij de stip: zoals op een gewone foto, met drie knoppen ──
-function ReviewCard({ d, photo, size, rect, busy, siblings, photos, admin, flash, onSelect, onApprove, onReject, onRemove, onLink }: {
+function ReviewCard({ d, photo, size, rect, busy, siblings, photos, admin, all, onLinkSame, onUnlinkSame, flash, onSelect, onApprove, onReject, onRemove, onLink, askingReason, onCancelReason }: {
+  /** De redenen van verwijderen staan open (alleen admins). */
+  askingReason: boolean
+  onCancelReason: () => void
   d: PhotoDetection
   photo: Photo
   size: Size | null
@@ -425,12 +527,17 @@ function ReviewCard({ d, photo, size, rect, busy, siblings, photos, admin, flash
   siblings: PhotoDetection[]
   photos: Photo[]
   admin: boolean
+  all: PhotoDetection[]
+  /** Deze stip is hetzelfde product als `target`. */
+  onLinkSame: (target: PhotoDetection) => void
+  onUnlinkSame: (x: PhotoDetection) => void
   /** Net ingedrukt: die knop staat aan tot het doorgaat naar de volgende. */
   flash: CardAction | null
   onSelect: (d: PhotoDetection) => void
   onApprove: () => void
   onReject: () => void
-  onRemove: () => void
+  /** Zonder argument: (bij een admin) eerst de redenen; met een reden (of null): verwijderen. */
+  onRemove: (reason?: HideReason | null) => void
   /** Zelf koppelen: een collectie of merk kiezen, of "staat er niet in". */
   onLink: (action: ReviewAction) => void
 }) {
@@ -478,6 +585,23 @@ function ReviewCard({ d, photo, size, rect, busy, siblings, photos, admin, flash
   /** Het gekozen merk in het koppelveld; de groene vink koppelt dan alleen het merk. */
   const [linkBrand, setLinkBrand] = useState<BrandHit | null>(null)
 
+  // Hetzelfde product op een andere foto, zelf koppelen (migratie 345).
+  const [pickingSame, setPickingSame] = useState(false)
+  /** De uitsnede waar de muis op staat: groter onder de kaart, met naam en categorie. */
+  const [preview, setPreview] = useState<PhotoDetection | null>(null)
+  const photoIndex = (id: string) => photos.findIndex((p) => p.id === id)
+  // Alle stippen die in aanmerking komen: andere foto, nog niet in de groep,
+  // niet verborgen. Eerst de voorgestelde, dan dezelfde soort, dan op foto.
+  const sameOptions = all
+    .filter((x) => x.photoId !== d.photoId && x.groupId !== d.groupId && x.reviewStatus !== "hidden")
+    .sort((a, b) => {
+      const ma = d.maybeSame.indexOf(a.id), mb = d.maybeSame.indexOf(b.id)
+      if (ma !== mb) return (ma < 0 ? 99 : ma) - (mb < 0 ? 99 : mb)
+      const ka = Number(a.kindSlug !== d.kindSlug), kb = Number(b.kindSlug !== d.kindSlug)
+      return ka - kb || photoIndex(a.photoId) - photoIndex(b.photoId) || a.rank - b.rank
+    })
+  const maybe = d.maybeSame.map((id) => sameOptions.find((x) => x.id === id)).filter((x): x is PhotoDetection => Boolean(x))
+
   // Plaats: buiten het kader van het product, zodat dat zichtbaar blijft —
   // erboven, eronder, rechts of links, wat het eerst past.
   const { left, top } = placeOutside({
@@ -487,7 +611,16 @@ function ReviewCard({ d, photo, size, rect, busy, siblings, photos, admin, flash
 
   // color: tint en hover; dark: aan (gekozen, of net ingedrukt).
   const buttons: Array<{ key: CardAction | "link"; label: string; color: string; dark: string; active: boolean; disabled: boolean; onClick: () => void; icon: React.ReactNode }> = [
-    { key: "remove", label: d.reviewStatus === "hidden" ? (d.matchNote?.startsWith("auto-hidden") ? "Automatisch verborgen · terugzetten" : "Verborgen · terugzetten") : "Verwijderen", color: "#6b6b68", dark: "#3d3d3b", active: flash === "remove" || (!flash && d.reviewStatus === "hidden"), disabled: busy, onClick: onRemove, icon: <Trash2 size={16} /> },
+    {
+      key: "remove",
+      label: d.reviewStatus === "hidden"
+        ? (d.matchNote?.startsWith("auto-hidden") ? "Automatisch verborgen · terugzetten"
+          : `Verborgen${admin && d.hiddenReason ? ` (${HIDE_REASON_OPTIONS.find((r) => r.key === d.hiddenReason)?.label.toLowerCase() ?? d.hiddenReason})` : ""} · terugzetten`)
+        : "Verwijderen",
+      color: "#6b6b68", dark: "#3d3d3b", active: flash === "remove" || askingReason || (!flash && d.reviewStatus === "hidden"), disabled: busy,
+      // Geen event doorgeven: zonder argument vraagt het (bij een admin) eerst de reden.
+      onClick: () => onRemove(), icon: <Trash2 size={16} />,
+    },
     { key: "link", label: "Ander product koppelen", color: "#2f6690", dark: "#1f4766", active: false, disabled: busy, onClick: () => setLinking(true), icon: <ArrowLeftRight size={16} /> },
     { key: "reject", label: d.reviewStatus === "rejected" ? "Klopt niet · nog eens: terug" : `Klopt niet${groupLabel}`, color: "#c0392b", dark: "#9b2a1f", active: flash === "reject" || (!flash && d.reviewStatus === "rejected"), disabled: busy, onClick: onReject, icon: <X size={18} /> },
     { key: "approve", label: d.reviewStatus === "approved" || d.reviewStatus === "missing" ? "Klopt · nog eens: terug" : shown || rec ? `Klopt${groupLabel}` : "Kies eerst een product", color: "#2e7d4f", dark: "#1b5432", active: flash === "approve" || (!flash && (d.reviewStatus === "approved" || d.reviewStatus === "missing")), disabled: busy || (!shown && !rec && d.reviewStatus !== "approved" && d.reviewStatus !== "missing"), onClick: onApprove, icon: <Check size={18} /> },
@@ -545,34 +678,97 @@ function ReviewCard({ d, photo, size, rect, busy, siblings, photos, admin, flash
         {/* Hetzelfde product op andere foto's: deze stip en de andere als
             kleine uitsneden. Bij hover over klopt / klopt niet krijgen de
             uitsneden waar het oordeel ook voor geldt een rand in die kleur. */}
-        {siblings.length > 0 && (
-          <div style={{ display: "flex", gap: 4, padding: "0 12px 10px", flexWrap: "wrap" }}>
+        {/* Daarachter, met een stippellijn: misschien hetzelfde product (lijkt
+            er redelijk op) — één klik koppelt. De laatste tegel ("…") opent
+            alle stippen van het project om er zelf een te kiezen. */}
+        {!pickingSame && (siblings.length > 0 || maybe.length > 0 || sameOptions.length > 0) && (
+          // Even breed als de knoppen eronder: vier kolommen, dezelfde rand.
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, padding: "0 8px 10px" }}>
             {/* Vaste volgorde (zoals de foto's in het project), zodat een
                 uitsnede op zijn plek blijft als je erheen springt. */}
-            {[d, ...siblings].sort((a, b) => photos.findIndex((p) => p.id === a.photoId) - photos.findIndex((p) => p.id === b.photoId) || a.rank - b.rank).map((x) => {
-              const p = photos.find((ph) => ph.id === x.photoId)
+            {siblings.length > 0 && [d, ...siblings].sort((a, b) => photoIndex(a.photoId) - photoIndex(b.photoId) || a.rank - b.rank).map((x) => {
               const covered = x.id === d.id || !x.reviewStatus
               const ring = hover === "approve" || hover === "reject"
                 ? (covered && !(hover === "approve" && !shown) ? buttons.find((b) => b.key === hover)!.color : null)
                 : x.id === d.id ? INK : null
               return (
-                <button key={x.id} type="button" onClick={() => x.id !== d.id && onSelect(x)}
-                  aria-label={x.id === d.id ? "Deze foto" : `Naar deze foto (${STATE_STYLE[detectionState(x)].label})`}
-                  title={x.id === d.id ? "Deze foto" : STATE_STYLE[detectionState(x)].label}
-                  style={{ position: "relative", width: 32, height: 32, padding: 0, border: "none", borderRadius: 3, background: "none", cursor: x.id === d.id ? "default" : "pointer", outline: ring ? `2px solid ${ring}` : "none", outlineOffset: 1 }}>
-                  <span style={{ display: "block", width: 32, height: 32, borderRadius: 3, overflow: "hidden" }}>
-                    {p && <ThumbCrop photo={p} box={x.box} />}
-                  </span>
-                  <span style={{ position: "absolute", right: -3, top: -3, width: 9, height: 9, borderRadius: "50%", border: "1.5px solid #fff", background: STATE_STYLE[detectionState(x)].color }} />
-                </button>
+                <SameTile key={x.id} x={x} photos={photos} ring={ring} dot
+                  label={x.id === d.id ? "Deze foto" : `Naar deze foto (${STATE_STYLE[detectionState(x)].label})`}
+                  cursor={x.id === d.id ? "default" : "pointer"}
+                  onClick={() => x.id !== d.id && onSelect(x)}
+                  onHover={setPreview}
+                  // Zelf gekoppeld: een kruisje om los te koppelen.
+                  extra={x.linked && preview?.id === x.id && !busy ? (
+                    <button type="button" onClick={() => onUnlinkSame(x)} aria-label="Los koppelen" title="Los koppelen: niet hetzelfde product"
+                      style={{ position: "absolute", left: -4, bottom: -4, width: 18, height: 18, borderRadius: "50%", border: "1.5px solid #fff", background: INK, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, cursor: "pointer" }}>
+                      <X size={10} strokeWidth={3} />
+                    </button>
+                  ) : null}
+                />
               )
             })}
+            {/* Misschien hetzelfde: met een stippellijn; bij hover + over het beeld. */}
+            {maybe.map((x) => (
+              <SameTile key={x.id} x={x} photos={photos} dashed overlay="add" disabled={busy}
+                label={`Koppelen: hetzelfde product als op foto ${photoIndex(x.photoId) + 1}`}
+                onClick={() => onLinkSame(x)} onHover={setPreview} />
+            ))}
+            {sameOptions.length > 0 && (
+              <button type="button" disabled={busy} onClick={() => setPickingSame(true)}
+                aria-label="Zelfde product als…" title="Zelfde product als… (een stip op een andere foto)"
+                style={{ aspectRatio: "1", width: "100%", padding: 0, border: `1px solid ${LINE}`, borderRadius: 4, background: "#fff", color: MUTED, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Link2 size={18} />
+              </button>
+            )}
+          </div>
+        )}
+        {pickingSame && (
+          <div style={{ padding: "0 8px 10px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "0 0 6px 4px" }}>
+              <span style={{ fontSize: 12, color: MUTED }}>Zelfde product als…</span>
+              <button type="button" onClick={() => setPickingSame(false)} aria-label="Annuleren" style={{ background: "none", border: "none", padding: 2, cursor: "pointer", color: MUTED, display: "flex" }}>
+                <X size={14} />
+              </button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, maxHeight: 186, overflowY: "auto", paddingTop: 3, paddingRight: 3 }}>
+              {sameOptions.map((x) => (
+                <SameTile key={x.id} x={x} photos={photos} dot overlay="add" disabled={busy}
+                  label={`Koppelen aan ${x.kindName ?? x.label} (foto ${photoIndex(x.photoId) + 1})`}
+                  onClick={() => { setPickingSame(false); setPreview(null); onLinkSame(x) }} onHover={setPreview} />
+              ))}
+            </div>
           </div>
         )}
         {showLinker && (
           <LinkPicker d={d} busy={busy} admin={admin} brand={linkBrand} setBrand={setLinkBrand} onLink={onLink} onCancel={needsLink ? null : () => { setLinking(false); setLinkBrand(null) }} />
         )}
-        <div style={{ display: "flex", gap: 6, padding: "0 8px 8px" }}>
+        {/* Waarom weg? (alleen admins): één klik verwijdert met die reden. Zo
+            is te tellen wat de herkenning fout doet (migratie 348). */}
+        {askingReason && (
+          <div style={{ padding: "0 8px 8px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "0 4px 6px" }}>
+              <span style={{ fontSize: 12, color: MUTED }}>Waarom verwijderen?</span>
+              <button type="button" onClick={onCancelReason} aria-label="Annuleren" style={{ background: "none", border: "none", padding: 2, cursor: "pointer", color: MUTED, display: "flex" }}>
+                <X size={14} />
+              </button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              {HIDE_REASON_OPTIONS.map((r, i) => (
+                <button key={r.key} type="button" disabled={busy} onClick={() => onRemove(r.key)} title={`${r.hint} (${i + 1})`}
+                  style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 34, padding: "6px 8px", borderRadius: 4, border: `1px solid ${LINE}`, background: "#fff", color: INK, fontSize: 12, lineHeight: 1.2, textAlign: "left", cursor: "pointer" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = SOFT }} onMouseLeave={(e) => { e.currentTarget.style.background = "#fff" }}>
+                  <span aria-hidden style={{ fontSize: 10, color: "#a1a1a0", fontVariantNumeric: "tabular-nums", width: 8 }}>{i + 1}</span>
+                  {r.label}
+                </button>
+              ))}
+            </div>
+            <button type="button" disabled={busy} onClick={() => onRemove(null)}
+              style={{ width: "100%", marginTop: 6, height: 30, border: "none", background: "none", color: MUTED, fontSize: 12, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3 }}>
+              Verwijderen zonder reden
+            </button>
+          </div>
+        )}
+        {!askingReason && <div style={{ display: "flex", gap: 6, padding: "0 8px 8px" }}>
           {visibleButtons.map((b) => (
             <button key={b.key} type="button" aria-label={b.label} aria-pressed={b.active} onClick={b.onClick} disabled={b.disabled}
               onMouseEnter={() => setHover(b.key)} onMouseLeave={() => setHover((h) => (h === b.key ? null : h))}
@@ -586,8 +782,26 @@ function ReviewCard({ d, photo, size, rect, busy, siblings, photos, admin, flash
               {b.icon}
             </button>
           ))}
-        </div>
+        </div>}
       </div>
+      {/* Uitsnede bij hover: groter, met naam en categorie, net onder de kaart. */}
+      {preview && !hovered && (() => {
+        const p = photos.find((ph) => ph.id === preview.photoId)
+        const c = shownCandidate(preview)
+        const name = c ? titleOf(c) : preview.recognized?.product ?? preview.recognized?.brand ?? preview.kindName ?? preview.label
+        const sub = [c && c.brandName !== name ? c.brandName : null, preview.kindName, `foto ${photoIndex(preview.photoId) + 1}`].filter(Boolean).join(" · ")
+        return (
+          <div role="tooltip" className="photo-dot-card" style={{ position: "absolute", top: "100%", marginTop: 6, left: 0, width: CARD_W, pointerEvents: "none", color: INK }}>
+            <div style={{ width: "100%", height: 150, background: SOFT, overflow: "hidden" }}>
+              {p && <Crop key={preview.id} src={p.url} size={p.width && p.height ? { w: p.width, h: p.height } : null} box={preview.box} aspect={CARD_W / 150} zoom />}
+            </div>
+            <div style={{ padding: "8px 12px 10px" }}>
+              <div style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
+              <div style={{ fontSize: 12, fontWeight: 300, color: MUTED, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sub}</div>
+            </div>
+          </div>
+        )
+      })()}
       {/* Naam van de knop bij hover, net onder de kaart (de kaart zelf knipt af). */}
       {hovered && (
         <div role="tooltip" style={{ position: "absolute", top: "100%", marginTop: 6, left: 0, right: 0, display: "flex", justifyContent: "center", pointerEvents: "none" }}>
@@ -770,6 +984,52 @@ function CardLink({ href, children }: { href: string | null; children: React.Rea
   )
 }
 
+/**
+ * Een uitsnede in de rij "hetzelfde product" van de kaart: vierkant, even
+ * breed als de knoppen eronder. `overlay="add"`: bij hover een + over het
+ * beeld (zoals bij merk toevoegen). `dot`: de stand van die stip rechtsboven.
+ */
+function SameTile({ x, photos, label, onClick, onHover, ring = null, dot = false, dashed = false, overlay, disabled = false, cursor = "pointer", extra = null }: {
+  x: PhotoDetection
+  photos: Photo[]
+  label: string
+  onClick: () => void
+  onHover: (x: PhotoDetection | null) => void
+  ring?: string | null
+  dot?: boolean
+  dashed?: boolean
+  overlay?: "add"
+  disabled?: boolean
+  cursor?: string
+  extra?: React.ReactNode
+}) {
+  const [over, setOver] = useState(false)
+  const p = photos.find((ph) => ph.id === x.photoId)
+  return (
+    <span style={{ position: "relative", display: "block" }}
+      onMouseEnter={() => { setOver(true); onHover(x) }}
+      onMouseLeave={() => { setOver(false); onHover(null) }}>
+      <button type="button" onClick={onClick} disabled={disabled} aria-label={label}
+        style={{
+          position: "relative", display: "block", width: "100%", aspectRatio: "1", padding: 0, borderRadius: 4, background: "none", cursor,
+          border: dashed ? `1px dashed #b4b4b0` : "none",
+          outline: ring ? `2px solid ${ring}` : "none", outlineOffset: 1,
+        }}>
+        <span style={{ position: "absolute", inset: dashed ? 2 : 0, borderRadius: dashed ? 2 : 4, overflow: "hidden" }}>
+          {p && <ThumbCrop photo={p} box={x.box} />}
+          {overlay === "add" && (
+            <span aria-hidden style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(1, 109, 117, 0.82)", color: "#fff", opacity: over && !disabled ? 1 : 0, transition: "opacity 0.15s ease" }}>
+              <Plus size={18} />
+            </span>
+          )}
+        </span>
+        {dot && <span style={{ position: "absolute", right: -3, top: -3, width: 10, height: 10, borderRadius: "50%", border: "1.5px solid #fff", background: STATE_STYLE[detectionState(x)].color }} />}
+      </button>
+      {extra}
+    </span>
+  )
+}
+
 /** Een kleine uitsnede uit een (andere) foto; de maat zelf bepalen als die niet bekend is. */
 function ThumbCrop({ photo, box }: { photo: Photo; box: Box }) {
   const [size, setSize] = useState<Size | null>(photo.width && photo.height ? { w: photo.width, h: photo.height } : null)
@@ -877,4 +1137,11 @@ export function CatalogSearch({ busy, onPick }: { busy: boolean; onPick: (hit: C
 }
 
 const plainBtn: React.CSSProperties = { background: "none", border: "none", color: "#e8e8e6", cursor: "pointer", fontSize: 13, padding: 0 }
+/** Pill in de bovenbalk; aan = licht gevuld. */
+const pill = (active: boolean): React.CSSProperties => ({
+  height: 30, padding: "0 14px", borderRadius: 999, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap",
+  border: `1px solid ${active ? "#e8e8e6" : "#3a3a38"}`,
+  background: active ? "#e8e8e6" : "transparent",
+  color: active ? "#151514" : "#c9c9c5",
+})
 const roundBtn: React.CSSProperties = { width: 40, height: 40, borderRadius: "50%", border: "1px solid #3a3a38", background: "transparent", color: "#e8e8e6", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }

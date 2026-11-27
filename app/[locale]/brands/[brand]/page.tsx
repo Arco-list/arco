@@ -6,7 +6,7 @@ import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { Link } from "@/i18n/navigation"
 import { requireProductsAdmin } from "@/lib/products-gate"
-import { categoryLabel, categoryTree, collectionKindsLabel, getBrandDealers, getBrandLocations, getBrandProjects, getCatalogBrands, getCatalogCategories, getCatalogCollections } from "@/lib/products/catalog"
+import { activeCategories, categoryLabel, categoryTree, collectionKindsLabel, getBrandDealers, getBrandLocations, getBrandProjects, getCatalogBrands, getCatalogCategories, getCatalogCollections } from "@/lib/products/catalog"
 import { ProfessionalLocations } from "@/components/professional/professional-locations"
 import { BrandSubNav } from "@/components/brand/brand-sub-nav"
 import { CollectionGrid } from "@/components/catalog/collection-grid"
@@ -36,7 +36,8 @@ export default async function BrandPage({ params }: { params: Params }) {
   const [brands, categories, allCollections] = await Promise.all([getCatalogBrands(), getCatalogCategories(), getCatalogCollections()])
   const brand = brands.find((b) => b.slug === slug)
   if (!brand) notFound()
-  const tree = categoryTree(categories)
+  // Alleen actieve categorieën: geparkeerde (migratie 351) niet als label of link.
+  const tree = categoryTree(activeCategories(categories))
   // Eerst collecties met een hoofdbeeld, dan op aantal projecten, dan op naam: bij een ingeklapt raster bepaalt dit wat de bezoeker als eerste ziet.
   const collections = allCollections.filter((s) => s.brand.id === brand.id).sort((a, b) => Number(Boolean(b.heroImageUrl)) - Number(Boolean(a.heroImageUrl)) || b.projectCount - a.projectCount || a.name.localeCompare(b.name))
   const [projects, dealers, locations] = await Promise.all([getBrandProjects(brand.id, { includeInReview: true }), getBrandDealers(brand.id, locale), getBrandLocations(brand.id)])

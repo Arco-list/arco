@@ -47,12 +47,15 @@ export default async function CategoriesPage() {
   }))
 
   // Fetch product categories (separate table)
-  const [{ data: productCategoriesData }, { data: brandCategoryRows }, { data: collectionRows }, { data: collectionKindRows }, { data: productShotRows }] = await Promise.all([
+  const [{ data: productCategoriesData }, { data: brandCategoryRows }, { data: collectionRows }, { data: collectionKindRows }, { data: productShotRows }, productCategoryRows] = await Promise.all([
     (serviceSupabase as any).from("product_categories").select("id, slug, name, name_nl, parent_id, order_index, is_active, image_url").order("order_index"),
     selectAll(() => (serviceSupabase as any).from("brand_categories").select("brand_id, category_id").order("brand_id").order("category_id")),
     (serviceSupabase as any).from("product_collections").select("id, category_id"),
     (serviceSupabase as any).from("product_collection_kinds").select("collection_id, category_id"),
     (serviceSupabase as any).from("product_collection_photos").select("collection_id, url, order_index").eq("kind", "product").order("order_index"),
+    // De soort van elk product: collecties hangen aan subgroepen (migratie 351),
+    // een soort als Hoekbanken telt via de producten.
+    selectAll(() => (serviceSupabase as any).from("products").select("id, collection_id, category_id").not("collection_id", "is", null).not("category_id", "is", null).order("id")),
   ])
   // Voorbeeld van de automatische schijf op /products: een productfoto uit
   // een collectie in de groep (de publieke pagina kiest de meest toegepaste).
@@ -79,6 +82,7 @@ export default async function CategoriesPage() {
   }
   for (const r of (collectionRows ?? []) as Array<{ id: string; category_id: string | null }>) addCollection(r.category_id, r.id)
   for (const r of (collectionKindRows ?? []) as Array<{ collection_id: string; category_id: string }>) addCollection(r.category_id, r.collection_id)
+  for (const r of (productCategoryRows?.data ?? []) as Array<{ collection_id: string; category_id: string }>) addCollection(r.category_id, r.collection_id)
 
   const productCategories = ((productCategoriesData ?? []) as any[]).map((row: any) => ({
     id: row.id,

@@ -4,11 +4,16 @@ import { useState } from "react"
 import { useLocale } from "next-intl"
 
 import type { ProfessionalBrand } from "@/lib/professionals/types"
-import { BrandDisc } from "@/components/brand/brand-disc"
-import { BRAND_GRID_GAP, BrandRows } from "@/components/brand/brand-rows"
+import { QuickRow } from "@/components/quick-row"
+import { BrandCard } from "@/components/brand/brand-card"
 import { BrandCategoryPills, useBrandCategoryPills, type BrandCategoryOption } from "@/components/brand/brand-category-pills"
 
-/** De merktegels op de bedrijfspagina, met filterpills per hoofdcategorie. */
+/**
+ * De merken op de bedrijfspagina: een carrousel van staande merkkaarten,
+ * zoals op /products (beeld van een collectie, logo linksboven), met
+ * filterpills per hoofdcategorie. Nog zonder link naar de merkpagina: de
+ * productlaag is admin-only.
+ */
 export function ProfessionalBrandsGrid({ brands, categories }: { brands: ProfessionalBrand[]; categories: BrandCategoryOption[] }) {
   const locale = useLocale()
   const [category, setCategory] = useState<string | null>(null)
@@ -17,25 +22,13 @@ export function ProfessionalBrandsGrid({ brands, categories }: { brands: Profess
   return (
     <>
       <BrandCategoryPills pills={pills} total={brands.length} current={current} onChange={setCategory} locale={locale} showCounts={false} />
-      {/* Disc tiles zoals op /admin/design: schijf van 100px op het grijs,
-          logo-fit, naam eronder in .quick-tile-label. */}
-      <BrandRows
-        items={visible}
-        resetKey={current}
-        locale={locale}
-        render={(rows) => (
-          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexWrap: "wrap", gap: BRAND_GRID_GAP }}>
-            {rows.map((b) => (
-              <li key={b.id} className="credit-card service-quick-card quick-tile quick-tile--static">
-                <div className="credit-icon">
-                  <BrandDisc name={b.name} logoUrl={b.logoUrl} />
-                </div>
-                <h3 className="quick-tile-label">{b.name}</h3>
-              </li>
-            ))}
-          </ul>
-        )}
-      />
+      {/* Pijlen op het midden van het beeld: de kaart is 2 : 3, dus op
+          driekwart van de kaartbreedte. Andere pill: de rij begint opnieuw. */}
+      <QuickRow key={current ?? "all"} minTile={{ desktop: 220, mobile: 160 }} gap={16} fill arrowTop="calc(var(--quick-tile-w, 220px) * 0.75)">
+        {visible.map((b) => (
+          <BrandCard key={b.id} name={b.name} logoUrl={b.logoUrl} imageUrl={b.imageUrl ?? null} />
+        ))}
+      </QuickRow>
     </>
   )
 }

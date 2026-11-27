@@ -42,10 +42,8 @@ export type AdminBrandRow = {
   is_curated: boolean
   /** Aantal collection (product_collections). */
   collection_count: number
-  /** Aantal projecten waarin het merk is getagd (project_brands, distinct). */
+  /** In hoeveel projecten een product van het merk op een foto getagd is (distinct). */
   project_count: number
-  /** Waarvan met een aangewezen foto — de fijne koppeling. */
-  pinned_count: number
   /** Naam van de eigenaar als het merk geclaimd is. */
   owner_name: string | null
   /** Laatste taak van de collectiepijplijn (migratie 325), voor de voortgang in de kolom. */
@@ -57,6 +55,7 @@ export type AdminBrandRow = {
 }
 
 export type AdminBrandCategory = { id: string; name: string; parentId: string | null; orderIndex: number }
+
 
 export default async function AdminBrandsPage() {
   const supabase = createServiceRoleSupabaseClient() as any
@@ -76,9 +75,11 @@ export default async function AdminBrandsPage() {
     supabase.from("product_categories").select("id, name, parent_id, order_index"),
   ])
   // Collectiepijplijn: de laatste taak per merk en wat er nog te kiezen is.
-  const [{ data: jobRows }, { data: candidateRows }] = await Promise.all([
+  const [{ data: jobRows }, { data: candidateRows }, { data: photoTags }] = await Promise.all([
     selectAll(() => supabase.from("brand_collection_jobs").select("brand_id, kind, stage, progress_done, progress_total, error, created_at").order("created_at", { ascending: false }).order("id")),
     selectAll(() => supabase.from("brand_collection_candidates").select("brand_id").eq("status", "found").order("brand_id").order("id")),
+    // Merkstippen op projectfoto's, met het project van de foto.
+    selectAll(() => supabase.from("project_photo_brand_tags").select("brand_id, photo:project_photos!inner(project_id)").order("id")),
   ])
   const jobByBrand = new Map<string, AdminBrandRow["collection_job"]>()
   for (const j of (jobRows ?? []) as Array<{ brand_id: string; kind: "inventory" | "enrich"; stage: string; progress_done: number; progress_total: number; error: string | null }>) {
@@ -103,23 +104,19 @@ export default async function AdminBrandsPage() {
   for (const f of (collections ?? []) as Array<{ brand_id: string }>) {
     collectionByBrand.set(f.brand_id, (collectionByBrand.get(f.brand_id) ?? 0) + 1)
   }
+  // Projects: in hoeveel projecten een product van het merk op een foto
+  // getagd is — een merk op een foto aangewezen (project_brands.photo_id),
+  // een merkstip (project_photo_brand_tags) of een goedgekeurde stip van de
+  // productherkenning (project_detection_links). Een vermelding van het merk
+  // bij het project zonder foto telt niet.
   const projectsByBrand = new Map<string, Set<string>>()
-  const pinnedByBrand = new Map<string, Set<string>>()
-  for (const l of (links ?? []) as Array<{ brand_id: string; project_id: string; photo_id: string | null }>) {
-    const set = projectsByBrand.get(l.brand_id) ?? new Set<string>()
-    set.add(l.project_id)
-    projectsByBrand.set(l.brand_id, set)
-    if (l.photo_id) {
-      const p = pinnedByBrand.get(l.brand_id) ?? new Set<string>()
-      p.add(l.project_id)
-      pinnedByBrand.set(l.brand_id, p)
-    }
+  const addProject = (brandId: string, projectId: string | null | undefined) => {
+    if (!projectId) return
+    projectsByBrand.set(brandId, (projectsByBrand.get(brandId) ?? new Set<string>()).add(projectId))
   }
-  // Goedgekeurde stippen: een project met dit merk, op een foto aangewezen.
-  for (const l of (detLinks ?? []) as Array<{ brand_id: string; project_id: string }>) {
-    projectsByBrand.set(l.brand_id, (projectsByBrand.get(l.brand_id) ?? new Set<string>()).add(l.project_id))
-    pinnedByBrand.set(l.brand_id, (pinnedByBrand.get(l.brand_id) ?? new Set<string>()).add(l.project_id))
-  }
+  for (const l of (links ?? []) as Array<{ brand_id: string; project_id: string; photo_id: string | null }>) if (l.photo_id) addProject(l.brand_id, l.project_id)
+  for (const t of (photoTags ?? []) as Array<{ brand_id: string; photo: { project_id: string } | null }>) addProject(t.brand_id, t.photo?.project_id)
+  for (const l of (detLinks ?? []) as Array<{ brand_id: string; project_id: string }>) addProject(l.brand_id, l.project_id)
 
   // Eigenaarnaam voor geclaimde merken — één vraag voor alle rijen.
   const ownerIds = Array.from(new Set(((brands ?? []) as Array<{ owner_user_id: string | null }>).map((b) => b.owner_user_id).filter((id): id is string => Boolean(id))))
@@ -150,7 +147,6 @@ export default async function AdminBrandsPage() {
     is_curated: b.is_curated !== false,
     collection_count: collectionByBrand.get(b.id) ?? 0,
     project_count: projectsByBrand.get(b.id)?.size ?? 0,
-    pinned_count: pinnedByBrand.get(b.id)?.size ?? 0,
     owner_name: b.owner_user_id ? (ownerName.get(b.owner_user_id) ?? "—") : null,
     collection_job: jobByBrand.get(b.id) ?? null,
     candidates_found: foundByBrand.get(b.id) ?? 0,

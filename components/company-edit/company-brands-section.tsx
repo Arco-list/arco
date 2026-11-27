@@ -101,7 +101,9 @@ export function CompanyBrandsSection({ companyId, brands: initial, options, filt
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [category, setCategory] = useState<string | null>(null)
-  const { pills, current, visible } = useBrandCategoryPills(brands, filterCategories, category)
+  // Op alfabet, ook net toegevoegde merken (die staan dan meteen op hun plek).
+  const sorted = useMemo(() => [...brands].sort((a, b) => a.name.localeCompare(b.name, locale, { sensitivity: "base" })), [brands, locale])
+  const { pills, current, visible } = useBrandCategoryPills(sorted, filterCategories, category)
 
   const have = useMemo(() => new Set(brands.map((b) => b.id)), [brands])
 

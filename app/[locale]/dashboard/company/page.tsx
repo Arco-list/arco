@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import { categoryLevels } from "@/lib/products/collection-subgroups"
 import { selectAll } from "@/lib/supabase/select-all"
 import { getTranslations } from "next-intl/server"
 
@@ -411,10 +412,11 @@ export default async function CompanySettingsPage({
       .eq("company_id", company.id)
       .order("position")
       .order("created_at"),
-    selectAll(() => sr297.from("brands").select("id, slug, name, logo_url").neq("status", "deactivated").order("name").order("id")),
+    // Niet uitgezet en niet alleen voorgesteld (migratie 347).
+    selectAll(() => sr297.from("brands").select("id, slug, name, logo_url").not("status", "in", "(deactivated,suggested,passed)").order("name").order("id")),
     sr297.from("locations").select("*").eq("company_id", company.id).order("position").order("created_at"),
     selectAll(() => sr297.from("brand_categories").select("brand_id, category_id").order("brand_id").order("category_id")),
-    sr297.from("product_categories").select("id, parent_id, name, name_nl, order_index"),
+    sr297.from("product_categories").select("id, slug, parent_id, name, name_nl, order_index, is_active"),
   ])
   // Filterpills in de merkkiezer: de hoofdcategorie (Verlichting, Meubels,
   // Buiten…) van elke categorie van een merk.
@@ -425,8 +427,11 @@ export default async function CompanySettingsPage({
     for (let i = 0; cur?.parent_id && i < 6; i++) cur = catById.get(cur.parent_id)
     return cur?.id ?? id
   }
+  // Geparkeerde categorieën (migratie 351) geven geen pill.
+  const catLevels = categoryLevels(productCats as any[])
   const mainsByBrand = new Map<string, Set<string>>()
   for (const r of (brandCategoryRows ?? []) as Array<{ brand_id: string; category_id: string }>) {
+    if (!catLevels.isLive(r.category_id)) continue
     const set = mainsByBrand.get(r.brand_id) ?? new Set<string>()
     set.add(rootOf(r.category_id))
     mainsByBrand.set(r.brand_id, set)

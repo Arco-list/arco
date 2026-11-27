@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { categoryLevels } from "@/lib/products/collection-subgroups"
 import { notFound } from "next/navigation"
 
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
@@ -70,9 +71,11 @@ export default async function AdminCollectionDetailPage({ params }: { params: Pa
   const kindIds = ((kindRows ?? []) as Array<{ category_id: string }>).map((k) => k.category_id)
   const { data: categories } = await supabase
     .from("product_categories")
-    .select("id, slug, name, name_nl, parent_id, order_index")
+    .select("id, slug, name, name_nl, parent_id, order_index, is_active")
     .order("order_index")
-  const categoryRows: CollectionEditCategory[] = ((categories ?? []) as any[]).map((c) => ({
+  // Alleen actieve categorieën (geparkeerd = ook alles eronder weg, migratie 351).
+  const levels = categoryLevels((categories ?? []) as any[])
+  const categoryRows: CollectionEditCategory[] = ((categories ?? []) as any[]).filter((c) => levels.isLive(c.id)).map((c) => ({
     id: c.id, slug: c.slug, name: c.name, nameNl: c.name_nl ?? null, parentId: c.parent_id ?? null, orderIndex: c.order_index ?? 0,
   }))
 

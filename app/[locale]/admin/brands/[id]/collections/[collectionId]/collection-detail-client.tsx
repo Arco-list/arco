@@ -8,6 +8,11 @@ import { ExternalLink, ImageIcon, Plus, RefreshCw, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { handlePlainTextPaste, handlePlainTextDrop } from "@/lib/plain-text-paste"
+import { downscaleForUpload } from "@/lib/image-downscale"
+
+// Een server action neemt standaard maar 1 MB aan: elke foto eerst in de
+// browser verkleinen (zoals de showroomfoto) en per foto versturen.
+const UPLOAD_LIMIT = { targetBytes: 900 * 1024, maxEdge: 2000 }
 import {
   createProduct,
   deleteProduct,
@@ -141,13 +146,14 @@ const PHOTO_GRID_CSS = `
 
 type SectionDef = { id: string; label: string }
 
-function CollectionEditSubNav({ brand, collectionSlug, sections, onFetch, fetching }: {
+function CollectionEditSubNav({ brand, collectionSlug, sections, onFetch, fetching, fetchNeedsUrl = false }: {
   brand: CollectionEditBrand
   collectionSlug: string
   sections: SectionDef[]
-  /** Foto's, soorten en producten opnieuw van de pagina bij het merk; alleen als die er is. */
+  /** Foto's, soorten en producten opnieuw van de pagina bij het merk; zonder pagina eerst de URL vragen. */
   onFetch?: () => void
   fetching?: boolean
+  fetchNeedsUrl?: boolean
 }) {
   const [activeSection, setActiveSection] = useState<string | null>(null)
   const [scrollDirection, setScrollDirection] = useState<"down" | "up">("down")
@@ -211,7 +217,7 @@ function CollectionEditSubNav({ brand, collectionSlug, sections, onFetch, fetchi
               <span className="sub-nav-pill-label">Preview</span>
             </a>
             {onFetch && (
-              <button type="button" className="filter-pill" onClick={onFetch} disabled={fetching} title="Fetch photos, kinds and products from the collection's page at the brand">
+              <button type="button" className="filter-pill" onClick={onFetch} disabled={fetching} title={fetchNeedsUrl ? "Add the collection's page at the brand, then fetch photos, kinds and products from it" : "Fetch photos, kinds and products from the collection's page at the brand"}>
                 <RefreshCw size={13} className={fetching ? "animate-spin" : undefined} />
                 <span className="sub-nav-pill-label">{fetching ? "Fetching…" : "Fetch from brand"}</span>
               </button>
@@ -266,6 +272,11 @@ export function CollectionEditClient({ brand, collection, photos, applied, categ
     return rows
   }, [categories])
   const categoryName = (c: CollectionEditCategory) => c.nameNl ?? c.name
+  // Een product hangt aan een eindcategorie: de subgroep zelf als die geen
+  // soorten heeft (Hanglampen), anders haar soorten (Banken → Hoekbanken…).
+  const isLeaf = (id: string) => !categories.some((x) => x.parentId === id)
+  const collectionLeaves = selectedKinds
+    .flatMap((id) => (isLeaf(id) ? categories.filter((c) => c.id === id) : categories.filter((c) => c.parentId === id).sort((a, b) => a.orderIndex - b.orderIndex)))
   const currentCategory = categoryId ? categories.find((c) => c.id === categoryId) ?? null : null
   const kindsLabel = (selectedKinds.length > 0 ? selectedKinds.map((id) => categories.find((c) => c.id === id)) : currentCategory ? [currentCategory] : [])
     .filter((c): c is CollectionEditCategory => Boolean(c))
@@ -367,31 +378,59 @@ export function CollectionEditClient({ brand, collection, photos, applied, categ
     const file = e.target.files?.[0]
     if (coverInputRef.current) coverInputRef.current.value = ""
     if (!file) return
-    const fd = new FormData()
-    fd.append("file", file)
     setUploading(true)
-    const result = await uploadProductCollectionImage(collection.id, fd)
-    setUploading(false)
-    if ("error" in result) toast.error(result.error)
-    else { toast.success("Cover updated"); router.refresh() }
+    try {
+      const fd = new FormData()
+      fd.append("file", (await downscaleForUpload(file, UPLOAD_LIMIT)).file)
+      const result = await uploadProductCollectionImage(collection.id, fd)
+      if ("error" in result) toast.error(result.error)
+      else { toast.success("Cover updated"); router.refresh() }
+    } catch {
+      toast.error("Upload failed. Try a smaller image.")
+    } finally {
+      setUploading(false)
+    }
   }
 
-  const handleUploadPhotos = async (files: FileList | null) => {
+  const handleUploadPhotos = async (list: FileList | null) => {
+    // Eerst kopiëren: de input leegmaken leegt ook de (live) FileList.
+    const files = list ? Array.from(list) : []
     if (photoInputRef.current) photoInputRef.current.value = ""
-    if (!files || files.length === 0) return
-    const fd = new FormData()
-    for (const f of Array.from(files)) fd.append("files", f)
+    if (files.length === 0) return
     setUploading(true)
-    const result = await uploadProductCollectionPhotos(collection.id, fd)
-    setUploading(false)
-    if ("error" in result) { toast.error(result.error); return }
-    toast.success(result.photos.length === 1 ? "Photo added" : `${result.photos.length} photos added`)
-    router.refresh()
+    let added = 0
+    try {
+      for (const f of files) {
+        const fd = new FormData()
+        fd.append("files", (await downscaleForUpload(f, UPLOAD_LIMIT)).file)
+        const result = await uploadProductCollectionPhotos(collection.id, fd)
+        if ("error" in result) { toast.error(result.error); break }
+        added += result.photos.length
+      }
+    } catch {
+      toast.error("Upload failed. Try a smaller image.")
+    } finally {
+      setUploading(false)
+    }
+    if (added > 0) {
+      toast.success(added === 1 ? "Photo added" : `${added} photos added`)
+      router.refresh()
+    }
   }
 
   // De eigen pagina van de collectie bij het merk: foto's die hier nog niet
   // staan, en designer, jaar en omschrijving waar die nog leeg zijn.
   const handleFetchFromBrand = async () => {
+    // Nog geen pagina bij het merk: eerst vragen en bewaren (de collectie
+    // heeft verder geen veld voor de URL op deze pagina).
+    if (!url) {
+      const entered = window.prompt(`Page of ${collection.name} at ${brand.name}:`, brand.website ?? "https://")?.trim()
+      if (!entered) return
+      if (!/^https?:\/\/[^\s]+\.[^\s]+/i.test(entered)) { toast.error("Enter the full address of the page, starting with https://"); return }
+      const saved = await updateProductCollection(collection.id, { url: entered })
+      if ("error" in saved) { toast.error(saved.error); return }
+      setUrl(entered)
+    }
     setFetching(true)
     const result = await fetchCollectionFromBrandPage(collection.id)
     setFetching(false)
@@ -528,7 +567,7 @@ export function CollectionEditClient({ brand, collection, photos, applied, categ
   const openProductDialog = (product: CollectionEditProduct | null) => {
     setProductDialog({ product })
     setProductName(product?.name ?? "")
-    setProductCategory(product?.category_id ?? (selectedKinds.length === 1 ? selectedKinds[0] : ""))
+    setProductCategory(product?.category_id ?? (collectionLeaves.length === 1 ? collectionLeaves[0].id : ""))
     setProductUrl(product?.url ?? "")
     setProductFile(null)
     setProductPreview(null)
@@ -540,10 +579,17 @@ export function CollectionEditClient({ brand, collection, photos, applied, categ
     fd.append("name", productName)
     fd.append("category_id", productCategory)
     fd.append("url", productUrl)
-    if (productFile) fd.append("file", productFile)
     setProductBusy(true)
-    const result = productDialog.product ? await updateProduct(productDialog.product.id, fd) : await createProduct(collection.id, fd)
-    setProductBusy(false)
+    let result: Awaited<ReturnType<typeof updateProduct>> | Awaited<ReturnType<typeof createProduct>>
+    try {
+      if (productFile) fd.append("file", (await downscaleForUpload(productFile, UPLOAD_LIMIT)).file)
+      result = productDialog.product ? await updateProduct(productDialog.product.id, fd) : await createProduct(collection.id, fd)
+    } catch {
+      toast.error("Saving failed. Try a smaller image.")
+      return
+    } finally {
+      setProductBusy(false)
+    }
     if ("error" in result) { toast.error(result.error); return }
     toast.success(productDialog.product ? "Product saved" : "Product added")
     setProductDialog(null)
@@ -619,42 +665,17 @@ export function CollectionEditClient({ brand, collection, photos, applied, categ
         brand={brand}
         collectionSlug={collection.slug}
         sections={sections}
-        onFetch={url ? () => { if (!fetching && !uploading) void handleFetchFromBrand() } : undefined}
+        onFetch={() => { if (!fetching && !uploading) void handleFetchFromBrand() }}
+        fetchNeedsUrl={!url}
         fetching={fetching}
       />
 
       {/* ════════════════════ HERO ════════════════════ */}
       <div id="details">
-        {/* Het grote beeld bovenaan, zoals op de publieke pagina. "Change
-            cover" in het midden, zoals bij projecten: kiezen uit de foto's
-            van de collectie; zonder foto's een bestand uploaden. */}
-        <div style={{ position: "relative" }}>
-          {coverUrl ? (
-            <CollectionHero
-              src={coverUrl}
-              alt={heroPhoto?.alt_text ?? name}
-              style={{ marginTop: 0 }}
-              cutout={heroPhoto ? isCutoutPhoto(heroPhoto) : false}
-              focus={heroFocus}
-              onPickFocus={heroPhoto ? (f) => void handlePickFocus(heroPhoto.id, f) : undefined}
-            />
-          ) : (
-            <div className="collection-hero" style={{ marginTop: 0 }} />
-          )}
-          <button
-            type="button"
-            className="hero-cover-btn"
-            disabled={uploading}
-            onClick={() => (coverChoices.length > 0 ? setCoverPickerOpen(true) : coverInputRef.current?.click())}
-          >
-            <ImageIcon size={14} />
-            {uploading ? "Uploading…" : coverChoices.length > 0 ? "Change cover" : "Add cover"}
-          </button>
-          <input ref={coverInputRef} type="file" hidden accept="image/png,image/jpeg,image/webp" onChange={handleCoverChange} />
-          {heroPhoto && !isCutoutPhoto(heroPhoto) && (
-            <span className="hero-focus-hint">Click the image to set the focus point</span>
-          )}
-        </div>
+        {/* Het beeld (4:3) staat links naast de naam, zoals op de publieke
+            pagina; zie hieronder. "Change cover" in het midden, zoals bij
+            projecten: kiezen uit de foto's van de collectie; zonder foto's
+            een bestand uploaden. */}
 
         {coverPickerOpen && (
           <div className="popup-overlay" onClick={() => setCoverPickerOpen(false)}>
@@ -693,7 +714,41 @@ export function CollectionEditClient({ brand, collection, photos, applied, categ
           </div>
         )}
 
-        <div className="wrap" style={{ marginTop: 56, marginBottom: 60 }}>
+        <div className="wrap" style={{ marginTop: 48, marginBottom: 60 }}>
+          <div className="collection-intro">
+          {(() => {
+            const cover = (
+              <>
+                <button
+                  type="button"
+                  className="hero-cover-btn"
+                  disabled={uploading}
+                  onClick={() => (coverChoices.length > 0 ? setCoverPickerOpen(true) : coverInputRef.current?.click())}
+                >
+                  <ImageIcon size={14} />
+                  {uploading ? "Uploading…" : coverChoices.length > 0 ? "Change cover" : "Add cover"}
+                </button>
+                <input ref={coverInputRef} type="file" hidden accept="image/png,image/jpeg,image/webp" onChange={handleCoverChange} />
+                {heroPhoto && !isCutoutPhoto(heroPhoto) && (
+                  <span className="hero-focus-hint">Click the image to set the focus point</span>
+                )}
+              </>
+            )
+            return coverUrl ? (
+              <CollectionHero
+                layout="intro"
+                src={coverUrl}
+                alt={heroPhoto?.alt_text ?? name}
+                cutout={heroPhoto ? isCutoutPhoto(heroPhoto) : false}
+                focus={heroFocus}
+                onPickFocus={heroPhoto ? (f) => void handlePickFocus(heroPhoto.id, f) : undefined}
+              >
+                {cover}
+              </CollectionHero>
+            ) : (
+              <div className="collection-intro-media">{cover}</div>
+            )
+          })()}
           <section className="professional-header">
             <Link href={`/admin/brands/${brand.id}`} className="company-icon" aria-label={brand.name} style={{ display: "inline-block", textDecoration: "none" }}>
               <BrandLogo logoUrl={brand.logo_url} name={brand.name} />
@@ -723,7 +778,7 @@ export function CollectionEditClient({ brand, collection, photos, applied, categ
               style={{ display: "inline-flex", alignItems: "center", gap: 8, marginTop: 12, marginBottom: 24 }}
             >
               <p className="professional-badge service-popup-badge" style={{ margin: 0, cursor: "pointer", ...(kindsLabel ? undefined : { color: "var(--primary)" }) }}>
-                {kindsLabel || "Add kinds"}
+                {kindsLabel || "Add subgroups"}
               </p>
               <span className="ec-badge ec-badge--inline">
                 <span className="ec-ico">
@@ -737,10 +792,13 @@ export function CollectionEditClient({ brand, collection, photos, applied, categ
                 <>
                   <div style={{ position: "fixed", inset: 0, zIndex: 10 }} onClick={(e) => { e.stopPropagation(); void closeKinds() }} />
                   <div className="dd-panel" style={{ maxHeight: 320, overflowY: "auto", minWidth: 240, textAlign: "left" }} onClick={(e) => e.stopPropagation()}>
-                    {categoryRows.map(({ c, depth }) => {
+                    {/* Migratie 351: een collectie hangt aan subgroepen (Banken,
+                        Hanglampen). Hoofdgroepen als kop, soorten niet. */}
+                    {categoryRows.filter(({ depth }) => depth < 2).map(({ c, depth }) => {
+                      if (depth === 0) return <div key={c.id} className="dd-row" style={{ paddingLeft: 14, color: "#a1a1a0", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", cursor: "default" }}>{categoryName(c)}</div>
                       const sel = selectedKinds.includes(c.id)
                       return (
-                        <div key={c.id} className={`dd-row${sel ? " sel" : ""}`} style={{ paddingLeft: 14 + depth * 16 }} onClick={(e) => { e.stopPropagation(); toggleKind(c.id) }}>
+                        <div key={c.id} className={`dd-row${sel ? " sel" : ""}`} style={{ paddingLeft: 14 + (depth - 1) * 16 }} onClick={(e) => { e.stopPropagation(); toggleKind(c.id) }}>
                           <span>{categoryName(c)}</span>
                           {sel && <span className="dd-check">✓</span>}
                         </div>
@@ -768,6 +826,7 @@ export function CollectionEditClient({ brand, collection, photos, applied, categ
               </p>
             </div>
           </section>
+          </div>
 
         {/* ════════════════════ DETAILS BAR ════════════════════ */}
         <div className="edit-specs-bar" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 32, padding: "32px 0", marginTop: 0, borderTop: "1px solid #e8e8e6", borderBottom: "1px solid #e8e8e6" }}>
@@ -874,9 +933,9 @@ export function CollectionEditClient({ brand, collection, photos, applied, categ
               onChange={(e) => setProductCategory(e.target.value)}
             >
               <option value="">No category</option>
-              {selectedKinds.length > 0 && (
-                <optgroup label="Kinds of this collection">
-                  {selectedKinds.map((id) => categories.find((c) => c.id === id)).filter((c): c is CollectionEditCategory => Boolean(c)).map((c) => (
+              {collectionLeaves.length > 0 && (
+                <optgroup label="In this collection's subgroups">
+                  {collectionLeaves.map((c) => (
                     <option key={`k-${c.id}`} value={c.id}>{categoryName(c)}</option>
                   ))}
                 </optgroup>

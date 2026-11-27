@@ -10,7 +10,7 @@ import { categoryLabel, categoryTree, collectionKindsLabel, type CatalogBrand, t
 import { CollectionCard } from "@/components/catalog/catalog-cards"
 import { LayeredFilterPanel, layeredPillLabel, nextLayeredSelection, type LayeredGroup } from "@/components/filters/layered-filter"
 import { ProductImage } from "@/components/catalog/product-image"
-import { BrandCardLogo } from "@/components/brand/brand-card-logo"
+import { BrandCard } from "@/components/brand/brand-card"
 import { LogoFill } from "@/components/brand/brand-logo"
 import { DrawerSection } from "@/components/filters/drawer-section"
 import { SortLinks } from "@/components/sort-links"
@@ -166,10 +166,11 @@ export function ProductsDiscoverClient({ locale, collection, brands, categories,
     for (const r of roots) for (const id of tree.subtreeIds(r.id)) ids.add(id)
     return ids
   }, [fixedKind, selectedKinds, tree])
-  // Een collectie hoort bij een soort via haar categorie of via haar soorten
-  // (kindIds): een collectie in "Binnenverlichting" met een vloerlamp telt
-  // mee bij Vloerlampen.
-  const inIds = (s: CatalogCollection, ids: Set<string>) => (s.categoryId !== null && ids.has(s.categoryId)) || s.kindIds.some((k) => ids.has(k))
+  // Een collectie hoort bij een categorie via haar hoofdsubgroep, haar andere
+  // subgroepen (kindIds) of de soort van een van haar producten: een collectie
+  // onder Banken met een hoekbank telt mee bij Hoekbanken.
+  const inIds = (s: CatalogCollection, ids: Set<string>) =>
+    (s.categoryId !== null && ids.has(s.categoryId)) || s.kindIds.some((k) => ids.has(k)) || (s.productCategoryIds ?? []).some((k) => ids.has(k))
   const inKind = (s: CatalogCollection) => !kindIds || inIds(s, kindIds)
   const inBrand = (s: CatalogCollection) => selectedBrands.length === 0 || selectedBrands.includes(s.brand.slug)
   const byRelevance = (a: CatalogCollection, b: CatalogCollection) => b.projectCount - a.projectCount || a.name.localeCompare(b.name)
@@ -231,7 +232,8 @@ export function ProductsDiscoverClient({ locale, collection, brands, categories,
       const own = collection.filter((s) => s.brand.id === b.id).sort(byRelevance)
       return { brand: b, imageUrl: own.find((s) => s.heroImageUrl)?.heroImageUrl ?? null }
     })
-    .sort((a, b) => b.brand.projectCount - a.brand.projectCount || b.brand.collectionCount - a.brand.collectionCount || a.brand.name.localeCompare(b.brand.name))
+    // Uitgelicht (de ster in admin) eerst, dan de meest toegepaste.
+    .sort((a, b) => Number(Boolean(b.brand.isFeatured)) - Number(Boolean(a.brand.isFeatured)) || b.brand.projectCount - a.brand.projectCount || b.brand.collectionCount - a.brand.collectionCount || a.brand.name.localeCompare(b.brand.name))
   // ── Soortpagina (/products/meubels) zonder verdere keuze ───────────
   // Zelfde opbouw als /products: subgroepen als schijven (bij een
   // hoofdgroep), de merken binnen de soort als carrousel, dan de lijst.
@@ -341,20 +343,7 @@ export function ProductsDiscoverClient({ locale, collection, brands, categories,
       </div>
       <QuickRow minTile={{ desktop: 220, mobile: 160 }} gap={16} fill arrowTop="calc(var(--quick-tile-w, 220px) * 0.75)">
         {cards.slice(0, 10).map(({ brand, imageUrl }) => (
-          <Link key={brand.id} href={`/brands/${brand.slug}`} className="quick-row-item group">
-            <div className="relative w-full overflow-hidden mb-2.5" style={{ aspectRatio: "2/3", background: "var(--arco-surface)" }}>
-              {imageUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={imageUrl} alt={brand.name} className="absolute inset-0 h-full w-full object-cover transition-all duration-500 group-hover:scale-[1.04]" />
-              )}
-              {brand.logoUrl && (
-                <span className="absolute left-4 top-4">
-                  <BrandCardLogo logoUrl={brand.logoUrl} name={brand.name} />
-                </span>
-              )}
-            </div>
-            <span className="arco-card-title" style={{ paddingLeft: 2 }}>{brand.name}</span>
-          </Link>
+          <BrandCard key={brand.id} name={brand.name} logoUrl={brand.logoUrl} imageUrl={imageUrl} href={`/brands/${brand.slug}`} />
         ))}
       </QuickRow>
     </section>

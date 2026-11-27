@@ -3,11 +3,11 @@ import "server-only"
 import { unstable_cache } from "next/cache"
 
 import { getHubs, SPACE_HUB_DEFS } from "@/lib/project-hubs"
-import { getProfessionalHubs, servicePlural } from "@/lib/professional-hubs"
+import { getProfessionalHubs, proNamePluralOf, servicePlural } from "@/lib/professional-hubs"
 import { PROVINCES, cityLabel } from "@/lib/provinces"
 import { typeLabel, scopeLabel, spaceNoun } from "@/lib/type-labels"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
-import { activeCategories, categoryLabel, categoryTree, getCatalogCategories, getCatalogCollections } from "@/lib/products/catalog"
+import { activeCategories, categoryLabel, categoryTree, getCatalogCategories } from "@/lib/products/catalog"
 
 /**
  * De twee uitklapmenu's in de header, gebouwd uit dezelfde
@@ -60,11 +60,10 @@ async function buildNavMenus(locale: string): Promise<NavMenus> {
   // Service-role, niet de cookie-client: binnen unstable_cache mag
   // cookies() niet, en de hubs tellen alleen publieke rijen.
   const supabase = createServiceRoleSupabaseClient()
-  const [projectHubs, proHubs, categories, catalogCollections] = await Promise.all([
+  const [projectHubs, proHubs, categories] = await Promise.all([
     getHubs(supabase),
     getProfessionalHubs(supabase),
     getCatalogCategories(),
-    getCatalogCollections(),
   ])
 
   // ── Projecten: vier assen ─────────────────────────────────────────
@@ -118,66 +117,62 @@ async function buildNavMenus(locale: string): Promise<NavMenus> {
   // kruimelpad een "Kies plaats" draagt die álle plaatsen kent.
   const places = provinces
 
-  // ── Professionals: de vijf dienstgroepen ──────────────────────────
-  // Een groep rendert alleen als er een dienst in zit die zijn eigen hub
-  // haalt. Installaties heeft vandaag nul bedrijven en Buiten & Tuin
-  // één; een kolom met niets erin is geen navigatie. Ze verschijnen
-  // vanzelf zodra er drie bedrijven in een dienst staan.
-  const serviceHubs = proHubs.filter((h) => h.kind === "service")
-  const byGroup = new Map<string, { label: string; links: Array<NavMenuLink & { count: number }> }>()
-  for (const hub of serviceHubs) {
-    const groupSlug = hub.categorySlug
-    if (!groupSlug) continue
-    // Fotografen staan niet in dit menu: zij zijn het andere publiek
-    // (audience 'pro', /businesses/photography), niet wie een
-    // huiseigenaar hier zoekt.
-    if ((hub.serviceSlug ?? hub.slug) === "photographer") continue
-    const label = (nl ? hub.categoryNameNl : hub.categoryName) ?? hub.categoryName ?? groupSlug
-    const entry = byGroup.get(groupSlug) ?? { label, links: [] }
-    entry.links.push({
-      href: `/professionals/${hub.slug}`,
-      // Dezelfde naam als op de kaarten op home en in de hubtitels.
-      label: servicePlural(hub, locale),
-      // count blijft buiten het label: een getal in de hoofdnavigatie
-      // veroudert zodra de voorraad beweegt en de pagina zegt het zelf.
-      // Hij sorteert wel, zodra een groep moet afkappen.
-      count: hub.count,
+  // ── Professionals: alle dienstgroepen met al hun diensten ──────────
+  // De hele indeling uit de taxonomie, niet alleen de diensten met een
+  // eigen hub: wie een dakdekker zoekt, hoort te zien dat Arco die kent.
+  // Een dienst met een hub (genoeg bedrijven) linkt naar die pagina; de
+  // rest naar /professionals, gefilterd op die dienst (?services=slug,
+  // dezelfde token als het filter). Geen afkapping: alle diensten, in de
+  // volgorde van het filter, ook in een groep met meer dan acht.
+  const hubByService = new Map(proHubs.filter((h) => h.kind === "service").map((h) => [h.serviceSlug ?? h.slug, h]))
+  const { data: serviceRows } = await supabase
+    .from("categories")
+    .select("id, slug, name, name_nl, parent_id, pro_name_plural, pro_name_plural_nl, audience, is_active, sort_order")
+    .eq("is_active", true)
+  const taxonomy = (serviceRows ?? []) as Array<{ id: string; slug: string; name: string; name_nl: string | null; parent_id: string | null; pro_name_plural: string | null; pro_name_plural_nl: string | null; audience: string | null; sort_order: number | null }>
+  // Dezelfde volgorde als het filter op /professionals (professionals-
+  // filter-bar): groepen en diensten op sort_order uit de taxonomie, bij
+  // gelijke stand op de (Engelse) naam.
+  const bySortOrder = (a: { sort_order: number | null; name: string }, b: { sort_order: number | null; name: string }) =>
+    (a.sort_order ?? 99) - (b.sort_order ?? 99) || (a.name ?? "").localeCompare(b.name ?? "")
+  const groups = taxonomy.filter((c) => !c.parent_id && PRO_GROUP_ORDER.includes(c.slug)).sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99))
+  const proColumns: NavMenuColumn[] = groups
+    .map((group) => {
+      const links = taxonomy
+        // Fotografen staan niet in dit menu: zij zijn het andere publiek
+        // (audience 'pro', /businesses/photography), niet wie een
+        // huiseigenaar hier zoekt.
+        .filter((c) => c.parent_id === group.id && c.audience !== "pro")
+        .sort(bySortOrder)
+        .map((c) => {
+          const hub = hubByService.get(c.slug)
+          return {
+            href: hub ? `/professionals/${hub.slug}` : `/professionals?services=${encodeURIComponent(c.slug)}`,
+            // Dezelfde naam als op de kaarten op home en in de hubtitels.
+            label: hub ? servicePlural(hub, locale) : proNamePluralOf(c, locale),
+          }
+        })
+      // De groepskop is geen link: de groep is een indeling van het menu,
+      // geen pagina die iemand zoekt. De diensten eronder zijn de ingangen.
+      const label = (nl ? group.name_nl : null) ?? group.name
+      return links.length ? { label, links } : null
     })
-    byGroup.set(groupSlug, entry)
-  }
-  const proColumns: NavMenuColumn[] = PRO_GROUP_ORDER.filter((slug) => byGroup.has(slug)).map((slug) => {
-    const group = byGroup.get(slug)!
-    // Compleet: alfabetisch. Afgekapt: de populairste, want dan heet
-    // de kolom "Populair in …".
-    const ordered = group.links.length > COLUMN_CAP
-      ? group.links.slice().sort((a, b) => b.count - a.count)
-      : group.links.slice().sort((a, b) => a.label.localeCompare(b.label))
-    const links = ordered.map(({ href, label }) => ({ href, label }))
-    const popular = nl ? `Populair in ${group.label.toLowerCase()}` : `Popular in ${group.label.toLowerCase()}`
-    // De groepskop is geen link: de groep is een indeling van het menu,
-    // geen pagina die iemand zoekt. De diensten eronder zijn de ingangen.
-    return column(group.label, popular, links)
-  })
+    .filter((c): c is NavMenuColumn => Boolean(c))
 
-  // ── Producten: de hoofdgroepen, met al hun subgroepen eronder ───────
+  // ── Producten: de zeven hoofdgroepen, met al hun subgroepen eronder ──
   // Rijen zijn subgroepen (tweede niveau), geen merken of collecties: een
   // collectienaam zegt niets zonder merk. Alle actieve subgroepen, ook
-  // zonder collecties: het menu toont de hele indeling. De groepskop linkt
-  // wél — de groepspagina (alle verlichting) is een ingang die mensen
-  // zoeken, anders dan een dienstgroep.
+  // zonder collecties, in de volgorde van de indeling en niet afgekapt: het
+  // menu toont de hele indeling (hooguit negen per groep, migratie 351). De
+  // groepskop linkt wél — de groepspagina (alle verlichting) is een ingang
+  // die mensen zoeken, anders dan een dienstgroep.
   const tree = categoryTree(activeCategories(categories))
-  const collectionsIn = (id: string) => {
-    const ids = tree.subtreeIds(id)
-    return catalogCollections.filter((s) => (s.categoryId && ids.has(s.categoryId)) || s.kindIds.some((k) => ids.has(k))).length
-  }
   const productColumns: NavMenuColumn[] = tree.roots
-    .map((group) => {
-      const kinds = tree.children(group.id).map((k) => ({ k, n: collectionsIn(k.id) }))
-      const ordered = kinds.length > COLUMN_CAP ? kinds.slice().sort((a, b) => b.n - a.n) : kinds
-      const links = ordered.map(({ k }) => ({ href: `/products/${k.slug}`, label: categoryLabel(k, locale) }))
-      const label = categoryLabel(group, locale)
-      return column(label, nl ? `Populair in ${label.toLowerCase()}` : `Popular in ${label.toLowerCase()}`, links, `/products/${group.slug}`)
-    })
+    .map((group) => ({
+      label: categoryLabel(group, locale),
+      href: `/products/${group.slug}`,
+      links: tree.children(group.id).map((k) => ({ href: `/products/${k.slug}`, label: categoryLabel(k, locale) })),
+    }))
 
   return {
     projects: {
@@ -213,7 +208,9 @@ async function buildNavMenus(locale: string): Promise<NavMenus> {
 const TTL_MS = 5 * 60 * 1000
 const memo = new Map<string, { at: number; value: Promise<NavMenus> }>()
 
-const cachedNavMenus = unstable_cache(buildNavMenus, ["nav-menus"], { revalidate: 300, tags: ["nav-menus"] })
+// v2: het professionalsmenu toont alle diensten uit de taxonomie (niet
+// alleen die met een hub); een nieuwe sleutel zodat de oude vorm niet blijft hangen.
+const cachedNavMenus = unstable_cache(buildNavMenus, ["nav-menus-v5"], { revalidate: 300, tags: ["nav-menus"] })
 
 export function getNavMenus(locale: string): Promise<NavMenus> {
   const hit = memo.get(locale)

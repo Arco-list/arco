@@ -69,6 +69,8 @@ export type ProfessionalBrand = {
   isOfficialDealer: boolean
   /** Hoofdcategorieën (Verlichting, Meubels…), voor de filterpills. */
   categoryIds: string[]
+  /** Beeld voor de merkkaart: de hero van een collectie (uitgelicht eerst). */
+  imageUrl?: string | null
 }
 
 export type ProfessionalDetail = {

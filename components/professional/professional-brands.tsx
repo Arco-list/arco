@@ -5,7 +5,7 @@ import { ProfessionalBrandsGrid } from "@/components/professional/professional-b
 
 /**
  * "Merken" op de bedrijfspagina: de merken waarvan het bedrijf officieel
- * dealer is, als disc tiles, met filterpills per hoofdcategorie zoals de
+ * dealer is, als carrousel van merkkaarten, met filterpills per hoofdcategorie zoals de
  * Fototour. Dezelfde rijen staan op de merkpagina als "Verkooppunten"
  * (company_brands, migratie 297). Nog zonder link naar de merkpagina: de
  * productlaag is admin-only.

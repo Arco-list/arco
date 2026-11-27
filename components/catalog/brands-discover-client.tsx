@@ -109,7 +109,8 @@ export function BrandsDiscoverClient({ locale, brands, categories }: { locale: s
     const list = brands.filter((b) => inKinds(b) && inBrands(b))
     return [...list].sort(sort === "Alphabetical"
       ? (a, b) => a.name.localeCompare(b.name)
-      : (a, b) => b.projectCount - a.projectCount || b.collectionCount - a.collectionCount || a.name.localeCompare(b.name))
+      // Uitgelicht (de ster in admin) eerst, dan de meest toegepaste.
+      : (a, b) => Number(Boolean(b.isFeatured)) - Number(Boolean(a.isFeatured)) || b.projectCount - a.projectCount || b.collectionCount - a.collectionCount || a.name.localeCompare(b.name))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brands, kindIds, selectedBrands, sort])
 

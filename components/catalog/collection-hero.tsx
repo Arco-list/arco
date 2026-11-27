@@ -14,13 +14,17 @@ import { centeredFocus, focusFromClick, focusPosition, type Focus } from "@/lib/
  * `onPickFocus`: op de bewerkpagina zet een klik op het beeld het
  * focuspunt op die plek.
  */
-export function CollectionHero({ src, alt, style, cutout = false, focus, onPickFocus }: {
+export function CollectionHero({ src, alt, style, cutout = false, focus, onPickFocus, layout = "wide", children }: {
   src: string
   alt: string
   style?: React.CSSProperties
   cutout?: boolean
   focus?: { x: number; y: number } | null
   onPickFocus?: (focus: { x: number; y: number }) => void
+  /** "intro": het 4:3-beeld links naast de naam en tekst (.collection-intro). */
+  layout?: "wide" | "intro"
+  /** Over het beeld heen (bewerkpagina: "Change cover"). */
+  children?: React.ReactNode
 }) {
   // Het focuspunt in het midden van het vlak (centeredFocus). Dat hangt af
   // van de maat van de foto en van het vlak, dus pas na het laden en bij
@@ -51,8 +55,9 @@ export function CollectionHero({ src, alt, style, cutout = false, focus, onPickF
     if (f) onPickFocus(f)
   }
 
+  const Tag = layout === "intro" ? "div" : "section"
   return (
-    <section className="collection-hero" data-fit={cutout ? "contain" : "cover"} style={style}>
+    <Tag className={layout === "intro" ? "collection-intro-media" : "collection-hero"} data-fit={cutout ? "contain" : "cover"} style={style}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         ref={imgRef}
@@ -62,6 +67,7 @@ export function CollectionHero({ src, alt, style, cutout = false, focus, onPickF
         style={cutout ? undefined : { objectPosition: position, cursor: onPickFocus ? "crosshair" : undefined }}
         onClick={onPickFocus ? pick : undefined}
       />
-    </section>
+      {children}
+    </Tag>
   )
 }

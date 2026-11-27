@@ -1,5 +1,6 @@
 "use server"
 
+import { categoryLevels } from "@/lib/products/collection-subgroups"
 import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { selectAll } from "@/lib/supabase/select-all"
 import { isAdminUser } from "@/lib/auth-utils"
@@ -85,12 +86,15 @@ export async function loadProjectBrandsEditorAction(
     supabase.from("spaces").select("id, slug").order("name"),
     supabase.from("project_brands").select(LINK_SELECT).eq("project_id", projectId).order("created_at", { ascending: true }),
     selectAll(() => supabase.from("brand_categories").select("brand_id, category_id").order("position").order("brand_id").order("category_id")),
-    supabase.from("product_categories").select("id, slug, name, name_nl, parent_id, order_index").order("order_index"),
+    supabase.from("product_categories").select("id, slug, name, name_nl, parent_id, order_index, is_active").order("order_index"),
   ])
   const err = brandsRes.error ?? collectionsRes.error ?? spacesRes.error ?? linksRes.error ?? brandCatsRes.error ?? catsRes.error
   if (err) return { error: err.message }
+  // Alleen actieve categorieën (migratie 351): geparkeerde geven geen pill.
+  const catLevels = categoryLevels((catsRes.data ?? []) as any[])
   const catIdsByBrand = new Map<string, string[]>()
   for (const l of (brandCatsRes.data ?? []) as Array<{ brand_id: string; category_id: string }>) {
+    if (!catLevels.isLive(l.category_id)) continue
     catIdsByBrand.set(l.brand_id, [...(catIdsByBrand.get(l.brand_id) ?? []), l.category_id])
   }
   // Alleen categorieën waar minstens één merk in zit worden pills.

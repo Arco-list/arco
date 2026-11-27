@@ -8,6 +8,7 @@ import { descriptionTranslations, mergeTranslations, type Translations } from "@
 import { logger } from "@/lib/logger"
 import { imageSize } from "@/lib/images/image-size"
 import { syncBrandCategoriesFromCollections } from "@/lib/products/brand-categories"
+import { categoryLevels, syncCollectionSubgroups, type CategoryLevels, type CategoryRow } from "@/lib/products/collection-subgroups"
 import { fetchPage } from "@/lib/collections/fetch-page"
 import { absoluteHttpUrl, pageMainImage, slugify, storeRemoteImage, stripWww, syncCollectionCover } from "@/lib/collections/shared"
 import { regroupCandidates } from "@/lib/collections/families"
@@ -57,7 +58,7 @@ type Job = {
   firecrawl_credits: number
 }
 type Brand = { id: string; name: string; domain: string | null; website: string | null }
-type Cats = { lines: CategoryLine[]; idBySlug: Map<string, string> }
+type Cats = { lines: CategoryLine[]; idBySlug: Map<string, string>; levels: CategoryLevels }
 
 /** Pagina's verversen; buiten een Next-verzoek (script) is er niets te verversen. */
 function revalidatePath(path: string) {
@@ -73,9 +74,12 @@ async function save(sb: any, job: Job, patch: Partial<Job> & { error?: string | 
   await sb.from("brand_collection_jobs").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", job.id)
 }
 
+/** Alleen actieve categorieën (en niets onder een geparkeerde, migratie 351). */
 async function loadCategories(sb: any): Promise<Cats> {
-  const { data } = await sb.from("product_categories").select("id, slug, name, parent_id")
-  const rows = (data ?? []) as Array<{ id: string; slug: string; name: string; parent_id: string | null }>
+  const { data } = await sb.from("product_categories").select("id, slug, name, parent_id, is_active, order_index")
+  const all = (data ?? []) as Array<CategoryRow & { name: string }>
+  const levels = categoryLevels(all)
+  const rows = all.filter((r) => levels.isLive(r.id))
   const byId = new Map(rows.map((r) => [r.id, r]))
   const path = (r: { name: string; parent_id: string | null }) => {
     const parts: string[] = []
@@ -83,7 +87,7 @@ async function loadCategories(sb: any): Promise<Cats> {
     for (let i = 0; cur && i < 6; i++) { parts.unshift(cur.name); cur = cur.parent_id ? byId.get(cur.parent_id) : undefined }
     return parts.join(" › ")
   }
-  return { lines: rows.map((r) => ({ slug: r.slug, path: path(r) })), idBySlug: new Map(rows.map((r) => [r.slug, r.id])) }
+  return { lines: rows.map((r) => ({ slug: r.slug, path: path(r) })), idBySlug: new Map(rows.map((r) => [r.slug, r.id])), levels }
 }
 
 async function submitBatch(requests: BatchRequest[]): Promise<string | null> {
@@ -435,7 +439,8 @@ async function insertCandidates(sb: any, brandId: string, found: Array<{ col: Ov
     seen.add(slug)
     const url = absoluteHttpUrl(col.url, pageUrl)
     const img = absoluteHttpUrl(col.image_url, pageUrl)
-    const categoryId = col.category_slug ? cats.idBySlug.get(col.category_slug) ?? null : null
+    // Een collectie hangt aan een subgroep (niveau 2), ook als Claude een soort noemt.
+    const categoryId = col.category_slug ? cats.levels.subgroupOf(cats.idBySlug.get(col.category_slug)) : null
     const existing = candBySlug.get(slug)
     if (existing) {
       // Alleen aanvullen wat nog leeg is.
@@ -581,16 +586,16 @@ async function applyRead(sb: any, colId: string, brandId: string, data: Collecti
   if (!col.designer && data.designer) patch.designer = data.designer.trim()
   const thisYear = new Date().getFullYear()
   if (!col.launch_year && data.launch_year && data.launch_year >= 1800 && data.launch_year <= thisYear + 1) patch.launch_year = data.launch_year
-  if (!col.category_id && data.category_slug) { const id = cats.idBySlug.get(data.category_slug); if (id) patch.category_id = id }
+  if (!col.category_id && data.category_slug) { const id = cats.levels.subgroupOf(cats.idBySlug.get(data.category_slug)); if (id) patch.category_id = id }
   await sb.from("product_collections").update(patch).eq("id", colId)
 
-  // Soorten alleen als er nog geen staan: een handmatige keuze wint.
-  const kindIds = Array.from(new Set((data.kind_slugs ?? []).map((s) => cats.idBySlug.get(s)).filter((x): x is string => Boolean(x)))).slice(0, 8)
+  // Subgroepen alleen als er nog geen staan; na de producten zet
+  // syncCollectionSubgroups ze recht (handmatig gekozen subgroepen winnen).
+  const kindIds = Array.from(new Set((data.kind_slugs ?? []).map((s) => cats.levels.subgroupOf(cats.idBySlug.get(s))).filter((x): x is string => Boolean(x)))).slice(0, 8)
   if (kindIds.length > 0) {
     const { count } = await sb.from("product_collection_kinds").select("collection_id", { count: "exact", head: true }).eq("collection_id", colId)
     if (!count) await sb.from("product_collection_kinds").insert(kindIds.map((category_id, position) => ({ collection_id: colId, category_id, position })))
   }
-  await syncBrandCategoriesFromCollections(sb, brandId)
 
   // Producten: alleen nieuwe, herkend op naam en op productpagina.
   const { data: known } = await sb.from("products").select("slug, url").eq("collection_id", colId)
@@ -613,7 +618,8 @@ async function applyRead(sb: any, colId: string, brandId: string, data: Collecti
     if (stored) images++
     const { data: inserted, error } = await sb.from("products").insert({
       brand_id: brandId, collection_id: colId, slug, name, url,
-      category_id: p.kind_slug ? cats.idBySlug.get(p.kind_slug) ?? null : null,
+      // Een product hangt aan het diepste niveau: alleen een eindcategorie.
+      category_id: p.kind_slug && cats.levels.isLeaf(cats.idBySlug.get(p.kind_slug)) ? cats.idBySlug.get(p.kind_slug)! : null,
       image_url: stored ?? img, source_image_url: img, position: i,
       variants: p.variants?.trim().slice(0, 200) || null,
     }).select("id").single()
@@ -633,6 +639,9 @@ async function applyRead(sb: any, colId: string, brandId: string, data: Collecti
       await sb.from("product_photos").insert({ product_id: inserted.id, url: copy ?? src, source_url: src, position: j + 1 })
     }
   }
+
+  await syncCollectionSubgroups(sb, colId, cats.levels)
+  await syncBrandCategoriesFromCollections(sb, brandId)
 
   return Array.from(new Set((data.photos ?? []).map((u) => absoluteHttpUrl(u, base as any)).filter((u): u is string => Boolean(u)).map(upsize)))
 }

@@ -1,4 +1,5 @@
 import { spaceLabelSingular } from "@/lib/type-labels"
+import { categoryLevels } from "@/lib/products/collection-subgroups"
 import { locationFromRow, type LocationRecord } from "@/lib/locations/types"
 import "server-only"
 
@@ -971,21 +972,34 @@ export const fetchProfessionalDetail = async (slugOrId: string, options?: { allo
         logoUrl: (r.brands.logo_url as string | null) ?? null,
         isOfficialDealer: r.is_official_dealer === true,
         categoryIds: [] as string[],
+        imageUrl: null as string | null,
       }))
     // Hoofdcategorie van elke categorie van die merken, voor de pills.
     if (brands.length > 0) {
-      const [{ data: bc }, { data: pcs }] = await Promise.all([
+      const [{ data: bc }, { data: pcs }, { data: heroes }] = await Promise.all([
         sr.from("brand_categories").select("brand_id, category_id").in("brand_id", brands.map((b) => b.id)),
-        sr.from("product_categories").select("id, parent_id, name, name_nl"),
+        sr.from("product_categories").select("id, slug, parent_id, name, name_nl, order_index, is_active"),
+        // Het beeld op de merkkaart: de hero van een collectie, uitgelicht eerst.
+        sr.from("product_collections").select("brand_id, hero_image_url, is_featured, name")
+          .in("brand_id", brands.map((b) => b.id)).not("hero_image_url", "is", null)
+          .order("is_featured", { ascending: false }).order("name"),
       ])
+      const imageOf = new Map<string, string>()
+      for (const h of (heroes ?? []) as Array<{ brand_id: string; hero_image_url: string }>) {
+        if (!imageOf.has(h.brand_id)) imageOf.set(h.brand_id, h.hero_image_url)
+      }
+      brands = brands.map((b) => ({ ...b, imageUrl: imageOf.get(b.id) ?? null }))
       const catById = new Map(((pcs ?? []) as Array<{ id: string; parent_id: string | null; name: string; name_nl: string | null }>).map((c) => [c.id, c]))
       const rootOf = (id: string) => {
         let cur = catById.get(id)
         for (let i = 0; cur?.parent_id && i < 6; i++) cur = catById.get(cur.parent_id)
         return cur?.id ?? id
       }
+      // Geparkeerde categorieën (migratie 351) tellen niet mee.
+      const catLevels = categoryLevels((pcs ?? []) as any[])
       const byBrand = new Map<string, Set<string>>()
       for (const r of (bc ?? []) as Array<{ brand_id: string; category_id: string }>) {
+        if (!catLevels.isLive(r.category_id)) continue
         const set = byBrand.get(r.brand_id) ?? new Set<string>()
         set.add(rootOf(r.category_id))
         byBrand.set(r.brand_id, set)

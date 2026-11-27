@@ -5,6 +5,7 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { useLocale } from "next-intl"
 import { toast } from "sonner"
+import { Plus } from "lucide-react"
 
 import { LocationPopup } from "@/components/location-form"
 import { locationKindLabel, type LocationInput, type LocationRecord } from "@/lib/locations/types"
@@ -109,7 +110,9 @@ export function CompanyLocationsSection({ companyId, companyName, logoUrl, locat
             <h2 className="arco-section-title">{locations.length === 1 ? c.titleOne : c.title}</h2>
             <p className="arco-body-text" style={{ color: "#8c8c8a", marginTop: 6, marginBottom: 0, maxWidth: 600 }}>{c.intro}</p>
           </div>
-          <button type="button" className="btn-primary" style={{ fontSize: 13, padding: "8px 18px" }} onClick={() => setPopup({ open: true, editing: null })}>
+          {/* Zelfde knop als "+ Merk toevoegen" en "+ Project toevoegen". */}
+          <button type="button" className="btn-primary shrink-0 gap-1.5" onClick={() => setPopup({ open: true, editing: null })}>
+            <Plus size={14} />
             {c.add}
           </button>
         </div>

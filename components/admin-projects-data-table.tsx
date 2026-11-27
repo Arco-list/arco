@@ -106,7 +106,8 @@ export type AdminProjectRow = {
    * te beoordelen, wachtend op de catalogus, onbekend, en of het nog loopt.
    * null: nog niet herkend.
    */
-  products: { dots: number; linked: number; open: number; waiting: number; unknown: number; busy: boolean } | null
+  /** Productherkenning (migraties 341, 350): stippen, gekoppeld, open, en hoeveel beoordeeld. */
+  products: { dots: number; linked: number; open: number; waiting: number; unknown: number; busy: boolean; reviewed: number } | null
   isFeatured: boolean
   location: string | null
   createdAt: string | null
@@ -739,20 +740,25 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
           p.waiting ? `${p.waiting} waiting for catalogue` : null,
           p.unknown ? `${p.unknown} unknown` : null,
         ].filter(Boolean).join(" · ")
+        // Voltooid: het deel van de stippen dat beoordeeld is. Groen klaar,
+        // oranje op weg (vanaf de helft), rood net begonnen.
+        const pct = p.dots > 0 ? Math.round((p.reviewed / p.dots) * 100) : null
+        const pctColor = pct == null ? undefined : pct >= 100 ? "#2e7d4f" : pct >= 50 ? "#d98a1c" : "#c0392b"
+        // Klik: het project open met de productkiezer erbij (?products=review).
         return (
-          <div className="flex flex-col gap-0.5" title={[`${p.linked} linked of ${p.dots} dots`, detail].filter(Boolean).join(" · ")}>
+          <Link
+            href={`/dashboard/edit/${row.original.id}?products=review`}
+            className="flex flex-col gap-0.5 hover:opacity-70 transition-opacity"
+            style={{ textDecoration: "none", color: "inherit" }}
+            title={[`${p.linked} linked of ${p.dots} dots`, pct != null ? `${p.reviewed} of ${p.dots} reviewed` : null, p.open > 0 ? `${p.open} open` : null, detail, "Open the product reviewer"].filter(Boolean).join(" · ")}
+          >
             <span className="arco-table-nowrap">
               <span className="arco-table-primary">{p.linked}</span>
               <span className="arco-table-secondary"> / {p.dots}</span>
+              {pct != null && <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 500, color: pctColor, fontVariantNumeric: "tabular-nums" }}>{pct}%</span>}
             </span>
-            {p.busy ? (
-              <span className="arco-table-secondary">analysing…</span>
-            ) : p.open > 0 ? (
-              <span className="arco-table-secondary" style={{ color: "#d98a1c" }}>{p.open} open</span>
-            ) : p.dots > 0 ? (
-              <span className="arco-table-secondary">all reviewed</span>
-            ) : null}
-          </div>
+            {p.busy && <span className="arco-table-secondary">analysing…</span>}
+          </Link>
         )
       },
     },

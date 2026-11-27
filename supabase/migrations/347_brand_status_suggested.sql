@@ -1,0 +1,33 @@
+-- Merkstatus "suggested" (Suggested): een merk dat bij het beoordelen van
+-- een stip is voorgesteld en nog niet in de catalogus stond. Een echte rij
+-- in brands, zodat het in /admin/brands net zo werkt als elk ander merk
+-- (ster, logo, domein, segment, inventariseren); vóór Added in de funnel.
+-- Niet in de selectie (is_curated false) en niet in de catalogus
+-- (lib/products/catalog.ts) tot er een domein is: dan wordt het Added en
+-- komt het in de selectie (updateBrandDomain).
+--
+-- Twee stappen: een nieuwe enumwaarde kan pas na de commit gebruikt worden.
+
+alter type public.brand_status add value if not exists 'suggested' before 'unclaimed';
+
+-- (Aparte migratie/stap.) De bestaande voorstellen — stippen "staat niet in
+-- de catalogus" met een merknaam zonder merk — als merk aanmaken en de
+-- stippen eraan koppelen. Genegeerde namen (brand_suggestion_dismissals,
+-- migratie 344) niet.
+--
+-- insert into public.brands (name, slug, status, is_curated)
+-- select distinct on (lower(regexp_replace(d.missing_brand, '[^a-zA-Z0-9]', '', 'g')))
+--   trim(d.missing_brand),
+--   trim(both '-' from lower(regexp_replace(trim(d.missing_brand), '[^a-zA-Z0-9]+', '-', 'g'))),
+--   'suggested', false
+-- from public.project_photo_detections d
+-- where d.review_status = 'missing' and d.missing_brand_id is null and d.missing_brand is not null
+--   and not exists (select 1 from public.brand_suggestion_dismissals x
+--                   where x.name_key = lower(regexp_replace(d.missing_brand, '[^a-zA-Z0-9]', '', 'g')))
+-- on conflict do nothing;
+--
+-- update public.project_photo_detections d set missing_brand_id = b.id
+-- from public.brands b
+-- where d.review_status = 'missing' and d.missing_brand_id is null and d.missing_brand is not null
+--   and b.status = 'suggested'
+--   and lower(regexp_replace(b.name, '[^a-zA-Z0-9]', '', 'g')) = lower(regexp_replace(d.missing_brand, '[^a-zA-Z0-9]', '', 'g'));

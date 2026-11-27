@@ -44,7 +44,7 @@ export async function getCatalogCategories(): Promise<CatalogCategory[]> {
  *  halen en in code te filteren, en dat blijft lang zo. */
 export async function getCatalogCollections(): Promise<CatalogCollection[]> {
   const supabase = createServiceRoleSupabaseClient() as any
-  const [{ data: collections }, { data: links }, { data: kindRows }, { data: productShots }, { data: productRows }, { data: coverRows }, { data: detLinks }] = await Promise.all([
+  const [{ data: collections }, { data: links }, { data: kindRows }, { data: productShots }, { data: productRows }, { data: coverRows }, { data: detLinks }, { data: productCats }] = await Promise.all([
     // In blokken: Supabase kapt elke query af op 1000 rijen.
     selectAll(() => supabase
       .from("product_collections")
@@ -60,6 +60,9 @@ export async function getCatalogCollections(): Promise<CatalogCollection[]> {
     selectAll(() => supabase.from("product_collection_photos").select("collection_id, url, focus_x, focus_y, width, height").eq("is_primary", true).not("focus_x", "is", null).order("id")),
     // Goedgekeurde productherkenning telt ook (migratie 343).
     selectAll(() => supabase.from("project_detection_links").select("collection_id, project_id").not("collection_id", "is", null).order("detection_id")),
+    // De soort van elk product (migratie 351): daarop filtert een soort zoals
+    // Hoekbanken; de collectie zelf hangt alleen aan subgroepen.
+    selectAll(() => supabase.from("products").select("id, collection_id, category_id").not("collection_id", "is", null).not("category_id", "is", null).order("id")),
   ])
   const focusByUrl = new Map<string, { x: number; y: number }>()
   // De maat erbij, zodat de kaart het punt kan centreren (focusPositionIn).
@@ -79,6 +82,12 @@ export async function getCatalogCollections(): Promise<CatalogCollection[]> {
   for (const k of (kindRows ?? []) as Array<{ collection_id: string; category_id: string }>) {
     kindsByCollection.set(k.collection_id, [...(kindsByCollection.get(k.collection_id) ?? []), k.category_id])
   }
+  const productCatsByCollection = new Map<string, Set<string>>()
+  for (const p of (productCats ?? []) as Array<{ collection_id: string; category_id: string }>) {
+    const set = productCatsByCollection.get(p.collection_id) ?? new Set<string>()
+    set.add(p.category_id)
+    productCatsByCollection.set(p.collection_id, set)
+  }
   const projectsByCollection = new Map<string, Set<string>>()
   for (const l of [...(links ?? []), ...(detLinks ?? [])] as Array<{ collection_id: string; project_id: string }>) {
     const set = projectsByCollection.get(l.collection_id) ?? new Set<string>()
@@ -86,7 +95,7 @@ export async function getCatalogCollections(): Promise<CatalogCollection[]> {
     projectsByCollection.set(l.collection_id, set)
   }
   return ((collections ?? []) as any[])
-    .filter((f) => f.brands && (PUBLIC_BRAND_STATUSES === null || PUBLIC_BRAND_STATUSES.includes(f.brands.status)))
+    .filter((f) => f.brands && f.brands.status !== "suggested" && f.brands.status !== "passed" && (PUBLIC_BRAND_STATUSES === null || PUBLIC_BRAND_STATUSES.includes(f.brands.status)))
     .map((f) => ({
       id: f.id,
       slug: f.slug,
@@ -102,6 +111,7 @@ export async function getCatalogCollections(): Promise<CatalogCollection[]> {
       url: f.url ?? null,
       categoryId: f.category_id ?? null,
       kindIds: kindsByCollection.get(f.id) ?? [],
+      productCategoryIds: Array.from(productCatsByCollection.get(f.id) ?? []),
       isFeatured: Boolean(f.is_featured),
       brand: { id: f.brands.id, slug: f.brands.slug, name: f.brands.name, logoUrl: f.brands.logo_url ?? null },
       projectCount: projectsByCollection.get(f.id)?.size ?? 0,
@@ -113,7 +123,7 @@ export async function getCatalogBrands(): Promise<CatalogBrand[]> {
   const [{ data: brands }, { data: cats }, { data: collections }, { data: links }, { data: detLinks }] = await Promise.all([
     selectAll(() => supabase
       .from("brands")
-      .select("id, slug, name, domain, website, logo_url, description, translations, country, founded_year, status")
+      .select("id, slug, name, domain, website, logo_url, description, translations, country, founded_year, status, is_featured")
       .order("name")
       .order("id")),
     selectAll(() => supabase.from("brand_categories").select("brand_id, category_id, position").order("position").order("brand_id").order("category_id")),
@@ -137,7 +147,9 @@ export async function getCatalogBrands(): Promise<CatalogBrand[]> {
     projectsByBrand.set(l.brand_id, set)
   }
   return ((brands ?? []) as any[])
-    .filter((b) => PUBLIC_BRAND_STATUSES === null || PUBLIC_BRAND_STATUSES.includes(b.status))
+    // Een voorgesteld merk (migratie 347) is nog geen catalogusmerk; een merk
+    // op Passed (niet premium, migratie 354) hoort er niet in.
+    .filter((b) => b.status !== "suggested" && b.status !== "passed" && (PUBLIC_BRAND_STATUSES === null || PUBLIC_BRAND_STATUSES.includes(b.status)))
     .map((b) => ({
       id: b.id,
       slug: b.slug,
@@ -150,6 +162,7 @@ export async function getCatalogBrands(): Promise<CatalogBrand[]> {
       country: b.country ?? null,
       foundedYear: b.founded_year ?? null,
       status: b.status,
+      isFeatured: Boolean(b.is_featured),
       categoryIds: catsByBrand.get(b.id) ?? [],
       collectionCount: collectionByBrand.get(b.id) ?? 0,
       projectCount: projectsByBrand.get(b.id)?.size ?? 0,

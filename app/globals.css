@@ -7784,6 +7784,14 @@ body.no-scroll {
    breedte (cover); staand of studiobeeld = heel, op het grijs van de
    dienstkaarten (contain). Tot het beeld gemeten is blijft het vlak
    grijs en het beeld onzichtbaar, zodat er niets verspringt. */
+/* Doorzichtige header (home) met een uitklapmenu: header, logo, links en
+   paneel wisselen in één keer van kleur, zonder overgangen die na elkaar
+   lopen (components/header.tsx, data-instant-colors). */
+header[data-instant-colors="true"],
+header[data-instant-colors="true"] * {
+  transition: none !important;
+}
+
 .collection-hero {
   margin-top: 60px;
   position: relative;
@@ -7814,6 +7822,46 @@ body.no-scroll {
 /* Staat de subnavigatie er direct boven (publieke collectiepagina), dan
    begint het beeld eronder: de balk zit al in de stroom, 60px hoog. */
 .sub-nav + .collection-hero { margin-top: 65px; }
+/* Collectiepagina: het beeld als 4:3 links, logo, naam, soort en tekst
+   rechts ernaast (desktop); kleiner eronder, gecentreerd. Een vaste
+   verhouding in plaats van een brede hero: het focuspunt hoeft niet per
+   schermbreedte te kloppen. */
+.collection-intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 56px;
+  /* Bovenaan uitgelijnd, het logo op een vaste hoogte: bij elke collectie
+     op dezelfde plek, hoe lang de tekst ook is. */
+  align-items: start;
+  margin-bottom: 60px;
+}
+.collection-intro .professional-header {
+  max-width: none;
+  margin: 0;
+  padding-top: 40px;
+  text-align: left;
+}
+.collection-intro .company-icon { justify-content: flex-start; }
+.collection-intro-media {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: var(--surface, #f5f5f4);
+  overflow: hidden;
+}
+.collection-intro-media img { width: 100%; height: 100%; display: block; }
+.collection-intro-media[data-fit="cover"] img { object-fit: cover; }
+.collection-intro-media[data-fit="contain"] img {
+  object-fit: contain;
+  box-sizing: border-box;
+  padding: 32px;
+  mix-blend-mode: multiply;
+}
+@media (max-width: 900px) {
+  .collection-intro { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+  .collection-intro .professional-header { text-align: center; padding-top: 0; }
+  .collection-intro .company-icon { justify-content: center; }
+}
+
 @media (max-width: 768px) {
   .collection-hero { height: 52vh; min-height: 320px; }
   .sub-nav + .collection-hero { margin-top: 57px; }

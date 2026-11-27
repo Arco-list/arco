@@ -711,6 +711,14 @@ export default function ListingEditorPage() {
       : detections.find((x) => { const s = detectionState(x); return s === "review" || s === "open" }) ?? detections[0]
     if (d) setReviewAt({ photoId: d.photoId, detectionId: d.id })
   }, [detections])
+  // ?products=review (vanuit /admin/projects): de productkiezer meteen open,
+  // één keer, zodra de stippen er zijn.
+  const autoOpenedReview = useRef(false)
+  useEffect(() => {
+    if (autoOpenedReview.current || searchParams.get("products") !== "review" || detections.length === 0) return
+    autoOpenedReview.current = true
+    openReview()
+  }, [searchParams, detections, openReview])
   const requestDetections = async (force: boolean) => {
     if (!projectId) return
     setIsRequestingDetections(true)

@@ -7,7 +7,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useTranslations, useLocale } from "next-intl"
 import { toast } from "sonner"
-import { AlertTriangle, ImageIcon, ExternalLink } from "lucide-react"
+import { AlertTriangle, ImageIcon, ExternalLink, Plus } from "lucide-react"
 import { ImportProjectModal } from "@/components/import-project-modal"
 import { LinkInputRow } from "@/components/landing"
 
@@ -1949,12 +1949,13 @@ export function CompanyEditClient({ company, socialLinks, services, serviceCateg
                 </Link>
               )}
               {companyProjects.length > 0 && canPublish && (
+                // Zelfde knop als "+ Merk toevoegen" en "+ Showroom toevoegen".
                 <button
                   type="button"
-                  className="btn-primary"
-                  style={{ fontSize: 13, padding: "8px 18px" }}
+                  className="btn-primary shrink-0 gap-1.5"
                   onClick={() => setImportModalOpen(true)}
                 >
+                  <Plus size={14} />
                   {t("add_project")}
                 </button>
               )}

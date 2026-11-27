@@ -19,7 +19,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { addBrandFromSite, deleteBrand, importBrandsFromApollo, setBrandCurated, updateBrandSegment, discoverBrandCollections, fetchCollectionFromBrandPage, updateBrandDomain, updateBrandStatus, uploadBrandLogo } from "./actions"
+import { addBrandFromSite, deleteBrand, importBrandsFromApollo, setBrandFeatured, discoverBrandCollections, fetchCollectionFromBrandPage, updateBrandDomain, updateBrandStatus, uploadBrandLogo } from "./actions"
 import type { AdminBrandCategory, AdminBrandRow } from "./page"
 import { startCollectionInventory } from "./collection-actions"
 import { CollectionPicker } from "./collection-picker"
@@ -34,9 +34,10 @@ import { normalizeDomain } from "@/lib/products/domain"
  * zoeken, statusfilter en de primaire actie; statusfunnel als
  * klikbare kaarten; de tabel eronder.
  *
- * De funnel is korter dan die van bedrijven: Added → Showcased →
- * Listed, met Unlisted en Deactivated geparkeerd. Labels, kleuren
- * en uitleg staan in ./status, gedeeld met de merkpagina.
+ * De funnel is korter dan die van bedrijven: Added → Catalogued →
+ * Showcased → Listed, met Deactivated, Passed (niet premium) en Unlisted
+ * als eindstanden eronder. Labels, kleuren en uitleg staan in ./status,
+ * gedeeld met de merkpagina.
  */
 
 
@@ -100,17 +101,6 @@ function BrandDomainCell({ domain, website, onSave }: { domain: string | null; w
   )
 }
 
-/** Segment van een merk (migratie 324). Luxury en premium zijn het
- *  werkterrein van Arco; mid maakt zichtbaar wat buiten de doelgroep valt. */
-type Segment = "luxury" | "premium" | "mid"
-const SEGMENTS: Array<{ value: Segment; label: string; hint: string; dot: string }> = [
-  { value: "luxury", label: "Luxury", hint: "Absolute top (Minotti, B&B Italia, Gaggenau)", dot: "#1c1c1a" },
-  { value: "premium", label: "Premium", hint: "High-quality design (Hay, Muuto, Flos)", dot: "#016D75" },
-  { value: "mid", label: "Mid-market", hint: "Below our audience (Kave Home, Calligaris)", dot: "#c4c4c2" },
-]
-const SEGMENT_BY_VALUE = new Map(SEGMENTS.map((x) => [x.value, x]))
-type SegmentFilter = Segment | "none"
-
 /** Voortgang van de collectiepijplijn (migratie 325) in de Collection-kolom. */
 const JOB_ACTIVE = (j: AdminBrandRow["collection_job"]) => Boolean(j && j.stage !== "done" && j.stage !== "error")
 function jobLabel(j: NonNullable<AdminBrandRow["collection_job"]>): string {
@@ -149,21 +139,16 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
   // alles eronder; een merk met een soort (Kookplaten) valt onder zijn
   // subgroep (Apparatuur) en groep (Keuken).
   const [categoryFilter, setCategoryFilter] = useState<string[]>([])
-  const [segmentFilter, setSegmentFilter] = useState<SegmentFilter[]>([])
-  const toggleSegment = (v: SegmentFilter) => setSegmentFilter((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]))
   const [countryFilter, setCountryFilter] = useState<string[]>([])
   const toggleCountry = (c: string) => setCountryFilter((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]))
-  // Segment direct bijgewerkt in de tabel, zonder op de refresh te wachten.
-  const [segmentOverrides, setSegmentOverrides] = useState<Record<string, Segment | null>>({})
-  // De ster (selectie, migratie 338): meteen omzetten, daarna opslaan.
+  // De ster: vooraan in de weergave, zoals bij projecten en professionals.
+  // (Niet premium is sinds migratie 354 de status Passed.)
   const [curatedOverrides, setCuratedOverrides] = useState<Record<string, boolean>>({})
-  const curatedOf = (b: AdminBrandRow) => curatedOverrides[b.id] ?? b.is_curated
-  /** Filter op de ster: alle merken, alleen de selectie, of alleen zonder ster. */
-  const [curatedFilter, setCuratedFilter] = useState<"all" | "in" | "out">("all")
+  const curatedOf = (b: AdminBrandRow) => curatedOverrides[b.id] ?? b.is_featured
   const toggleCurated = async (b: AdminBrandRow) => {
     const next = !curatedOf(b)
     setCuratedOverrides((o) => ({ ...o, [b.id]: next }))
-    const res = await setBrandCurated(b.id, next)
+    const res = await setBrandFeatured(b.id, next)
     if ("error" in res) { setCuratedOverrides((o) => ({ ...o, [b.id]: !next })); toast.error(res.error) }
   }
   // Keuze-pop-up na een inventarisatie, en verversen zolang er iets loopt.
@@ -206,7 +191,6 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
     else toast.success(`Inventorying ${b.name} in the background — progress shows in the Collection column`)
     router.refresh()
   }
-  const segmentOf = (b: AdminBrandRow): Segment | null => (b.id in segmentOverrides ? segmentOverrides[b.id] : b.market_segment)
   const countryOptions = useMemo(() => {
     const count = new Map<string, number>()
     for (const b of initialBrands) { const c = countryOf(b) ?? "—"; count.set(c, (count.get(c) ?? 0) + 1) }
@@ -245,14 +229,12 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
     const q = searchTerm.trim().toLowerCase()
     return initialBrands.filter((b) => {
       if (categoryFilter.length > 0 && !categoryFilter.some((id) => brandInCategory(b, id))) return false
-      if (segmentFilter.length > 0 && !segmentFilter.includes(segmentOf(b) ?? "none")) return false
       if (countryFilter.length > 0 && !countryFilter.includes(countryOf(b) ?? "—")) return false
-      if (curatedFilter !== "all" && curatedOf(b) !== (curatedFilter === "in")) return false
       if (!q) return true
       return [b.name, b.domain ?? "", b.category ?? "", b.city ?? "", b.country ?? "", b.owner_name ?? ""].join(" ").toLowerCase().includes(q)
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialBrands, searchTerm, categoryFilter, subtreeOf, segmentFilter, countryFilter, segmentOverrides, curatedFilter, curatedOverrides])
+  }, [initialBrands, searchTerm, categoryFilter, subtreeOf, countryFilter])
 
   // Sorteren op de kolommen met een getal of datum; standaard de laatst
   // gewijzigde bovenaan. Een merk zonder wijziging telt met zijn
@@ -275,21 +257,26 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
 
   // ── Funnel ───────────────────────────────────────────────────────────
   const countAt = (s: BrandStatus) => funnelData.filter((b) => b.status === s).length
-  // Cohort = alles dat in of voorbij deze stap zit. Deactivated is een
-  // afrit en telt nergens in door.
+  // Cohort = alles dat in of voorbij deze stap zit. Deactivated en Passed
+  // zijn afritten en tellen nergens in door.
   const cohortFor = (s: BrandStatus): number => {
     switch (s) {
-      case "unclaimed": return countAt("unclaimed") + countAt("prospected") + countAt("unlisted") + countAt("listed")
+      case "unclaimed": return countAt("unclaimed") + countAt("catalogued") + countAt("prospected") + countAt("unlisted") + countAt("listed")
+      case "catalogued": return countAt("catalogued") + countAt("prospected") + countAt("unlisted") + countAt("listed")
+      case "passed": return countAt("passed")
       case "prospected": return countAt("prospected") + countAt("unlisted") + countAt("listed")
       case "listed": return countAt("listed") + countAt("unlisted")
       case "unlisted": return countAt("unlisted")
       case "deactivated": return countAt("deactivated")
+      // Voor de funnel: nog geen merk in de catalogus.
+      case "suggested": return countAt("suggested")
     }
   }
   const rate = (from: number, to: number) => (from === 0 ? "0%" : `${Math.round((to / from) * 100)}%`)
 
   const FUNNEL: { status: BrandStatus; driver: "prospect" | "retention" | null }[] = [
     { status: "unclaimed", driver: null },
+    { status: "catalogued", driver: null },
     { status: "prospected", driver: "prospect" },
     { status: "listed", driver: "retention" },
   ]
@@ -408,21 +395,10 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
     setLogoOverrides((prev) => ({ ...prev, [brand.id]: `${res.url}?v=${Date.now()}` }))
     toast.success(`Logo van ${brand.name} bijgewerkt`)
   }
-  const [statusBrand, setStatusBrand] = useState<AdminBrandRow | null>(null)
-  const [statusValue, setStatusValue] = useState<BrandStatus>("unclaimed")
+  // Status: een dropdown op de plek van de klik, zoals bij bedrijven en projecten.
+  const [statusMenu, setStatusMenu] = useState<{ brand: AdminBrandRow; x: number; y: number } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<AdminBrandRow | null>(null)
 
-  const openStatus = (b: AdminBrandRow) => { setStatusBrand(b); setStatusValue(b.status as BrandStatus) }
-  const saveStatus = () => {
-    if (!statusBrand) return
-    startTransition(async () => {
-      const result = await updateBrandStatus(statusBrand.id, statusValue)
-      if ("error" in result) { toast.error(result.error); return }
-      toast.success(`${statusBrand.name} → ${STATUS_LABEL[statusValue]}`)
-      setStatusBrand(null)
-      router.refresh()
-    })
-  }
   const confirmDelete = () => {
     if (!deleteTarget) return
     startTransition(async () => {
@@ -459,8 +435,10 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
       <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => setLogoBrand({ id: b.id, name: b.name })}>
         Find logo
       </DropdownMenuItem>
-      <DropdownMenuItem className="text-xs cursor-pointer" disabled={JOB_ACTIVE(b.collection_job)} onClick={() => void inventory(b)}>
-        Inventory collections
+      {/* Collecties ophalen kan zodra het domein bekend is (een voorgesteld
+          merk heeft er nog geen: eerst het domein in de tabel invullen). */}
+      <DropdownMenuItem className="text-xs cursor-pointer" disabled={JOB_ACTIVE(b.collection_job) || !(b.domain || b.website)} onClick={() => void inventory(b)}>
+        {b.domain || b.website ? "Inventory collections" : "Inventory collections (add a domain first)"}
       </DropdownMenuItem>
       <DropdownMenuItem
         className="text-xs cursor-pointer"
@@ -556,7 +534,7 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
                   Clear selection
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                {(["listed", "unlisted", "prospected", "unclaimed", "deactivated"] as BrandStatus[]).map((s) => (
+                {(["listed", "unlisted", "prospected", "catalogued", "unclaimed", "suggested", "passed", "deactivated"] as BrandStatus[]).map((s) => (
                   <DropdownMenuCheckboxItem key={s} checked={statusFilter.includes(s)} onCheckedChange={() => toggleStatus(s)} onSelect={(e) => e.preventDefault()} className="text-xs">
                     <span className="flex items-center gap-1.5">
                       <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: STATUS_DOT[s] }} />
@@ -599,58 +577,6 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
                       </DropdownMenuCheckboxItem>
                     ))}
                   </Fragment>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Selectie — de ster: alle merken, alleen de selectie, of zonder ster. */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className={`w-[140px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 shrink-0 ${curatedFilter !== "all" ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"}`}
-                >
-                  <span className={`truncate flex items-center gap-1.5 ${curatedFilter === "all" ? "text-[#6b6b68]" : ""}`}>
-                    <Star size={12} className={curatedFilter === "out" ? "text-[#a1a1a0]" : "fill-amber-400 text-amber-400"} />
-                    {curatedFilter === "all" ? "All brands" : curatedFilter === "in" ? "In selection" : "Not in selection"}
-                  </span>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]"><path d="M6 9l6 6 6-6" /></svg>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="min-w-[200px] z-[120]">
-                {([["all", "All brands"], ["in", "In selection"], ["out", "Not in selection"]] as const).map(([value, label]) => (
-                  <DropdownMenuCheckboxItem key={value} checked={curatedFilter === value} onCheckedChange={() => setCuratedFilter(value)} className="text-xs">
-                    <span className="flex-1">{label}</span>
-                    <span className="ml-3 tabular-nums text-[#a1a1a0]">{value === "all" ? initialBrands.length : initialBrands.filter((b) => curatedOf(b) === (value === "in")).length}</span>
-                  </DropdownMenuCheckboxItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Segment — luxury, premium, mid, of nog niet beoordeeld. */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className={`w-[140px] h-9 px-3 text-xs border rounded-[3px] transition-colors flex items-center justify-between gap-2 shrink-0 ${segmentFilter.length > 0 ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4] bg-white hover:border-[#a1a1a0]"}`}
-                >
-                  <span className={`truncate ${segmentFilter.length === 0 ? "text-[#6b6b68]" : ""}`}>
-                    {segmentFilter.length === 0 ? "All segments" : segmentFilter.length === 1 ? (segmentFilter[0] === "none" ? "No segment" : SEGMENT_BY_VALUE.get(segmentFilter[0])?.label) : `${segmentFilter.length} segments`}
-                  </span>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-[#a1a1a0]"><path d="M6 9l6 6 6-6" /></svg>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="min-w-[200px] z-[120]">
-                <DropdownMenuItem onClick={(e) => { e.preventDefault(); if (segmentFilter.length > 0) setSegmentFilter([]) }} className="text-xs">
-                  Clear selection
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                {[...SEGMENTS.map((x) => ({ value: x.value as SegmentFilter, label: x.label, dot: x.dot })), { value: "none" as SegmentFilter, label: "No segment", dot: "transparent" }].map((x) => (
-                  <DropdownMenuCheckboxItem key={x.value} checked={segmentFilter.includes(x.value)} onCheckedChange={() => toggleSegment(x.value)} onSelect={(e) => e.preventDefault()} className="text-xs">
-                    <span className="h-1.5 w-1.5 rounded-full shrink-0 mr-2" style={{ background: x.dot, border: x.value === "none" ? "1px solid #c4c4c2" : undefined }} />
-                    <span className="flex-1">{x.label}</span>
-                    <span className="ml-3 tabular-nums text-[#a1a1a0]">{initialBrands.filter((b) => (segmentOf(b) ?? "none") === x.value).length}</span>
-                  </DropdownMenuCheckboxItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -751,7 +677,8 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: FUNNEL.map((_, i) => (i === 0 ? "auto" : "1fr auto")).join(" "),
+              // Eerst Suggested (geen merk nog, buiten de funnel), dan de funnel.
+              gridTemplateColumns: ["auto", ...FUNNEL.map(() => "1fr auto")].join(" "),
               gridTemplateRows: "auto auto auto",
               gap: 0,
               alignItems: "start",
@@ -759,17 +686,38 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
           >
             {/* Driver-labels, rij 1 */}
             {FUNNEL.map((stage, i) => stage.driver && (
-              <p key={`driver-${stage.status}`} className="arco-eyebrow" style={{ gridRow: 1, gridColumn: i * 2 + 1, color: DRIVER_COLORS[stage.driver], marginBottom: 8 }}>
+              <p key={`driver-${stage.status}`} className="arco-eyebrow" style={{ gridRow: 1, gridColumn: i * 2 + 3, color: DRIVER_COLORS[stage.driver], marginBottom: 8 }}>
                 {stage.driver.charAt(0).toUpperCase() + stage.driver.slice(1)}
               </p>
             ))}
 
             {/* Kaarten + connectors, rij 2 */}
+            <div style={{ gridRow: 2, gridColumn: 1 }} className="flex flex-col">
+              <button
+                type="button"
+                onClick={() => toggleStatus("suggested")}
+                title={STATUS_DESC.suggested}
+                className={`rounded-[3px] border bg-white px-3 py-3 transition-colors hover:border-[#c4c4c2] ${statusFilter.includes("suggested") ? "border-[#1c1c1a] bg-[#fafaf9]" : "border-[#e5e5e4]"}`}
+                style={{ width: CARD_WIDTH }}
+              >
+                <div className="flex items-center gap-[6px] mb-1.5">
+                  <span className="status-pill-dot shrink-0" style={{ background: STATUS_DOT.suggested }} />
+                  <span style={{ fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 400, color: "var(--text-primary)", whiteSpace: "nowrap" }}>{STATUS_LABEL.suggested}</span>
+                </div>
+                <p className="arco-card-title text-left">{countAt("suggested")}</p>
+              </button>
+            </div>
             {FUNNEL.map((stage, i) => {
               const isActive = statusFilter.includes(stage.status)
               const r = i > 0 ? rate(cohortFor(FUNNEL[i - 1].status), cohortFor(stage.status)) : ""
               return (
                 <Fragment key={stage.status}>
+                  {/* Suggested → Added: geen percentage, voorgesteld is nog geen merk. */}
+                  {i === 0 && (
+                    <div className="relative px-1 self-center" style={{ gridRow: 2, minWidth: 32 }}>
+                      <div className="w-full border-t border-dashed border-[#d4d4d3]" />
+                    </div>
+                  )}
                   {i > 0 && (
                     <div className="relative px-1 self-center" style={{ gridRow: 2, minWidth: 32 }}>
                       <div className="w-full border-t border-[#d4d4d3]" />
@@ -794,10 +742,11 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
               )
             })}
 
-            {/* Geparkeerde eindstanden, rij 3: Unlisted onder Listed, Deactivated onder Added */}
+            {/* Eindstanden, rij 3: Deactivated onder Added, Passed onder Catalogued, Unlisted onder Listed */}
             {([
-              { status: "unlisted" as BrandStatus, col: 5 },
-              { status: "deactivated" as BrandStatus, col: 1 },
+              { status: "deactivated" as BrandStatus, col: 3 },
+              { status: "passed" as BrandStatus, col: 5 },
+              { status: "unlisted" as BrandStatus, col: 9 },
             ]).map((sub) => {
               const active = statusFilter.includes(sub.status)
               return (
@@ -835,7 +784,6 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
                 <th>Brand</th>
                 <th>Domain</th>
                 <th>Status</th>
-                <th>Segment</th>
                 {([
                   ["collections", "Collection", "right"],
                   ["projects", "Projects", "right"],
@@ -866,7 +814,7 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={10} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
+                  <td colSpan={9} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>
                     {initialBrands.length === 0 ? "No brands yet — add one from a brand's homepage." : "No brands match these filters."}
                   </td>
                 </tr>
@@ -881,13 +829,12 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
                 >
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      {/* De ster: in de selectie (high-end). Zonder ster niet te
-                          kiezen in projecten en niet mee bij productherkenning. */}
+                      {/* De ster: uitgelicht, vooraan in de weergave. */}
                       <button
                         type="button"
                         onClick={() => void toggleCurated(b)}
-                        title={curatedOf(b) ? "In selection — remove star to exclude from projects and recognition" : "Not in selection — star to include"}
-                        aria-label={curatedOf(b) ? `${b.name} uit de selectie halen` : `${b.name} in de selectie zetten`}
+                        title={curatedOf(b) ? "Featured — shown first. Click to unfeature" : "Feature — show this brand first"}
+                        aria-label={curatedOf(b) ? `${b.name} niet meer uitlichten` : `${b.name} uitlichten`}
                         aria-pressed={curatedOf(b)}
                         className="shrink-0 transition-colors"
                         style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex" }}
@@ -926,58 +873,10 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
                     />
                   </td>
                   <td>
-                    <button type="button" onClick={() => openStatus(b)} className="arco-table-status" style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }} title="Update status">
+                    <button type="button" onClick={(e) => setStatusMenu({ brand: b, x: e.clientX, y: e.clientY })} className="arco-table-status" style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }} title="Update status">
                       <span className="arco-table-status-dot" style={{ background: STATUS_DOT[b.status as BrandStatus] ?? "#a1a1a0" }} />
                       <span style={{ fontWeight: 500 }}>{STATUS_LABEL[b.status as BrandStatus] ?? b.status}</span>
                     </button>
-                  </td>
-                  <td>
-                    {(() => {
-                      const seg = segmentOf(b)
-                      const meta = seg ? SEGMENT_BY_VALUE.get(seg) : null
-                      const save = async (next: Segment | null) => {
-                        const prev = seg
-                        setSegmentOverrides((o) => ({ ...o, [b.id]: next }))
-                        const res = await updateBrandSegment(b.id, next)
-                        if ("error" in res) { setSegmentOverrides((o) => ({ ...o, [b.id]: prev })); toast.error(res.error) }
-                      }
-                      return (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button type="button" className="arco-table-status" style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }} title="Set segment">
-                              {meta ? (
-                                <>
-                                  <span className="arco-table-status-dot" style={{ background: meta.dot }} />
-                                  <span style={{ fontWeight: 500 }}>{meta.label}</span>
-                                </>
-                              ) : (
-                                <>
-                                  <span className="arco-table-status-dot" style={{ background: "transparent", boxShadow: "inset 0 0 0 1px #c4c4c2" }} />
-                                  <span style={{ fontWeight: 500, color: "#a1a1a0" }}>No segment</span>
-                                </>
-                              )}
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="start" className="min-w-[260px] z-[120]">
-                            {SEGMENTS.map((x) => (
-                              <DropdownMenuCheckboxItem key={x.value} checked={seg === x.value} onCheckedChange={() => void save(x.value)} className="text-xs">
-                                <span className="h-1.5 w-1.5 rounded-full shrink-0 mr-2" style={{ background: x.dot }} />
-                                <span className="flex-1">
-                                  <span style={{ fontWeight: 500 }}>{x.label}</span>
-                                  <span className="block text-[#a1a1a0]">{x.hint}</span>
-                                </span>
-                              </DropdownMenuCheckboxItem>
-                            ))}
-                            {seg && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => void save(null)} className="text-xs text-[#6b6b68]">Clear segment</DropdownMenuItem>
-                              </>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )
-                    })()}
                   </td>
                   <td style={{ textAlign: "right" }}>
                     {(() => {
@@ -1008,12 +907,8 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
                     })()}
                   </td>
                   <td style={{ textAlign: "right" }}>
-                    {b.project_count ? (
-                      <>
-                        <span>{b.project_count}</span>
-                        {b.pinned_count > 0 && <div className="arco-table-secondary" style={{ color: "#016D75" }}>{b.pinned_count} with photo</div>}
-                      </>
-                    ) : dash}
+                    {/* In hoeveel projecten een product van het merk op een foto getagd is. */}
+                    {b.project_count ? <span>{b.project_count}</span> : dash}
                   </td>
                   <td>{b.owner_name ?? dash}</td>
                   <td className="arco-table-nowrap">{b.updated_at ? format(new Date(b.updated_at), "dd MMM yyyy") : dash}</td>
@@ -1188,34 +1083,37 @@ export function BrandsClient({ initialBrands, categoryTree = [] }: { initialBran
         </div>
       )}
 
-      {/* ── Update status ───────────────────────────────────────────── */}
-      {statusBrand && (
-        <div className="popup-overlay" onClick={() => setStatusBrand(null)}>
-          <div className="popup-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
-            <div className="popup-header">
-              <h3 className="arco-section-title">{statusBrand.name}</h3>
-              <button type="button" className="popup-close" onClick={() => setStatusBrand(null)} aria-label="Close">✕</button>
-            </div>
-            <div className="status-modal-options">
-              {ALL_STATUSES.map((s) => (
-                <button key={s} type="button" className={`status-modal-option${statusValue === s ? " selected" : ""}`} onClick={() => setStatusValue(s)}>
-                  <span className="status-modal-dot" style={{ background: STATUS_DOT[s] }} />
-                  <div className="status-modal-option-text">
-                    <span className="status-modal-option-label">{STATUS_LABEL[s]}</span>
-                    <span className="arco-table-secondary" style={{ display: "block", marginTop: 2 }}>{STATUS_DESC[s]}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-            <div className="popup-actions" style={{ marginTop: 20 }}>
-              <button type="button" className="btn-tertiary" style={{ flex: 1 }} onClick={() => setStatusBrand(null)}>Cancel</button>
-              <button type="button" className="btn-secondary" style={{ flex: 1 }} onClick={saveStatus} disabled={isPending || statusValue === statusBrand.status}>
-                {isPending ? "Saving…" : "Save"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── Update status: dropdown op de klikplek, de huidige vet. Suggested
+          zet je niet met de hand (dat doet het beoordelen van stippen), dus
+          getoond maar niet te kiezen, met de reden als titel. ─────────── */}
+      {(() => {
+        const brand = statusMenu?.brand ?? null
+        return (
+          <DropdownMenu open={Boolean(statusMenu)} onOpenChange={(open) => { if (!open) setStatusMenu(null) }}>
+            <DropdownMenuTrigger asChild>
+              <span aria-hidden style={{ position: "fixed", left: statusMenu?.x ?? 0, top: statusMenu?.y ?? 0, width: 0, height: 0 }} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[160px]">
+              {brand && ALL_STATUSES.map((st) => {
+                const isCurrent = brand.status === st
+                const disabledReason = st === "suggested" ? "Set while reviewing product dots" : null
+                return (
+                  <DropdownMenuItem
+                    key={st}
+                    disabled={isPending || Boolean(disabledReason)}
+                    title={disabledReason ?? STATUS_DESC[st]}
+                    className={`text-xs cursor-pointer flex items-center gap-1.5${isCurrent ? " font-semibold bg-[#f5f5f4]" : ""}`}
+                    onClick={() => { if (!isCurrent) applyStatus(brand, st) }}
+                  >
+                    <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: STATUS_DOT[st], opacity: disabledReason ? 0.4 : 1 }} />
+                    {STATUS_LABEL[st]}
+                  </DropdownMenuItem>
+                )
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
+      })()}
 
       {/* ── Delete ──────────────────────────────────────────────────── */}
       {deleteTarget && (
