@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { SUBTYPE_ICON_MAP } from "@/components/filter-icon-map"
 import { resolveFeatureIcon } from "@/lib/icons/project-features"
+import { spaceMark } from "@/lib/icons/space-marks"
 import { spaceNoun, scopeLabel } from "@/lib/type-labels"
 import { cn } from "@/lib/utils"
 
@@ -282,14 +283,15 @@ export function ProjectsTab({ types, spaces, services, serviceSpaces, partialCou
                     {expanded.has("partial") && (partialRows.length === 0 ? (
                       <tr><td colSpan={6} style={{ height: 64, textAlign: "center", color: "var(--text-disabled)" }}>{c.nonePartial}</td></tr>
                     ) : partialRows.map((s) => {
-                      const Icon = resolveFeatureIcon(s.iconKey ?? s.slug)
+                      const Mark = spaceMark(s.slug)
+                      const Icon = Mark ?? resolveFeatureIcon(s.iconKey ?? s.slug)
                       const publishers = (servicesBySpace.get(s.id) ?? []).map(label).join(" · ")
                       return (
                         <tr key={s.id} onClick={(e) => openMenu(e, { kind: "space", row: s, x: e.clientX, y: e.clientY })} style={{ cursor: "pointer" }}>
                           <td>
                             <div className="flex items-center gap-2" style={{ paddingLeft: 22 }}>
                               <div className="arco-table-avatar" style={{ background: "#f5f5f4", color: "#1c1c1a" }}>
-                                <Icon size={16} strokeWidth={1} />
+                                {Mark ? <Mark size={24} strokeWidth={1} /> : <Icon size={16} strokeWidth={1} />}
                               </div>
                               <div className="flex flex-col min-w-0">
                                 <span className="arco-table-primary">{spaceLabel(s)}</span>

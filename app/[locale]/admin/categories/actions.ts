@@ -863,6 +863,32 @@ export async function setProductCategoryActiveAction(
   return createSuccessResponse({ success: true as const })
 }
 
+/** Productherkenning per categorie (migraties 362–363): de stand voor de
+ *  stippen (null = van de ouder) en extra context voor Claude. Geldt voor
+ *  foto's die vanaf nu herkend worden. */
+export async function setProductCategoryDetectAction(
+  id: string,
+  patch: { mode?: "auto" | "show" | "hide" | "off" | null; hint?: string | null },
+): Promise<ActionResult<{ success: true }>> {
+  const { error } = await assertAdmin()
+  if (error) return createErrorResponse("AUTH", error.message, {}, "admin-product-cat-detect")
+
+  const update: Record<string, unknown> = {}
+  if (patch.mode !== undefined) {
+    if (patch.mode !== null && !["auto", "show", "hide", "off"].includes(patch.mode)) return createErrorResponse("VALIDATION", "Unknown mode", {}, "admin-product-cat-detect")
+    update.detect_mode = patch.mode
+  }
+  if (patch.hint !== undefined) update.detect_hint = patch.hint?.trim().slice(0, 500) || null
+  if (Object.keys(update).length === 0) return createSuccessResponse({ success: true as const })
+
+  const supabase = createServiceRoleSupabaseClient()
+  const { error: updateError } = await supabase.from("product_categories").update(update as any).eq("id", id)
+  if (updateError) return createErrorResponse("DATABASE", updateError.message, {}, "admin-product-cat-detect")
+
+  revalidatePath("/admin/categories")
+  return createSuccessResponse({ success: true as const })
+}
+
 /** Eigen beeld voor de schijf van een productgroep op /products (migratie
  *  321): een uitsnede of productfoto op wit, ongewijzigd opgeslagen. */
 export async function uploadProductCategoryImageAction(

@@ -6,6 +6,9 @@ import { logger } from "@/lib/logger"
 import { indexCatalogImages, voyageConfigured } from "@/lib/recognition/embeddings"
 import { tickMatching } from "@/lib/recognition/matching"
 import { promptHash } from "@/lib/recognition/config"
+import { AUTO_RECOGNIZE_SINCE } from "@/lib/recognition/flags"
+import { effectiveDetectMode } from "@/lib/recognition/detect-mode"
+import { releaseHeldLiveEmails } from "@/lib/projects/live-email"
 
 /**
  * Productherkenning, stap 1 (Notion › Product recognition, migratie 332).
@@ -105,13 +108,22 @@ function anthropic() {
  * diepste niveau. Geparkeerde categorieën en alles eronder vallen weg.
  */
 async function loadCategories(sb: any): Promise<{ menu: string; idBySlug: Map<string, string> }> {
-  const { data } = await sb.from("product_categories").select("id, slug, name, parent_id, is_active")
-  const all = (data ?? []) as Array<{ id: string; slug: string; name: string; parent_id: string | null; is_active: boolean }>
+  const { data } = await sb.from("product_categories").select("id, slug, name, parent_id, is_active, detect_mode, detect_hint")
+  const all = (data ?? []) as Array<{ id: string; slug: string; name: string; parent_id: string | null; is_active: boolean; detect_mode: string | null; detect_hint: string | null }>
   const byId = new Map(all.map((r) => [r.id, r]))
   const live = (r: (typeof all)[number] | undefined): boolean => Boolean(r && r.is_active && (!r.parent_id || live(byId.get(r.parent_id))))
   const rows = all.filter((r) => live(r))
   const hasChildren = new Set(rows.map((r) => r.parent_id).filter((x): x is string => Boolean(x)))
-  const leaves = rows.filter((r) => !hasChildren.has(r.id))
+  // Stippen uit (admin › categorieën, migraties 362–363) voor de soort of
+  // een van zijn ouders: niet in de lijst, dus geen stip (zie storeResult).
+  const ancestry = (r: (typeof all)[number]) => {
+    const out: Array<(typeof all)[number]> = []
+    for (let cur: (typeof all)[number] | undefined = r; cur && out.length < 6; cur = cur.parent_id ? byId.get(cur.parent_id) : undefined) out.unshift(cur)
+    return out
+  }
+  const leaves = rows.filter((r) => !hasChildren.has(r.id) && effectiveDetectMode(r, byId).mode !== "off")
+  // Context van de categorie en zijn ouders, van algemeen naar specifiek.
+  const hintOf = (r: (typeof all)[number]) => ancestry(r).map((c) => c.detect_hint?.trim()).filter(Boolean).join(" ")
   const pathOf = (r: { name: string; parent_id: string | null }): string => {
     const parts: string[] = []
     let cur: { name: string; parent_id: string | null } | undefined = r
@@ -119,7 +131,7 @@ async function loadCategories(sb: any): Promise<{ menu: string; idBySlug: Map<st
     return parts.join(" › ")
   }
   return {
-    menu: leaves.map((r) => `${r.slug} — ${pathOf(r)}`).sort().join("\n"),
+    menu: leaves.map((r) => { const hint = hintOf(r); return `${r.slug} — ${pathOf(r)}${hint ? ` (${hint})` : ""}` }).sort().join("\n"),
     idBySlug: new Map(leaves.map((r) => [r.slug, r.id])),
   }
 }
@@ -176,9 +188,6 @@ const clamp01 = (n: number) => Math.min(1, Math.max(0, Number.isFinite(n) ? n : 
  * niet opgeslagen en dus ook niet gekoppeld. Geen enkele goedgekeurde stip
  * was kleiner (november 2026).
  */
-/** Soorten die nooit een stip krijgen: kussens, plaids en ander los textiel. */
-const SKIPPED_KINDS = new Set(["cushions", "throws", "textiles", "kitchen-textiles"])
-
 const MIN_BOX_SIDE = 0.1
 // November 2026: van 0,5% naar 1% van de foto. Van de bewaarde (gekoppelde of
 // goedgekeurde) stippen was 4 op 101 kleiner; van de om "niet prominent"
@@ -198,12 +207,6 @@ export const prominentBox = (b: { x0: number; y0: number; x1: number; y1: number
 const AUTO_HIDE_MIN_REVIEWS = 6
 /** …waarvan minstens dit deel verwijderen was (migraties 342, 349). */
 const AUTO_HIDE_SHARE = 0.85
-/**
- * Nooit automatisch verbergen: producten die Arco voert en die vooral om
- * de stip zelf verwijderd worden (te ver weg op een buitenfoto), niet om de
- * soort — een loungeset van Dedon op het terras.
- */
-const AUTO_HIDE_PROTECTED_GROUPS = new Set(["furniture", "lighting", "outdoor"])
 export const AUTO_HIDDEN = "auto-hidden"
 
 /**
@@ -213,22 +216,30 @@ export const AUTO_HIDDEN = "auto-hidden"
  * de soort gaan (migratie 349); een paar keer goedkeuren zet de soort weer aan.
  */
 export async function autoHiddenKinds(sb: any): Promise<Set<string>> {
+  const { byStats, forced } = await hiddenKindsBySource(sb)
+  return new Set([...byStats, ...forced])
+}
+
+/**
+ * Waarom een soort meteen verborgen wordt: door de oordelen (stand Aan) of
+ * omdat hij op Verborgen staat. Stand "Altijd tonen" — producten die vooral
+ * om de stip zelf verwijderd worden (te ver weg op een buitenfoto), niet om
+ * de soort — telt de oordelen niet (migratie 363).
+ */
+export async function hiddenKindsBySource(sb: any): Promise<{ byStats: Set<string>; forced: Set<string> }> {
   const [{ data }, { data: cats }] = await Promise.all([
     sb.from("detection_kind_review_stats").select("kind_slug, reviewed, hidden"),
-    sb.from("product_categories").select("id, slug, parent_id"),
+    sb.from("product_categories").select("id, slug, parent_id, detect_mode"),
   ])
-  const rows = (cats ?? []) as Array<{ id: string; slug: string; parent_id: string | null }>
+  const rows = (cats ?? []) as Array<{ id: string; slug: string; parent_id: string | null; detect_mode: string | null }>
   const byId = new Map(rows.map((c) => [c.id, c]))
-  const bySlug = new Map(rows.map((c) => [c.slug, c]))
-  const topOf = (slug: string) => {
-    let cur = bySlug.get(slug)
-    for (let i = 0; cur?.parent_id && i < 6; i++) cur = byId.get(cur.parent_id)
-    return cur?.slug ?? null
-  }
-  return new Set(((data ?? []) as Array<{ kind_slug: string; reviewed: number; hidden: number }>)
+  const modeOf = new Map(rows.map((c) => [c.slug, effectiveDetectMode(c, byId).mode]))
+  const byStats = new Set(((data ?? []) as Array<{ kind_slug: string; reviewed: number; hidden: number }>)
     .filter((k) => Number(k.reviewed) >= AUTO_HIDE_MIN_REVIEWS && Number(k.hidden) / Number(k.reviewed) >= AUTO_HIDE_SHARE)
-    .filter((k) => !AUTO_HIDE_PROTECTED_GROUPS.has(topOf(k.kind_slug) ?? ""))
+    .filter((k) => (modeOf.get(k.kind_slug) ?? "auto") === "auto")
     .map((k) => k.kind_slug))
+  const forced = new Set(rows.filter((c) => modeOf.get(c.slug) === "hide").map((c) => c.slug))
+  return { byStats, forced }
 }
 
 /** De instellingen die met een detectie worden opgeslagen (migratie 336). */
@@ -252,12 +263,11 @@ async function storeResult(sb: any, photo: { photo_id: string; project_id: strin
   const covered = (cx: number, cy: number) => keptRows.some((k) => cx >= k.box_x0 && cx <= k.box_x1 && cy >= k.box_y0 && cy <= k.box_y1)
   const rows = (data.products ?? []).slice(0, MAX_DETECTIONS).filter((p) => {
     if (!prominentBox(p.box)) return false
-    // Alleen de soorten die Arco voert (de producttaxonomie): geen fiets,
-    // auto of kunstwerk, ook niet als Claude er toch een stip voor geeft.
+    // Alleen de soorten in de lijst: die Arco voert en waarvoor herkennen
+    // aan staat (admin › categorieën; kussens en los textiel staan uit).
+    // Geen fiets of auto, ook niet als Claude er toch een stip voor geeft.
     const slug = p.kind_slug?.trim()
     if (!slug || !idBySlug.has(slug)) return false
-    // Kussens en los textiel taggen we niet (geen collecties, zelden een merk).
-    if (SKIPPED_KINDS.has(slug)) return false
     const cx = (p.box.x0 + p.box.x1) / 2, cy = (p.box.y0 + p.box.y1) / 2
     return !covered(cx, cy)
   }).map((p, i) => {
@@ -282,7 +292,7 @@ async function storeResult(sb: any, photo: { photo_id: string; project_id: strin
       // "Ook beoordeelde tonen"; dan wordt hij alsnog gekoppeld.
       ...(slug && hiddenKinds.has(slug) ? {
         review_status: "hidden", reviewed_at: new Date().toISOString(),
-        match_status: "done", match_error: `${AUTO_HIDDEN}: ${slug} wordt bijna altijd verwijderd`,
+        match_status: "done", match_error: `${AUTO_HIDDEN}: ${slug} wordt meteen verborgen`,
       } : {}),
     }
   })
@@ -295,13 +305,9 @@ async function storeResult(sb: any, photo: { photo_id: string; project_id: strin
   return true
 }
 
-/**
- * Automatisch herkennen: projecten die live gaan (published_at, gezet door
- * trg_set_project_published_at, langs welke weg ook), vanaf deze datum.
- * Afgekeurde projecten kosten zo niets. Eerder gepubliceerde projecten
- * (backfill) gaan via "Producten herkennen" of een aparte ronde.
- */
-export const AUTO_RECOGNIZE_SINCE = "2026-11-25T00:00:00Z"
+// Automatisch herkennen vanaf AUTO_RECOGNIZE_SINCE (lib/recognition/flags):
+// ook de live-mail leest hem, zonder deze module te laden.
+export { AUTO_RECOGNIZE_SINCE }
 
 /** Foto's van live projecten (sinds AUTO_RECOGNIZE_SINCE) die nog niet herkend zijn, in de wachtrij. */
 export async function queuePublishedProjects(sb: any): Promise<number> {
@@ -414,7 +420,7 @@ export async function tickPhotoDetections(sb: any) {
         params: {
           model: DETECTION_MODEL,
           max_tokens: 4000,
-          system: [{ type: "text", text: `Product categories (slug — group › subgroup, › kind where a subgroup has kinds):\n${cats.menu}`, cache_control: { type: "ephemeral" } }],
+          system: [{ type: "text", text: `Product categories (slug — group › subgroup, › kind where a subgroup has kinds; a note in brackets is extra guidance for that category):\n${cats.menu}`, cache_control: { type: "ephemeral" } }],
           messages: [{ role: "user", content: [block, { type: "text", text: PROMPT }] }],
           output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
         },
@@ -446,6 +452,15 @@ export async function tickPhotoDetections(sb: any) {
     logger.error("Matching tick failed", {}, err as any)
   }
 
+  // 4. Live-mails die wachtten tot de stippen beoordeeld zijn (migratie 361):
+  //    ook projecten zonder iets te beoordelen, en de vangnet-termijn.
+  let liveEmails: string[] = []
+  try {
+    liveEmails = await releaseHeldLiveEmails(sb)
+  } catch (err) {
+    logger.error("Releasing held live emails failed", {}, err as any)
+  }
+
   const { count } = await sb.from("project_photo_analyses").select("photo_id", { count: "exact", head: true }).in("status", ["queued", "submitted"])
-  return { processed, submitted, pending: count ?? 0, indexed, matching }
+  return { processed, submitted, pending: count ?? 0, indexed, matching, liveEmails: liveEmails.length }
 }

@@ -108,6 +108,8 @@ export type AdminProjectRow = {
    */
   /** Productherkenning (migraties 341, 350): stippen, gekoppeld, open, en hoeveel beoordeeld. */
   products: { dots: number; linked: number; open: number; waiting: number; unknown: number; busy: boolean; reviewed: number } | null
+  /** De mail "je project staat live" wacht tot de stippen beoordeeld zijn. */
+  liveEmailHeld?: boolean
   isFeatured: boolean
   location: string | null
   createdAt: string | null
@@ -147,6 +149,9 @@ interface AdminProjectsDataTableProps {
   projects: AdminProjectRow[]
   reviewCount?: number
   firstReviewProjectId?: string | null
+  /** Live projecten met stippen die nog beoordeeld moeten worden. */
+  productCount?: number
+  firstProductProjectId?: string | null
 }
 
 const NONE = "__none__"
@@ -204,7 +209,7 @@ function MultiFilter({ label, plural, options, value, onChange }: {
   )
 }
 
-export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewProjectId }: AdminProjectsDataTableProps) {
+export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewProjectId, productCount = 0, firstProductProjectId }: AdminProjectsDataTableProps) {
   const locale = useLocale()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -750,14 +755,16 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
             href={`/dashboard/edit/${row.original.id}?products=review`}
             className="flex flex-col gap-0.5 hover:opacity-70 transition-opacity"
             style={{ textDecoration: "none", color: "inherit" }}
-            title={[`${p.linked} linked of ${p.dots} dots`, pct != null ? `${p.reviewed} of ${p.dots} reviewed` : null, p.open > 0 ? `${p.open} open` : null, detail, "Open the product reviewer"].filter(Boolean).join(" · ")}
+            title={[`${p.linked} linked of ${p.dots} dots`, row.original.liveEmailHeld ? "Live mail goes out once every dot is reviewed" : null, pct != null ? `${p.reviewed} of ${p.dots} reviewed` : null, p.open > 0 ? `${p.open} open` : null, detail, "Open the product reviewer"].filter(Boolean).join(" · ")}
           >
             <span className="arco-table-nowrap">
               <span className="arco-table-primary">{p.linked}</span>
               <span className="arco-table-secondary"> / {p.dots}</span>
               {pct != null && <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 500, color: pctColor, fontVariantNumeric: "tabular-nums" }}>{pct}%</span>}
             </span>
-            {p.busy && <span className="arco-table-secondary">analysing…</span>}
+            {p.busy
+              ? <span className="arco-table-secondary">analysing…</span>
+              : row.original.liveEmailHeld && <span className="arco-table-secondary">live mail waiting</span>}
           </Link>
         )
       },
@@ -1016,6 +1023,18 @@ export function AdminProjectsDataTable({ projects, reviewCount = 0, firstReviewP
           </DropdownMenu>
           <MultiFilter label="type" plural="types" options={typeOptions} value={typeFilter} onChange={setTypeFilter} />
           <MultiFilter label="scope" plural="scopes" options={scopeOptions} value={scopeFilter} onChange={setScopeFilter} />
+          {/* Producten: het eerste live project met open stippen, de
+              productkiezer meteen open. Naast Review, dat rechts blijft. */}
+          {productCount > 0 && firstProductProjectId && (
+            <Link
+              href={`/dashboard/edit/${firstProductProjectId}?products=review`}
+              className="btn-secondary shrink-0"
+              style={{ fontSize: 13, padding: "6px 16px", borderRadius: 3 }}
+              title="Live projects with dots still to review"
+            >
+              Products ({productCount})
+            </Link>
+          )}
           {/* Review CTA — rightmost, like Add company on Companies. */}
           {reviewCount > 0 && firstReviewProjectId && (
             <Link

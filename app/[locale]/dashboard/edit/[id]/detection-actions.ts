@@ -4,6 +4,7 @@ import { createServerActionSupabaseClient, createServiceRoleSupabaseClient } fro
 import { isAdminUser } from "@/lib/auth-utils"
 import { queueProjectPhotos } from "@/lib/recognition/photo-detections"
 import { OWNER_REVIEW_ENABLED } from "@/lib/recognition/flags"
+import { releaseHeldLiveEmails } from "@/lib/projects/live-email"
 import { cosine, groupDetections, MAYBE_SAME_SIMILARITY, parseVector } from "@/lib/recognition/grouping"
 import { randomUUID } from "node:crypto"
 import { createSuggestedBrand } from "@/lib/brands/suggested"
@@ -348,8 +349,8 @@ export async function requestPhotoDetections(projectId: string, force = false): 
 export type CatalogTarget = { kind: MatchLevel; id: string }
 
 /** Waarom een stip weg moet (migratie 348); de keuzes in de kaart, alleen voor admins. */
-export type HideReason = "not_prominent" | "bespoke" | "not_carried" | "duplicate" | "wrong_box" | "other"
-const HIDE_REASONS = new Set<HideReason>(["not_prominent", "bespoke", "not_carried", "duplicate", "wrong_box", "other"])
+export type HideReason = "not_prominent" | "bespoke" | "not_carried" | "duplicate" | "wrong_box" | "not_high_end" | "other"
+const HIDE_REASONS = new Set<HideReason>(["not_prominent", "bespoke", "not_carried", "duplicate", "wrong_box", "not_high_end", "other"])
 
 export type ReviewAction =
   /** Deze kandidaat klopt (eventueel op een ander niveau). */
@@ -369,6 +370,8 @@ export type ReviewAction =
   | { type: "level"; level: MatchLevel }
   /** De stip verplaatsen (het kader schuift mee). */
   | { type: "move"; x: number; y: number }
+  /** Het kader aanpassen (0–1); de stip blijft erbinnen. */
+  | { type: "box"; x0: number; y0: number; x1: number; y1: number }
   /** Alleen een zelf toegevoegde stip. */
   | { type: "delete" }
 
@@ -411,9 +414,9 @@ const GROUP_ACTIONS = new Set<ReviewAction["type"]>(["approve", "pick", "reject"
  * hetzelfde product op andere foto's. Die krijgen hetzelfde oordeel, maar
  * alleen als ze nog niet beoordeeld zijn: een eerder oordeel blijft staan.
  */
-export async function reviewDetection(detectionId: string, action: ReviewAction, alsoIds: string[] = []): Promise<{ ok: true; applied: number } | { error: string }> {
+export async function reviewDetection(detectionId: string, action: ReviewAction, alsoIds: string[] = []): Promise<{ ok: true; applied: number; liveEmailSent?: boolean } | { error: string }> {
   const sb = createServiceRoleSupabaseClient() as any
-  const cols = "id, project_id, photo_id, source, review_status, box_x0, box_y0, box_x1, box_y1"
+  const cols = "id, project_id, photo_id, source, review_status, box_x0, box_y0, box_x1, box_y1, dot_x, dot_y"
   const { data: det } = await sb.from("project_photo_detections").select(cols).eq("id", detectionId).maybeSingle()
   if (!det) return { error: "Product niet gevonden." }
   const guard = await requireProjectAccess(det.project_id)
@@ -455,7 +458,13 @@ export async function reviewDetection(detectionId: string, action: ReviewAction,
       await logReview(sb, { detectionId: sib.id, projectId: sib.project_id, photoId: sib.photo_id, action: sibType, payload: { ...sibPayload, via: detectionId }, before: sibBefore, after: await snapshot(sb, sib.id), userId: guard.userId, role: guard.role })
     }
   }
-  return { ok: true, applied }
+  // De laatste open stip beoordeeld door een admin: de live-mail die
+  // daarop wachtte nu versturen (migratie 361; anders doet de cron het).
+  let liveEmailSent = false
+  if (guard.role === "admin") {
+    try { liveEmailSent = (await releaseHeldLiveEmails(sb, det.project_id)).length > 0 } catch { /* de cron vangt het op */ }
+  }
+  return { ok: true, applied, liveEmailSent }
 }
 
 type MatchTarget = { level: MatchLevel; brand_id: string; collection_id: string | null; product_id: string | null }
@@ -633,7 +642,11 @@ async function applyReview(sb: any, det: any, detectionId: string, action: Revie
       return { ok: true }
     }
     case "unknown": {
-      await setDetection({ review_status: "unknown", hidden_reason: null, ...reviewed })
+      // Wel een product, niet te zeggen welk: het voorstel klopt dan ook niet
+      // (zoals "klopt niet" vroeger), zodat dat oordeel bewaard blijft.
+      await rejectOthers()
+      await matches().delete().eq("detection_id", detectionId).eq("source", "manual")
+      await setDetection({ review_status: "unknown", missing_brand: null, missing_name: null, missing_brand_id: null, hidden_reason: null, ...reviewed })
       return { ok: true }
     }
     case "reset": {
@@ -658,6 +671,26 @@ async function applyReview(sb: any, det: any, detectionId: string, action: Revie
     case "move": {
       // Alleen de stip verplaatsen (migratie 346); het kader is het product.
       await setDetection({ dot_x: clamp01(action.x), dot_y: clamp01(action.y) })
+      return { ok: true }
+    }
+    case "box": {
+      const x0 = clamp01(Math.min(action.x0, action.x1)), x1 = clamp01(Math.max(action.x0, action.x1))
+      const y0 = clamp01(Math.min(action.y0, action.y1)), y1 = clamp01(Math.max(action.y0, action.y1))
+      if (x1 - x0 < 0.01 || y1 - y0 < 0.01) return { error: "Het kader is te klein." }
+      // De stip naar het midden van het nieuwe kader (zonder eigen plek staat
+      // hij daar vanzelf); daarna is hij weer te verslepen.
+      const patch: Record<string, unknown> = {
+        box_x0: x0, box_y0: y0, box_x1: x1, box_y1: y1,
+        dot_x: null, dot_y: null,
+      }
+      // Nog niet beoordeeld en door Claude gevonden: opnieuw koppelen met de
+      // nieuwe uitsnede (de cron pakt match_status null op). Wat al beoordeeld
+      // is, houdt zijn koppeling; alleen het kader verandert.
+      if (!det.review_status && det.source === "ai") {
+        await matches().delete().eq("detection_id", detectionId).or("source.is.null,source.neq.manual")
+        Object.assign(patch, { embedding: null, match_status: null, match_batch_id: null, match_error: null })
+      }
+      await setDetection(patch)
       return { ok: true }
     }
     case "delete": {

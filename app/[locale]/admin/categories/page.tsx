@@ -4,6 +4,7 @@ import { canonicalizeScope } from "@/lib/project-translations"
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server"
 import { logger } from "@/lib/logger"
 import { toPublishScope } from "@/lib/publish-scope"
+import { hiddenKindsBySource } from "@/lib/recognition/photo-detections"
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Categories" }
@@ -47,20 +48,15 @@ export default async function CategoriesPage() {
   }))
 
   // Fetch product categories (separate table)
-  const [{ data: productCategoriesData }, { data: brandCategoryRows }, { data: collectionRows }, { data: collectionKindRows }, { data: productShotRows }, productCategoryRows] = await Promise.all([
-    (serviceSupabase as any).from("product_categories").select("id, slug, name, name_nl, parent_id, order_index, is_active, image_url").order("order_index"),
+  const [{ data: productCategoriesData }, { data: brandCategoryRows }, { data: collectionRows }, { data: collectionKindRows }, productCategoryRows] = await Promise.all([
+    (serviceSupabase as any).from("product_categories").select("id, slug, name, name_nl, parent_id, order_index, is_active, image_url, detect_mode, detect_hint").order("order_index"),
     selectAll(() => (serviceSupabase as any).from("brand_categories").select("brand_id, category_id").order("brand_id").order("category_id")),
     (serviceSupabase as any).from("product_collections").select("id, category_id"),
     (serviceSupabase as any).from("product_collection_kinds").select("collection_id, category_id"),
-    (serviceSupabase as any).from("product_collection_photos").select("collection_id, url, order_index").eq("kind", "product").order("order_index"),
     // De soort van elk product: collecties hangen aan subgroepen (migratie 351),
     // een soort als Hoekbanken telt via de producten.
     selectAll(() => (serviceSupabase as any).from("products").select("id, collection_id, category_id").not("collection_id", "is", null).not("category_id", "is", null).order("id")),
   ])
-  // Voorbeeld van de automatische schijf op /products: een productfoto uit
-  // een collectie in de groep (de publieke pagina kiest de meest toegepaste).
-  const productShot = new Map<string, string>()
-  for (const r of (productShotRows ?? []) as Array<{ collection_id: string; url: string }>) if (!productShot.has(r.collection_id)) productShot.set(r.collection_id, r.url)
 
   const productCategoryNameMap = new Map<string, string>()
   for (const row of productCategoriesData ?? []) {
@@ -84,6 +80,10 @@ export default async function CategoriesPage() {
   for (const r of (collectionKindRows ?? []) as Array<{ collection_id: string; category_id: string }>) addCollection(r.category_id, r.collection_id)
   for (const r of (productCategoryRows?.data ?? []) as Array<{ collection_id: string; category_id: string }>) addCollection(r.category_id, r.collection_id)
 
+  // Soorten waarvan nieuwe stippen meteen verborgen worden (bijna altijd
+  // verwijderd door admins): zichtbaar in de kolom Stippen.
+  const autoHidden = await hiddenKindsBySource(serviceSupabase).then((r) => r.byStats).catch(() => new Set<string>())
+
   const productCategories = ((productCategoriesData ?? []) as any[]).map((row: any) => ({
     id: row.id,
     slug: row.slug,
@@ -94,7 +94,9 @@ export default async function CategoriesPage() {
     orderIndex: row.order_index ?? 0,
     isActive: row.is_active ?? true,
     imageUrl: row.image_url ?? null,
-    autoImageUrl: Array.from(collectionsPer.get(row.id) ?? []).map((id) => productShot.get(id)).find(Boolean) ?? null,
+    detectMode: row.detect_mode ?? null,
+    detectHint: row.detect_hint ?? null,
+    autoHidden: autoHidden.has(row.slug),
     brandCount: brandsPer.get(row.id)?.size ?? 0,
     collectionCount: collectionsPer.get(row.id)?.size ?? 0,
   }))

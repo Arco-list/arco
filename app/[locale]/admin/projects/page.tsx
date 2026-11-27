@@ -28,7 +28,7 @@ async function loadAdminProjectsData() {
     serviceSupabase
       .from("projects")
       .select(
-        "id, title, slug, status, is_featured, rejection_reason, project_type, kind, primary_space:spaces!projects_primary_space_id_fkey(slug), client_id, project_year, created_at, location, address_city, address_region, seo_indexed, seo_indexation_state, seo_impressions_28d, seo_clicks_28d, seo_ctr_28d, seo_position_28d, project_photos(count), project_categories(category_id, is_primary), client:profiles!projects_client_id_fkey(is_active)"
+        "id, title, slug, status, is_featured, rejection_reason, live_email_held_at, project_type, kind, primary_space:spaces!projects_primary_space_id_fkey(slug), client_id, project_year, created_at, location, address_city, address_region, seo_indexed, seo_indexation_state, seo_impressions_28d, seo_clicks_28d, seo_ctr_28d, seo_position_28d, project_photos(count), project_categories(category_id, is_primary), client:profiles!projects_client_id_fkey(is_active)"
       )
       .eq("client.is_active", true)
       .order("created_at", { ascending: false, nullsFirst: false }),
@@ -194,6 +194,8 @@ async function loadAdminProjectsData() {
         : canonicalizeScope(project.project_type),
       imageCount,
       products: productsByProject.get(id) ?? null,
+      // De live-mail wacht op de beoordeling van de stippen (migratie 361).
+      liveEmailHeld: Boolean((project as any).live_email_held_at),
       isFeatured: project.is_featured ?? false,
       location,
       createdAt: project.created_at ?? null,
@@ -217,6 +219,11 @@ export default async function ProjectsPage() {
 
   const reviewProjects = projects.filter((p) => p.status === "in_progress")
   const firstReviewProjectId = reviewProjects[0]?.id ?? null
+  // Stippen te beoordelen: live projecten met open stippen, klaar met
+  // herkennen. Eerst de projecten waarvan de live-mail erop wacht.
+  const productProjects = projects
+    .filter((p) => p.status === "published" && p.products && p.products.open > 0 && !p.products.busy)
+    .sort((a, b) => Number(Boolean(b.liveEmailHeld)) - Number(Boolean(a.liveEmailHeld)))
 
   return (
     <div className="min-h-screen bg-white">
@@ -226,6 +233,8 @@ export default async function ProjectsPage() {
         projects={projects}
         reviewCount={reviewProjects.length}
         firstReviewProjectId={firstReviewProjectId}
+        productCount={productProjects.length}
+        firstProductProjectId={productProjects[0]?.id ?? null}
       />
     </div>
   )

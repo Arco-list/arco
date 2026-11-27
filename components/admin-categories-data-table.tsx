@@ -3,9 +3,11 @@
 import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { AdminTabs, useAdminTab } from "@/components/admin/admin-tabs"
-import { MoreHorizontal, Plus } from "lucide-react"
+import { Info, MoreHorizontal, Plus } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { productGroupIcon } from "@/lib/icons/product-groups"
+import { DETECT_MODES, effectiveDetectMode, type DetectMode } from "@/lib/recognition/detect-mode"
 
 import {
   createCategoryAction,
@@ -121,10 +123,14 @@ export type AdminProductCategoryRow = {
   /** Merken en collecties in deze categorie en alles eronder. */
   brandCount: number
   collectionCount: number
-  /** Eigen beeld voor de schijf op /products (migratie 321). */
+  /** Eigen beeld voor de schijf op /products (migratie 321); zonder: de illustratie. */
   imageUrl?: string | null
-  /** Wat /products zonder eigen beeld toont: een productfoto uit de groep. */
-  autoImageUrl?: string | null
+  /** Stippen bij herkennen (migratie 363): eigen stand, null = van de ouder. */
+  detectMode?: DetectMode | null
+  /** Extra context voor Claude (migratie 362), afgesproken in de chat. */
+  detectHint?: string | null
+  /** Nieuwe stippen van deze soort worden meteen verborgen (bijna altijd verwijderd). */
+  autoHidden?: boolean
 }
 
 interface Props {
@@ -1070,6 +1076,8 @@ function ProductCategoriesTab({ productCategories, nl }: { productCategories: Ad
     [productCategories]
   )
 
+  const byId = useMemo(() => new Map(productCategories.map((c) => [c.id, c])), [productCategories])
+
   const childrenMap = useMemo(() => {
     const map = new Map<string, AdminProductCategoryRow[]>()
     for (const child of productCategories.filter((c) => c.parentId)) {
@@ -1115,58 +1123,124 @@ function ProductCategoriesTab({ productCategories, nl }: { productCategories: Ad
     })
   }
 
-  // Beeld voor de schijf op /products (alleen hoofdgroepen staan daar):
-  // eigen uitsnede, anders automatisch een productfoto uit de groep.
-  const handleImage = (item: AdminProductCategoryRow, file: File | null) => {
+  // Stippen (migraties 362–363): de stand kiezen in een dropdown op de
+  // plek van de klik, zoals de status bij merken. De context voor Claude
+  // spreken we in de chat af; hier alleen de i.
+  const [detectMenu, setDetectMenu] = useState<{ item: AdminProductCategoryRow; x: number; y: number } | null>(null)
+  const saveDetect = (item: AdminProductCategoryRow, mode: DetectMode | null) => {
     startTransition(async () => {
-      const { uploadProductCategoryImageAction, clearProductCategoryImageAction } = await import("@/app/admin/categories/actions")
-      let ok = false
-      if (file) {
-        const fd = new FormData()
-        fd.append("file", file)
-        fd.append("categoryId", item.id)
-        ok = (await uploadProductCategoryImageAction(fd)).success
-      } else {
-        ok = (await clearProductCategoryImageAction(item.id)).success
-      }
-      if (!ok) toast.error(nl ? "Beeld opslaan mislukt" : "Failed to save image")
+      const { setProductCategoryDetectAction } = await import("@/app/admin/categories/actions")
+      const result = await setProductCategoryDetectAction(item.id, { mode })
+      if (!result.success) toast.error(nl ? "Opslaan mislukt" : "Failed to save")
       else router.refresh()
     })
   }
-
-  const imageCell = (item: AdminProductCategoryRow) => {
-    const url = item.imageUrl ?? item.autoImageUrl ?? null
+  const MODE: Record<DetectMode, { dot: string; label: string; desc: string }> = {
+    auto: { dot: "bg-emerald-500", label: "Auto", desc: nl ? "Stippen; een soort die admins bijna altijd verwijderen wordt vanzelf verborgen" : "Dots; a kind admins almost always remove is hidden automatically" },
+    show: { dot: "bg-emerald-500", label: nl ? "Altijd tonen" : "Always show", desc: nl ? "Stippen, nooit automatisch verbergen" : "Dots, never hidden automatically" },
+    hide: { dot: "bg-amber-500", label: nl ? "Verborgen" : "Hidden", desc: nl ? "Stippen worden geplaatst maar meteen verborgen" : "Dots are placed but hidden right away" },
+    off: { dot: "bg-[#d4d4d3]", label: nl ? "Uit" : "Off", desc: nl ? "Geen stippen: niet in de lijst voor Claude" : "No dots: not in the list for Claude" },
+  }
+  const detectCell = (item: AdminProductCategoryRow) => {
+    const { mode, from } = effectiveDetectMode(item, byId)
+    const inherited = from && from.id !== item.id ? from : null
+    const autoHidden = mode === "auto" && item.autoHidden
+    const dot = autoHidden ? "bg-amber-500" : MODE[mode].dot
+    const text = autoHidden ? (nl ? "Auto verborgen" : "Auto-hidden") : MODE[mode].label
+    const title = [
+      autoHidden ? (nl ? "Admins verwijderen deze soort bijna altijd: nieuwe stippen worden meteen verborgen" : "Admins almost always remove this kind: new dots are hidden right away") : MODE[mode].desc,
+      inherited ? (nl ? `Overgenomen van ${label(inherited)}` : `Inherited from ${label(inherited)}`) : null,
+    ].filter(Boolean).join(" · ")
     return (
       <td>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div
-            title={item.imageUrl ? (nl ? "Eigen beeld" : "Custom image") : (nl ? "Automatisch: productfoto uit de groep" : "Automatic: product photo from the group")}
-            style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--arco-surface)", overflow: "hidden", flexShrink: 0, opacity: item.imageUrl ? 1 : 0.6 }}
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <button
+            type="button"
+            className="arco-table-status"
+            title={title}
+            onClick={(e) => setDetectMenu({ item, x: e.clientX, y: e.clientY })}
+            style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6, opacity: inherited ? 0.6 : 1 }}
           >
-            {url && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", padding: "12%", boxSizing: "border-box", mixBlendMode: "multiply" }} />
-            )}
-          </div>
-          <label className="arco-table-secondary" style={{ cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2 }}>
-            {item.imageUrl ? (nl ? "Wijzig" : "Change") : (nl ? "Upload" : "Upload")}
-            <input
-              type="file"
-              accept="image/png,image/webp,image/jpeg"
-              style={{ display: "none" }}
-              onChange={(e) => { const f = e.target.files?.[0] ?? null; e.target.value = ""; if (f) handleImage(item, f) }}
-            />
-          </label>
-          {item.imageUrl && (
-            <button type="button" className="arco-table-secondary" onClick={() => handleImage(item, null)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }} title={nl ? "Terug naar automatisch" : "Back to automatic"}>
-              ✕
-            </button>
+            <span className={cn("arco-table-status-dot", dot)} />
+            <span>{text}</span>
+          </button>
+          {/* Context voor Claude (afgesproken in de chat): de tekst bij hover. */}
+          {item.detectHint && (
+            <span title={`Context: ${item.detectHint}`} aria-label={`Context: ${item.detectHint}`} style={{ display: "flex", color: "#a1a1a0", cursor: "help" }}>
+              <Info size={14} strokeWidth={1.5} />
+            </span>
           )}
         </div>
       </td>
     )
   }
+  const detectDropdown = (() => {
+    const item = detectMenu?.item ?? null
+    const parent = item?.parentId ? byId.get(item.parentId) ?? null : null
+    const parentMode = parent ? effectiveDetectMode(parent, byId).mode : null
+    return (
+      <DropdownMenu open={Boolean(detectMenu)} onOpenChange={(open) => { if (!open) setDetectMenu(null) }}>
+        <DropdownMenuTrigger asChild>
+          <span aria-hidden style={{ position: "fixed", left: detectMenu?.x ?? 0, top: detectMenu?.y ?? 0, width: 0, height: 0 }} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="min-w-[170px]">
+          {item && parent && parentMode && (
+            <>
+              <DropdownMenuItem
+                title={nl ? `Dezelfde stand als ${label(parent)}` : `Same as ${label(parent)}`}
+                className={`text-xs cursor-pointer flex items-center gap-1.5${!item.detectMode ? " font-semibold bg-[#f5f5f4]" : ""}`}
+                onClick={() => { if (item.detectMode) saveDetect(item, null) }}
+              >
+                <span className={cn("inline-block h-1.5 w-1.5 rounded-full", MODE[parentMode].dot)} style={{ opacity: 0.6 }} />
+                {nl ? `Als ${label(parent)}` : `As ${label(parent)}`} ({MODE[parentMode].label.toLowerCase()})
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
+          {item && DETECT_MODES.map((m) => {
+            // Bovenaan is "Auto" de standaard: geen eigen stand nodig.
+            const isCurrent = item.detectMode === m || (!parent && !item.detectMode && m === "auto")
+            return (
+              <DropdownMenuItem
+                key={m}
+                title={MODE[m].desc}
+                className={`text-xs cursor-pointer flex items-center gap-1.5${isCurrent ? " font-semibold bg-[#f5f5f4]" : ""}`}
+                onClick={() => { if (!isCurrent) saveDetect(item, !parent && m === "auto" ? null : m) }}
+              >
+                <span className={cn("inline-block h-1.5 w-1.5 rounded-full", MODE[m].dot)} />
+                {MODE[m].label}
+              </DropdownMenuItem>
+            )
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  })()
 
+  // De illustratie van de groep, of die van zijn ouders (zoals op /products).
+  const slugPath = (item: AdminProductCategoryRow): string[] => {
+    const out: string[] = []
+    for (let cur: AdminProductCategoryRow | undefined = item; cur && out.length < 4; cur = cur.parentId ? byId.get(cur.parentId) : undefined) out.push(cur.slug)
+    return out
+  }
+  // De schijf voor de naam, zoals bij ruimtes op de tab Projecten.
+  const avatar = (item: AdminProductCategoryRow) => {
+    const Icon = productGroupIcon(...slugPath(item))
+    return (
+      <div
+        className="arco-table-avatar"
+        title={item.imageUrl ? (nl ? "Eigen beeld" : "Custom image") : (nl ? "Illustratie (zoals op /products)" : "Illustration (as on /products)")}
+        style={{ background: "#f5f5f4", color: "#1c1c1a", overflow: "hidden" }}
+      >
+        {item.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={item.imageUrl} alt="" style={{ objectFit: "contain", padding: "12%", boxSizing: "border-box", mixBlendMode: "multiply", borderRadius: 0 }} />
+        ) : (
+          <Icon size={24} strokeWidth={1} />
+        )}
+      </div>
+    )
+  }
   const cells = (item: AdminProductCategoryRow) => (
     <>
       <td>
@@ -1181,6 +1255,7 @@ function ProductCategoriesTab({ productCategories, nl }: { productCategories: Ad
           <span>{item.isActive ? (nl ? "Actief" : "Active") : (nl ? "Inactief" : "Inactive")}</span>
         </button>
       </td>
+      {detectCell(item)}
       <td className="arco-table-nowrap" style={{ fontVariantNumeric: "tabular-nums", color: item.brandCount ? undefined : "var(--text-disabled)" }}>{item.brandCount}</td>
       <td className="arco-table-nowrap" style={{ fontVariantNumeric: "tabular-nums", color: item.collectionCount ? undefined : "var(--text-disabled)" }}>{item.collectionCount}</td>
     </>
@@ -1216,12 +1291,13 @@ function ProductCategoriesTab({ productCategories, nl }: { productCategories: Ad
 
   return (
     <div className="arco-table-wrap max-w-full min-w-0">
+      {detectDropdown}
       <table className="arco-table">
         <thead>
           <tr>
             <th>{nl ? "Categorie" : "Category"}</th>
-            <th style={{ width: 150 }}>{nl ? "Beeld" : "Image"}</th>
             <th style={{ width: 120 }}>Status</th>
+            <th style={{ width: 170 }} title={nl ? "Stippen plaatsen bij het herkennen van projectfoto's, met extra context voor Claude" : "Place dots when recognising project photos, with extra context for Claude"}>{nl ? "Stippen" : "Dots"}</th>
             <th style={{ width: 100 }}>{nl ? "Merken" : "Brands"}</th>
             <th style={{ width: 100 }}>{nl ? "Collecties" : "Collections"}</th>
             <th style={{ width: 60 }}>{nl ? "Volgorde" : "Order"}</th>
@@ -1259,13 +1335,13 @@ function ProductCategoriesTab({ productCategories, nl }: { productCategories: Ad
                         ) : (
                           <div style={{ width: 14 }} />
                         )}
+                        {avatar(parent)}
                         <div>
                           <div className="arco-table-primary" style={{ fontWeight: 500 }}>{label(parent)}</div>
                           <div className="arco-table-secondary">{parent.slug}</div>
                         </div>
                       </div>
                     </td>
-                    {imageCell(parent)}
                     {cells(parent)}
                     <td><ArrowButtons item={parent} siblings={parents} /></td>
                   </tr>
@@ -1295,25 +1371,27 @@ function ProductCategoriesTab({ productCategories, nl }: { productCategories: Ad
                               ) : (
                                 <div style={{ width: 14 }} />
                               )}
+                              {avatar(child)}
                               <div>
                                 <div className="arco-table-primary">{label(child)}</div>
                                 <div className="arco-table-secondary">{child.slug}</div>
                               </div>
                             </div>
                           </td>
-                          <td />
                           {cells(child)}
                           <td><ArrowButtons item={child} siblings={children} /></td>
                         </tr>
                         {isChildExpanded && grandchildren.map((gc) => (
                           <tr key={gc.id}>
                             <td>
-                              <div style={{ paddingLeft: 52 }}>
-                                <div className="arco-table-primary">{label(gc)}</div>
-                                <div className="arco-table-secondary">{gc.slug}</div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 52 }}>
+                                {avatar(gc)}
+                                <div>
+                                  <div className="arco-table-primary">{label(gc)}</div>
+                                  <div className="arco-table-secondary">{gc.slug}</div>
+                                </div>
                               </div>
                             </td>
-                            <td />
                             {cells(gc)}
                             <td><ArrowButtons item={gc} siblings={grandchildren} /></td>
                           </tr>

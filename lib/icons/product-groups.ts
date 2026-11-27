@@ -3,6 +3,7 @@ import type { LucideIcon } from "lucide-react"
 import {
   ArtIcon,
   BathroomIcon,
+  BedroomIcon,
   BuilderIcon,
   CabinetMakerIcon,
   ElectricalIcon,
@@ -18,6 +19,7 @@ import {
   OutdoorLightingIcon,
   PainterIcon,
   RoofingIcon,
+  ShedBuilderIcon,
   StairsIcon,
   SwimmingPoolIcon,
   TilesStonesIcon,
@@ -33,6 +35,7 @@ import {
  * de merk- en collectiekaarten. Een subgroep zonder eigen tekening krijgt
  * die van zijn hoofdgroep. Een eigen beeld van de categorie (admin ›
  * categorieën) gaat voor; daar komen tzt de specifieke illustraties.
+ * Admin › categorieën toont dezelfde keuze.
  */
 const PRODUCT_GROUP_ICONS: Record<string, LucideIcon> = {
   // Hoofdgroepen
@@ -45,21 +48,29 @@ const PRODUCT_GROUP_ICONS: Record<string, LucideIcon> = {
   decor: InteriorStylingIcon,
   finishes: FlooringIcon,
   construction: BuilderIcon,
-  // Subgroepen
-  "sofas-armchairs": UpholsteryIcon,
+  // Subgroepen (indeling v2, migratie 351); zonder eigen tekening die van
+  // de hoofdgroep (pendant, tafels, wastafels…).
+  sofas: UpholsteryIcon,
+  armchairs: UpholsteryIcon,
   storage: CabinetMakerIcon,
-  "indoor-lighting": LightingIcon,
+  bedroom: BedroomIcon,
   "outdoor-lighting": OutdoorLightingIcon,
   kitchens: KitchenIcon,
   countertops: TilesStonesIcon,
+  "sauna-steam": WellnessIcon,
+  spas: WellnessIcon,
   pools: SwimmingPoolIcon,
-  "outdoor-furniture": OutdoorFurnitureIcon,
-  "garden-accessories": GardenerIcon,
+  "outdoor-lounge": OutdoorFurnitureIcon,
   "fire-heat": FireplaceIcon,
-  art: ArtIcon,
-  textiles: UpholsteryIcon,
-  doors: WindowsDoorsIcon,
+  pergolas: ShedBuilderIcon,
+  "garden-accessories": GardenerIcon,
   "indoor-fireplaces": FireplaceIcon,
+  "home-accessories": InteriorStylingIcon,
+  rugs: FlooringIcon,
+  "window-treatments": WindowsDoorsIcon,
+  art: ArtIcon,
+  // Geparkeerd (Afwerking, Bouw & techniek): niet in het menu, wel in admin.
+  doors: WindowsDoorsIcon,
   radiators: HeatingVentilationIcon,
   stairs: StairsIcon,
   walls: PainterIcon,

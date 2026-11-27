@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { resolveFeatureIcon } from "@/lib/icons/project-features"
+import { spaceMark } from "@/lib/icons/space-marks"
 import { cn } from "@/lib/utils"
 
 /**
@@ -116,19 +117,16 @@ export function SpacesTab({ spaces, services, serviceSpaces, search, pending, on
             {rows.length === 0 ? (
               <tr><td colSpan={6} style={{ height: 96, textAlign: "center", color: "var(--text-disabled)" }}>{q ? c.noMatch : c.none}</td></tr>
             ) : rows.map((s) => {
-              const Icon = resolveFeatureIcon(s.iconKey ?? s.slug)
+              // De illustratie van /projects; zonder eigen tekening het pictogram.
+              const Mark = spaceMark(s.slug)
+              const Icon = Mark ?? resolveFeatureIcon(s.iconKey ?? s.slug)
               const publishers = (publishersBySpace.get(s.id) ?? []).join(" · ")
               return (
                 <tr key={s.id} onClick={(e) => openMenu(e, s)} style={{ cursor: "pointer" }}>
                   <td>
                     <div className="flex items-center gap-2">
                       <div className="arco-table-avatar" style={{ background: "#f5f5f4", color: "#1c1c1a" }}>
-                        {s.cutoutUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={s.cutoutUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />
-                        ) : (
-                          <Icon size={16} strokeWidth={1} />
-                        )}
+                        {Mark ? <Mark size={24} strokeWidth={1} /> : <Icon size={16} strokeWidth={1} />}
                       </div>
                       <div className="flex flex-col min-w-0">
                         <span className="arco-table-primary">{label(s)}</span>

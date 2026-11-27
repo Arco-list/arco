@@ -1,5 +1,6 @@
 "use client"
 
+import { spaceMark } from "@/lib/icons/space-marks"
 import { useState } from "react"
 import { useLocale, useTranslations } from "next-intl"
 import { QuickRow } from "@/components/quick-row"
@@ -15,9 +16,11 @@ import { pluralizeLabel } from "@/lib/pluralize-label"
 import { PROVINCES, cityLabel } from "@/lib/provinces"
 import { scopeLabel, spaceNoun } from "@/lib/type-labels"
 
-/** Een ruimte als cirkel: de uitsnede (object op de beige schijf) als die er is, anders het pictogram van de ruimte. */
-function SpaceIcon({ iconKey }: { iconKey: string }) {
-  const Icon = resolveFeatureIcon(iconKey)
+/** Een ruimte als cirkel: de lijnillustratie van de ruimte (lib/icons/space-marks),
+ *  zoals de diensten op /professionals en de productgroepen op /products;
+ *  zonder eigen tekening het pictogram van de ruimte. */
+function SpaceIcon({ slug, iconKey }: { slug: string; iconKey: string }) {
+  const Icon = spaceMark(slug) ?? resolveFeatureIcon(iconKey)
   return <Icon className="credit-icon-service" strokeWidth={1} />
 }
 
@@ -274,12 +277,7 @@ export function DiscoverClient({ initialProjects, initialSort = DEFAULT_PROJECT_
                 className="credit-card service-quick-card quick-tile"
               >
                 <div className="credit-icon">
-                  {s.cutoutUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={s.cutoutUrl} alt="" className="credit-cutout" />
-                  ) : (
-                    <SpaceIcon iconKey={s.iconKey ?? s.slug} />
-                  )}
+                  <SpaceIcon slug={s.slug} iconKey={s.iconKey ?? s.slug} />
                 </div>
                 <h3 className="quick-tile-label">{s.label}</h3>
               </Link>

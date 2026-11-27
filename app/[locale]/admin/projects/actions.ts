@@ -9,7 +9,7 @@ import { logger } from "@/lib/logger"
 import { generateUniqueSlug, isValidSlug } from "@/lib/seo-utils"
 import { getSiteUrl } from "@/lib/utils"
 import { sendProjectStatusEmail } from "@/lib/email-service"
-import { getCompanyEmailRecipients } from "@/lib/companies/company-email-recipients"
+import { holdLiveEmailForReview, projectMailContext, sendProjectLiveEmail } from "@/lib/projects/live-email"
 import { 
   ActionResult, 
   createErrorResponse, 
@@ -356,112 +356,9 @@ export async function setProjectStatusAction(input: {
   // Send emails based on status change
   if (statusResult.data === "published" || statusResult.data === "rejected") {
     try {
-      // Get project details and owner email
-      const { data: project } = await serviceClient
-        .from('projects')
-        .select(`
-          title,
-          slug,
-          client_id,
-          location,
-          address_city,
-          building_type,
-          project_type,
-          project_type_category_id,
-          profiles!client_id(first_name, last_name)
-        `)
-        .eq('id', idResult.data)
-        .single()
-
-      // Fetch primary photo
-      const { data: projectPhoto } = await serviceClient
-        .from('project_photos')
-        .select('url')
-        .eq('project_id', idResult.data)
-        .order('order_index', { ascending: true })
-        .limit(1)
-        .maybeSingle()
-
-      // Resolve project type label
-      let projectTypeLabel: string | undefined
-      const bt = (project as any)?.building_type
-      const btIsUuid = bt && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bt)
-      if (bt && !btIsUuid) {
-        projectTypeLabel = bt.charAt(0).toUpperCase() + bt.slice(1).replace(/-/g, " ")
-      }
-      if (!projectTypeLabel) {
-        const catId = btIsUuid ? bt : (project as any)?.project_type_category_id
-        if (catId) {
-          const { data: cat } = await serviceClient.from("categories").select("name").eq("id", catId).maybeSingle()
-          if (cat?.name) projectTypeLabel = cat.name
-        }
-      }
-      if (!projectTypeLabel && (project as any)?.project_type) {
-        projectTypeLabel = (project as any).project_type
-      }
-      
-      logger.info("Project data retrieved", {
-        scope: "admin-projects",
-        projectId: idResult.data,
-        hasTitle: !!project?.title,
-        hasClientId: !!project?.client_id,
-        hasProfile: !!project?.profiles
-      })
-
-      // Get owner's email from auth.users table
-      let ownerEmail: string | null = null
-      if (project?.client_id) {
-        try {
-          const { data: ownerAuth, error: authError } = await serviceClient.auth.admin.getUserById(project.client_id)
-          ownerEmail = ownerAuth?.user?.email || null
-          
-          logger.info("Owner auth lookup", {
-            scope: "admin-projects",
-            clientId: project.client_id,
-            hasEmail: !!ownerEmail,
-            authError: authError?.message
-          })
-        } catch (error) {
-          logger.error("Failed to get owner email", {
-            scope: "admin-projects",
-            clientId: project.client_id,
-            error: getErrorMessage(error)
-          })
-        }
-      }
-      
-      // Fan out to the owning company's team: every contact with the
-      // company-mail toggle on (team page). Projects without a company
-      // keep the old owner-only behavior via the fallback below.
-      const { data: ownerCredit } = await serviceClient
-        .from("project_professionals")
-        .select("company_id")
-        .eq("project_id", idResult.data)
-        .eq("is_project_owner", true)
-        .not("company_id", "is", null)
-        .maybeSingle()
-      let recipients = ownerCredit?.company_id
-        ? await getCompanyEmailRecipients(ownerCredit.company_id)
-        : []
-      if (recipients.length === 0 && ownerEmail) {
-        recipients = [{ email: ownerEmail, userId: project?.client_id ?? null }]
-      }
-
-      // Greet each receiver by their own first name, not the owner's.
-      const firstNameByUserId = new Map<string, string>()
-      const recipientUserIds = recipients.map((r) => r.userId).filter((id): id is string => Boolean(id))
-      if (recipientUserIds.length > 0) {
-        const { data: recipientProfiles } = await serviceClient
-          .from("profiles")
-          .select("id, first_name")
-          .in("id", recipientUserIds)
-        for (const p of recipientProfiles ?? []) {
-          if (p.first_name) firstNameByUserId.set(p.id, p.first_name)
-        }
-      }
-      const firstnameFor = (r: { userId: string | null }) =>
-        (r.userId ? firstNameByUserId.get(r.userId) : undefined) ?? ''
-      const baseUrl = getSiteUrl()
+      // Project, foto, type en ontvangers (lib/projects/live-email).
+      const mailContext = await projectMailContext(serviceClient, idResult.data)
+      const { project, projectPhoto, projectTypeLabel, recipients, firstnameFor, baseUrl } = mailContext
 
       if (statusResult.data === "rejected") {
         // Send rejection email to every company-mail receiver
@@ -519,29 +416,11 @@ export async function setProjectStatusAction(input: {
           })
         } else if (recipients.length > 0) {
           try {
-            for (const recipient of recipients) {
-              await sendProjectStatusEmail(
-                recipient.email,
-                'live',
-                {
-                  firstname: firstnameFor(recipient),
-                  project_title: project?.title || 'Your Project',
-                  project_name: project?.title || 'Your Project',
-                  project_image: projectPhoto?.url ?? undefined,
-                  project_location: (project as any)?.address_city ?? (project as any)?.location ?? undefined,
-                  project_type: projectTypeLabel,
-                  project_link: `${baseUrl}/projects/${(project as any)?.slug ?? idResult.data}`,
-                  dashboard_link: `${baseUrl}/dashboard/listings`
-                },
-                { userId: recipient.userId }
-              )
+            // Wacht op de stippen (migratie 361): de mail gaat pas als een
+            // admin ze beoordeeld heeft — dan ziet de eigenaar alleen de goede.
+            if (!(await holdLiveEmailForReview(serviceClient, idResult.data))) {
+              await sendProjectLiveEmail(serviceClient, idResult.data, mailContext)
             }
-
-            logger.info("Project live email sent", {
-              scope: "admin-projects",
-              projectId: idResult.data,
-              recipients: recipients.length
-            })
           } catch (emailError) {
             logger.error("Failed to send project live email", {
               scope: "admin-projects",

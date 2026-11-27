@@ -507,6 +507,20 @@ export const ShedBuilderIcon = mark(
   </>,
 )
 
+/** Bedroom — the bed from the side in the one-pen hand: the headboard
+ *  post runs down into its leg; ONE stroke draws the mattress top, the
+ *  foot end and the base back towards the headboard, stopping shy of it;
+ *  the pillow is an open loop, the duvet a single fold line. */
+export const BedroomIcon = mark(
+  <>
+      <path d="M4.6 7.2C4.4 11.1 4.4 15 4.6 18.7" />
+      <path d="M4.9 12.6C9.8 12.2 14.8 12.2 19.4 12.7c.3 1.4.3 2.8.1 4.2C14.6 17.3 9.6 17.3 5.1 17" />
+      <path d="M19.3 17.1c0 .5 0 1 .1 1.6" />
+      <path d="M6.1 12.2c-.3-1.2.3-2.1 1.5-2.2 1.3-.2 2.6-.1 3.8.3.6.4.6 1.2.3 1.8" />
+      <path d="M12.9 12.4c2.1-.7 4.4-.7 6.5.1" />
+  </>,
+)
+
 /** Person — the family's avatar fallback (team page, account,
  *  header pill): a tilted head loop that closes in a near-miss, and
  *  ONE stroke for the bust — up over the left shoulder, down the
