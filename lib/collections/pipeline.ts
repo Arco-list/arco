@@ -468,7 +468,7 @@ async function insertCandidates(sb: any, brandId: string, found: Array<{ col: Ov
 
 // ── Gekozen collecties ophalen ─────────────────────────────────────────
 
-type Item = { step: "fetch" | "reading" | "photos" | "done"; failed?: boolean; photos?: string[] }
+type Item = { step: "fetch" | "reading" | "photos" | "done"; failed?: boolean; photos?: string[]; /** Mislukte pogingen om de pagina op te halen. */ attempts?: number }
 
 async function stepEnrich(sb: any, job: Job, brand: Brand, deadline: number): Promise<void> {
   const st = job.state ?? {}
@@ -498,11 +498,12 @@ async function stepEnrich(sb: any, job: Job, brand: Brand, deadline: number): Pr
         if (st.textOnly) { item.step = "done"; continue }
         const { data: cover } = await sb.from("product_collection_photos").select("source_url").eq("collection_id", colId).eq("is_primary", true).maybeSingle()
         const candidates = Array.from(new Set([cover?.source_url, ...photos].filter((u): u is string => Boolean(u)))).slice(0, MAX_PHOTO_CANDIDATES)
-        // AVIF leest Claude niet: die gaan omgezet mee; wat niet lukt valt af,
-        // zodat de nummers in het antwoord bij de lijst blijven horen.
-        const sources = await Promise.all(candidates.map((u) => visionImage(u)))
+        // Zelf opgehaald en als JPEG mee (zie visionImage); wat niet lukt valt
+        // af, zodat de nummers in het antwoord bij de lijst blijven horen.
+        const sources: Array<VisionImage | null> = []
+        for (let i = 0; i < candidates.length; i += 6) sources.push(...await Promise.all(candidates.slice(i, i + 6).map((u) => visionImage(u))))
         const list = candidates.filter((_, i) => sources[i])
-        const images = sources.filter((x): x is VisionImage => Boolean(x)).map((x) => ("url" in x ? x.url : x))
+        const images = sources.filter((x): x is VisionImage => Boolean(x))
         if (list.length === 0) { item.step = "done"; continue }
         const { data: col } = await sb.from("product_collections").select("name").eq("id", colId).maybeSingle()
         photoRequests.push(photoChoiceRequest(`p_${colId}`, col?.name ?? "", brand.name, images))
@@ -526,7 +527,13 @@ async function stepEnrich(sb: any, job: Job, brand: Brand, deadline: number): Pr
     if (!col?.url) { item.step = "done"; continue }
     const page = await fetchPage(col.url, { maxChars: 50_000, mainContentOnly: true })
     if (page?.via === "firecrawl") job.firecrawl_credits += 1
-    if (!page) { item.step = "done"; item.failed = true; continue }
+    // Niet gelukt (vaak Firecrawl dat even weigert als er veel tegelijk
+    // loopt): de volgende rondes nog twee keer proberen.
+    if (!page) {
+      item.attempts = (item.attempts ?? 0) + 1
+      if (item.attempts >= 3) { item.step = "done"; item.failed = true }
+      continue
+    }
     readRequests.push(collectionReadRequest(`r_${colId}`, col.name, brand.name, page.url, page.text, page.images, cats.lines))
     item.step = "reading"
   }

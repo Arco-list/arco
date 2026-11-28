@@ -133,13 +133,14 @@ function sniffImageType(bytes: Buffer): string | null {
 }
 
 /**
- * Een beeld zoals Claude het kan lezen: het adres, of voor AVIF en HEIC
- * (die Claude niet leest) een verkleinde JPEG als base64. null als dat
- * niet lukt.
+ * Een beeld zoals Claude het leest: altijd zelf opgehaald, verkleind en als
+ * JPEG (base64) meegestuurd. Een adres laat Claude zelf ophalen, en dan
+ * breekt één beeld het hele verzoek: AVIF achter een adres zonder .avif
+ * (Baxter: /api/image?...&f=avif), een server die Claude weert, een te
+ * groot bestand. null als het beeld niet te halen of om te zetten is.
  */
-export type VisionImage = { url: string } | { base64: string; mediaType: "image/jpeg" }
+export type VisionImage = { base64: string; mediaType: "image/jpeg" }
 export async function visionImage(remoteUrl: string): Promise<VisionImage | null> {
-  if (!/\.(avif|heic|heif)(\?|#|$)/i.test(remoteUrl)) return { url: remoteUrl }
   const res = await fetchImage(remoteUrl)
   if (!res) return null
   const bytes = Buffer.from(await res.arrayBuffer())
