@@ -31,6 +31,10 @@ export type PhotoBrandTag = {
   external: boolean
   /** Kleur van de stip (productherkenning: de toestand); zonder de huisstijl. */
   color?: string
+  /** Waar de stip naar wijst: om op een merk- of collectiepagina alleen de
+   *  eigen stippen te tonen. */
+  brandId?: string
+  collectionId?: string | null
 }
 
 export async function getPhotoBrandTags(photoIds: string[], viewerIsAdmin: boolean): Promise<Map<string, PhotoBrandTag[]>> {
@@ -113,6 +117,8 @@ export async function getPhotoBrandTags(photoIds: string[], viewerIsAdmin: boole
       imageUrl: c ? heroByCollection.get(c.id) ?? null : null,
       href: viewerIsAdmin ? internal : externalUrl,
       external: !viewerIsAdmin,
+      brandId: t.brand.id,
+      collectionId: c?.id ?? null,
     }
     out.set(t.photo_id, [...(out.get(t.photo_id) ?? []), tag])
   }

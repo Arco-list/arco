@@ -132,6 +132,7 @@ export default async function BrandPage({ params }: { params: Params }) {
             <CollectionGrid
               cards={collections.map((s) => <CollectionCard key={s.id} collection={s} locale={locale} showBrand={false} kind={kindOf(s)} />)}
               showAllLabel={nl ? `Toon alle ${collections.length} collecties` : `Show all ${collections.length} collections`}
+              hideLabel={nl ? "Verberg collecties" : "Hide collections"}
             />
           </section>
         )}
@@ -139,7 +140,7 @@ export default async function BrandPage({ params }: { params: Params }) {
         {projects.length > 0 && (
           <section id="projects" style={{ marginBottom: 60 }}>
             <div className="section-header">
-              <h2 className="arco-section-title">{nl ? "Toegepast in projecten" : "Applied in projects"}</h2>
+              <h2 className="arco-section-title">{nl ? "In projecten" : "In projects"}</h2>
             </div>
             <div className="discover-grid">
               {projects.map((p) => <ProjectCard key={p.id} project={p} locale={locale} />)}

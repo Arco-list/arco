@@ -11,6 +11,7 @@ import { CollectionCard } from "@/components/catalog/catalog-cards"
 import { LayeredFilterPanel, layeredPillLabel, nextLayeredSelection, type LayeredGroup } from "@/components/filters/layered-filter"
 import { ProductImage } from "@/components/catalog/product-image"
 import { BrandCard } from "@/components/brand/brand-card"
+import type { BrandCardImage } from "@/lib/products/brand-card-image"
 import { LogoFill } from "@/components/brand/brand-logo"
 import { DrawerSection } from "@/components/filters/drawer-section"
 import { SortLinks } from "@/components/sort-links"
@@ -38,6 +39,9 @@ type Props = {
   categories: CatalogCategory[]
   /** Soortpagina: deze soort (en alles eronder) staat vast. */
   fixedKind?: CatalogCategory | null
+  /** Beeld per merkkaart (lib/products/brand-card-image), op een soortpagina
+   *  uit die soort. */
+  brandImages?: Record<string, BrandCardImage>
 }
 
 const COPY = {
@@ -102,7 +106,7 @@ type Sort = (typeof SORTS)[number]
 
 const split = (v: string | null) => (v ? v.split(",").map((s) => s.trim()).filter(Boolean) : [])
 
-export function ProductsDiscoverClient({ locale, collection, brands, categories, fixedKind = null }: Props) {
+export function ProductsDiscoverClient({ locale, collection, brands, categories, fixedKind = null, brandImages = {} }: Props) {
   const t = COPY[locale === "nl" ? "nl" : "en"]
   const router = useRouter()
   const pathname = usePathname()
@@ -343,7 +347,10 @@ export function ProductsDiscoverClient({ locale, collection, brands, categories,
       </div>
       <QuickRow minTile={{ desktop: 220, mobile: 160 }} gap={16} fill arrowTop="calc(var(--quick-tile-w, 220px) * 0.75)">
         {cards.slice(0, 10).map(({ brand, imageUrl }) => (
-          <BrandCard key={brand.id} name={brand.name} logoUrl={brand.logoUrl} imageUrl={imageUrl} href={`/brands/${brand.slug}`} />
+          <BrandCard key={brand.id} name={brand.name} logoUrl={brand.logoUrl} imageUrl={brandImages[brand.id]?.url ?? imageUrl} focus={brandImages[brand.id]?.focus} size={brandImages[brand.id]?.size}
+            // Op een productpagina filtert de kaart op het merk (binnen de
+            // soort van de pagina); de merkpagina zelf via /brands.
+            href={`${fixedKind ? `/products/${fixedKind.slug}` : "/products"}?brand=${encodeURIComponent(brand.slug)}`} />
         ))}
       </QuickRow>
     </section>

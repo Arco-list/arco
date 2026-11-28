@@ -5,6 +5,8 @@ import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { requireProductsAdmin } from "@/lib/products-gate"
 import { activeCategories, categoryLabel, getCatalogBrands, getCatalogCategories, getCatalogCollections } from "@/lib/products/catalog"
+import { brandCardImages } from "@/lib/products/brand-card-image"
+import { categoryTree } from "@/lib/products/catalog-types"
 import { ProductsDiscoverClient } from "@/components/catalog/products-discover-client"
 
 export const dynamic = "force-dynamic"
@@ -32,12 +34,15 @@ export default async function ProductCategoryPage({ params }: { params: Params }
   const categories = activeCategories(allCategories)
   const category = categories.find((c) => c.slug === slug)
   if (!category) notFound()
+  // Merkkaarten met een foto uit deze categorie: op Verlichting de lamp van
+  // een merk, niet zijn bank.
+  const brandImages = await brandCardImages(collection, { categoryIds: categoryTree(categories).subtreeIds(category.id) })
 
   return (
     <div className="min-h-screen bg-white">
       <Header />
       <main style={{ paddingBottom: 80 }}>
-        <ProductsDiscoverClient locale={locale} collection={collection} brands={brands} categories={categories} fixedKind={category} />
+        <ProductsDiscoverClient locale={locale} collection={collection} brands={brands} categories={categories} fixedKind={category} brandImages={brandImages} />
       </main>
       <Footer />
     </div>

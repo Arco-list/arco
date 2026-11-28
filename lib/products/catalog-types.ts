@@ -107,6 +107,8 @@ export type CatalogProject = {
   spaceSlug?: string | null
   /** Status van het project; alleen admins zien andere dan published. */
   status?: string | null
+  /** Het eigenaarsbedrijf (architect, studio), zoals op /projects. */
+  professionalName?: string | null
   /** De foto waarop het merk of de collectie met een stip staat
    *  (migratie 317): die vervangt de omslag op de kaart. */
   taggedPhoto?: {

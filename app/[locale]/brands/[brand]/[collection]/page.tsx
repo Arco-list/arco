@@ -7,7 +7,9 @@ import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { Link } from "@/i18n/navigation"
 import { requireProductsAdmin } from "@/lib/products-gate"
-import { activeCategories, categoryLabel, categoryTree, collectionKindsLabel, getCatalogCategories, getCatalogCollections, getCollectionPhotos, getCollectionProducts, getCollectionProjects } from "@/lib/products/catalog"
+import { activeCategories, categoryLabel, categoryTree, collectionKindsLabel, getBrandDealers, getBrandLocations, getCatalogCategories, getCatalogCollections, getCollectionPhotos, getCollectionProducts, getCollectionProjects } from "@/lib/products/catalog"
+import { BrandDealers } from "@/components/brand/brand-dealers"
+import { ProfessionalLocations } from "@/components/professional/professional-locations"
 import { ProjectCard, CollectionCard } from "@/components/catalog/catalog-cards"
 import { CollectionHero } from "@/components/catalog/collection-hero"
 import { isCutoutPhoto, pickCollectionHero } from "@/lib/products/collection-hero"
@@ -41,7 +43,12 @@ export default async function CollectionPage({ params }: { params: Params }) {
   if (!collection) notFound()
   // Alleen actieve categorieën: geparkeerde (migratie 351) niet als label of link.
   const tree = categoryTree(activeCategories(categories))
-  const [photos, projects, products] = await Promise.all([getCollectionPhotos(collection.id), getCollectionProjects(collection.id, { includeInReview: true }), getCollectionProducts(collection.id)])
+  const [photos, projects, products, dealers, locations] = await Promise.all([
+    getCollectionPhotos(collection.id), getCollectionProjects(collection.id, { includeInReview: true }), getCollectionProducts(collection.id),
+    // Verkooppunten van het merk, zoals op de merkpagina: wie het merk voert,
+    // voert (of bestelt) ook deze collectie.
+    getBrandDealers(collection.brand.id, locale), getBrandLocations(collection.brand.id),
+  ])
   const cover = photos.find((p) => p.isPrimary) ?? photos[0] ?? null
   const category = collection.categoryId ? tree.byId.get(collection.categoryId) : undefined
   const siblings = allCollections.filter((s) => s.brand.id === collection.brand.id && s.id !== collection.id).slice(0, 6)
@@ -110,7 +117,7 @@ export default async function CollectionPage({ params }: { params: Params }) {
   const projectsSection = (
     <section id="projects" style={{ marginBottom: 60 }}>
       <div className="section-header">
-        <h2 className="arco-section-title">{nl ? "Projecten" : "Projects"}</h2>
+        <h2 className="arco-section-title">{nl ? "In projecten" : "In projects"}</h2>
       </div>
       {projects.length === 0 ? (
         <p className="arco-body-text" style={{ color: "#a1a1a0" }}>{nl ? "Nog niet in een gepubliceerd project getagd." : "Not tagged in a published project yet."}</p>
@@ -147,6 +154,7 @@ export default async function CollectionPage({ params }: { params: Params }) {
     ...(products.length > 0 ? [{ id: "products", label: nl ? "Producten" : "Products" }] : []),
     // Niet in een project getagd: geen sectie en geen link.
     ...(projects.length > 0 ? [projectsLink, ...photosLink] : photosLink),
+    ...(dealers.length > 0 || locations.length > 0 ? [{ id: "dealers", label: nl ? "Verkooppunten" : "Where to buy" }] : []),
   ]
 
   return (
@@ -203,6 +211,22 @@ export default async function CollectionPage({ params }: { params: Params }) {
         {productsSection}
         {projects.length > 0 && projectsSection}
         {gallerySection}
+
+        {/* Verkooppunten van het merk en zijn eigen showrooms, zoals op de
+            merkpagina: na het product, vóór de andere collecties. */}
+        {(dealers.length > 0 || locations.length > 0) && (
+          <div id="dealers">
+            {dealers.length > 0 && (
+              <section style={{ marginBottom: 60 }}>
+                <div className="section-header">
+                  <h2 className="arco-section-title">{nl ? "Verkooppunten" : "Where to buy"}</h2>
+                </div>
+                <BrandDealers dealers={dealers} />
+              </section>
+            )}
+            <ProfessionalLocations locations={locations} inWrap={false} fallbackLogoUrl={collection.brand.logoUrl} />
+          </div>
+        )}
 
         {siblings.length > 0 && (
           <section style={{ marginBottom: 60 }}>

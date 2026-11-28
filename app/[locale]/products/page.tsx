@@ -4,6 +4,7 @@ import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { requireProductsAdmin } from "@/lib/products-gate"
 import { activeCategories, getCatalogBrands, getCatalogCategories, getCatalogCollections } from "@/lib/products/catalog"
+import { brandCardImages } from "@/lib/products/brand-card-image"
 import { ProductsDiscoverClient } from "@/components/catalog/products-discover-client"
 
 export const dynamic = "force-dynamic"
@@ -29,12 +30,14 @@ export default async function ProductsPage({ params }: { params: Promise<{ local
   await requireProductsAdmin()
   const { locale } = await params
   const [categories, collection, brands] = await Promise.all([getCatalogCategories(), getCatalogCollections(), getCatalogBrands()])
+  // Merkkaarten: een staande sfeerfoto van het merk (lib/products/brand-card-image).
+  const brandImages = await brandCardImages(collection)
 
   return (
     <div className="min-h-screen bg-white">
       <Header />
       <main style={{ paddingBottom: 40 }}>
-        <ProductsDiscoverClient locale={locale} collection={collection} brands={brands} categories={activeCategories(categories)} />
+        <ProductsDiscoverClient locale={locale} collection={collection} brands={brands} categories={activeCategories(categories)} brandImages={brandImages} />
       </main>
       <Footer />
     </div>

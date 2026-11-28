@@ -106,7 +106,6 @@ type Props = {
 const SECTIONS = [
   { id: "header", label: "Details" },
   { id: "collections", label: "Collections" },
-  { id: "applied", label: "Projects" },
   { id: "showrooms", label: "Showrooms" },
 ] as const
 
@@ -619,8 +618,9 @@ export function BrandEditClient({ brand, collections, categories, categoryIds, c
             </span>
           </div>
 
-          {/* In projects — read-only, scrolls to the section */}
-          <div className="spec-item-edit" style={{ cursor: "pointer" }} onClick={() => scrollToSection("applied")}>
+          {/* In projects — alleen het aantal; de projecten zelf staan op de
+              merkpagina, de eigenaar kan er hier niets aan wijzigen. */}
+          <div className="spec-item-edit" style={{ cursor: "default" }}>
             <span className="arco-eyebrow spec-eyebrow" style={{ display: "block", marginBottom: 8 }}>In projects</span>
             <span className="spec-inp-inline" style={{ display: "block", color: projectCount > 0 ? undefined : "#b0b0ae" }}>
               {projectCount > 0 ? projectCount : "—"}
@@ -705,40 +705,6 @@ export function BrandEditClient({ brand, collections, categories, categoryIds, c
               </p>
               <button type="button" className="btn-primary" onClick={() => setShowCreate(true)}>Add collection</button>
             </div>
-          )}
-        </div>
-      </section>
-
-      {/* ════════════════════ APPLIED IN PROJECTS ════════════════════ */}
-      <section id="applied" style={{ marginBottom: 60 }}>
-        <div className="wrap">
-          <div className="section-header" style={{ marginBottom: 8 }}>
-            <h2 className="arco-section-title">Projects</h2>
-          </div>
-          <p className="arco-body-text" style={{ color: "#8c8c8a", marginBottom: 24, maxWidth: 600 }}>
-            Tagged from the project editor (admins only for now). Brand, collection and room; which photo comes later.
-          </p>
-          {applied.length === 0 ? (
-            <div style={{ border: "1px dashed var(--border)", borderRadius: 8, padding: "48px 24px", textAlign: "center" }}>
-              <p className="arco-body-text" style={{ color: "#a1a1a0", margin: 0 }}>Not tagged on any project yet.</p>
-            </div>
-          ) : (
-            <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8, maxWidth: 820 }}>
-              {applied.map((l) => (
-                <li key={l.id} style={{ display: "grid", gridTemplateColumns: "1fr 150px 130px 1fr 110px", gap: 12, alignItems: "center", border: "1px solid #e5e5e4", borderRadius: 4, padding: "10px 12px", fontSize: 13 }}>
-                  <Link href={`/dashboard/edit/${l.project.id}`} style={{ fontWeight: 500, color: "#1c1c1a" }}>
-                    {l.project.title}
-                    {l.project.city ? <span style={{ color: "#8c8c8a", fontWeight: 400 }}> · {l.project.city}</span> : null}
-                  </Link>
-                  <span style={{ color: "#1c1c1a" }}>{l.collectionName ?? <span style={{ color: "#a1a1a0" }}>—</span>}</span>
-                  <span style={{ color: "#8c8c8a" }}>{l.spaceName ?? "—"}</span>
-                  <span style={{ color: "#8c8c8a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.note ?? ""}</span>
-                  <span className="arco-eyebrow" style={{ color: l.photoId ? "#016D75" : "#a1a1a0", textAlign: "right" }}>
-                    {l.photoId ? "photo pinned" : l.project.status}
-                  </span>
-                </li>
-              ))}
-            </ul>
           )}
         </div>
       </section>

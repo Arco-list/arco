@@ -5,7 +5,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Link } from "@/i18n/navigation"
 
 import { categoryLabel, categoryTree, type CatalogBrand, type CatalogCategory } from "@/lib/products/catalog-types"
-import { BrandDisc } from "@/components/brand/brand-disc"
+import { BrandCard } from "@/components/brand/brand-card"
+import type { BrandCardImage } from "@/lib/products/brand-card-image"
 import { SortLinks } from "@/components/sort-links"
 import { LayeredFilterPanel, layeredPillLabel, nextLayeredSelection, type LayeredGroup } from "@/components/filters/layered-filter"
 import { DrawerSection } from "@/components/filters/drawer-section"
@@ -14,8 +15,9 @@ import { DrawerSection } from "@/components/filters/drawer-section"
  * /brands als discover, in de vorm van /products: dezelfde filterbalk
  * ("Alle filters" met lade, Merk, Soort; meerdere keuzes, als chips
  * eronder), het kruimelpad (Producten › groep › subgroep › Merken), de
- * teller met sortering, en een grid van disc tiles (logo en naam, zoals
- * op /admin/design).
+ * teller met sortering, en een grid van staande merkkaarten (beeld van
+ * de meest toegepaste collectie, logo erin, naam eronder), zoals de
+ * carrousel op /products.
  *
  * De keuze staat in de URL (?kind=a,b&brand=x,y). Bij precies één soort
  * volgen kruimelpad en titel die soort. Een hoofdgroep toont ook de
@@ -62,7 +64,7 @@ function ChevronDownIcon({ className }: { className?: string }) {
   )
 }
 
-export function BrandsDiscoverClient({ locale, brands, categories }: { locale: string; brands: CatalogBrand[]; categories: CatalogCategory[] }) {
+export function BrandsDiscoverClient({ locale, brands, categories, imageByBrand = {} }: { locale: string; brands: CatalogBrand[]; categories: CatalogCategory[]; imageByBrand?: Record<string, BrandCardImage> }) {
   const t = COPY[locale === "nl" ? "nl" : "en"]
   const router = useRouter()
   const pathname = usePathname()
@@ -400,14 +402,12 @@ export function BrandsDiscoverClient({ locale, brands, categories }: { locale: s
               <p className="arco-body-text empty-state__description">{t.noneBody}</p>
             </div>
           ) : (
-            <div className="brands-disc-grid">
+            // Raster van staande merkkaarten, even breed als de carrousel op
+            // /products (220px); op een telefoon twee naast elkaar. De kaart
+            // neemt de kolombreedte (--quick-tile-w), niet de carrouselmaat.
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(220px, calc(50% - 8px)), 1fr))", gap: "32px 16px", ["--quick-tile-w" as string]: "100%" }}>
               {visible.map((b) => (
-                <Link key={b.id} href={`/brands/${b.slug}`} className="credit-card service-quick-card quick-tile">
-                  <div className="credit-icon">
-                    <BrandDisc name={b.name} logoUrl={b.logoUrl} />
-                  </div>
-                  <h3 className="quick-tile-label">{b.name}</h3>
-                </Link>
+                <BrandCard key={b.id} name={b.name} logoUrl={b.logoUrl} imageUrl={imageByBrand[b.id]?.url ?? null} focus={imageByBrand[b.id]?.focus} size={imageByBrand[b.id]?.size} href={`/brands/${b.slug}`} />
               ))}
             </div>
           )}

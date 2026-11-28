@@ -138,7 +138,10 @@ export async function chooseCollectionCandidates(brandId: string, candidateIds: 
         seen.add(pslug)
         const src = p.source_image_url ?? p.image_url
         const stored = p.image_url ?? (src ? await storeRemoteImage(sb, src, `product-families/${col.id}/products`, pslug) : null)
-        return { brand_id: brandId, collection_id: col.id, slug: pslug, name: p.name, url: p.url, image_url: stored ?? src, source_image_url: src, position, category_id: levels.isLeaf(c.category_id) ? c.category_id : null }
+        return { brand_id: brandId, collection_id: col.id, slug: pslug, name: p.name, url: p.url, image_url: stored ?? src, source_image_url: src, position, // Met een eigen pagina leest het ophalen hieronder de soort per
+        // product (uit de categorieën van nu); de kandidaat kan van vóór een
+        // nieuwe soort zijn (Saunakachels). Zonder pagina: die van de kandidaat.
+        category_id: !c.url && levels.isLeaf(c.category_id) ? c.category_id : null }
       }))
       const products = rows.filter(Boolean)
       if (products.length) {

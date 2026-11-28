@@ -192,18 +192,18 @@ export async function getCollectionPhotos(collectionId: string): Promise<Array<{
 }
 
 /** Projecten waarin een collectie of een merk is toegepast, als kaart —
- *  uit de materialized view die de discover-grid ook leest. Een project
- *  telt mee via project_brands of via een stip op een van zijn foto's
- *  (migratie 317); staat er een stip, dan toont de kaart die foto met de
- *  stip in plaats van de omslag.
+ *  uit de materialized view die de discover-grid ook leest. Alleen
+ *  projecten met een stip voor dit merk of deze collectie op een foto
+ *  (handmatig, migratie 317, of herkend en goedgekeurd, 343): de kaart
+ *  toont die foto met alleen de eigen stip. Een koppeling zonder foto
+ *  (project_brands) telt niet: dan zie je het product niet.
  *
  *  `includeInReview`: ook projecten in review en concepten. Alleen voor
  *  admins, en alleen zolang de merk- en collectiepagina's admin-only zijn
  *  (requireProductsAdmin); zet het uit als de laag publiek gaat. */
 async function projectsFor(column: "collection_id" | "brand_id", id: string, options?: { includeInReview?: boolean }): Promise<CatalogProject[]> {
   const supabase = createServiceRoleSupabaseClient() as any
-  const [{ data: links }, { data: tagRows }, { data: detRows }] = await Promise.all([
-    supabase.from("project_brands").select("project_id").eq(column, id),
+  const [{ data: tagRows }, { data: detRows }] = await Promise.all([
     supabase.from("project_photo_brand_tags").select("photo_id, created_at, photo:project_photos!inner(id, project_id, url, width, height)").eq(column, id).order("created_at"),
     // Goedgekeurde stippen van de productherkenning (migratie 343).
     supabase.from("project_detection_links").select("photo_id, project_id, created_at").eq(column, id).order("created_at"),
@@ -223,10 +223,7 @@ async function projectsFor(column: "collection_id" | "brand_id", id: string, opt
       if (photo && !taggedByProject.has(r.project_id)) taggedByProject.set(r.project_id, photo)
     }
   }
-  const ids = Array.from(new Set([
-    ...((links ?? []) as Array<{ project_id: string }>).map((l) => l.project_id),
-    ...taggedByProject.keys(),
-  ]))
+  const ids = Array.from(taggedByProject.keys())
   if (ids.length === 0) return []
   const { data } = await supabase
     .from("mv_project_summary")
@@ -264,6 +261,20 @@ async function projectsFor(column: "collection_id" | "brand_id", id: string, opt
   const photoIds = rows.map((p) => taggedByProject.get(p.id)?.id).filter((x): x is string => Boolean(x))
   // De pagina's zijn admin-only, dus de stippen linken naar Arco.
   const tagsByPhoto = await getPhotoBrandTags(photoIds, true)
+  // Alleen de eigen stippen: op een collectiepagina die collectie, op een
+  // merkpagina alles van het merk.
+  const own = (t: { brandId?: string; collectionId?: string | null }) => column === "collection_id" ? t.collectionId === id : t.brandId === id
+
+  // De architect of studio (het eigenaarsbedrijf), zoals op /projects:
+  // alleen een zichtbaar bedrijf.
+  const { data: owners } = rows.length > 0
+    ? await supabase.from("project_professionals").select("project_id, company:companies!company_id(name, status)")
+        .in("project_id", rows.map((r) => r.id)).eq("is_project_owner", true).in("status", ["live_on_page", "listed"])
+    : { data: [] }
+  const ownerBy = new Map<string, string>()
+  for (const o of (owners ?? []) as Array<{ project_id: string; company: { name: string; status: string | null } | null }>) {
+    if (o.company?.name && o.company.status !== "unclaimed" && !ownerBy.has(o.project_id)) ownerBy.set(o.project_id, o.company.name)
+  }
 
   return rows
     .map((p) => {
@@ -277,7 +288,8 @@ async function projectsFor(column: "collection_id" | "brand_id", id: string, opt
         type: p.primary_category ?? null,
         spaceSlug: spaceById.get(p.id) ?? null,
         status: p.status ?? null,
-        taggedPhoto: photo ? { url: photo.url, width: photo.width, height: photo.height, tags: tagsByPhoto.get(photo.id) ?? [] } : null,
+        professionalName: ownerBy.get(p.id) ?? null,
+        taggedPhoto: photo ? { url: photo.url, width: photo.width, height: photo.height, tags: (tagsByPhoto.get(photo.id) ?? []).filter(own) } : null,
       }
     })
     // Projecten met een stip eerst: die laten het product echt zien.

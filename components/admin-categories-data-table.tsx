@@ -1384,7 +1384,10 @@ function ProductCategoriesTab({ productCategories, nl }: { productCategories: Ad
                         {isChildExpanded && grandchildren.map((gc) => (
                           <tr key={gc.id}>
                             <td>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 52 }}>
+                              {/* Even ver in als het tweede niveau t.o.v. het eerste: 24px
+                                  meer, met dezelfde ruimte waar een pijltje zou staan. */}
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 48 }}>
+                                <div style={{ width: 14, flexShrink: 0 }} />
                                 {avatar(gc)}
                                 <div>
                                   <div className="arco-table-primary">{label(gc)}</div>

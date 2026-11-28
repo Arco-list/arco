@@ -718,8 +718,8 @@ async function applyRead(sb: any, colId: string, brandId: string, data: Collecti
 
   // Producten: alleen nieuwe, herkend op naam en op productpagina. Van een
   // bekend product werken we alleen de prijs bij (migratie 374).
-  const { data: known } = await sb.from("products").select("id, slug, url").eq("collection_id", colId)
-  const knownRows = (known ?? []) as Array<{ id: string; slug: string; url: string | null }>
+  const { data: known } = await sb.from("products").select("id, slug, url, category_id").eq("collection_id", colId)
+  const knownRows = (known ?? []) as Array<{ id: string; slug: string; url: string | null; category_id: string | null }>
   const slugs = new Set(knownRows.map((p) => p.slug))
   const urls = new Set(knownRows.map((p) => p.url).filter(Boolean))
   const observedAt = new Date().toISOString()
@@ -734,7 +734,11 @@ async function applyRead(sb: any, colId: string, brandId: string, data: Collecti
     const price = readPrice(p, base ?? null, observedAt)
     if (slugs.has(slug) || (url && urls.has(url))) {
       const existing = knownRows.find((k) => k.slug === slug || (url && k.url === url))
-      if (existing && price) await sb.from("products").update(price).eq("id", existing.id)
+      // Een bekend product zonder soort (een familie, aangemaakt bij het
+      // kiezen) krijgt de soort die deze pagina noemt; een gekozen soort blijft.
+      const kindId = p.kind_slug && cats.levels.isLeaf(cats.idBySlug.get(p.kind_slug)) ? cats.idBySlug.get(p.kind_slug)! : null
+      const patch: Record<string, unknown> = { ...(price ?? {}), ...(existing && !existing.category_id && kindId ? { category_id: kindId } : {}) }
+      if (existing && Object.keys(patch).length > 0) await sb.from("products").update(patch).eq("id", existing.id)
       continue
     }
     slugs.add(slug)
@@ -816,8 +820,10 @@ async function applyPhotos(sb: any, colId: string, list: string[], choice: Photo
 
   // Omslag: het eerste sfeerbeeld, anders blijft het overzichtsbeeld. Is de
   // omslag al een sfeerbeeld (bv. met de hand gekozen), dan blijft die.
-  const { data: currentCover } = await sb.from("product_collection_photos").select("kind").eq("collection_id", colId).eq("is_primary", true).maybeSingle()
-  if (choice && ambianceIds.length > 0 && currentCover?.kind !== "ambiance") {
+  // Ook een kleine omslag (een teaser van 445 px, Occhio) maakt plaats.
+  const { data: currentCover } = await sb.from("product_collection_photos").select("kind, width, height").eq("collection_id", colId).eq("is_primary", true).maybeSingle()
+  const smallCover = Boolean(currentCover?.width && currentCover?.height && Math.max(currentCover.width, currentCover.height) < LARGE_SIDE)
+  if (choice && ambianceIds.length > 0 && (currentCover?.kind !== "ambiance" || smallCover)) {
     await sb.from("product_collection_photos").update({ is_primary: false }).eq("collection_id", colId)
     await sb.from("product_collection_photos").update({ is_primary: true }).eq("id", ambianceIds[0])
   }

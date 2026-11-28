@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, type ReactNode } from "react"
-import { ChevronRight } from "lucide-react"
+import { useRef, useState, type ReactNode } from "react"
+import { ChevronRight, ChevronUp } from "lucide-react"
 
 /**
  * Het collectieraster van een merk, ingeklapt als er veel zijn: op
@@ -22,15 +22,23 @@ export const MOBILE_VISIBLE = 4
 const DESKTOP_COLLAPSE_ABOVE = 8
 const MOBILE_COLLAPSE_ABOVE = 6
 
-export function CollectionGrid({ cards, showAllLabel }: { cards: ReactNode[]; showAllLabel: string }) {
+export function CollectionGrid({ cards, showAllLabel, hideLabel }: { cards: ReactNode[]; showAllLabel: string; /** Na openklappen: weer inklappen. */ hideLabel?: string }) {
   const [expanded, setExpanded] = useState(false)
+  const gridRef = useRef<HTMLDivElement>(null)
+  // Inklappen en terug naar het begin van het raster, anders sta je
+  // ineens ver onder de collecties.
+  const collapse = () => {
+    setExpanded(false)
+    const top = gridRef.current?.getBoundingClientRect().top
+    if (top != null && top < 0) window.scrollBy({ top: top - 140, behavior: "smooth" })
+  }
   const total = cards.length
   const desktopCollapsible = total > DESKTOP_COLLAPSE_ABOVE
   const mobileCollapsible = total > MOBILE_COLLAPSE_ABOVE
 
   return (
     <>
-      <div className="discover-grid collection-grid" data-collapsed={!expanded && (desktopCollapsible || mobileCollapsible) ? "true" : "false"}>
+      <div ref={gridRef} className="discover-grid collection-grid" data-collapsed={!expanded && (desktopCollapsible || mobileCollapsible) ? "true" : "false"}>
         {cards.map((card, i) => {
           const cls = [
             desktopCollapsible && i >= DESKTOP_VISIBLE ? "cg-d" : "",
@@ -45,6 +53,14 @@ export function CollectionGrid({ cards, showAllLabel }: { cards: ReactNode[]; sh
           <button type="button" className="btn-tertiary" onClick={() => setExpanded(true)}>
             {showAllLabel}
             <ChevronRight size={16} />
+          </button>
+        </div>
+      )}
+      {expanded && hideLabel && (
+        <div className={["collection-grid-more", desktopCollapsible ? "cg-more-d" : "", mobileCollapsible ? "cg-more-m" : ""].filter(Boolean).join(" ")}>
+          <button type="button" className="btn-tertiary" onClick={collapse}>
+            {hideLabel}
+            <ChevronUp size={16} />
           </button>
         </div>
       )}

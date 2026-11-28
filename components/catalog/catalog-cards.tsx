@@ -89,7 +89,14 @@ export function ProjectCard({ project, locale = "nl" }: { project: CatalogProjec
         )}
       </div>
       <h3 className="discover-card-title">{project.title}</h3>
-      {sub && <p className="discover-card-sub">{sub}</p>}
+      {/* Zoals op /projects: type · plaats · studio (in de accentkleur). */}
+      {(sub || project.professionalName) && (
+        <p className="discover-card-sub truncate">
+          {sub}
+          {sub && project.professionalName && " · "}
+          {project.professionalName && <span style={{ color: "var(--primary)" }}>{project.professionalName}</span>}
+        </p>
+      )}
     </Link>
   )
 }
