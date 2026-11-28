@@ -468,7 +468,81 @@ async function insertCandidates(sb: any, brandId: string, found: Array<{ col: Ov
 
 // ── Gekozen collecties ophalen ─────────────────────────────────────────
 
-type Item = { step: "fetch" | "reading" | "photos" | "done"; failed?: boolean; photos?: string[]; /** Mislukte pogingen om de pagina op te halen. */ attempts?: number }
+type Item = {
+  step: "fetch" | "reading" | "photos" | "done"; failed?: boolean; photos?: string[]
+  /** Mislukte pogingen om de pagina op te halen. */ attempts?: number
+  /** Extra gelezen productpagina's en de grote foto's die dat opleverde (kosten). */ productPages?: number; extraImages?: number
+}
+
+/** Een foto telt als groot vanaf deze lange zijde: genoeg voor een hero. */
+const LARGE_SIDE = 1000
+/** Minder grote foto's dan dit: ook de productpagina's lezen. */
+const MIN_LARGE_PHOTOS = 3
+/** Hooguit zoveel productpagina's per collectie. */
+const MAX_PRODUCT_PAGES = 3
+const isLarge = (v: VisionImage) => Math.max(v.width, v.height) >= LARGE_SIDE
+
+/**
+ * Dezelfde foto in meerdere maten (Drupal: /styles/<maat>/…/naam.webp naast
+ * /files/…/naam.jpg): één keer, de grootste. Herkend aan de bestandsnaam
+ * zonder extensie; adressen zonder leesbare naam blijven staan.
+ */
+function largestPerStem(pairs: Array<{ url: string; image: VisionImage }>): Array<{ url: string; image: VisionImage }> {
+  const stemOf = (url: string) => {
+    try {
+      const name = decodeURIComponent(new URL(url).pathname.split("/").pop() ?? "").replace(/\.[a-z0-9]+$/i, "").toLowerCase()
+      return name.length >= 6 ? name : null
+    } catch { return null }
+  }
+  const best = new Map<string, { url: string; image: VisionImage }>()
+  const rest: Array<{ url: string; image: VisionImage }> = []
+  for (const p of pairs) {
+    const stem = stemOf(p.url)
+    if (!stem) { rest.push(p); continue }
+    const cur = best.get(stem)
+    if (!cur || p.image.width * p.image.height > cur.image.width * cur.image.height) best.set(stem, p)
+  }
+  return [...best.values(), ...rest]
+}
+
+/** Adressen met hun beeld voor Claude; wat niet te halen is valt af. */
+async function visionPairs(urls: string[]): Promise<Array<{ url: string; image: VisionImage }>> {
+  const out: Array<{ url: string; image: VisionImage }> = []
+  for (let i = 0; i < urls.length; i += 6) {
+    const got = await Promise.all(urls.slice(i, i + 6).map(async (url) => ({ url, image: await visionImage(url) })))
+    for (const g of got) if (g.image) out.push({ url: g.url, image: g.image })
+  }
+  return out
+}
+
+/**
+ * Foto's van de productpagina's van een collectie (hooguit drie), voor als
+ * de collectiepagina alleen kleine beelden heeft. Wat op elke gelezen
+ * productpagina terugkomt (kop, voet, "vind een winkel") is van de site,
+ * niet van het product, en valt af. Geeft ook de kosten terug.
+ */
+async function photosFromProductPages(data: CollectionRead, have: string[], deadline: number): Promise<{ urls: string[]; pages: number; credits: number }> {
+  const pageUrls = Array.from(new Set((data.products ?? []).map((p) => p.url).filter((u): u is string => Boolean(u)))).slice(0, MAX_PRODUCT_PAGES)
+  const seen = new Map<string, number>()
+  let pages = 0, credits = 0
+  for (const url of pageUrls) {
+    if (Date.now() > deadline - 60_000) break
+    const page = await fetchPage(url, { maxChars: 20_000, mainContentOnly: true })
+    if (!page) continue
+    pages++
+    if (page.via === "firecrawl") credits++
+    for (const img of new Set(page.images.map(upsize))) {
+      if (/\.svg(\?|$)|logo|icon/i.test(img)) continue
+      seen.set(img, (seen.get(img) ?? 0) + 1)
+    }
+  }
+  const haveSet = new Set(have)
+  const urls = [...seen.entries()]
+    .filter(([u, n]) => !haveSet.has(u) && (pages < 2 || n < pages))
+    .map(([u]) => u)
+    .slice(0, MAX_PHOTO_CANDIDATES)
+  return { urls, pages, credits }
+}
 
 async function stepEnrich(sb: any, job: Job, brand: Brand, deadline: number): Promise<void> {
   const st = job.state ?? {}
@@ -497,13 +571,28 @@ async function stepEnrich(sb: any, job: Job, brand: Brand, deadline: number): Pr
         // Alleen teksten vernieuwen: geen foto's opnieuw kiezen.
         if (st.textOnly) { item.step = "done"; continue }
         const { data: cover } = await sb.from("product_collection_photos").select("source_url").eq("collection_id", colId).eq("is_primary", true).maybeSingle()
-        const candidates = Array.from(new Set([cover?.source_url, ...photos].filter((u): u is string => Boolean(u)))).slice(0, MAX_PHOTO_CANDIDATES)
+        const first = Array.from(new Set([cover?.source_url, ...photos].filter((u): u is string => Boolean(u)))).slice(0, MAX_PHOTO_CANDIDATES)
         // Zelf opgehaald en als JPEG mee (zie visionImage); wat niet lukt valt
         // af, zodat de nummers in het antwoord bij de lijst blijven horen.
-        const sources: Array<VisionImage | null> = []
-        for (let i = 0; i < candidates.length; i += 6) sources.push(...await Promise.all(candidates.slice(i, i + 6).map((u) => visionImage(u))))
-        const list = candidates.filter((_, i) => sources[i])
-        const images = sources.filter((x): x is VisionImage => Boolean(x))
+        let pairs = await visionPairs(first)
+        // Te weinig grote foto's (Occhio: alleen teasers van 445 px op de
+        // collectiepagina): ook de productpagina's van de collectie lezen.
+        if (pairs.filter((p) => isLarge(p.image)).length < MIN_LARGE_PHOTOS) {
+          const extra = await photosFromProductPages(data as CollectionRead, first, deadline)
+          job.firecrawl_credits += extra.credits
+          item.productPages = extra.pages
+          if (extra.urls.length > 0) {
+            const added = largestPerStem((await visionPairs(extra.urls)).filter((p) => isLarge(p.image)))
+            item.extraImages = added.length
+            const large = [...pairs, ...added].filter((p) => isLarge(p.image))
+            // Genoeg grote: de kleine vallen af (de omslag blijft altijd mee).
+            pairs = large.length >= MIN_LARGE_PHOTOS
+              ? [...pairs.filter((p) => p.url === cover?.source_url && !isLarge(p.image)), ...large].slice(0, MAX_PHOTO_CANDIDATES)
+              : [...pairs, ...added].slice(0, MAX_PHOTO_CANDIDATES)
+          }
+        }
+        const list = pairs.map((p) => p.url)
+        const images = pairs.map((p) => p.image)
         if (list.length === 0) { item.step = "done"; continue }
         const { data: col } = await sb.from("product_collections").select("name").eq("id", colId).maybeSingle()
         photoRequests.push(photoChoiceRequest(`p_${colId}`, col?.name ?? "", brand.name, images))

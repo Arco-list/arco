@@ -139,14 +139,20 @@ function sniffImageType(bytes: Buffer): string | null {
  * (Baxter: /api/image?...&f=avif), een server die Claude weert, een te
  * groot bestand. null als het beeld niet te halen of om te zetten is.
  */
-export type VisionImage = { base64: string; mediaType: "image/jpeg" }
+export type VisionImage = { base64: string; mediaType: "image/jpeg"; /** Maat van het origineel. */ width: number; height: number }
 export async function visionImage(remoteUrl: string): Promise<VisionImage | null> {
   const res = await fetchImage(remoteUrl)
   if (!res) return null
   const bytes = Buffer.from(await res.arrayBuffer())
   if (bytes.byteLength === 0 || bytes.byteLength > REMOTE_IMAGE_MAX_BYTES) return null
+  let width = 0, height = 0
+  try {
+    const { default: sharp } = await import("sharp")
+    const meta = await sharp(bytes).metadata()
+    width = meta.width ?? 0; height = meta.height ?? 0
+  } catch { /* geen maat */ }
   const jpeg = await toJpeg(bytes, 1200, 80)
-  return jpeg ? { base64: jpeg.toString("base64"), mediaType: "image/jpeg" } : null
+  return jpeg ? { base64: jpeg.toString("base64"), mediaType: "image/jpeg", width, height } : null
 }
 
 export async function storeRemoteImage(supabase: any, remoteUrl: string, folder: string, name?: string): Promise<string | null> {
